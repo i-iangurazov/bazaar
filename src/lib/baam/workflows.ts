@@ -79,6 +79,35 @@ export type WorkflowValue =
   | WorkflowValue[]
   | { [key: string]: WorkflowValue };
 export type WorkflowValues = Record<string, WorkflowValue>;
+// Model corrections contain scalar leaves, not replacement rows. Preserve the
+// other fields and lines when the user changes only a quantity, cost or variant.
+export function mergeWorkflowCorrection(
+  base: WorkflowValues,
+  patch: WorkflowValues,
+): WorkflowValues {
+  const merge = (before: WorkflowValue | undefined, next: WorkflowValue): WorkflowValue => {
+    if (Array.isArray(next)) {
+      const result = Array.isArray(before) ? structuredClone(before) : [];
+      next.forEach((value, index) => {
+        result[index] = merge(result[index], value);
+      });
+      return result;
+    }
+    if (next && typeof next === "object") {
+      const result: WorkflowValues =
+        before && typeof before === "object" && !Array.isArray(before)
+          ? structuredClone(before)
+          : {};
+      for (const [key, value] of Object.entries(next)) {
+        if (["__proto__", "prototype", "constructor"].includes(key)) continue;
+        result[key] = merge(result[key], value);
+      }
+      return result;
+    }
+    return next;
+  };
+  return merge(base, patch) as WorkflowValues;
+}
 const valueSchema: z.ZodType<WorkflowValue> = z.lazy(() =>
   z.union([
     z.string().max(6000),

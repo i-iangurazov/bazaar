@@ -1,4 +1,6 @@
 export const contextualHelpRoutes = [
+  { match: /^\/settings\/price-lists(?:\/|$)/, guideId: "products/shared-prices" },
+  { match: /^\/settings\/store-groups(?:\/|$)/, guideId: "products/shared-catalog" },
   { match: /^\/settings\/loyalty(?:\/|$)/, guideId: "loyalty/get-started" },
   { match: /^\/products(?:\/|$)/, guideId: "products/add-product" },
   { match: /^\/settings\/import(?:\/|$)/, guideId: "products/import-products" },
@@ -35,6 +37,19 @@ import type { LocalizedText } from "./types";
 type ContextualHelpSummary = { title: LocalizedText; steps: LocalizedText[] };
 
 const contextualHelpSummaries: Record<string, ContextualHelpSummary> = {
+  "products/shared-prices": {
+    title: t("Общие прайсы", "Жалпы баа тизмелери", "Shared price lists"),
+    steps: [t("Подготовьте цены и выберите магазины", "Бааларды даярдап, дүкөндөрдү тандаңыз", "Stage prices and choose stores"), t("Сохраните индивидуальные цены по умолчанию", "Жеке бааларды демейки боюнча сактаңыз", "Preserve individual prices by default"), t("Проверьте изменения до применения", "Колдонуудан мурун өзгөртүүлөрдү текшериңиз", "Review changes before applying")],
+  },
+  "products/shared-catalog": {
+    title: t("Ассортимент магазинов", "Дүкөндөрдүн ассортименти", "Store assortment"),
+    steps: [
+      t("Выберите магазин-получатель", "Алуучу дүкөндү тандаңыз", "Select the recipient store"),
+      t("Подключите источник целиком или выберите товары", "Булакты толук туташтырыңыз же товарларды тандаңыз", "Connect a full source or select products"),
+      t("Проверьте последствия и сохраните", "Таасирин текшерип сактаңыз", "Review the impact and save"),
+      t("Цены и физические остатки проверяются отдельно", "Баалар жана калдыктар өзүнчө текшерилет", "Check prices and physical stock separately"),
+    ],
+  },
   "loyalty/get-started": {
     title: t("Бонусная программа", "Бонус программасы", "Loyalty program"),
     steps: [

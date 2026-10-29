@@ -28,9 +28,10 @@
   - `subscriptionStatus` (`ACTIVE | PAST_DUE | CANCELED`)
   - `currentPeriodEndsAt`
 - Plan tiers:
-  - `STARTER`: up to 1 store, 3 users, 1000 products
-  - `BUSINESS`: up to 5 stores, 15 users, 50000 products
-  - `ENTERPRISE`: up to 20 stores, 60 users, 200000 products
+  - `STARTER`: up to 1 store, 5 active users, 1000 products; POS, price tags and customer orders are included.
+  - `BUSINESS`: up to 5 stores, 10 active users, 5000 products.
+  - `ENTERPRISE`: up to 15 stores, 20 active users, 20000 products.
+  - The current complete feature matrix and KGS pricing are defined by `src/server/billing/planCatalog.ts`; public pricing and billing use that same catalog. See `docs/subscriptions-v2.md`.
 - Guard behavior:
   - mutation access requires active subscription/trial where enforced.
   - capacity guards for `stores`, `users`, `products` return specific error keys:

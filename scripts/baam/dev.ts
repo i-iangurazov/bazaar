@@ -6,7 +6,7 @@ import { baamTestEnvironment, assertBaamTestDatabase } from "./environment";
 const require = createRequire(import.meta.url);
 const nextEnv = createRequire(require.resolve("next/package.json"))("@next/env");
 nextEnv.loadEnvConfig(process.cwd(), true);
-const providerKey = process.env.BAAM_LIVE_PROVIDER === "1" ? process.env.OPENAI_API_KEY : undefined;
+const providerKeys = process.env.BAAM_LIVE_PROVIDER === "1" ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY, DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY, AI_PROVIDER: process.env.AI_PROVIDER || "deepseek" } : {};
 const production = process.argv.includes("--production");
 Object.assign(process.env, baamTestEnvironment(), {
   NODE_ENV: production ? "production" : "development",
@@ -15,7 +15,7 @@ Object.assign(process.env, baamTestEnvironment(), {
 });
 if (process.env.BAAM_TEST_HTTPS === "1") process.env.NEXTAUTH_URL = "https://localhost:3121";
 assertBaamTestDatabase();
-if (providerKey) process.env.OPENAI_API_KEY = providerKey;
+Object.assign(process.env, providerKeys);
 nextEnv.updateInitialEnv({ ...process.env });
 const { default: next } = await import("next");
 const app = next({ dev: !production, hostname: "localhost", port: 3121 });

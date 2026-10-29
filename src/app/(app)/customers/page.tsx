@@ -4,8 +4,10 @@ import { CustomerLoyaltyHistory } from "@/components/pos/customer-loyalty-histor
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CustomerSource } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { reportHref } from "@/lib/reporting";
+import { hasPermission } from "@/lib/roleAccess";
 import { addBusinessDays, businessDateKey } from "@/lib/timezone";
 import { usePathname, useSearchParams } from "next/navigation";
 
@@ -14,6 +16,8 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { DownloadIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { EditIcon, DeleteIcon, PhoneIcon, ViewIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -86,6 +90,8 @@ const parseOption = <T extends string>(value: string | null, options: readonly T
   value && options.includes(value as T) ? (value as T) : fallback;
 
 const CustomerDatabasePage = () => {
+  const { data: session } = useSession();
+  const canManageCustomers = hasPermission({ role: session?.user?.role }, "manageCustomers");
   const t = useTranslations("customers");
   const tCommon = useTranslations("common");
   const purchaseText = useTranslations("customerPurchases");
@@ -112,7 +118,8 @@ const CustomerDatabasePage = () => {
   );
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
-  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
+  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(searchParams.get("customerId"));
+  useEffect(() => { setDetailCustomerId(searchParams.get("customerId")); }, [searchParams]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("xlsx");
   const [selectedExportColumns, setSelectedExportColumns] = useState<CustomerExportColumnKey[]>([
@@ -150,11 +157,12 @@ const CustomerDatabasePage = () => {
   }, [storeId, stores, updateListParams]);
 
   useEffect(() => {
-    if (searchParams.get("add") === "1") {
+    if (canManageCustomers && searchParams.get("add") === "1") {
       setForm(emptyForm);
       setFormOpen(true);
+      updateListParams({ add: null });
     }
-  }, [searchParams]);
+  }, [canManageCustomers, searchParams, updateListParams]);
 
   const customersQuery = trpc.customers.list.useQuery(
     {
@@ -260,6 +268,7 @@ const CustomerDatabasePage = () => {
   }, [customerDetail, customers, form, t, tErrors]);
 
   const openAdd = () => {
+    if (!canManageCustomers || !selectedStore) return;
     setForm(emptyForm);
     setFormOpen(true);
   };
@@ -276,7 +285,7 @@ const CustomerDatabasePage = () => {
   };
 
   const handleSubmit = () => {
-    if (!storeId || formErrors.length) {
+    if (!canManageCustomers || !selectedStore || formErrors.length) {
       return;
     }
     if (form.id) {
@@ -379,7 +388,7 @@ const CustomerDatabasePage = () => {
             </Button>
           </>
         ) : (
-          <Button className="mt-3" onClick={openAdd} disabled={!storeId}>
+          <Button className="mt-3" onClick={openAdd} disabled={!canManageCustomers || !selectedStore}>
             {t("actions.add")}
           </Button>
         )}
@@ -398,12 +407,12 @@ const CustomerDatabasePage = () => {
               type="button"
               variant="outline"
               onClick={() => setExportOpen(true)}
-              disabled={!storeId || customersQuery.isLoading || !customersQuery.data?.total}
+              disabled={!canManageCustomers || !selectedStore || customersQuery.isLoading || !customersQuery.data?.total}
             >
               <DownloadIcon className="h-4 w-4" aria-hidden />
               {t("actions.export")}
             </Button>
-            <Button type="button" onClick={openAdd} disabled={!storeId}>
+            <Button type="button" onClick={openAdd} disabled={!canManageCustomers || !selectedStore}>
               {t("actions.add")}
             </Button>
           </div>
@@ -525,168 +534,169 @@ const CustomerDatabasePage = () => {
 
       {customersQuery.error ? (
         <Card className="bazaar-admin-surface">
-          <CardContent className="bazaar-admin-error">
-            {translateError(tErrors, customersQuery.error)}
+          <CardContent className="bazaar-admin-error flex flex-wrap items-center gap-2" role="alert">
+            <span>{translateError(tErrors, customersQuery.error)}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => customersQuery.refetch()}
+              disabled={customersQuery.isFetching}
+            >
+              {tErrors("tryAgain")}
+            </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      <ResponsiveDataList
-        key={`customers-${pageSize}`}
-        items={customers}
-        page={page}
-        totalItems={customersQuery.data?.total ?? 0}
-        defaultPageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        paginationKey="customers"
-        mobileItemsClassName="space-y-3"
-        empty={emptyState}
-        getKey={(customer) => customer.id}
-        renderDesktop={(items) => (
-          <TableContainer className="bazaar-admin-table-shell">
-            <Table className="min-w-[920px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("columns.name")}</TableHead>
-                  <TableHead>{t("columns.email")}</TableHead>
-                  <TableHead>{t("columns.phone")}</TableHead>
-                  <TableHead>{t("columns.address")}</TableHead>
-                  <TableHead>{t("columns.source")}</TableHead>
-                  <TableHead>{t("columns.createdAt")}</TableHead>
-                  <TableHead className="text-right">{t("columns.actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.length ? (
-                  items.map((customer) => (
-                    <TableRow key={customer.id}>
-                      <TableCell className="font-medium">{customer.name}</TableCell>
-                      <TableCell>{customer.email ?? "-"}</TableCell>
-                      <TableCell>{customer.phone ?? "-"}</TableCell>
-                      <TableCell className="max-w-[260px] truncate">
-                        {customer.address ?? "-"}
-                      </TableCell>
-                      <TableCell>{renderSource(customer.source)}</TableCell>
-                      <TableCell>{formatDateTime(customer.createdAt, locale)}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => openEdit(customer)}
-                          >
-                            {tCommon("edit")}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={deleteMutation.isLoading}
-                            onClick={() => {
-                              if (window.confirm(t("deleteConfirm", { name: customer.name }))) {
-                                deleteMutation.mutate({ customerId: customer.id });
-                              }
-                            }}
-                          >
-                            {tCommon("delete")}
-                          </Button>
-                        </div>
+      {!customersQuery.error ? (
+        <ResponsiveDataList
+          key={`customers-${pageSize}`}
+          items={customers}
+          page={page}
+          totalItems={customersQuery.data?.total ?? 0}
+          defaultPageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          paginationKey="customers"
+          mobileItemsClassName="space-y-3"
+          empty={emptyState}
+          getKey={(customer) => customer.id}
+          renderDesktop={(items) => (
+            <TableContainer className="bazaar-admin-table-shell">
+              <Table className="min-w-[920px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("columns.name")}</TableHead>
+                    <TableHead>{t("columns.email")}</TableHead>
+                    <TableHead>{t("columns.phone")}</TableHead>
+                    <TableHead>{t("columns.address")}</TableHead>
+                    <TableHead>{t("columns.source")}</TableHead>
+                    <TableHead>{t("columns.createdAt")}</TableHead>
+                    <TableHead className="text-right">{t("columns.actions")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.length ? (
+                    items.map((customer) => (
+                      <TableRow key={customer.id}>
+                        <TableCell className="font-medium">{customer.name}</TableCell>
+                        <TableCell>{customer.email ?? "-"}</TableCell>
+                        <TableCell>{customer.phone ?? "-"}</TableCell>
+                        <TableCell className="max-w-[260px] truncate">
+                          {customer.address ?? "-"}
+                        </TableCell>
+                        <TableCell>{renderSource(customer.source)}</TableCell>
+                        <TableCell>{formatDateTime(customer.createdAt, locale)}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <IconButton
+                              type="button"
+                              variant="secondary"
+                              onClick={() => openEdit(customer)}
+                              icon={EditIcon}
+                              label={tCommon("edit")}
+                            />
+                            <IconButton
+                              type="button"
+                              variant="outline"
+                              disabled={deleteMutation.isLoading}
+                              onClick={() => {
+                                if (window.confirm(t("deleteConfirm", { name: customer.name }))) {
+                                  deleteMutation.mutate({ customerId: customer.id });
+                                }
+                              }}
+                              icon={DeleteIcon}
+                              label={tCommon("delete")}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="py-10 text-center text-sm text-muted-foreground"
+                      >
+                        {customersQuery.isLoading ? tCommon("loading") : t("empty")}
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="py-10 text-center text-sm text-muted-foreground"
-                    >
-                      {customersQuery.isLoading ? tCommon("loading") : t("empty")}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-        renderMobile={(customer) => (
-          <Card className="bazaar-admin-surface overflow-hidden">
-            <CardHeader className="space-y-1 pb-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <CardTitle className="truncate text-base">{customer.name}</CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {selectedStore?.name} · {renderSource(customer.source)}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="min-h-10 shrink-0"
-                  onClick={() => viewCustomerSales(customer)}
-                >
-                  {t("actions.viewSales")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="grid gap-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("columns.phone")}</p>
-                  <p className="font-medium text-foreground">{customer.phone ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("columns.email")}</p>
-                  <p className="font-medium text-foreground">{customer.email ?? "—"}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bazaar-admin-info-tile">
-                    <p className="text-xs text-muted-foreground">{t("columns.lastPurchase")}</p>
-                    <p className="text-sm font-semibold text-foreground">
-                      {customer.lastOrderAt
-                        ? formatDateTime(customer.lastOrderAt, locale)
-                        : tCommon("notAvailable")}
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+          renderMobile={(customer) => (
+            <Card className="bazaar-admin-surface overflow-hidden">
+              <CardHeader className="space-y-1 pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <CardTitle className="truncate text-base">{customer.name}</CardTitle>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {selectedStore?.name} · {renderSource(customer.source)}
                     </p>
                   </div>
-                  <div className="bazaar-admin-info-tile">
-                    <p className="text-xs text-muted-foreground">{t("columns.totalPurchases")}</p>
-                    <p className="text-sm font-semibold text-foreground">{customer.orderCount}</p>
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    className="min-h-10 shrink-0"
+                    onClick={() => viewCustomerSales(customer)}
+                    icon={ViewIcon}
+                    label={t("actions.viewSales")}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("columns.phone")}</p>
+                    <p className="font-medium text-foreground">{customer.phone ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("columns.email")}</p>
+                    <p className="font-medium text-foreground">{customer.email ?? "—"}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bazaar-admin-info-tile">
+                      <p className="text-xs text-muted-foreground">{t("columns.lastPurchase")}</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {customer.lastOrderAt
+                          ? formatDateTime(customer.lastOrderAt, locale)
+                          : tCommon("notAvailable")}
+                      </p>
+                    </div>
+                    <div className="bazaar-admin-info-tile">
+                      <p className="text-xs text-muted-foreground">{t("columns.totalPurchases")}</p>
+                      <p className="text-sm font-semibold text-foreground">{customer.orderCount}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {customer.phone ? (
-                  <Button asChild variant="secondary" size="sm" className="min-h-10">
-                    <a href={`tel:${customer.phone}`}>{t("actions.call")}</a>
-                  </Button>
-                ) : (
-                  <Button type="button" variant="secondary" size="sm" className="min-h-10" disabled>
-                    {t("actions.call")}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-10"
-                  onClick={() => openEdit(customer)}
-                >
-                  {tCommon("edit")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-10"
-                  onClick={() => viewCustomerSales(customer)}
-                >
-                  {t("actions.viewSales")}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      />
+                <div className="flex flex-wrap items-center gap-2">
+                  <IconButton icon={PhoneIcon} label={t("actions.call")} variant="secondary"
+                    href={customer.phone ? `tel:${customer.phone}` : undefined} disabled={!customer.phone} />
+                  <IconButton
+                    type="button"
+                    variant="secondary"
+                    onClick={() => openEdit(customer)}
+                    className="min-h-10"
+                    icon={EditIcon}
+                    label={tCommon("edit")}
+                  />
+                  <IconButton
+                    type="button"
+                    variant="secondary"
+                    className="min-h-10"
+                    onClick={() => viewCustomerSales(customer)}
+                    icon={ViewIcon}
+                    label={t("actions.viewSales")}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        />
+      ) : null}
 
       <Modal
         open={exportOpen}
@@ -716,7 +726,7 @@ const CustomerDatabasePage = () => {
                     role="radio"
                     aria-checked={selected}
                     className={cn(
-                      "button-focus-ring rounded-xl border p-4 text-left transition",
+                      "button-focus-ring rounded-lg border p-4 text-left transition",
                       selected
                         ? "border-primary bg-primary/10 ring-1 ring-primary/20"
                         : "border-border bg-card hover:border-primary/45 hover:bg-muted/40",
@@ -780,7 +790,7 @@ const CustomerDatabasePage = () => {
                 </Button>
               </div>
             </div>
-            <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
+            <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-2">
               {exportColumns.map((column) => {
                 const checked = selectedExportColumnSet.has(column.key);
                 return (
@@ -1009,7 +1019,8 @@ const CustomerDatabasePage = () => {
               type="button"
               onClick={handleSubmit}
               disabled={
-                !storeId ||
+                !canManageCustomers ||
+                !selectedStore ||
                 formErrors.length > 0 ||
                 createMutation.isLoading ||
                 updateMutation.isLoading

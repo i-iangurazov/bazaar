@@ -28,11 +28,12 @@ describeDb("feature acceptance across money, prices, stock and exports", () => {
     expect((await prisma.storePriceTypes.findFirstOrThrow({ where: { productId: f.product.id } })).retailPriceKgs).toBeNull();
     let sale = await f.cashier.pos.sales.createDraft({ registerId: f.register.id, priceMode: "RETAIL", lines: [{ productId: f.product.id, qty: 1 }] });
     let line = await prisma.customerOrderLine.findFirstOrThrow({ where: { customerOrderId: sale.id } });
-    expect(Number(line.unitPriceKgs)).toBe(800);
+    // An existing ordinary retail price keeps priority over wholesale fallback.
+    expect(Number(line.unitPriceKgs)).toBe(1000);
     await f.caller.storePrices.upsert({ storeId: f.store.id, productId: f.product.id, retailPriceKgs: 0, wholesalePriceKgs: 900 });
     const preview = await f.cashier.posTools.changePriceMode({ saleId: sale.id, mode: "WHOLESALE" });
     expect(preview).toMatchObject({ needsConfirmation: true, totalKgs: 900 });
-    expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).totalKgs)).toBe(800);
+    expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).totalKgs)).toBe(1000);
     await f.cashier.posTools.changePriceMode({ saleId: sale.id, mode: "WHOLESALE", confirmation: preview.fingerprint, expectedTotal: 900 });
     await f.cashier.pos.sales.updateLine({ lineId: line.id, unitPriceKgs: 777 });
     const manual = await f.cashier.posTools.changePriceMode({ saleId: sale.id, mode: "RETAIL" });

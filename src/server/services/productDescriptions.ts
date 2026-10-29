@@ -1,9 +1,9 @@
+import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 
 import sharp from "sharp";
 
-import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import {
   downloadRemoteImage,
   normalizeProductImageUrl,
@@ -11,7 +11,6 @@ import {
 import { AppError } from "@/server/services/errors";
 import { defaultLocale, normalizeLocale as normalizeAppLocale, type Locale } from "@/lib/locales";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
 const MAX_INPUT_IMAGES = 3;
 const MAX_OUTPUT_TOKENS = 220;
@@ -100,18 +99,7 @@ const resolveOpenAiModel = () =>
   process.env.OPENAI_MODEL?.trim() ||
   DEFAULT_OPENAI_MODEL;
 
-const resolveProviderConfig = (): {
-  apiKey: string;
-  model: string;
-} | null => {
-  const openAiApiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
-  return openAiApiKey
-    ? {
-        apiKey: openAiApiKey,
-        model: resolveOpenAiModel(),
-      }
-    : null;
-};
+const resolveProviderConfig = () => resolveTextAiConfig("vision", resolveOpenAiModel());
 
 export const isProductDescriptionGenerationConfigured = () => Boolean(resolveProviderConfig());
 
@@ -250,6 +238,12 @@ const loadImageForPrompt = async (rawUrl: string) => {
 const toDataUrl = (image: DownloadedImage) =>
   `data:${image.contentType};base64,${image.buffer.toString("base64")}`;
 
+export const prepareProductAiImage = async (url: string) => {
+  const image = await loadImageForPrompt(url);
+  if (!image || image.buffer.length > 5 * 1024 * 1024) return null;
+  return toDataUrl(await optimizeImageForModel(image));
+};
+
 const parseRetryAfterMs = (value: string | null) => {
   if (!value) {
     return null;
@@ -349,16 +343,9 @@ const callOpenAiResponses = async (input: {
     let response: Response;
     let responseBody: OpenAiResponseBody | null = null;
     try {
-      assertExternalProviderCallAllowed("openai");
-      response = await fetch(OPENAI_RESPONSES_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${input.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: input.body,
-        signal: controller.signal,
-      });
+      const config = resolveProviderConfig();
+      if (!config) throw new AppError("aiDescriptionNotConfigured", "BAD_REQUEST", 400);
+      response = await fetchAiResponse(config, JSON.parse(input.body), controller.signal);
       responseBody = (await response.json().catch(() => null)) as OpenAiResponseBody | null;
     } catch (error) {
       if (isAbortLikeError(error)) {
@@ -848,7 +835,7 @@ export const generateProductDescriptionFromImages = async (
   }
 
   const { apiKey, model } = providerConfig;
-  const provider = "openai";
+  const provider = providerConfig.provider;
   const buildProviderRequestBody = (promptText: string) =>
     JSON.stringify({
       model,

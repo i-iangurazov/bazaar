@@ -230,7 +230,7 @@ const SalesOrdersPage = () => {
       />
 
       <Card className="bazaar-admin-surface">
-        <CardHeader className="border-b border-border/60 bg-muted/20">
+        <CardHeader className="border-b border-border bg-muted/20">
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -94,6 +94,8 @@ export type ApplyStockMovementInput = {
   movementDate?: Date | null;
   expiryDate?: Date | null;
   stockLotId?: string | null;
+  /** Absolute inline correction: validate the resulting balance, including legacy fractions. */
+  correctionTargetOnHand?: number;
 };
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
@@ -127,7 +129,12 @@ export const applyStockMovement = async (
       (input.organizationId && product.organizationId !== input.organizationId)) {
     throw new AppError("productOrgMismatch", "FORBIDDEN", 403);
   }
-  if (!isValidQuantity(input.qtyDelta, product.baseUnit.quantityPrecision))
+  const absoluteCorrection = input.correctionTargetOnHand !== undefined &&
+    input.type === StockMovementType.ADJUSTMENT && input.referenceType === "INLINE_STOCK";
+  if (input.correctionTargetOnHand !== undefined && !absoluteCorrection)
+    throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
+  if (!isValidQuantity(absoluteCorrection ? input.correctionTargetOnHand! : input.qtyDelta,
+    product.baseUnit.quantityPrecision))
     throw new AppError("wholeQuantityRequired", "BAD_REQUEST", 400);
   await assignProductToStore(tx, {
     organizationId: input.organizationId ?? store.organizationId,
@@ -169,6 +176,8 @@ export const applyStockMovement = async (
   }
 
   const nextOnHand = roundQuantity(snapshot.onHand + input.qtyDelta);
+  if (absoluteCorrection && nextOnHand !== input.correctionTargetOnHand)
+    throw new AppError("inventoryStockConflict", "CONFLICT", 409);
   if (!effectiveAllowNegativeStock && input.qtyDelta < 0 && nextOnHand < 0) {
     throw new AppError("insufficientStock", "CONFLICT", 409);
   }
@@ -342,6 +351,7 @@ export const setStockOnHand = async (input: {
       const { snapshot } = await applyStockMovement(tx, {
         ...input, qtyDelta, type: StockMovementType.ADJUSTMENT,
         referenceType: "INLINE_STOCK", referenceId: input.idempotencyKey,
+        correctionTargetOnHand: input.targetOnHand,
         note: input.reason, allowNegativeStock: true,
       });
       await writeAuditLog(tx, {
@@ -1463,6 +1473,8 @@ export const transferStock = async (input: TransferStockInput) => {
       },
     );
 
+    if ("canceled" in transfer && transfer.canceled === true)
+      throw new AppError("transferAttemptClosed", "CONFLICT", 409);
     return transfer;
   }, { maxWait: 10_000, timeout: 120_000 });
 

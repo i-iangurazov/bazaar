@@ -57,20 +57,17 @@ async function graph(tx: Tx, organizationId: string) {
       },
       orderBy: { name: "asc" },
     }),
-    tx.storeProduct.findMany({
-      where: { organizationId, product: { organizationId } },
-      select: {
-        storeId: true,
-        productId: true,
-        product: { select: { isDeleted: true } },
-        isActive: true,
-        isHidden: true,
-        isDirect: true,
-        isHistorical: true,
-        updatedAt: true,
-      },
-      orderBy: [{ storeId: "asc" }, { productId: "asc" }],
-    }),
+    // One join avoids hydrating the same nested Product up to once per store.
+    // Preserve archived assignments in the compatibility fingerprint.
+    tx.$queryRaw<Array<{
+      storeId: string; productId: string; isDeleted: boolean; isActive: boolean;
+      isHidden: boolean; isDirect: boolean; isHistorical: boolean; updatedAt: Date;
+    }>>`SELECT a."storeId", a."productId", p."isDeleted", a."isActive", a."isHidden",
+        a."isDirect", a."isHistorical", a."updatedAt"
+      FROM "StoreProduct" a JOIN "Product" p ON p.id=a."productId" AND p."organizationId"=a."organizationId"
+      WHERE a."organizationId"=${organizationId}
+      ORDER BY a."storeId", a."productId"`
+      .then(rows => rows.map(({ isDeleted, ...a }) => ({ ...a, product: { isDeleted } }))),
     tx.productCatalog.findMany({
       where: { organizationId },
       include: {
@@ -194,7 +191,8 @@ async function graph(tx: Tx, organizationId: string) {
   for (const r of rules) {
     const direct = sources.get(`store:${r.sourceStoreId}`)!;
     const granted = r.grants.map((g) => g.productId);
-    if (granted.every((id) => direct.memberIds.includes(id))) {
+    const directMembers = new Set(direct.memberIds);
+    if (granted.every((id) => directMembers.has(id))) {
       ruleKeys.set(r.id, direct.key);
       continue;
     }
@@ -257,8 +255,9 @@ async function graph(tx: Tx, organizationId: string) {
     for (const rule of rules.filter((r) => r.targetStoreId === storeId)) {
       const key = ruleKeys.get(rule.id)!;
       const ids = rule.grants.map((g) => g.productId);
+      const grantedIds = new Set(ids);
       const activeIds = allAssignments
-        .filter((a) => a.storeId === storeId && a.isActive && ids.includes(a.productId))
+        .filter((a) => a.storeId === storeId && a.isActive && grantedIds.has(a.productId))
         .map((a) => a.productId);
       connections.push({
         key,
@@ -314,7 +313,7 @@ export async function getCatalogSettings(organizationId: string, storeId?: strin
         ownCount: g.sources.get(`store:${store.id}`)!.productIds.length,
       };
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, maxWait: 10_000, timeout: 30_000 },
   );
 }
 export async function getCatalogProducts(input: {
@@ -384,7 +383,7 @@ export async function getCatalogProducts(input: {
         })),
       };
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, maxWait: 10_000, timeout: 30_000 },
   );
 }
 

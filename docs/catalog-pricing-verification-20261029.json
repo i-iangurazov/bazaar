@@ -1,0 +1,1466 @@
+{
+  "date": "2026-10-29",
+  "branch": "codex/playground",
+  "implementationCommits": [
+    "bcd5954",
+    "1131a02"
+  ],
+  "acceptanceCommits": [
+    "cb4e31d",
+    "8062600",
+    "479888e",
+    "7ee1f53"
+  ],
+  "verifiedApplicationCommit": "7ee1f53d62ff1bad2c2afa775ce453e1b61a4858",
+  "main": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+  "all15Implemented": true,
+  "localAcceptancePassed": true,
+  "mergeReady": true,
+  "decision": "GO: technical acceptance passed; human authorization still required",
+  "mainChanged": false,
+  "productionDeployed": false,
+  "customerDatabaseUsedForTests": false,
+  "actualProviderCalls": 0,
+  "productionSchemaReadOnlyCheck": {
+    "status": "passed",
+    "transactionReadOnly": true,
+    "businessRowsRead": 0,
+    "writes": 0,
+    "metadata": {
+      "readOnly": "on",
+      "version": "17.11 (7d7ea2a)",
+      "timezone": "GMT",
+      "sha256Available": true
+    },
+    "pending": [
+      "20261021170000_subscription_payments",
+      "20261022090000_studio_quality",
+      "20261029180000_shared_price_books",
+      "20261029190000_price_book_references",
+      "20261029200000_price_book_snapshots"
+    ],
+    "appliedRecords": 123
+  },
+  "sourceFingerprint": {
+    "method": "SHA256 of sorted tracked non-documentation paths and content SHA256 bytes; excludes docs/ and *.md",
+    "files": 1614,
+    "sha256": "3b32af44ba521fff5d4687675616acc221afc926f18168cc2e7a55effa94f386"
+  },
+  "scope": [
+    {
+      "id": 1,
+      "result": "Retail retains ordinary price before wholesale; explicit zero remains real",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 2,
+      "result": "Table/card/POS agree; metadata saves retain shared inheritance",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 3,
+      "result": "Fractional stock, precision and concurrent snapshot guards",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 4,
+      "result": "Same-tab, user/organization scoped transfer draft and uncertain-attempt recovery",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 5,
+      "result": "Destination changes preserve transfer lines and refresh validation",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 6,
+      "result": "Source changes preserve transfer lines and flag unavailability",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 7,
+      "result": "SSE/focus refresh makes new products available from another tab",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 8,
+      "result": "Recipient availability respects explicitly restricted assortment",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 9,
+      "result": "Inactive variant display duplicates removed; distinct IDs never merged",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 10,
+      "result": "Existing-product/archive/barcode guide in RU/KG/EN",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 11,
+      "result": "Approved Cost label; no new cost accounting model",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 12,
+      "result": "Full/selected/future assortment verified at 10k products and ten stores; stock independent",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 13,
+      "result": "Explicit shared retail/wholesale price lists, per-kind store overrides and freeze/disconnect",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 14,
+      "result": "Signed expiring preview, bounded scope, roles/plan, audit, concurrency, idempotency, rollback and recovery",
+      "status": "implemented-and-verified"
+    },
+    {
+      "id": 15,
+      "result": "Read-only store price comparison and source preparation; no customer price migration",
+      "status": "implemented-and-verified"
+    }
+  ],
+  "isolation": {
+    "postgresPort": 55448,
+    "redisPort": 56398,
+    "pgbouncerPort": 56448,
+    "qaPort": 3124,
+    "persistentUserAppPortUntouched": 3122,
+    "disposableDataDirectoryPrefix": "/private/tmp/bazaar-catalog-20261029."
+  },
+  "verification": {
+    "unit": {
+      "passed": 2195,
+      "failed": 0,
+      "pending": 0,
+      "files": 285,
+      "artifact": "artifacts/catalog-pricing-20261029/final-unit.json"
+    },
+    "regularIntegration": {
+      "passed": 819,
+      "failed": 0,
+      "pending": 3,
+      "files": 116,
+      "artifact": "artifacts/catalog-pricing-20261029/final-integration.json"
+    },
+    "finalPriceBooks": {
+      "passed": 15,
+      "failed": 0,
+      "pending": 0,
+      "files": 1,
+      "artifact": "artifacts/catalog-pricing-20261029/final-price-books.json"
+    },
+    "realTransactionPooling": {
+      "passed": 88,
+      "failed": 0,
+      "pending": 0,
+      "files": 10,
+      "artifact": "artifacts/catalog-pricing-20261029/pooling.json"
+    },
+    "scale": {
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "files": 1,
+      "artifact": "artifacts/catalog-pricing-20261029/price-book-scale.json"
+    },
+    "stabilization": {
+      "passed": 135,
+      "failed": 0,
+      "pending": 0,
+      "files": 15,
+      "artifact": "artifacts/catalog-pricing-20261029/stabilization.json"
+    },
+    "uniquePassedDatabaseCases": 959,
+    "countingNote": "Deduplicated by file basename and full case name; repeated/overlapping runs are not added. The three pool-only skips in the regular run pass in the real pooling run; the one later archive regression passes in the final price book and pooling runs.",
+    "productionBrowser": {
+      "transfersAndProducts": {
+        "checks": [
+          "Reload restores quantities, note and stores",
+          "Changing destination preserves lines and validates fresh balances",
+          "Changing source retains input and blocks unavailable products",
+          "Product created through the authenticated API in another tab appears via SSE",
+          "Validation network error preserves the document and retries successfully",
+          "Desktop/mobile inspection and no horizontal page overflow",
+          "Lost response + reload + replay uses the same idempotency key, posts once, clears draft",
+          "Unknown result locks edits; server reconciliation closes an unposted attempt and blocks late posting",
+          "Inline retail editor preserves legacy 325 over wholesale 300 and saves/reloads 350",
+          "Fractional stock saves through the product table and product card using real editors",
+          "Shared product, archive and barcode guide is available in RU/KG/EN",
+          "Product barcode actions reflow within the form and header search stays clear of BAAM across RU/KG/EN at 390/767/768/1023/1024/1440px"
+        ],
+        "errors": [],
+        "organizationId": "cmvtnfpef0000o3lb6jnx8x83"
+      },
+      "priceBooks": {
+        "checks": [
+          "Create/stage/signed preview does not write prices before explicit confirmation; comma decimals accepted",
+          "A staged price draft disables list creation and store connection; the staged amount remains available for confirmation",
+          "Connection preserves existing individual prices by default and applies common prices to missing store prices",
+          "Real bulk +10% preview/publication and reviewed rollback preserve individual prices",
+          "An individual zero is visible as local; the explicit store source editor restores inheritance",
+          "A stale preview is rejected in the real UI and cannot overwrite a subsequent store edit",
+          "Lost committed response survives reload and server reconciliation finds the original receipt without applying twice",
+          "Unposted network failure survives reload, restores staged prices, closes safely and rejects a late publication with the old key",
+          "Storage failure gives actionable recovery and does not start a price publication",
+          "Source/target comparison shows real store differences without writing prices",
+          "Desktop/mobile use icon-only row actions, readable price cards, named fields and no horizontal page overflow",
+          "RU/KG/EN render the actual shared pricing page without missing translations",
+          "A live common-price update refreshes pristine product fields, preserves a name being edited, and a metadata-only Save retains inheritance"
+        ],
+        "errors": [],
+        "organizationId": "cmvtnfsae0000jpe0mlrqf0zx",
+        "bookId": "cmvtnfszt000r9xpyji5qukry"
+      }
+    },
+    "broaderLocalAcceptance": {
+      "uxBehavior": {
+        "uniquePassed": 82,
+        "note": "Sequential continuations of the existing suite after QA harness fixes; not claimed as one uninterrupted clean run. Final GitHub CI runs the full suite."
+      },
+      "sharedControls": {
+        "checks": [
+          "Metrics fields: aligned Espresso controls, keyboard, delayed options, search/checkbox/URL/reload/all-stores reset",
+          "Metrics and header: RU/KG/EN, light/dark, 360/768/1440px; open menus preserve field bounds",
+          "Reports, analytics, products and dashboard share keyboard-accessible styled selects",
+          "Discount form: shared store Select, selection and preview through existing read-only service",
+          "Movements: flat inner contour, last row, single separator, pagination, horizontal scroll and mobile themes",
+          "ADMIN/MANAGER: single header BAAM, POS/inventory/products, client checkout round trip preserves draft, focus return, mobile chat, localized checkout hidden",
+          "STAFF/CASHIER still have no BAAM entry point"
+        ],
+        "observations": [
+          {
+            "locale": "ru",
+            "theme": "light",
+            "width": 360,
+            "bounds": [
+              {
+                "name": "Магазин",
+                "x": 33,
+                "y": 325.796875,
+                "width": 294,
+                "height": 40,
+                "top": 325.796875,
+                "right": 327,
+                "bottom": 365.796875,
+                "left": 33
+              },
+              {
+                "name": "Категория",
+                "x": 33,
+                "y": 401.796875,
+                "width": 294,
+                "height": 40,
+                "top": 401.796875,
+                "right": 327,
+                "bottom": 441.796875,
+                "left": 33
+              },
+              {
+                "name": "Поиск",
+                "x": 33,
+                "y": 477.796875,
+                "width": 294,
+                "height": 40,
+                "top": 477.796875,
+                "right": 327,
+                "bottom": 517.796875,
+                "left": 33
+              },
+              {
+                "name": null,
+                "x": 33,
+                "y": 565.796875,
+                "width": 16,
+                "height": 16,
+                "top": 565.796875,
+                "right": 49,
+                "bottom": 581.796875,
+                "left": 33
+              }
+            ]
+          },
+          {
+            "locale": "ru",
+            "theme": "light",
+            "width": 768,
+            "bounds": [
+              {
+                "name": "Магазин",
+                "x": 318,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 518.5,
+                "bottom": 329,
+                "left": 318
+              },
+              {
+                "name": "Категория",
+                "x": 530.5,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 731,
+                "bottom": 329,
+                "left": 530.5
+              },
+              {
+                "name": "Поиск",
+                "x": 318,
+                "y": 365,
+                "width": 200.5,
+                "height": 32,
+                "top": 365,
+                "right": 518.5,
+                "bottom": 397,
+                "left": 318
+              },
+              {
+                "name": null,
+                "x": 530.5,
+                "y": 377,
+                "width": 16,
+                "height": 16,
+                "top": 377,
+                "right": 546.5,
+                "bottom": 393,
+                "left": 530.5
+              }
+            ]
+          },
+          {
+            "locale": "ru",
+            "theme": "light",
+            "width": 1440,
+            "bounds": [
+              {
+                "name": "Магазин",
+                "x": 322,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 582.25,
+                "bottom": 269,
+                "left": 322
+              },
+              {
+                "name": "Категория",
+                "x": 594.25,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 854.5,
+                "bottom": 269,
+                "left": 594.25
+              },
+              {
+                "name": "Поиск",
+                "x": 866.5,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 1126.75,
+                "bottom": 269,
+                "left": 866.5
+              },
+              {
+                "name": null,
+                "x": 1138.75,
+                "y": 249,
+                "width": 16,
+                "height": 16,
+                "top": 249,
+                "right": 1154.75,
+                "bottom": 265,
+                "left": 1138.75
+              }
+            ]
+          },
+          {
+            "locale": "ru",
+            "theme": "dark",
+            "width": 360,
+            "bounds": [
+              {
+                "name": "Магазин",
+                "x": 33,
+                "y": 325.796875,
+                "width": 294,
+                "height": 40,
+                "top": 325.796875,
+                "right": 327,
+                "bottom": 365.796875,
+                "left": 33
+              },
+              {
+                "name": "Категория",
+                "x": 33,
+                "y": 401.796875,
+                "width": 294,
+                "height": 40,
+                "top": 401.796875,
+                "right": 327,
+                "bottom": 441.796875,
+                "left": 33
+              },
+              {
+                "name": "Поиск",
+                "x": 33,
+                "y": 477.796875,
+                "width": 294,
+                "height": 40,
+                "top": 477.796875,
+                "right": 327,
+                "bottom": 517.796875,
+                "left": 33
+              },
+              {
+                "name": null,
+                "x": 33,
+                "y": 565.796875,
+                "width": 16,
+                "height": 16,
+                "top": 565.796875,
+                "right": 49,
+                "bottom": 581.796875,
+                "left": 33
+              }
+            ]
+          },
+          {
+            "locale": "ru",
+            "theme": "dark",
+            "width": 768,
+            "bounds": [
+              {
+                "name": "Магазин",
+                "x": 318,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 518.5,
+                "bottom": 329,
+                "left": 318
+              },
+              {
+                "name": "Категория",
+                "x": 530.5,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 731,
+                "bottom": 329,
+                "left": 530.5
+              },
+              {
+                "name": "Поиск",
+                "x": 318,
+                "y": 365,
+                "width": 200.5,
+                "height": 32,
+                "top": 365,
+                "right": 518.5,
+                "bottom": 397,
+                "left": 318
+              },
+              {
+                "name": null,
+                "x": 530.5,
+                "y": 377,
+                "width": 16,
+                "height": 16,
+                "top": 377,
+                "right": 546.5,
+                "bottom": 393,
+                "left": 530.5
+              }
+            ]
+          },
+          {
+            "locale": "ru",
+            "theme": "dark",
+            "width": 1440,
+            "bounds": [
+              {
+                "name": "Магазин",
+                "x": 322,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 582.25,
+                "bottom": 269,
+                "left": 322
+              },
+              {
+                "name": "Категория",
+                "x": 594.25,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 854.5,
+                "bottom": 269,
+                "left": 594.25
+              },
+              {
+                "name": "Поиск",
+                "x": 866.5,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 1126.75,
+                "bottom": 269,
+                "left": 866.5
+              },
+              {
+                "name": null,
+                "x": 1138.75,
+                "y": 249,
+                "width": 16,
+                "height": 16,
+                "top": 249,
+                "right": 1154.75,
+                "bottom": 265,
+                "left": 1138.75
+              }
+            ]
+          },
+          {
+            "locale": "kg",
+            "theme": "light",
+            "width": 360,
+            "bounds": [
+              {
+                "name": "Дүкөн",
+                "x": 33,
+                "y": 325.796875,
+                "width": 294,
+                "height": 40,
+                "top": 325.796875,
+                "right": 327,
+                "bottom": 365.796875,
+                "left": 33
+              },
+              {
+                "name": "Категория",
+                "x": 33,
+                "y": 401.796875,
+                "width": 294,
+                "height": 40,
+                "top": 401.796875,
+                "right": 327,
+                "bottom": 441.796875,
+                "left": 33
+              },
+              {
+                "name": "Издөө",
+                "x": 33,
+                "y": 477.796875,
+                "width": 294,
+                "height": 40,
+                "top": 477.796875,
+                "right": 327,
+                "bottom": 517.796875,
+                "left": 33
+              },
+              {
+                "name": null,
+                "x": 33,
+                "y": 565.796875,
+                "width": 16,
+                "height": 16,
+                "top": 565.796875,
+                "right": 49,
+                "bottom": 581.796875,
+                "left": 33
+              }
+            ]
+          },
+          {
+            "locale": "kg",
+            "theme": "light",
+            "width": 768,
+            "bounds": [
+              {
+                "name": "Дүкөн",
+                "x": 318,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 518.5,
+                "bottom": 329,
+                "left": 318
+              },
+              {
+                "name": "Категория",
+                "x": 530.5,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 731,
+                "bottom": 329,
+                "left": 530.5
+              },
+              {
+                "name": "Издөө",
+                "x": 318,
+                "y": 365,
+                "width": 200.5,
+                "height": 32,
+                "top": 365,
+                "right": 518.5,
+                "bottom": 397,
+                "left": 318
+              },
+              {
+                "name": null,
+                "x": 530.5,
+                "y": 377,
+                "width": 16,
+                "height": 16,
+                "top": 377,
+                "right": 546.5,
+                "bottom": 393,
+                "left": 530.5
+              }
+            ]
+          },
+          {
+            "locale": "kg",
+            "theme": "light",
+            "width": 1440,
+            "bounds": [
+              {
+                "name": "Дүкөн",
+                "x": 322,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 582.25,
+                "bottom": 269,
+                "left": 322
+              },
+              {
+                "name": "Категория",
+                "x": 594.25,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 854.5,
+                "bottom": 269,
+                "left": 594.25
+              },
+              {
+                "name": "Издөө",
+                "x": 866.5,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 1126.75,
+                "bottom": 269,
+                "left": 866.5
+              },
+              {
+                "name": null,
+                "x": 1138.75,
+                "y": 249,
+                "width": 16,
+                "height": 16,
+                "top": 249,
+                "right": 1154.75,
+                "bottom": 265,
+                "left": 1138.75
+              }
+            ]
+          },
+          {
+            "locale": "kg",
+            "theme": "dark",
+            "width": 360,
+            "bounds": [
+              {
+                "name": "Дүкөн",
+                "x": 33,
+                "y": 325.796875,
+                "width": 294,
+                "height": 40,
+                "top": 325.796875,
+                "right": 327,
+                "bottom": 365.796875,
+                "left": 33
+              },
+              {
+                "name": "Категория",
+                "x": 33,
+                "y": 401.796875,
+                "width": 294,
+                "height": 40,
+                "top": 401.796875,
+                "right": 327,
+                "bottom": 441.796875,
+                "left": 33
+              },
+              {
+                "name": "Издөө",
+                "x": 33,
+                "y": 477.796875,
+                "width": 294,
+                "height": 40,
+                "top": 477.796875,
+                "right": 327,
+                "bottom": 517.796875,
+                "left": 33
+              },
+              {
+                "name": null,
+                "x": 33,
+                "y": 565.796875,
+                "width": 16,
+                "height": 16,
+                "top": 565.796875,
+                "right": 49,
+                "bottom": 581.796875,
+                "left": 33
+              }
+            ]
+          },
+          {
+            "locale": "kg",
+            "theme": "dark",
+            "width": 768,
+            "bounds": [
+              {
+                "name": "Дүкөн",
+                "x": 318,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 518.5,
+                "bottom": 329,
+                "left": 318
+              },
+              {
+                "name": "Категория",
+                "x": 530.5,
+                "y": 297,
+                "width": 200.5,
+                "height": 32,
+                "top": 297,
+                "right": 731,
+                "bottom": 329,
+                "left": 530.5
+              },
+              {
+                "name": "Издөө",
+                "x": 318,
+                "y": 365,
+                "width": 200.5,
+                "height": 32,
+                "top": 365,
+                "right": 518.5,
+                "bottom": 397,
+                "left": 318
+              },
+              {
+                "name": null,
+                "x": 530.5,
+                "y": 377,
+                "width": 16,
+                "height": 16,
+                "top": 377,
+                "right": 546.5,
+                "bottom": 393,
+                "left": 530.5
+              }
+            ]
+          },
+          {
+            "locale": "kg",
+            "theme": "dark",
+            "width": 1440,
+            "bounds": [
+              {
+                "name": "Дүкөн",
+                "x": 322,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 582.25,
+                "bottom": 269,
+                "left": 322
+              },
+              {
+                "name": "Категория",
+                "x": 594.25,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 854.5,
+                "bottom": 269,
+                "left": 594.25
+              },
+              {
+                "name": "Издөө",
+                "x": 866.5,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 1126.75,
+                "bottom": 269,
+                "left": 866.5
+              },
+              {
+                "name": null,
+                "x": 1138.75,
+                "y": 249,
+                "width": 16,
+                "height": 16,
+                "top": 249,
+                "right": 1154.75,
+                "bottom": 265,
+                "left": 1138.75
+              }
+            ]
+          },
+          {
+            "locale": "en",
+            "theme": "light",
+            "width": 360,
+            "bounds": [
+              {
+                "name": "Store",
+                "x": 33,
+                "y": 305.796875,
+                "width": 294,
+                "height": 40,
+                "top": 305.796875,
+                "right": 327,
+                "bottom": 345.796875,
+                "left": 33
+              },
+              {
+                "name": "Category",
+                "x": 33,
+                "y": 381.796875,
+                "width": 294,
+                "height": 40,
+                "top": 381.796875,
+                "right": 327,
+                "bottom": 421.796875,
+                "left": 33
+              },
+              {
+                "name": "Search",
+                "x": 33,
+                "y": 457.796875,
+                "width": 294,
+                "height": 40,
+                "top": 457.796875,
+                "right": 327,
+                "bottom": 497.796875,
+                "left": 33
+              },
+              {
+                "name": null,
+                "x": 33,
+                "y": 545.796875,
+                "width": 16,
+                "height": 16,
+                "top": 545.796875,
+                "right": 49,
+                "bottom": 561.796875,
+                "left": 33
+              }
+            ]
+          },
+          {
+            "locale": "en",
+            "theme": "light",
+            "width": 768,
+            "bounds": [
+              {
+                "name": "Store",
+                "x": 318,
+                "y": 293,
+                "width": 200.5,
+                "height": 32,
+                "top": 293,
+                "right": 518.5,
+                "bottom": 325,
+                "left": 318
+              },
+              {
+                "name": "Category",
+                "x": 530.5,
+                "y": 293,
+                "width": 200.5,
+                "height": 32,
+                "top": 293,
+                "right": 731,
+                "bottom": 325,
+                "left": 530.5
+              },
+              {
+                "name": "Search",
+                "x": 318,
+                "y": 361,
+                "width": 200.5,
+                "height": 32,
+                "top": 361,
+                "right": 518.5,
+                "bottom": 393,
+                "left": 318
+              },
+              {
+                "name": null,
+                "x": 530.5,
+                "y": 373,
+                "width": 16,
+                "height": 16,
+                "top": 373,
+                "right": 546.5,
+                "bottom": 389,
+                "left": 530.5
+              }
+            ]
+          },
+          {
+            "locale": "en",
+            "theme": "light",
+            "width": 1440,
+            "bounds": [
+              {
+                "name": "Store",
+                "x": 322,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 582.25,
+                "bottom": 269,
+                "left": 322
+              },
+              {
+                "name": "Category",
+                "x": 594.25,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 854.5,
+                "bottom": 269,
+                "left": 594.25
+              },
+              {
+                "name": "Search",
+                "x": 866.5,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 1126.75,
+                "bottom": 269,
+                "left": 866.5
+              },
+              {
+                "name": null,
+                "x": 1138.75,
+                "y": 249,
+                "width": 16,
+                "height": 16,
+                "top": 249,
+                "right": 1154.75,
+                "bottom": 265,
+                "left": 1138.75
+              }
+            ]
+          },
+          {
+            "locale": "en",
+            "theme": "dark",
+            "width": 360,
+            "bounds": [
+              {
+                "name": "Store",
+                "x": 33,
+                "y": 305.796875,
+                "width": 294,
+                "height": 40,
+                "top": 305.796875,
+                "right": 327,
+                "bottom": 345.796875,
+                "left": 33
+              },
+              {
+                "name": "Category",
+                "x": 33,
+                "y": 381.796875,
+                "width": 294,
+                "height": 40,
+                "top": 381.796875,
+                "right": 327,
+                "bottom": 421.796875,
+                "left": 33
+              },
+              {
+                "name": "Search",
+                "x": 33,
+                "y": 457.796875,
+                "width": 294,
+                "height": 40,
+                "top": 457.796875,
+                "right": 327,
+                "bottom": 497.796875,
+                "left": 33
+              },
+              {
+                "name": null,
+                "x": 33,
+                "y": 545.796875,
+                "width": 16,
+                "height": 16,
+                "top": 545.796875,
+                "right": 49,
+                "bottom": 561.796875,
+                "left": 33
+              }
+            ]
+          },
+          {
+            "locale": "en",
+            "theme": "dark",
+            "width": 768,
+            "bounds": [
+              {
+                "name": "Store",
+                "x": 318,
+                "y": 293,
+                "width": 200.5,
+                "height": 32,
+                "top": 293,
+                "right": 518.5,
+                "bottom": 325,
+                "left": 318
+              },
+              {
+                "name": "Category",
+                "x": 530.5,
+                "y": 293,
+                "width": 200.5,
+                "height": 32,
+                "top": 293,
+                "right": 731,
+                "bottom": 325,
+                "left": 530.5
+              },
+              {
+                "name": "Search",
+                "x": 318,
+                "y": 361,
+                "width": 200.5,
+                "height": 32,
+                "top": 361,
+                "right": 518.5,
+                "bottom": 393,
+                "left": 318
+              },
+              {
+                "name": null,
+                "x": 530.5,
+                "y": 373,
+                "width": 16,
+                "height": 16,
+                "top": 373,
+                "right": 546.5,
+                "bottom": 389,
+                "left": 530.5
+              }
+            ]
+          },
+          {
+            "locale": "en",
+            "theme": "dark",
+            "width": 1440,
+            "bounds": [
+              {
+                "name": "Store",
+                "x": 322,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 582.25,
+                "bottom": 269,
+                "left": 322
+              },
+              {
+                "name": "Category",
+                "x": 594.25,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 854.5,
+                "bottom": 269,
+                "left": 594.25
+              },
+              {
+                "name": "Search",
+                "x": 866.5,
+                "y": 237,
+                "width": 260.25,
+                "height": 32,
+                "top": 237,
+                "right": 1126.75,
+                "bottom": 269,
+                "left": 866.5
+              },
+              {
+                "name": null,
+                "x": 1138.75,
+                "y": 249,
+                "width": 16,
+                "height": 16,
+                "top": 249,
+                "right": 1154.75,
+                "bottom": 265,
+                "left": 1138.75
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "landing": {
+        "base": "http://localhost:3124",
+        "baseline": "4b5e5ce379031bb9f51737c3c193875ff5432b2a",
+        "checks": [
+          "ru-360: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "ru-390: actual signup/login CTA and RU → EN → KG → RU auth language switching; no forms submitted",
+          "ru-390: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "ru-768: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "ru-1440: actual signup/login CTA and RU → EN → KG → RU auth language switching; no forms submitted",
+          "ru-1440: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "kg-360: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "kg-390: actual signup/login CTA and RU → EN → KG → RU auth language switching; no forms submitted",
+          "kg-390: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "kg-768: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "kg-1440: actual signup/login CTA and RU → EN → KG → RU auth language switching; no forms submitted",
+          "kg-1440: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "en-360: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "en-390: actual signup/login CTA and RU → EN → KG → RU auth language switching; no forms submitted",
+          "en-390: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "en-768: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "en-1440: actual signup/login CTA and RU → EN → KG → RU auth language switching; no forms submitted",
+          "en-1440: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison",
+          "light: original theme isolation, 899/900/999/1000/1199/1200 px, short menu scroll and resize cleanup",
+          "dark: original theme isolation, 899/900/999/1000/1199/1200 px, short menu scroll and resize cleanup",
+          "Product story and pricing remain readable without JavaScript"
+        ],
+        "errors": [],
+        "status": "passed"
+      },
+      "boundedPageCapture": {
+        "states": 172,
+        "requestedPaths": 70,
+        "uninstantiatedDynamicTemplates": 10,
+        "artifact": "artifacts/catalog-pricing-20261029/ux-final-copy/artifacts/ux/after/report.json",
+        "note": "States include valid redirects and are not equivalent to fully accepted pages."
+      },
+      "reporting": {
+        "setsPassed": 5,
+        "visualCombinations": 72,
+        "detailScrollChecks": 20,
+        "providerCalls": 0
+      }
+    },
+    "typescript": "passed",
+    "lint": "passed without warnings",
+    "translations": "passed RU/KG/EN",
+    "offlinePublicSmoke": {
+      "passed": 11,
+      "failed": 0
+    },
+    "productionBuild": "passed in isolated source copy after final application edits; real next start runtime, not dev server",
+    "mainUpgrade": {
+      "main": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+      "database": "bazaar_hardening_agent3_transactions",
+      "pendingBefore": [
+        "20261021170000_subscription_payments",
+        "20261022090000_studio_quality",
+        "20261029180000_shared_price_books",
+        "20261029190000_price_book_references",
+        "20261029200000_price_book_snapshots"
+      ],
+      "pendingAfter": [],
+      "legacyTables": 128,
+      "legacyRows": 24,
+      "unchanged": true,
+      "zeroPricePreserved": true,
+      "fractionalStockPreserved": true,
+      "paidOrderAndPaymentPreserved": true,
+      "existingAccessRemainsManual": true,
+      "existingStudioQualityPreserved": true,
+      "automaticStoreConnections": 0,
+      "actualProviderCalls": 0
+    },
+    "scaleMeasurements": {
+      "products": 10000,
+      "stores": 10,
+      "measurements": {
+        "seedProductsMs": 845,
+        "fullAssortmentNineRecipientsMs": 21911,
+        "initialListPreviewMs": 530,
+        "initialListApplyMs": 1182,
+        "connectTenStoresPreviewMs": 354,
+        "connectTenStoresApplyMs": 13946,
+        "bulkTenThousandPreviewMs": 3273,
+        "bulkTenThousandApplyMs": 16265,
+        "bulkRollbackPreviewMs": 3825,
+        "bulkRollbackApplyMs": 17647,
+        "oneProductPreviewMs": 100,
+        "productPageMs": 220,
+        "futureProductMs": 63
+      },
+      "memorySamples": [
+        {
+          "stage": "seedProductsMs",
+          "heapMiB": 108,
+          "rssMiB": 260
+        },
+        {
+          "stage": "fullAssortmentNineRecipientsMs",
+          "heapMiB": 180,
+          "rssMiB": 1058
+        },
+        {
+          "stage": "initialListPreviewMs",
+          "heapMiB": 214,
+          "rssMiB": 1083
+        },
+        {
+          "stage": "initialListApplyMs",
+          "heapMiB": 149,
+          "rssMiB": 1082
+        },
+        {
+          "stage": "connectTenStoresPreviewMs",
+          "heapMiB": 228,
+          "rssMiB": 1096
+        },
+        {
+          "stage": "connectTenStoresApplyMs",
+          "heapMiB": 198,
+          "rssMiB": 955
+        },
+        {
+          "stage": "bulkTenThousandPreviewMs",
+          "heapMiB": 321,
+          "rssMiB": 1580
+        },
+        {
+          "stage": "bulkTenThousandApplyMs",
+          "heapMiB": 360,
+          "rssMiB": 1158
+        },
+        {
+          "stage": "bulkRollbackPreviewMs",
+          "heapMiB": 447,
+          "rssMiB": 1598
+        },
+        {
+          "stage": "bulkRollbackApplyMs",
+          "heapMiB": 473,
+          "rssMiB": 1394
+        },
+        {
+          "stage": "oneProductPreviewMs",
+          "heapMiB": 468,
+          "rssMiB": 1411
+        },
+        {
+          "stage": "productPageMs",
+          "heapMiB": 470,
+          "rssMiB": 1412
+        },
+        {
+          "stage": "futureProductMs",
+          "heapMiB": 183,
+          "rssMiB": 1350
+        }
+      ],
+      "nodeOptions": "--max-old-space-size=512",
+      "providerCalls": 0
+    },
+    "githubCI": {
+      "conclusion": "success",
+      "headSha": "7ee1f53d62ff1bad2c2afa775ce453e1b61a4858",
+      "jobs": [
+        {
+          "conclusion": "success",
+          "databaseId": 123519850005,
+          "name": "codeql",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850318,
+          "name": "stabilization",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850321,
+          "name": "baam-browser",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850424,
+          "name": "inventory-browser",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850460,
+          "name": "test (checks)",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850505,
+          "name": "ux-browser",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850519,
+          "name": "dependency-security / osv-scan",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850630,
+          "name": "native-ios",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850669,
+          "name": "test (catalog-scale)",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850681,
+          "name": "native-android",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850790,
+          "name": "landing-browser",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123519850796,
+          "name": "reporting-browser",
+          "status": "completed",
+          "steps": []
+        },
+        {
+          "conclusion": "success",
+          "databaseId": 123527238490,
+          "name": "release-gate",
+          "status": "completed",
+          "steps": []
+        }
+      ],
+      "status": "completed",
+      "url": "https://github.com/i-iangurazov/bazaar/actions/runs/40894511924"
+    },
+    "finalCIUiAcceptance": {
+      "applicationCommit": "7ee1f53d62ff1bad2c2afa775ce453e1b61a4858",
+      "workflow": "https://github.com/i-iangurazov/bazaar/actions/runs/40894511924",
+      "behaviorChecks": 82,
+      "sharedControlBlocks": 7,
+      "capturedStates": 190,
+      "distinctRequestedPaths": 78,
+      "uninstantiatedDynamicTemplates": [],
+      "behaviorErrors": [],
+      "controlErrors": [],
+      "captureErrors": [],
+      "overflowStates": [],
+      "note": "Captured states include roles, widths, themes and valid redirects; this is not exhaustive acceptance of all page/role/device/data combinations."
+    },
+    "finalCIChecks": {
+      "passed": 3015,
+      "poolOnlyPending": 3,
+      "poolingPassed": 88,
+      "artifact": "artifacts/catalog-pricing-20261029/ci-final-checks.log",
+      "note": "Regular CI cases overlap local unit/integration totals and are not added to them. All three pool-only skips run in the successful pooling suite."
+    }
+  },
+  "findingsFixedDuringAcceptance": [
+    "512 MiB JS heap OOM at 100k prices fixed by text rows, database row hashes, scoped post-state reads and streaming compressed snapshots; the full process RSS is not capped at 512 MiB",
+    "Repeated nested catalog hydration and quadratic membership checks reduced; cold 10k/ten-store catalog read timeout corrected",
+    "Metadata-only or untouched field saves no longer create individual prices; live updates refresh pristine fields without discarding dirty fields",
+    "Archived products/inactive variants excluded from active bulk preparation, with failing-before and passing-after DB regression",
+    "Pending price recovery restores staged values after a reload and confirmed cancellation; late requests cannot publish",
+    "New-list/store/source/history actions cannot silently discard staged price edits",
+    "QA browser locators corrected to await the real saved response and displayed before/after price pair; initial locator failures are not application regressions",
+    "QA Redis sockets explicitly closed so successful runs terminate",
+    "Real 768px product-form overflow fixed by wrapping barcode actions; the tablet BAAM action no longer overlaps global search. Browser regression covers RU/KG/EN at 390/767/768/1023/1024/1440px."
+  ],
+  "preservation": {
+    "warehouseColumns": "preserved and browser-checked",
+    "productRowNavigation": "ordinary row/name click remains unchanged; no new-tab navigation",
+    "zeroPrices": "preserved",
+    "stockAndHistoricalDocumentAmounts": "preserved by integration/scale checks",
+    "automaticStoreConnections": 0,
+    "automaticPaymentActivation": false,
+    "existingOrganizationBillingMode": "MANUAL preserved by upgrade rehearsal"
+  },
+  "limitations": [
+    "No customer price copying or duplicate merging was performed; the client must explicitly choose stores, source and preservation policy in the reviewed UI.",
+    "The 100k-price benchmark is one sequential local workload, not a production latency/RAM/concurrency SLA; the 512 MiB setting caps only JS heap. Whole-process RSS samples are recorded separately.",
+    "Historical Espresso 97-page-source/32-control coverage is retained as historical bounded evidence; this delivery does not claim a new exhaustive acceptance of every URL/state/role/device.",
+    "Current real Freedom Pay merchant acceptance, live DeepSeek/ASR/image quality, physical printers/scanners, actual email and marketplace calls were not rerun; provider calls in this acceptance were blocked or mocked. Freedom Pay remains disabled until merchant setup and real acceptance.",
+    "GitHub CI and preview are separate: production branch is main, preview build does not run production migrations. No customer or production database was migrated.",
+    "Final merge/deployment needs a new explicit human authorization and a fresh origin/main/conflict check at that time."
+  ]
+}

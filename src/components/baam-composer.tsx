@@ -1,9 +1,16 @@
 "use client";
 import Image from "next/image";
 import { useRef } from "react";
-import { ImageSquare, Microphone, PaperPlaneTilt, Stop, X } from "@phosphor-icons/react";
+import {
+  ImagePlusIcon as ImageSquare,
+  MicrophoneIcon as Microphone,
+  SendIcon as PaperPlaneTilt,
+  StopIcon as Stop,
+  CloseIcon as X,
+} from "@/components/icons";
 import { Spinner } from "./ui/spinner";
 import type { BaamController } from "./use-baam-companion";
+import { productPhotoAccept } from "@/lib/productImageUpload";
 
 const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
@@ -97,7 +104,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
       ) : null}
       {c.voice.recording || c.voice.requesting ? (
         <div
-          className="flex min-h-20 items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-3"
+          className="flex min-h-20 items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3"
           role="status"
         >
           <span className="h-2 w-2 rounded-full bg-red-600 motion-safe:animate-pulse" />
@@ -121,7 +128,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground"
             onClick={() => c.voice.stop()}
           >
-            <Stop size={18} weight="fill" />
+            <Stop size={18} fill="currentColor" />
           </button>
         </div>
       ) : (
@@ -130,7 +137,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             e.preventDefault();
             void c.ask();
           }}
-          className="rounded-2xl border border-border bg-background p-2 shadow-sm focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10"
+          className="rounded-lg border border-border bg-background p-2 shadow-none focus-within:border-primary"
         >
           <textarea
             ref={c.inputRef}
@@ -153,7 +160,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
+              accept={productPhotoAccept}
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -194,19 +201,19 @@ export function BaamComposer({ c }: { c: BaamController }) {
               <button
                 type="button"
                 aria-label={c.t("stop")}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary focus-visible:outline focus-visible:outline-2"
+                className="flex h-11 w-11 items-center justify-center rounded-lg bg-secondary focus-visible:outline focus-visible:outline-2"
                 onClick={() => void c.stopResponse()}
               >
-                <Stop size={18} weight="fill" />
+                <Stop size={18} fill="currentColor" />
               </button>
             ) : (
               <button
                 type="submit"
                 aria-label={c.t("send")}
                 disabled={!c.available || c.busy || c.mediaPending || !c.question.trim()}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
               >
-                <PaperPlaneTilt size={20} weight="fill" />
+                <PaperPlaneTilt size={20} />
               </button>
             )}
           </div>

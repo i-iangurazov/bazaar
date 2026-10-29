@@ -12,13 +12,13 @@ describe("product movement journal source", () => {
     const breadcrumbsSource = await readSource("src/components/page-breadcrumbs.tsx");
 
     expect(appShellSource).toContain('key: "productMovements"');
-    expect(appShellSource).toContain('href: appRoutes.movements');
+    expect(appShellSource).toContain("href: appRoutes.movements");
     expect(appShellSource).toContain("icon: ProductMovementIcon");
     expect(appShellSource).toContain('key: "stockTransfer"');
-    expect(appShellSource).toContain('href: appRoutes.transfers');
+    expect(appShellSource).toContain("href: appRoutes.transfers");
     expect(appShellSource).toContain("icon: TransferIcon");
     expect(appShellSource).toContain('key: "stockWriteOff"');
-    expect(appShellSource).toContain('href: appRoutes.writeOffs');
+    expect(appShellSource).toContain("href: appRoutes.writeOffs");
     expect(appShellSource).toContain("exact: true");
     expect(breadcrumbsSource).toContain('case "movements"');
     expect(breadcrumbsSource).toContain('tBreadcrumbs("productMovements")');
@@ -157,7 +157,11 @@ describe("product movement journal source", () => {
     expect(transferWorkflowSource).toContain("sourceStoreId: fromStoreId");
     expect(transferWorkflowSource).toContain("destinationStoreId: toStoreId");
     expect(writeOffWorkflowSource).toContain("if (!isEditMode)");
-    expect(transferWorkflowSource.match(/if \(!isEditMode\)/g)).toHaveLength(2);
+    // New-document recovery now guards by mode before loading a saved draft.
+    // Source/destination changes preserve lines and validate them instead of clearing them.
+    expect(transferWorkflowSource).toContain("isEditMode || !draftIdentity");
+    expect(transferWorkflowSource).toContain("useTransferLineContext");
+    expect(transferWorkflowSource).not.toContain("if (!isEditMode) {\n      setLines([])");
     await expect(
       access(
         path.join(process.cwd(), "src/components/inventory/product-movement-document-editor.tsx"),
@@ -182,7 +186,7 @@ describe("product movement journal source", () => {
     expect(serviceSource).toContain("normalizeProductMovementDocumentNumber");
   });
 
-  it("keeps Bazaar blue mapped into the shadcn-style sidebar foundation", async () => {
+  it("keeps Bazaar blue for active controls in the Espresso navigation foundation", async () => {
     const globalsSource = await readSource("src/app/globals.css");
     const tailwindSource = await readSource("tailwind.config.ts");
     const sidebarSource = await readSource("src/components/ui/sidebar.tsx");
@@ -194,14 +198,14 @@ describe("product movement journal source", () => {
     expect(globalsSource).toContain("--sidebar-ring: 221 83% 45%");
     expect(tailwindSource).toContain("sidebar:");
     expect(tailwindSource).toContain('"primary-foreground"');
-    expect(sidebarSource).toContain("data-[active=true]:bg-sidebar-primary/10");
+    expect(sidebarSource).toContain("data-[active=true]:bg-card");
     expect(sidebarSource).toContain("data-[active=true]:text-sidebar-primary");
     expect(appShellSource).toContain("<SidebarProvider");
     expect(appShellSource).toContain("<SidebarHeader");
     expect(appShellSource).toContain("<SidebarMenuButton");
     expect(appShellSource).toContain("<SidebarTrigger");
-    expect(mobileShellSource).toContain("rounded-[1.65rem]");
-    expect(mobileShellSource).toContain("bg-primary text-primary-foreground");
+    expect(mobileShellSource).toContain("bg-primary/10 text-primary");
+    expect(mobileShellSource).toContain("data-native-bottom-nav");
     expect(mobileShellSource).toContain("env(safe-area-inset-bottom)");
   });
 

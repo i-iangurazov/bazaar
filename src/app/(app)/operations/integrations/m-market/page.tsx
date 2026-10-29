@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { MMarketEnvironment, MMarketExportJobStatus } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import {
   isDescriptionGenerationJobRunning,
   ProductDescriptionGenerationProgress,
@@ -16,6 +17,8 @@ import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HideIcon, AddIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -174,7 +177,7 @@ const MMarketSettingsPage = () => {
   const trpcUtils = trpc.useUtils();
 
   const role = session?.user?.role ?? "STAFF";
-  const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
+  const canView = role === "ADMIN" || role === "MANAGER";
   const canEdit = role === "ADMIN" || role === "MANAGER";
   const [bulkProgress, setBulkProgress] = useState<MMarketBulkProgressState | null>(null);
   const [bulkElapsedSeconds, setBulkElapsedSeconds] = useState(0);
@@ -321,8 +324,7 @@ const MMarketSettingsPage = () => {
     { jobId: descriptionGenerationJobId ?? "" },
     {
       enabled: Boolean(descriptionGenerationJobId),
-      refetchInterval: (job) =>
-        isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false,
+      refetchInterval: (job) => (isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false),
       onSuccess: async (job) => {
         if (!isDescriptionGenerationJobRunning(job.status)) {
           await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
@@ -1198,7 +1200,22 @@ const MMarketSettingsPage = () => {
           : "";
 
   if (!canView) {
-    return null;
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <p role={session?.user ? "alert" : "status"}>
+          {session?.user ? tErrors("forbidden") : tCommon("loading")}
+        </p>
+      </div>
+    );
+  }
+  if (settingsQuery.error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <QueryErrorState error={settingsQuery.error} onRetry={() => void settingsQuery.refetch()} />
+      </div>
+    );
   }
 
   return (
@@ -1562,14 +1579,15 @@ const MMarketSettingsPage = () => {
           ) : null}
 
           {productsQuery.isLoading ? (
-            <div className="bazaar-admin-empty min-h-[8rem]">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
-            </div>
-          ) : productsQuery.error ? (
-            <div className="bazaar-admin-error">
-              {translateError(tErrors, productsQuery.error)}
-            </div>
+              <div className="bazaar-admin-empty min-h-[8rem]">
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </div>
+            ) : productsQuery.error ? (
+            <QueryErrorState
+              error={productsQuery.error}
+              onRetry={() => void productsQuery.refetch()}
+            />
           ) : (
             <ResponsiveDataList
               items={productItems}
@@ -1665,19 +1683,20 @@ const MMarketSettingsPage = () => {
                             </TableCell>
                             {canEdit ? (
                               <TableCell>
-                                <Button
+                                <IconButton
                                   type="button"
                                   variant={product.included ? "outline" : "secondary"}
-                                  size="sm"
                                   onClick={() =>
                                     handleUpdateProducts(!product.included, [product.id])
                                   }
                                   disabled={updateProductsMutation.isLoading}
-                                >
-                                  {product.included
-                                    ? t("productsSelection.rowExclude")
-                                    : t("productsSelection.rowInclude")}
-                                </Button>
+                                  icon={product.included ? HideIcon : AddIcon}
+                                  label={
+                                    product.included
+                                      ? t("productsSelection.rowExclude")
+                                      : t("productsSelection.rowInclude")
+                                  }
+                                />
                               </TableCell>
                             ) : null}
                           </TableRow>
@@ -1745,18 +1764,19 @@ const MMarketSettingsPage = () => {
                         />
                         {t("productsSelection.selectProductShort")}
                       </label>
-                      <Button
+                      <IconButton
                         type="button"
-                        size="sm"
                         variant={product.included ? "outline" : "secondary"}
-                        className="ml-auto"
                         onClick={() => handleUpdateProducts(!product.included, [product.id])}
                         disabled={updateProductsMutation.isLoading}
-                      >
-                        {product.included
-                          ? t("productsSelection.rowExclude")
-                          : t("productsSelection.rowInclude")}
-                      </Button>
+                        className="ml-auto"
+                        icon={product.included ? HideIcon : AddIcon}
+                        label={
+                          product.included
+                            ? t("productsSelection.rowExclude")
+                            : t("productsSelection.rowInclude")
+                        }
+                      />
                     </div>
                   ) : null}
                 </div>
@@ -1996,9 +2016,7 @@ const MMarketSettingsPage = () => {
                   </div>
                 </div>
               ) : (
-                <div className="bazaar-admin-empty min-h-[7rem]">
-                  {t("preflight.table.empty")}
-                </div>
+                <div className="bazaar-admin-empty min-h-[7rem]">{t("preflight.table.empty")}</div>
               )}
             </div>
           ) : null}
@@ -2074,9 +2092,7 @@ const MMarketSettingsPage = () => {
                 {tCommon("loading")}
               </div>
             ) : jobsQuery.error ? (
-              <div className="bazaar-admin-error">
-                {translateError(tErrors, jobsQuery.error)}
-              </div>
+              <QueryErrorState error={jobsQuery.error} onRetry={() => void jobsQuery.refetch()} />
             ) : jobsQuery.data?.length ? (
               <div className="bazaar-admin-table-shell">
                 <div className="bazaar-admin-table-scroll">
@@ -2140,9 +2156,7 @@ const MMarketSettingsPage = () => {
                 </div>
               </div>
             ) : (
-              <div className="bazaar-admin-empty min-h-[8rem]">
-                {t("history.empty")}
-              </div>
+              <div className="bazaar-admin-empty min-h-[8rem]">{t("history.empty")}</div>
             )}
           </div>
         </CardContent>
@@ -2248,9 +2262,7 @@ const MMarketSettingsPage = () => {
             </div>
 
             {bulkProgress.errorMessage ? (
-              <div className="bazaar-admin-error">
-                {bulkProgress.errorMessage}
-              </div>
+              <div className="bazaar-admin-error">{bulkProgress.errorMessage}</div>
             ) : null}
 
             {bulkProgress.kind === "specs" && bulkProgress.items.length ? (

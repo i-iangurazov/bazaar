@@ -5,12 +5,14 @@ const {
   mockGetServerAuthToken,
   mockRecordFirstEvent,
   mockUploadProductImageBuffer,
+  mockNormalizeProductImageUpload,
   prisma,
 } = vi.hoisted(() => ({
   mockCreateProductImageDirectUploadTarget: vi.fn(),
   mockGetServerAuthToken: vi.fn(),
   mockRecordFirstEvent: vi.fn(),
   mockUploadProductImageBuffer: vi.fn(),
+  mockNormalizeProductImageUpload: vi.fn(),
   prisma: {
     organization: { findUnique: vi.fn() },
     store: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
@@ -28,6 +30,7 @@ vi.mock("@/server/services/productEvents", () => ({
   recordFirstEvent: (...args: unknown[]) => mockRecordFirstEvent(...args),
 }));
 vi.mock("@/server/services/productImageStorage", () => ({
+  normalizeProductImageUpload: (...args: unknown[]) => mockNormalizeProductImageUpload(...args),
   createProductImageDirectUploadTarget: (...args: unknown[]) =>
     mockCreateProductImageDirectUploadTarget(...args),
   uploadProductImageBuffer: (...args: unknown[]) =>
@@ -529,12 +532,16 @@ describe("product image studio upload route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", role: "MANAGER" });
+    mockNormalizeProductImageUpload.mockResolvedValue({
+      buffer: Buffer.from([4, 5, 6]),
+      contentType: "image/jpeg",
+    });
     mockUploadProductImageBuffer.mockResolvedValue({
       url: "/uploads/imported-products/org-1/studio-test.jpg",
     });
   });
 
-  it("normalizes HEIC sequence uploads to HEIC mime type", async () => {
+  it("decodes HEIC sequences before storing the normalized JPEG", async () => {
     const { POST } = await import("../../src/app/api/product-image-studio/upload/route");
     const formData = new FormData();
     formData.append(
@@ -550,9 +557,12 @@ describe("product image studio upload route", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mockNormalizeProductImageUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: "image/heic" }),
+    );
     expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
       expect.objectContaining({
-        contentType: "image/heic",
+        contentType: "image/jpeg",
       }),
     );
   });
@@ -573,9 +583,12 @@ describe("product image studio upload route", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mockNormalizeProductImageUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ contentType: "image/heif" }),
+    );
     expect(mockUploadProductImageBuffer).toHaveBeenCalledWith(
       expect.objectContaining({
-        contentType: "image/heif",
+        contentType: "image/jpeg",
       }),
     );
   });

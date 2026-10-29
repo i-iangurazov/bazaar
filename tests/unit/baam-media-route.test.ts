@@ -20,6 +20,12 @@ vi.mock("@/server/db/prisma", () => ({
   prisma: { baamAttachment: { findUnique: mocks.existing, upsert: mocks.upsert } },
 }));
 import { POST } from "@/app/api/baam/media/route";
+vi.mock("@/server/services/productImageSourceUpload", () => ({
+  prepareProductStudioSource: async (file: File) => ({
+    buffer: Buffer.from(await file.arrayBuffer()),
+    contentType: file.type,
+  }),
+}));
 function request(bytes = "image", type = "image/png") {
   const form = new FormData();
   form.set("conversationId", "dialog");

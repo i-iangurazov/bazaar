@@ -149,6 +149,9 @@ const buildReturnScopeFilter = (scope: SalesAnalyticsScope) => {
   return Prisma.sql`WHERE ${Prisma.join(filters, " AND ")}`;
 };
 
+// Prisma binds raw Date parameters as timestamptz while DateTime columns store
+// UTC without a zone. Date bounds below explicitly convert to UTC timestamps so
+// the database session's TimeZone cannot shift a business-day boundary.
 const localDaySql = (field: Prisma.Sql) =>
   Prisma.sql`to_char((${field} + (${BUSINESS_TIME_ZONE_OFFSET_MINUTES} * interval '1 minute')), 'YYYY-MM-DD')`;
 
@@ -200,8 +203,8 @@ export const getSalesAnalyticsOverview = async (
                SUM(o."discountKgs") AS "discountKgs"
         FROM "CustomerOrder" o
         ${orderScope}
-          AND o."completedAt" >= ${range.fromUtc}
-          AND o."completedAt" < ${range.toUtcExclusive}
+          AND o."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC')
+          AND o."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
         GROUP BY "date"
         ORDER BY "date"
       `),
@@ -215,8 +218,8 @@ export const getSalesAnalyticsOverview = async (
                SUM(r."totalKgs") AS "returnsKgs"
         FROM "SaleReturn" r
         ${returnScope}
-          AND r."completedAt" >= ${range.fromUtc}
-          AND r."completedAt" < ${range.toUtcExclusive}
+          AND r."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC')
+          AND r."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
         GROUP BY "date"
         ORDER BY "date"
       `),
@@ -402,15 +405,15 @@ export const getSalesAnalyticsFilterOptions = async (
       FROM "CustomerOrderLine" l
       JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
       ${orderScope}
-        AND o."completedAt" >= ${range.fromUtc}
-        AND o."completedAt" < ${range.toUtcExclusive}
+        AND o."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC')
+        AND o."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
       UNION
       SELECT rl."productId"
       FROM "SaleReturnLine" rl
       JOIN "SaleReturn" r ON r.id = rl."saleReturnId"
       ${returnScope}
-        AND r."completedAt" >= ${range.fromUtc}
-        AND r."completedAt" < ${range.toUtcExclusive}
+        AND r."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC')
+        AND r."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
     )
     SELECT DISTINCT TRIM(category_value) AS category
     FROM active_products a
@@ -447,16 +450,16 @@ const buildSoldProductsActivity = (input: SoldProductsFilters, range: SalesAnaly
       FROM "CustomerOrderLine" l
       JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
       ${orderScope}
-        AND o."completedAt" >= ${range.fromUtc}
-        AND o."completedAt" < ${range.toUtcExclusive}
+        AND o."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC')
+        AND o."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
       UNION ALL
       SELECT rl."productId", rl."variantId", rl."variantKey", 0, 0::numeric,
              rl.qty, rl."lineTotalKgs", NULL::text
       FROM "SaleReturnLine" rl
       JOIN "SaleReturn" r ON r.id = rl."saleReturnId"
       ${returnScope}
-        AND r."completedAt" >= ${range.fromUtc}
-        AND r."completedAt" < ${range.toUtcExclusive}
+        AND r."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC')
+        AND r."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
     ), grouped AS (
       SELECT "productId", "variantKey", MAX("variantId") AS "variantId",
              SUM("quantitySold")::double precision AS "quantitySold",

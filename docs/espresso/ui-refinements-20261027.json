@@ -1,0 +1,255 @@
+{
+  "status": "implemented-and-verified",
+  "date": "2026-10-27",
+  "branch": "codex/playground",
+  "baseline": "f4d1b39",
+  "request": [
+    "Equal header control heights",
+    "Replace BAAM mark without stars",
+    "Contain mobile help counter",
+    "Remove technical overridden-price badges",
+    "Icon-only table row actions throughout the application",
+    "Open product by row/name in a new tab",
+    "Automatic large-screen scale plus saved manual choice"
+  ],
+  "changes": {
+    "header": {
+      "desktop": "BAAM, help, install and language group share a 36px base height. At 1920px automatic scaling measured 40.5px for BAAM/help/language with identical y position.",
+      "mobile": "BAAM and adjacent actions are 44x44px. The 14px help badge stays inside its own button; at 390px badge right=229, BAAM left=234. Counter capped at 99+.",
+      "icon": "Existing Lucide Bot with the shared 1.6 stroke style replaces the chat/wave mark everywhere BaamIcon is used. Brand blue retained; no sparkles."
+    },
+    "pricing": {
+      "list": "Removed overridden-price badge next to effective prices in product table.",
+      "detail": "Removed duplicate badge in profitability price card. Dedicated store-pricing settings retain the meaningful source distinction using Store price / Цена магазина / Дүкөндүн баасы. Effective price 139.50 KGS versus base 129.50 KGS verified; pricing logic unchanged."
+    },
+    "rowActions": {
+      "pattern": "Existing IconButton and icon API; localized accessible names, tooltips/native titles, disabled/loading states and links retained. IconButton supports explicit busy state. Overflow menu items retain readable labels with icons.",
+      "sources": [
+        "customers",
+        "admin/jobs",
+        "platform",
+        "pos/debts",
+        "pos/registers",
+        "inventory/reorder explanation",
+        "inventory/movements",
+        "integrations/bazaar-api",
+        "integrations/product-image-studio",
+        "integrations/m-market",
+        "integrations/bakai-store",
+        "integrations/o-market",
+        "integrations/bazaar-catalog",
+        "pos/receipt-registry"
+      ],
+      "mobile": "Corresponding list/card actions converted as well: customers, registers, receipts and catalogue integration rows.",
+      "rule": "Recorded in AGENTS.md. Entity names, data values, column sorting, selectors and confirmation buttons remain readable text.",
+      "audit": {
+        "tableOrResponsiveSourcesInspected": 51,
+        "remainingNonIconButtonsInCells": "Three report entity-name drilldowns; these are readable data labels, not an action toolbar. No unconverted labelled action buttons found in inspected table cells.",
+        "evidence": "artifacts/ux/espresso/row-actions-after.json"
+      }
+    },
+    "productNavigation": {
+      "behavior": "Clicking a noninteractive area of a product table row or its name opens the product in a new tab. List filter/store/page/returnTo context retained; opener protected.",
+      "independence": "Checkboxes, text selection, inline editors, action controls and existing links keep their own events. Real name links support native keyboard and modifier/context-menu behavior.",
+      "editing": "A separate pencil beside the linked name preserves inline editing; desktop and touch triggers use the existing policy. Keyboard editing and cancel remain covered.",
+      "mobile": "Product card title is also a real new-tab link.",
+      "status": "withdrawn-by-human",
+      "supersededBy": "docs/espresso/product-navigation-revert-20261027.json"
+    },
+    "display": {
+      "automatic": "App-only rem sizing on screens: normal16px; 1600px viewport→17px; 1920px→18px; 2560px→20px. Content may fill up to112.5rem on wide screens. No browser zoom override.",
+      "manual": "Profile → Display / Вид интерфейса: Automatic,100%,110%,125%. Applies immediately, persists in this browser, syncs across tabs. Invalid/unavailable storage handled; temporary preference notice when saving is blocked.",
+      "boundaries": "Scaling applies from1024px; phones retain16px. Root attribute removed when leaving app; print/document routes do not receive the setting. No account/schema/API migration.",
+      "handoff": "Final preference Automatic; original light theme restored; temporary browser viewport override reset."
+    }
+  },
+  "verification": {
+    "unit": {
+      "files": 280,
+      "tests": 2190,
+      "result": "passed",
+      "newCases": 22,
+      "log": "artifacts/ux/espresso/refinements-unit-final.log"
+    },
+    "database": {
+      "files": 65,
+      "tests": 520,
+      "result": "passed",
+      "database": "bazaar_hardening_ci",
+      "redisDb": 5,
+      "providers": "disabled/mock/log-only",
+      "log": "artifacts/ux/espresso/refinements-database.log"
+    },
+    "types": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/refinements-types-final.log"
+    },
+    "lint": {
+      "application": "passed without warnings",
+      "applicationLog": "artifacts/ux/espresso/refinements-lint-final.log",
+      "changedTests": "passed",
+      "testLog": "artifacts/ux/espresso/refinements-test-lint.log"
+    },
+    "translations": {
+      "locales": ["ru", "kg", "en"],
+      "result": "passed",
+      "log": "artifacts/ux/espresso/refinements-i18n-final.log"
+    },
+    "productionBuild": {
+      "result": "passed",
+      "buildId": "ZhzdXPUMxowi_3kabdRjc",
+      "log": ".local/bazaar/logs/build.log",
+      "startup": "artifacts/ux/espresso/refinements-start.log"
+    },
+    "browser": {
+      "engine": "Chrome on actual standalone production build",
+      "cases": [
+        {
+          "name": "1920 header",
+          "rootSize": 18,
+          "controlHeights": [40.5, 40.5, 40.5],
+          "aligned": true,
+          "overflow": false
+        },
+        {
+          "name": "390 mobile header",
+          "controls": 44,
+          "badgeContained": true,
+          "overflow": false
+        },
+        {
+          "name": "2560 product table",
+          "rootSize": 20,
+          "tableWidth": 2161,
+          "overflow": false,
+          "overriddenBadges": 0
+        },
+        {
+          "name": "Native product-name link opens a new tab",
+          "detailLoaded": true,
+          "storeAndListContextPreserved": true
+        },
+        {
+          "name": "Free product row click opens another tab",
+          "passed": true
+        },
+        {
+          "name": "Product checkbox selects without navigation",
+          "passed": true
+        },
+        {
+          "name": "Name pencil opens inline editor; Escape cancels",
+          "passed": true,
+          "noSave": true
+        },
+        {
+          "name": "Manual100% survives reload",
+          "fontBefore": 16,
+          "fontAfter": 16
+        },
+        {
+          "name": "Manual110%",
+          "desktopFont": 17.6,
+          "mobileFont": 16
+        },
+        {
+          "name": "Manual125%",
+          "desktopFont": 20,
+          "thenReset": "auto"
+        },
+        {
+          "name": "Customer edit/delete",
+          "iconsOnly": true,
+          "editModalOpenedAndCanceled": true,
+          "deleteConfirmationCanceled": true,
+          "customersStillPresent": 14
+        },
+        {
+          "name": "Mobile customer actions",
+          "iconsOnly": true,
+          "overflow": false
+        },
+        {
+          "name": "Receipt actions",
+          "iconsOnly": 4,
+          "previewDialogOpened": true,
+          "noPrintDownloadShare": true
+        },
+        {
+          "name": "320 phone in dark theme",
+          "rootSize": 16,
+          "controls": 44,
+          "overflow": false
+        },
+        {
+          "name": "2560 dark theme",
+          "rootSize": 20,
+          "overflow": false
+        },
+        {
+          "name": "Receiving1280",
+          "columns": [374, 561],
+          "ratio": "2:3",
+          "overflow": false
+        },
+        {
+          "name": "Receiving2560",
+          "columns": [869.109375, 1303.671875],
+          "ratio": "2:3",
+          "overflow": false
+        }
+      ],
+      "screenshots": [
+        "artifacts/ux/espresso/screenshots/refinements-final-desktop.png",
+        "artifacts/ux/espresso/screenshots/refinements-mobile-header-390.png",
+        "artifacts/ux/espresso/screenshots/refinements-products-2560.png",
+        "artifacts/ux/espresso/screenshots/refinements-products-2560-dark.png",
+        "artifacts/ux/espresso/screenshots/refinements-products-320-dark.png",
+        "artifacts/ux/espresso/screenshots/refinements-products-mobile.png",
+        "artifacts/ux/espresso/screenshots/refinements-customer-actions-desktop.png",
+        "artifacts/ux/espresso/screenshots/refinements-customer-actions-mobile.png",
+        "artifacts/ux/espresso/screenshots/refinements-receipt-actions.png",
+        "artifacts/ux/espresso/screenshots/refinements-receiving-1280.png",
+        "artifacts/ux/espresso/screenshots/refinements-scale-settings.png"
+      ],
+      "automationNote": "Chrome CDP stalled on the native window.confirm dialog. Its visible native Cancel button was used; original customer remained. No deletion was submitted."
+    },
+    "preservation": {
+      "routeClickSelectHandlers": "Syntax-tree comparison passed in18changed route sources. Existing disabled expressions retained; phone call branches consolidated to disabled={!customer.phone}.",
+      "protectedWorkflowSources": "Receiving, transfer, write-off and stock count remain byte-exact c276f30.",
+      "sourceEvidence": "artifacts/ux/espresso/refinements-source-preservation.json",
+      "businessRecords": 473,
+      "businessModels": 11,
+      "allTaskBaselineHashesMatch": true,
+      "customers": 14,
+      "evidence": "artifacts/ux/espresso/refinements-preservation-final.json",
+      "historicalCounts": "Earlier recovery report counted472rows. A new DRAFT customer order dated2026-10-27T13:19:56.544Z (19:19Bishkek), before this UI request, raised the current baseline to473. It was preserved; no rollback or seed.",
+      "serverApiOrSchemaChanges": []
+    }
+  },
+  "correctionsDuringVerification": [
+    "Focused test caught desktop name-pencil using a touch-only edit trigger. Fixed to use the existing keyboard trigger on desktop; behavior and permissions rechecked.",
+    "Existing test fixtures now include the application TooltipProvider; DOM-only scrollIntoView polyfill and old source assertions updated for icon buttons. Tests passed again."
+  ],
+  "limits": [
+    "51is a source inventory count, not51fully exercised route/state combinations. Recorded browser cases plus full existing unit/database regressions define acceptance.",
+    "Actual browser checks used local admin and selected desktop/mobile/light/dark states. All role/store/provider/domain regressions ran in the isolated database suite; not an exhaustive visual Cartesian product.",
+    "No live AI generation, acquiring, marketplace publication, email delivery, physical print/share or customer financial transaction was invoked. This delivery changes presentation, entity navigation and local display preference."
+  ],
+  "delivery": {
+    "url": "http://localhost:3122/products",
+    "running": "ready;db up;migrations ok;Redis up",
+    "manualAiConfiguration": "Existing local AI configuration restored after automated provider-disabled checks; no pending image/description jobs and no agent AI request.",
+    "mainUnchanged": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+    "mainMerge": false,
+    "push": false,
+    "deployment": false
+  },
+  "followups": [
+    {
+      "date": "2026-10-27",
+      "report": "docs/espresso/product-navigation-revert-20261027.json",
+      "note": "The human explicitly withdrew row/name new-tab navigation. Remaining UI improvements stay in playground. Earlier navigation test records describe the superseded implementation."
+    }
+  ]
+}

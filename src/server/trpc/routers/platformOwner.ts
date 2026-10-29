@@ -10,6 +10,13 @@ import {
   listPendingPlanUpgradeRequests,
   reviewPlanUpgradeRequest,
 } from "@/server/services/billing";
+import { getSubscriptionPaymentConfig } from "@/server/billing/paymentConfig";
+import {
+  checkSubscriptionInvoice,
+  listSubscriptionPaymentReviews,
+  resolveSubscriptionPaymentReview,
+} from "@/server/billing/subscriptionPayments";
+import { toTRPCError } from "@/server/trpc/errors";
 
 export const platformOwnerRouter = router({
   summary: platformOwnerProcedure.query(async ({ ctx }) => {
@@ -56,12 +63,44 @@ export const platformOwnerRouter = router({
           organization.subscriptionStatus === OrganizationSubscriptionStatus.CANCELED,
       ).length,
       pendingUpgradeRequests,
+      paymentsAvailable: getSubscriptionPaymentConfig().ready,
       activeByTier,
       estimatedMrrKgs,
     };
   }),
 
   listUpgradeRequests: platformOwnerProcedure.query(async () => listPendingPlanUpgradeRequests()),
+
+  paymentReviews: platformOwnerProcedure.query(() => listSubscriptionPaymentReviews()),
+  recheckPayment: platformOwnerProcedure
+    .input(z.object({ organizationId: z.string().min(1), invoiceId: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        return await checkSubscriptionInvoice(input.organizationId, input.invoiceId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  resolvePaymentReview: platformOwnerProcedure
+    .input(
+      z.object({
+        invoiceId: z.string().min(1),
+        note: z.string().trim().min(10).max(500),
+        confirmed: z.literal(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+      try {
+        return await resolveSubscriptionPaymentReview({
+          ...input,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   reviewUpgradeRequest: platformOwnerProcedure
     .input(
@@ -93,6 +132,7 @@ export const platformOwnerRouter = router({
         subscriptionStatus: true,
         trialEndsAt: true,
         currentPeriodEndsAt: true,
+        subscriptionBillingMode: true,
         stores: {
           select: {
             id: true,
@@ -121,46 +161,62 @@ export const platformOwnerRouter = router({
         subscriptionStatus: z.enum(["ACTIVE", "PAST_DUE", "CANCELED"]),
         trialDays: z.number().int().min(0).max(365).optional(),
         currentPeriodDays: z.number().int().min(1).max(365).optional(),
+        subscriptionBillingMode: z.enum(["MANUAL", "SELF_SERVE"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const before = await ctx.prisma.organization.findUnique({
-        where: { id: input.organizationId },
+      return ctx.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
+        const before = await tx.organization.findUnique({
+          where: { id: input.organizationId },
+        });
+        if (!before) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "orgNotFound" });
+        }
+        if (
+          input.subscriptionBillingMode === "SELF_SERVE" &&
+          before.subscriptionBillingMode !== "SELF_SERVE" &&
+          !getSubscriptionPaymentConfig().ready
+        )
+          throw new TRPCError({ code: "CONFLICT", message: "billingPaymentsUnavailable" });
+
+        const now = new Date();
+        const dates = {
+          ...(input.trialDays !== undefined
+            ? {
+                trialEndsAt:
+                  input.trialDays > 0 ? new Date(now.getTime() + input.trialDays * 86400000) : null,
+              }
+            : {}),
+          ...(input.currentPeriodDays !== undefined
+            ? { currentPeriodEndsAt: new Date(now.getTime() + input.currentPeriodDays * 86400000) }
+            : {}),
+        };
+
+        const updated = await tx.organization.update({
+          where: { id: input.organizationId },
+          data: {
+            plan: input.plan,
+            subscriptionStatus: input.subscriptionStatus,
+            ...dates,
+            ...(input.subscriptionBillingMode
+              ? { subscriptionBillingMode: input.subscriptionBillingMode }
+              : {}),
+          },
+        });
+
+        await writeAuditLog(tx, {
+          organizationId: updated.id,
+          actorId: ctx.user.id,
+          action: "PLATFORM_BILLING_PLAN_UPDATE",
+          entity: "Organization",
+          entityId: updated.id,
+          before: toJson(before),
+          after: toJson(updated),
+          requestId: ctx.requestId,
+        });
+
+        return updated;
       });
-      if (!before) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "orgNotFound" });
-      }
-
-      const now = new Date();
-      const trialEndsAt =
-        input.trialDays && input.trialDays > 0
-          ? new Date(now.getTime() + input.trialDays * 24 * 60 * 60 * 1000)
-          : null;
-      const currentPeriodEndsAt = new Date(
-        now.getTime() + (input.currentPeriodDays ?? 30) * 24 * 60 * 60 * 1000,
-      );
-
-      const updated = await ctx.prisma.organization.update({
-        where: { id: input.organizationId },
-        data: {
-          plan: input.plan,
-          subscriptionStatus: input.subscriptionStatus,
-          trialEndsAt,
-          currentPeriodEndsAt,
-        },
-      });
-
-      await writeAuditLog(ctx.prisma, {
-        organizationId: updated.id,
-        actorId: ctx.user.id,
-        action: "PLATFORM_BILLING_PLAN_UPDATE",
-        entity: "Organization",
-        entityId: updated.id,
-        before: toJson(before),
-        after: toJson(updated),
-        requestId: ctx.requestId,
-      });
-
-      return updated;
     }),
 });

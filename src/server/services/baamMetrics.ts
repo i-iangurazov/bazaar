@@ -44,7 +44,7 @@ export const readBaamAccessScope = async (
   }
   const organization = await tx.organization.findUnique({
     where: { id: actor.organizationId },
-    select: { plan: true, subscriptionStatus: true, trialEndsAt: true, currentPeriodEndsAt: true },
+    select: { plan: true, subscriptionStatus: true, trialEndsAt: true, currentPeriodEndsAt: true, subscriptionBillingMode: true },
   });
   if (!organization || !resolveOrganizationAccessState(organization).hasAccess) {
     throw new AppError("subscriptionInactive", "FORBIDDEN", 403);

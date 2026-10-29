@@ -48,6 +48,8 @@ import {
 import { findRankedProductIds } from "@/server/services/products/searchSql";
 import { normalizeProductSearchText } from "@/server/services/products/searchRelevance";
 import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
+import { getTransferLineContext } from "@/server/services/transferLineContext";
+import { reconcileTransferAttempt } from "@/server/services/transferRecovery";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
 const inventorySortKeySchema = z.enum([
@@ -713,8 +715,14 @@ export const inventoryRouter = router({
       const positions = new Map(rankedIds?.map((id, index) => [id, index]));
       if (rankedIds) products.sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
       return products.flatMap((product) => {
+        // Inactive variants cannot be posted by any stock writer. Do not render
+        // their historical snapshots as indistinguishable base-product choices.
+        const activeVariantIds = new Set(product.variants.map(variant => variant.id));
+        const eligibleSnapshots = product.inventorySnapshots.filter(snapshot =>
+          snapshot.variantId === null || activeVariantIds.has(snapshot.variantId));
+        if (product.inventorySnapshots.length && !eligibleSnapshots.length) return [];
         const snapshots = product.inventorySnapshots.length
-          ? product.inventorySnapshots
+          ? eligibleSnapshots
           : [
               {
                 id: `synthetic:${input.storeId}:${product.id}:BASE`,
@@ -1197,7 +1205,7 @@ export const inventoryRouter = router({
       storeId: z.string().min(1), productId: z.string().min(1),
       variantId: z.string().nullable().optional(),
       targetOnHand: z.number().multipleOf(0.001).min(-2147483648).max(2147483647),
-      expectedOnHand: z.number().int(), expectedVersion: z.number().int().nonnegative(),
+      expectedOnHand: z.number().multipleOf(0.001), expectedVersion: z.number().int().nonnegative(),
       reason: z.string().min(3), idempotencyKey: z.string().min(8),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1217,7 +1225,7 @@ export const inventoryRouter = router({
         variantId: z.string().optional(),
         qtyDelta: z
           .number()
-          .int()
+          .multipleOf(0.001)
           .refine((value) => value !== 0, "nonZeroAdjustment"),
         unitId: z.string().optional(),
         packId: z.string().optional(),
@@ -1405,6 +1413,32 @@ export const inventoryRouter = router({
       } catch (error) {
         throw toTRPCError(error);
       }
+    }),
+
+  reconcileTransferAttempt: managerProcedure
+    .input(z.object({ fromStoreId: z.string().min(1), toStoreId: z.string().min(1), idempotencyKey: z.string().min(8).max(191) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await Promise.all([
+          assertUserCanAccessStore(ctx.prisma, ctx.user, input.fromStoreId),
+          assertUserCanAccessStore(ctx.prisma, ctx.user, input.toStoreId),
+        ]);
+        return await reconcileTransferAttempt({ ...input, organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id, requestId: ctx.requestId });
+      } catch (error) { throw toTRPCError(error); }
+    }),
+
+  transferLineContext: managerProcedure
+    .input(z.object({ fromStoreId: z.string().min(1), toStoreId: z.string().min(1),
+      lines: z.array(z.object({ productId: z.string().min(1), variantId: z.string().nullable().optional() })).min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await Promise.all([
+          assertUserCanAccessStore(ctx.prisma, ctx.user, input.fromStoreId),
+          assertUserCanAccessStore(ctx.prisma, ctx.user, input.toStoreId),
+        ]);
+        return await getTransferLineContext(ctx.prisma, { ...input, organizationId: ctx.user.organizationId });
+      } catch (error) { throw toTRPCError(error); }
     }),
 
   transfer: managerProcedure

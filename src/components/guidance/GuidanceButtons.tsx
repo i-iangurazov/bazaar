@@ -38,9 +38,9 @@ export const GuidanceTipsTriggerButton = ({
             {pendingCount > 0 ? (
               <Badge
                 variant="muted"
-                className="absolute -right-1.5 -top-1.5 min-w-[1.1rem] px-1.5 py-0 text-[10px] leading-4"
+                className="pointer-events-none absolute right-0 top-0 flex h-3.5 min-w-3.5 max-w-full items-center justify-center rounded-full px-0.5 py-0 text-[9px] leading-none"
               >
-                {pendingCount}
+                {pendingCount > 99 ? "99+" : pendingCount}
               </Badge>
             ) : null}
           </Button>

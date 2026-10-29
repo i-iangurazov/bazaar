@@ -58,6 +58,8 @@ import {
   ViewIcon,
   EditIcon,
   AdjustIcon,
+  ShieldCheckIcon,
+  SettingsIcon,
 } from "@/components/icons";
 import {
   Tooltip,
@@ -616,19 +618,23 @@ const StoresPage = () => {
                                   </Tooltip>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onSelect={() => setViewingStore(store)}>
+                                    <ViewIcon className="h-4 w-4" aria-hidden />
                                       {tCommon("view")}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem asChild>
                                       <Link href={`/stores/${store.id}/compliance`}>
+                                      <ShieldCheckIcon className="h-4 w-4" aria-hidden />
                                         {t("complianceSettings")}
                                       </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem asChild>
                                       <Link href={`/stores/${store.id}/hardware`}>
+                                      <SettingsIcon className="h-4 w-4" aria-hidden />
                                         {t("hardwareSettings")}
                                       </Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onSelect={() => openEditDialog(store)}>
+                                    <EditIcon className="h-4 w-4" aria-hidden />
                                       {t("edit")}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
@@ -641,7 +647,7 @@ const StoresPage = () => {
                                       }
                                       disabled={isUpdating}
                                     >
-                                      {isUpdating ? <Spinner className="h-3 w-3" /> : null}
+                                    {isUpdating ? <Spinner className="h-3 w-3" /> : <AdjustIcon className="h-4 w-4" aria-hidden />}
                                       {isUpdating
                                         ? tCommon("loading")
                                         : store.allowNegativeStock
@@ -658,7 +664,7 @@ const StoresPage = () => {
                                       }
                                       disabled={isUpdating}
                                     >
-                                      {isUpdating ? <Spinner className="h-3 w-3" /> : null}
+                                    {isUpdating ? <Spinner className="h-3 w-3" /> : <AdjustIcon className="h-4 w-4" aria-hidden />}
                                       {isUpdating
                                         ? tCommon("loading")
                                         : store.trackExpiryLots
@@ -834,7 +840,7 @@ const StoresPage = () => {
         onOpenChange={setStoreDialogOpen}
         title={editingStore ? t("editStore") : t("addStore")}
         subtitle={editingStore?.code ?? t("storeFormHint")}
-        className="rounded-xl"
+        className="rounded-lg"
         bodyClassName="p-4 sm:p-6"
       >
         <Form {...storeForm}>

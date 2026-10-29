@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -16,6 +16,10 @@ export function LoyaltyJoinForm({ programStoreId }: { programStoreId: string }) 
   const [stage, setStage] = useState<"email" | "code">("email");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const codeInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (stage === "code") codeInput.current?.focus();
+  }, [stage]);
 
   const post = async (path: string, body: unknown) => {
     const response = await fetch(path, {
@@ -71,6 +75,7 @@ export function LoyaltyJoinForm({ programStoreId }: { programStoreId: string }) 
         <label className="block space-y-1.5 text-sm">
           <span className="font-medium">{t("codeLabel", { email })}</span>
           <Input
+            ref={codeInput}
             inputMode="numeric"
             pattern="[0-9]{6}"
             maxLength={6}
@@ -98,6 +103,7 @@ export function LoyaltyJoinForm({ programStoreId }: { programStoreId: string }) 
           onClick={() => {
             setStage("email");
             setCode("");
+            setError(null);
           }}
         >
           {t("changeEmail")}

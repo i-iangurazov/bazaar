@@ -1,0 +1,314 @@
+{
+  "status": "in-review-settings-checkpoint-browser-replay-complete-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "d29fc12",
+  "scope": [
+    "src/app/(app)/settings/attributes/page.tsx",
+    "src/app/(app)/settings/categories/page.tsx",
+    "src/app/(app)/settings/diagnostics/page.tsx",
+    "src/app/(app)/settings/import/page.tsx",
+    "src/app/(app)/settings/loyalty/page.tsx",
+    "src/app/(app)/settings/page.tsx",
+    "src/app/(app)/settings/printing/page.tsx",
+    "src/app/(app)/settings/profile/page.tsx",
+    "src/app/(app)/settings/store-groups/page.tsx",
+    "src/app/(app)/settings/units/page.tsx",
+    "src/app/(app)/settings/users/page.tsx",
+    "src/app/(app)/settings/whats-new/page.tsx"
+  ],
+  "composition": "Existing sections, column definitions, field order, actions and responsive breakpoints are retained. Shared helper changes affect border radii, shadows and decorative rings only. Operational documents must still match c276f30.",
+  "changes": [
+    {
+      "area": "Print previews in dark theme",
+      "before": "Receipt and label-layout samples rendered black text on a dark bg-card surface in the real browser",
+      "after": "Desktop receipt, five label-layout samples and the separate mobile wizard receipt use white paper in both themes; actual print/PDF parameters and actions are unchanged",
+      "sources": [
+        "src/app/(app)/settings/printing/page.tsx"
+      ]
+    },
+    {
+      "area": "Settings query recovery",
+      "before": "Unit/category/user/invitation query failures could also claim the list was empty; missing stores left category queries loading indefinitely",
+      "after": "Translated errors and retry are distinct from successful empty states; categories request a store when none is selected/available",
+      "sources": [
+        "src/app/(app)/settings/units/page.tsx",
+        "src/app/(app)/settings/categories/page.tsx",
+        "src/app/(app)/settings/users/page.tsx"
+      ],
+      "evidence": [
+        "artifacts/ux/espresso/settings-recovery-before.log",
+        "artifacts/ux/espresso/settings-users-before.log",
+        "tests/unit/settings-query-recovery.test.tsx"
+      ]
+    },
+    {
+      "area": "Accessible control names",
+      "after": "Category store/search labels identify their controls; attribute-template selector has its translated accessible name",
+      "sources": [
+        "src/app/(app)/settings/categories/page.tsx",
+        "src/app/(app)/settings/attributes/page.tsx"
+      ]
+    },
+    {
+      "area": "Espresso helper surfaces",
+      "after": "Administrative status, choice, preview, empty, notice and error helpers use the shared smaller radius and flat surface treatment; spacing, dimensions, colors and placement remain unchanged",
+      "sources": [
+        "src/app/globals.css"
+      ]
+    },
+    {
+      "area": "English headings and actions",
+      "after": "Replaced placeholder-like headings, subtitles and create actions for units, attributes/templates, imports, diagnostics and update notes",
+      "sources": [
+        "messages/en.json"
+      ]
+    }
+  ],
+  "checks": {
+    "focusedRecovery": {
+      "files": 1,
+      "tests": 11,
+      "result": "passed; tests first reproduced five category/unit failures and two user/invitation failures before the corrections",
+      "log": "artifacts/ux/espresso/settings-recovery-final.log"
+    },
+    "unit": {
+      "result": "259 files / 1903 tests passed after all query-recovery corrections, before the final style-only mobile-paper refinement",
+      "log": "artifacts/ux/espresso/settings-all-unit.log",
+      "files": 259,
+      "tests": 1903
+    },
+    "database": {
+      "files": 6,
+      "tests": 47,
+      "result": "passed; attributes, catalog sources, profile preferences/business settings, unit precision/history, users and import preview/apply/rollback",
+      "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
+      "log": "artifacts/ux/espresso/settings-db.log"
+    },
+    "typecheck": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/settings-typecheck.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/settings-lint.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/settings-i18n.log"
+    },
+    "productionBuild": {
+      "result": "passed after the final mobile paper refinement; type/lint checks and 125 static pages completed",
+      "log": "artifacts/ux/espresso/build-settings-final.log"
+    },
+    "printingAfterMobileRefinement": {
+      "files": 6,
+      "tests": 30,
+      "result": "passed after mobile paper background correction",
+      "log": "artifacts/ux/espresso/settings-printing-final.log"
+    }
+  },
+  "browserChecks": [
+    {
+      "flow": "Baseline desktop admin review",
+      "result": "All 12 settings route sources inspected at 1440px in RU/dark before final corrections; existing sections retained"
+    },
+    {
+      "flow": "Unit create/edit/reload",
+      "result": "Blank form validates required code and labels; Escape returns focus to Add unit. Created espresso-qa-20261026, edited RU label and enabled fractional quantity. Reload and reopened form show saved label and switch; no existing unit changed"
+    },
+    {
+      "flow": "Attribute and template",
+      "result": "Created SELECT attribute espresso_qa_material; empty options rejected, RU Хлопок / KG Пахта accepted. Assigned it to a synthetic Espresso QA category template; saved record appears in the list"
+    },
+    {
+      "flow": "Store category visibility",
+      "result": "Filtered Канцелярия in Бишкек · Центр; hide moves active 4→3 and hidden 0→1, Hidden filter shows it; Show restores active 4 and hidden 0. Original visibility restored"
+    },
+    {
+      "flow": "Persistent browser data readback",
+      "result": "Read-only Prisma queries against bazaar_espresso_ui confirm unit label/precision, attribute options/type and category-template link",
+      "evidence": "artifacts/ux/espresso/settings-fixture-readback.json"
+    },
+    {
+      "flow": "Desktop/mobile final review",
+      "result": "All 12 route sources inspected at 1440px RU/dark and EN/light, and at 390px RU/dark. Measured page width equals viewport width in all 36 recorded cases. The mobile print wizard remains distinct from the desktop form; its receipt sample is also white after correction."
+    },
+    {
+      "flow": "Category locale and control labels",
+      "result": "RU → KG retains selected store and Канцелярия search text. Store/search have named accessible controls; KG category page at 390px stays within the viewport."
+    },
+    {
+      "flow": "Attribute-template selector",
+      "result": "The final production browser exposes its translated accessible name. Opening and cancelling the template form retains normal list composition."
+    },
+    {
+      "flow": "Roles and assigned stores",
+      "result": "MANAGER settings index has profile/printing/attributes/units/import; category store choice contains Bishkek and Osh only, category mutations disabled, unit creation enabled, users denied. STAFF index has profile only and units denied. CASHIER index retains profile/printing, units denied, and printing store choices contain Bishkek only. No security grants changed.",
+      "evidence": "artifacts/ux/espresso/settings-role-matrix.json"
+    },
+    {
+      "flow": "Fixture cleanup",
+      "result": "Administrator interface/preferences restored to RU/dark; fixture accounts signed out. Unit/attribute/template synthetic records retained for further tests; category visibility returned to its initial state."
+    }
+  ],
+  "browserFinalReplay": {
+    "status": "completed-for-described-states-full-acceptance-pending",
+    "desktopGeometry": "artifacts/ux/espresso/settings-desktop-geometry.json",
+    "mobileGeometry": "artifacts/ux/espresso/settings-mobile-geometry.json",
+    "paperDesktop": {
+      "background": "rgb(255, 255, 255)",
+      "text": "rgb(0, 0, 0)",
+      "width": 232,
+      "labelLayoutSamples": 5,
+      "screenshot": "artifacts/ux/espresso/screenshots/printing-receipt-desktop-dark-final.png"
+    },
+    "mobilePaperBeforeCorrection": {
+      "background": "rgb(23, 23, 23)",
+      "text": "rgb(0, 0, 0)",
+      "width": 232,
+      "screenshot": "artifacts/ux/espresso/screenshots/printing-receipt-mobile-dark-before.png"
+    },
+    "lightDesktopGeometry": "artifacts/ux/espresso/settings-light-geometry.json",
+    "roleMatrix": "artifacts/ux/espresso/settings-role-matrix.json",
+    "mobilePaperFinal": {
+      "background": "rgb(255, 255, 255)",
+      "text": "rgb(0, 0, 0)",
+      "width": 232,
+      "unchangedWidthAndPosition": true,
+      "screenshot": "artifacts/ux/espresso/screenshots/printing-receipt-mobile-dark-final.png"
+    }
+  },
+  "sourceFingerprints": {
+    "src/app/(app)/settings/attributes/page.tsx": "c24e543276d733b5ea7d5c5d8c8140464c01951615f4e982b91bbdbac49f8f0d",
+    "src/app/(app)/settings/categories/page.tsx": "760c9ef29ccf959e3fc77623b6eaebbb3e29d3d26ada93df8ad1d190bf4314b6",
+    "src/app/(app)/settings/diagnostics/page.tsx": "1786acc15605073ea43d46701f077e7af584ed38b0a21cc9ecc337cd97836053",
+    "src/app/(app)/settings/import/page.tsx": "ebc9aab1098eec15d055c2d961d3573bfca9654751a9ebc6c0927f752a467374",
+    "src/app/(app)/settings/loyalty/page.tsx": "8c776e744b497c7811ac355014a671d7fc5cbd75a95da9929fe0a995cb5a65e1",
+    "src/app/(app)/settings/page.tsx": "0e7d2ae920e7a6bbaa1a682619d2d9dc3698be38f7c2bffaeaced630cbbb15b3",
+    "src/app/(app)/settings/printing/page.tsx": "d5dac1e3e80a7a337ba8729d3006a4963460e0a281feacb76c714f449379a247",
+    "src/app/(app)/settings/profile/page.tsx": "61bae021bff4f3f9a3a9157dbe34f6fc652f791f5f1bff9595851f061d2bd6ec",
+    "src/app/(app)/settings/store-groups/page.tsx": "b561fc96673aacda5d0af207b6ee0f9e82b1bb9d8bc6cdfcb2985d4608d944a8",
+    "src/app/(app)/settings/units/page.tsx": "ba6eff98622faf706c233717de2a9abf44238a20681317282f08a16bd9800ac1",
+    "src/app/(app)/settings/users/page.tsx": "2c2aea4f3b62ab0ef1b427c85b687b4d53e96fcb38c7b692cb9061e650dab5db",
+    "src/app/(app)/settings/whats-new/page.tsx": "619be91fbb50bcf07fab2a0a8416979400e5d98f859cce409cf5fbac8fd37c6d",
+    "src/app/globals.css": "b96dc2dd8d430c82675deb139bc7a2622743380c6cfcd4e06463503db4dd2d70",
+    "messages/en.json": "8f7c4e1f7a6762b3b03c23445f2af0b405298697dbac9491b46185304f4215db",
+    "scripts/espresso/regression.ts": "1f417d7adf00bca4344393ef826faeb32ba3ee4091d104bf2ba7fc27965871c4"
+  },
+  "environment": {
+    "origin": "http://localhost:3122",
+    "browserDatabase": "bazaar_espresso_ui",
+    "regressionDatabase": "bazaar_hardening_ci",
+    "postgresPort": 55440,
+    "redisPort": 56390,
+    "externalProviders": "disabled"
+  },
+  "limitations": [
+    "This settings checkpoint does not complete the entire 97-route redesign.",
+    "Query failure/empty/retry branches are exercised in component tests; the browser was not subjected to forced network failures.",
+    "No physical printer/QZ/Connector, external email, payment, user credential change or new security grant was performed through the browser.",
+    "Import transport, invitation delivery, assortment changes and loyalty accounting are not claimed as complete browser acceptance by an initial-state visual review; relevant real DB suites are recorded separately.",
+    "The checkpoint corrects selected English placeholder copy; it is not a full translation quality audit of every setting string."
+  ],
+  "delivery": "Local codex/playground only; no merge, push or production deployment",
+  "followUps": [
+    {
+      "area": "English copy quality",
+      "status": "pending-global-copy-pass",
+      "examples": [
+        "attributes.templateCategoryHint",
+        "attributes.templateAttributesHint",
+        "attributes.templateAddAttribute",
+        "imports.uploadHint"
+      ],
+      "meaning": "The selected title/action corrections are not a claim that all legacy English copy is polished."
+    },
+    {
+      "area": "Bespoke printing/import control labels and complete state matrix",
+      "status": "pending-final-acceptance",
+      "meaning": "Finish the full accessible-name and loading/error/recovery matrix for bespoke controls; current checkpoint reports the specific controls and states actually exercised."
+    },
+    {
+      "area": "Full settings acceptance",
+      "status": "pending",
+      "meaning": "Successful import upload/mapping, invitation delivery and all modal/plan/theme permutations remain outside the recorded browser replay; initial-state inspection alone is insufficient."
+    }
+  ],
+  "screenshots": [
+    "artifacts/ux/espresso/screenshots/settings-attributes-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-attributes-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-attributes-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-categories-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-categories-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-categories-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-diagnostics-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-diagnostics-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-diagnostics-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-import-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-import-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-import-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-loyalty-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-loyalty-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-loyalty-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-index-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-index-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-index-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-printing-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-printing-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-printing-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-profile-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-profile-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-profile-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-store-groups-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-store-groups-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-store-groups-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-units-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-units-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-units-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-users-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-users-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-users-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-whats-new-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-whats-new-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-whats-new-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/units-edit-persisted-dark.png",
+    "artifacts/ux/espresso/screenshots/attributes-template-saved-dark.png",
+    "artifacts/ux/espresso/screenshots/categories-hide-restore-dark.png",
+    "artifacts/ux/espresso/screenshots/printing-receipt-desktop-dark-final.png",
+    "artifacts/ux/espresso/screenshots/printing-receipt-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/settings-categories-desktop-dark-kg.png",
+    "artifacts/ux/espresso/screenshots/settings-categories-mobile-dark-kg.png",
+    "artifacts/ux/espresso/screenshots/attribute-template-labelled-light-en.png",
+    "artifacts/ux/espresso/screenshots/settings-fixture-preferences-restored.png",
+    "artifacts/ux/espresso/screenshots/settings-manager-index-dark.png",
+    "artifacts/ux/espresso/screenshots/settings-manager-categories-readonly.png",
+    "artifacts/ux/espresso/screenshots/settings-manager-users-denied.png",
+    "artifacts/ux/espresso/screenshots/settings-staff-index-dark.png",
+    "artifacts/ux/espresso/screenshots/settings-staff-units-denied.png",
+    "artifacts/ux/espresso/screenshots/settings-cashier-index-dark.png",
+    "artifacts/ux/espresso/screenshots/settings-cashier-units-denied.png",
+    "artifacts/ux/espresso/screenshots/settings-cashier-printing-assigned-store.png"
+  ],
+  "preservedCustomerLayouts": {
+    "src/components/inventory/receiving-workflow.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+    },
+    "src/components/inventory/transfer-workflow.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+    },
+    "src/components/inventory/write-off-workflow.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+    },
+    "src/app/(app)/inventory/counts/[id]/page.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+    }
+  }
+}

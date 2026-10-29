@@ -1,0 +1,256 @@
+{
+  "status": "integrations-checkpoint-in-review-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "0b6d060",
+  "mainUnchanged": "5a27b8e",
+  "date": "2026-10-26",
+  "scope": {
+    "routeSources": 9,
+    "newlyReviewedSources": 8,
+    "previouslyReviewedHub": true,
+    "routes": [
+      {
+        "caseName": "hub",
+        "source": "src/app/(app)/operations/integrations/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "bazaar-api",
+        "source": "src/app/(app)/operations/integrations/bazaar-api/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "catalog",
+        "source": "src/app/(app)/operations/integrations/bazaar-catalog/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "bakai",
+        "source": "src/app/(app)/operations/integrations/bakai-store/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "m-market",
+        "source": "src/app/(app)/operations/integrations/m-market/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "o-market",
+        "source": "src/app/(app)/operations/integrations/o-market/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "email",
+        "source": "src/app/(app)/operations/integrations/email-marketing/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "studio",
+        "source": "src/app/(app)/operations/integrations/product-image-studio/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "api-docs",
+        "source": "src/app/developers/bazaar-api/page.tsx",
+        "status": "in_review"
+      }
+    ],
+    "emailWorkspace": "src/app/(app)/operations/integrations/email-marketing/workspace.tsx"
+  },
+  "appearance": [
+    "API and O! Market headers use full shared border and card tokens. Catalog and studio borders use the shared border token. Existing field/action order, grids, widths, selection, publishing and export workflows are retained.",
+    "Public API documentation uses theme-aware foreground, muted, primary and success colors and flatter surfaces. Base URL, examples, tables, data and destination links retain their contents. Light-theme near-white code on a white surface was a reproduced contrast defect.",
+    "No operational two-column source was touched. All four remain byte-exact c276f30. Email canvas/output colors and merchant branding are retained."
+  ],
+  "explicitInteractionChanges": [
+    {
+      "area": "Failed reads and genuine empty states",
+      "behavior": "Targeted translated error/retry controls replace misleading not-configured/empty results or endless loading in API stores/keys, catalog stores/settings/products, MMarket/Bakai settings/products/jobs, O! Market settings/products/jobs/preflight, studio overview/jobs/product search, email stores/overview/history/senders/automations and the seven hub tiles. Unknown hub status displays loading. Genuine missing-store API summary and catalog state stop loading. This is a specified set of queries, not a claim that every hidden editor or polling failure state is accepted."
+    },
+    {
+      "area": "Existing server permissions",
+      "behavior": "Eight private pages gate queries and expose loading/forbidden feedback for session transitions to match existing ADMIN/MANAGER procedures. STAFF/CASHIER had no working server access before this correction. Email autosave, history polling and automatic-resume effects also require the existing manager role. No server role grant, plan gate or store scope changed."
+    },
+    {
+      "area": "Studio configuration evidence",
+      "behavior": "Generation is disabled while provider overview is unknown or failed; handler also checks successful overview data. Product-search failure is distinct from no results. Background/output controls gain labels using existing translations. Real image generation, retry and save-to-product were not run against an external provider."
+    },
+    {
+      "area": "Email sending evidence",
+      "behavior": "Existing validation additionally requires no current stores/overview/senders read failure. Independent history, sender and automation failures have their own retry. The existing desktop-only editor rule remains. Sending and domain verification were not triggered."
+    },
+    {
+      "area": "Public table keyboard access",
+      "behavior": "Existing horizontal documentation table viewports are focusable named regions. At 390px the table stays 720px inside a 306px viewport; ArrowRight moves scrollLeft 0 to 40 without page overflow. No column order/width or API table data changed."
+    }
+  ],
+  "authenticationTransportCorrection": {
+    "source": "src/middleware.ts",
+    "trigger": "After the old session expired during QA, sign-in authenticated the test admin but redirected back to login in the local production build.",
+    "cause": "authOptions chooses secure-cookie names from NODE_ENV; the middleware relied on NextAuth auto-detection from NEXTAUTH_URL. Production HTTP on localhost therefore read the wrong cookie name, and could keep using an older development cookie.",
+    "change": "Pass secureCookie: process.env.NODE_ENV === \"production\" to getToken, matching the existing authOptions policy. No credential, cookie security flag, session duration, signing secret or role authorization rule changed.",
+    "evidence": [
+      "artifacts/ux/espresso/integrations-session-before.log",
+      "artifacts/ux/espresso/integrations-unit-final.log",
+      "artifacts/ux/espresso/integrations-auth-database.log",
+      "artifacts/ux/espresso/integrations-role-matrix-final.json"
+    ],
+    "replay": "Fresh sign-out/sign-in for manager, staff, cashier and admin succeeded in the final production build. All eight protected integration paths then used the actual new role: manager retained routes; staff/cashier redirected to POS with the matching from parameter."
+  },
+  "browser": {
+    "environment": "Real production build on localhost:3122, bazaar_espresso_ui and separate Redis DB4; external providers disabled. Resettable DB regressions use bazaar_hardening_ci/Redis DB5.",
+    "baseMatrix": "artifacts/ux/espresso/integrations-base-matrix-final.json",
+    "captures": 32,
+    "uniqueRouteSources": 9,
+    "variants": "All nine RU desktop dark/light and mobile dark, plus EN/light desktop hub/API/studio and KG/light mobile hub/studio. Captures are not 32 unique routes or complete state acceptance.",
+    "dimensions": {
+      "desktop": [
+        1440,
+        1000
+      ],
+      "mobile": [
+        390,
+        844
+      ]
+    },
+    "overflow": "All 32 base captures have document scrollWidth equal to viewport width. Internal table scrolling is retained. Selected captures were visually inspected; complete below-fold/state comparison is still pending.",
+    "buildPhases": "RU/dark base captures and HEIC upload preceded the middleware-cookie-only rebuild. UI sources are identical between those builds; RU/light, selected locale captures, fresh role logins and email draft/preview were replayed on the final build.",
+    "roles": "artifacts/ux/espresso/integrations-role-matrix-final.json",
+    "managerScope": "API store selector offers only assigned Бишкек · Центр and Ош · Южный; selecting Osh updates the API scope explanation. Unassigned Новый магазин is absent.",
+    "studio": {
+      "presets": "artifacts/ux/espresso/integrations-studio-presets-final.json",
+      "heic": "artifacts/ux/espresso/integrations-studio-heic-final.json",
+      "result": "Search чай, select UX-0001, change background and soft-shadow switch. Synthetic studio.heic accepted through the normal chooser, converted to image/jpeg 43.8 KB and local preview loaded at 800×900. Generation stayed disabled because the isolated provider is intentionally absent. No HEIF browser replay or generation-speed claim."
+    },
+    "email": {
+      "workflow": "artifacts/ux/espresso/integrations-email-workflow-final.json",
+      "result": "Sender/automation tabs, create/edit/save named QA draft, preview and return to campaign history. Exactly one DRAFT remains, zero recipients/events; no test email, send, resume or domain-verification action."
+    },
+    "contrast": {
+      "evidence": "artifacts/ux/espresso/integrations-docs-contrast-final.json",
+      "lightCodeRatioBefore": 1.1,
+      "lightCodeRatioAfter": 17.93,
+      "darkCodeRatio": 16.88,
+      "keyboardPanPx": 40
+    },
+    "restoration": "Admin test profile returned to RU/DARK, temporary viewport reset, integration hub left open; original user tabs/server on port 3121 untouched."
+  },
+  "preservation": {
+    "businessEvidence": [
+      "artifacts/ux/espresso/integrations-business-before.json",
+      "artifacts/ux/espresso/integrations-business-after.json"
+    ],
+    "result": "All selected records and SHA256 hashes unchanged across 11 business models; this excludes auth/profile/asset/draft state and is not a whole-database assertion.",
+    "counts": {
+      "inventorySnapshot": 155,
+      "stockMovement": 166,
+      "productCost": 146,
+      "customerOrder": 4,
+      "saleReturn": 2,
+      "salePayment": 4,
+      "cashDrawerMovement": 2,
+      "registerShift": 2,
+      "purchaseOrder": 1,
+      "stockCount": 3,
+      "periodClose": 0
+    },
+    "expectedQaState": "artifacts/ux/espresso/integrations-state-readback-final.json",
+    "expectedChanges": "One local synthetic source-image asset and one named email DRAFT; temporary test profile theme/locale writes restored. Zero API keys, image jobs, market export jobs, email recipients and email events in final scoped readback.",
+    "protectedSources": [
+      {
+        "source": "src/components/inventory/receiving-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+      },
+      {
+        "source": "src/components/inventory/transfer-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+      },
+      {
+        "source": "src/components/inventory/write-off-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+      },
+      {
+        "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+      }
+    ],
+    "serverScope": "No src/server, REST route, Prisma schema or integration-service changes in this checkpoint. The explicit src/middleware.ts cookie-name correction is separately disclosed above. Earlier four server corrections remain tracked in redesign-change-audit.json."
+  },
+  "checks": {
+    "unit": {
+      "files": 264,
+      "tests": 1988,
+      "result": "passed after final runtime changes",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/integrations-unit-final.log"
+    },
+    "recovery": {
+      "files": 1,
+      "tests": 56,
+      "result": "passed within final full suite; real page components and shared controls rendered with deterministic failed reads, existing role policy and genuine empty-store states",
+      "source": "tests/unit/integration-workspace-recovery.test.tsx",
+      "before": "artifacts/ux/espresso/integrations-recovery-before.log",
+      "beforeResult": "Initial 39-case subset: 30 failed and 9 passed before changes. The final suite adds 17 independent query/empty-state checks.",
+      "focusedLog": "artifacts/ux/espresso/integrations-recovery-after.log",
+      "focusedNote": "57 focused tests include 56 recovery cases and the existing MMarket manager-permissions source test; do not add them to the full-suite count."
+    },
+    "database": {
+      "files": 14,
+      "tests": 94,
+      "result": "passed on separate bazaar_hardening_ci; provider requests mocked or disabled",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts integrations",
+      "log": "artifacts/ux/espresso/integrations-database.log",
+      "scope": "API/catalog payloads, store scope, external identities/operation idempotency, catalog source/discount behavior, marketplace payload/job lifecycle, image processing/storage/job lifecycle and email delivery/idempotency/product selection. Three new characterization cases preserve manager reads and reject STAFF/CASHIER without keys/config/jobs/campaign creation."
+    },
+    "authenticationDatabase": {
+      "files": 1,
+      "tests": 9,
+      "result": "passed on separate resettable DB/Redis; real credentials, claims and role destinations",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "log": "artifacts/ux/espresso/integrations-auth-database.log"
+    },
+    "sessionCookie": {
+      "files": 1,
+      "tests": 6,
+      "result": "passed within final full suite using real signed/encrypted NextAuth tokens",
+      "source": "tests/unit/middleware-session-cookie.test.ts",
+      "before": "artifacts/ux/espresso/integrations-session-before.log",
+      "beforeResult": "4 failed / 2 passed before correction; final 6 passed",
+      "scope": "Production HTTPS and local HTTP, development HTTP and HTTPS, stale mixed cookie names and rejection of an invalid secure cookie even beside a valid development cookie."
+    },
+    "typecheck": {
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/integrations-types.log"
+    },
+    "lint": {
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/integrations-lint.log"
+    },
+    "i18n": {
+      "result": "passed; no new user-facing translation keys introduced",
+      "log": "artifacts/ux/espresso/integrations-i18n.log"
+    },
+    "productionBuild": {
+      "result": "passed with final sources, type/lint and 125 generated static pages",
+      "log": "artifacts/ux/espresso/build-integrations-final.log",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts"
+    }
+  },
+  "remainingAcceptance": [
+    "Full redesign remains active: 79 of 97 sources in_review, 18 pending, zero fully accepted. Existing product/navigation composition disclosures and all previous family limitations remain.",
+    "Real marketplace contracts/tokens, external catalogue publication/checkout, API key issue/revoke UI, image generation/retry/save and live email/domain/delivery need separate configured provider acceptance; none is represented as completed here.",
+    "Hidden email-editor query failures, recipient-detail failure/retry, description-generation polling/session-transition permutations and every plan/organization/store/currency combination remain outside this bounded browser review.",
+    "Legacy mixed copy remains, including largely Russian email editor/public documentation and O! Market Never/raw statuses; i18n structural validation and selected locale captures do not establish complete translation or visual acceptance.",
+    "No live voice/Baam model-quality or new provider migration claim belongs to this redesign checkpoint. DeepSeek text and image-provider capability are not relabelled.",
+    "Complete full-screen reference fidelity, below-fold states, keyboard/focus and global component acceptance before merging. No merge, push to main or deployment authorized."
+  ],
+  "delivery": "Local codex/playground checkpoint only; goal remains active."
+}

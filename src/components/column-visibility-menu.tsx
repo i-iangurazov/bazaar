@@ -30,7 +30,7 @@ export const ColumnVisibilityMenu = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="secondary" size="sm">
+        <Button type="button" variant="secondary">
           {tCommon("savedViews.columns")}
         </Button>
       </DropdownMenuTrigger>

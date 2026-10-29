@@ -1,0 +1,160 @@
+{
+  "status": "marketing-checkpoint-in-review-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "dcd3975",
+  "date": "2026-10-26",
+  "mainUnchanged": "5a27b8e",
+  "scope": {
+    "routeSources": [
+      "src/app/page.tsx"
+    ],
+    "note": "One public marketing source, not60 pages. Primary page-source inventory is now97in_review/0pending/0accepted; shared controls remain6in_review/26pending/0accepted."
+  },
+  "appearance": [
+    "Marketing now uses shared foreground/background/card/border/primary tokens in both themes. Blue Bazaar brand/actions remain. Independent cyan glow, gradients, blur, heavy shadows and hover lift were removed.",
+    "297 existing CSS rules retain source geometry and non-hover transforms relative to dcd3975. Existing grids, section order, breakpoints, image/device geometry and spacing are preserved. New footer locale control is disclosed separately; translated copy can wrap differently.",
+    "Six actual current Espresso QA product captures replaced the older marketing assets. PNG-to-WebP format encoding only; no fabricated data/compositing. Total384884bytes, previously339896bytes. Content-hash query versions prevent stale captures."
+  ],
+  "explicitBehaviorChanges": [
+    "Complete typed RU/KG/EN marketing dictionaries replace mixed-language body copy. Server sends selected locale and client islands receive only their needed copy. Metadata/OpenGraph/JSON-LD are localized; canonical destination and authoritative subscription prices/grants/limits remain unchanged.",
+    "Root no longer forces light theme. Anonymous root respects the server-selected theme; authenticated root still redirects to dashboard. Shared HTML lang uses the existing canonical Intl helper:ru,ky-KG,en-US. No authentication or permission policy change.",
+    "All feature tabs reference one existing stable panel. Home/End and arrow wrap work with one tab stop and selected-tab labelling. All six existing features retained.",
+    "Mobile navigation retains its modal/body-lock/anchor behavior. Desktop resize now restores focus to the visible brand instead of losing focus onBODY. Escape returns focus to the mobile trigger.",
+    "New native footer locale select calls the existing locale API and refreshes. Busy state prevents duplicate requests; HTTP/network failure retains the confirmed language and provides translated retry feedback. Public cookie only; no staff preference mutation.",
+    "Footer privacy opens the actual privacy page. Other external contact destinations retained; no external message sent.",
+    "Connected-channel copy and static integration graphic are explicitly described as configured integrations/a demonstration. Unqualified fiscal-result claim removed. No invented testimonials or business statistics added."
+  ],
+  "tests": {
+    "unit": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "files": 274,
+      "tests": 2113,
+      "result": "passed after all application changes",
+      "log": "artifacts/ux/espresso/marketing-unit-final.log",
+      "newTests": 22,
+      "note": "Net increase relative to the2091-case public-consumer checkpoint. New cases are included in2113."
+    },
+    "database": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "files": 1,
+      "tests": 9,
+      "database": "bazaar_hardening_ci; Redis DB5; isolated resettable regression infrastructure",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/marketing-auth-database-final.log"
+    },
+    "types": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/marketing-types-final.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/marketing-lint-final.log"
+    },
+    "translations": {
+      "result": "passed; marketing dictionary shapes/SSR additionally checked by TypeScript and runtime unit tests",
+      "log": "artifacts/ux/espresso/marketing-i18n-final.log"
+    },
+    "productionBuild": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
+      "result": "passed after final application changes; includes types/lint and125 generated static pages",
+      "log": "artifacts/ux/espresso/build-marketing-final.log"
+    }
+  },
+  "browser": {
+    "environment": "Final isolated standalone production build on3122; actual IAB desktop and emulated widths, not physical mobile devices",
+    "matrix": {
+      "evidence": "artifacts/ux/espresso/marketing-matrix-final.json",
+      "captures": 60,
+      "combinations": 12,
+      "description": "RU/KG/EN ×light/dark ×1280/390; five sections each:hero/platform/commerce/pricing/footer. One page source. Zero page overflow, missing ARIA references or duplicate IDs; visible images loaded."
+    },
+    "supplemental": {
+      "evidence": "artifacts/ux/espresso/marketing-supplemental-sections-final.json",
+      "captures": 4,
+      "description": "POS/inventory/analytics/mobile stories inRU/light desktop; separate from60matrix captures"
+    },
+    "workflows": {
+      "evidence": "artifacts/ux/espresso/marketing-workflows-final.json",
+      "description": "All six tabs; Home/End/arrows; mobile Tab/ShiftTab trap, Escape and desktop resize focus; keyboard comparison scrolling80px; locale real stopped-server error and restarted-server retry; actual privacy link and signup form. Signup not submitted. Ordinary QA logout/login; authenticated root redirect preserved."
+    },
+    "fieldRegression": "artifacts/ux/espresso/marketing-app-field-regression-final.json",
+    "proofImage": "artifacts/ux/espresso/screenshots/marketing-home-proof-final.png",
+    "baselines": [
+      "artifacts/ux/espresso/marketing-before.json",
+      "artifacts/ux/espresso/marketing-nav-resize-before.json"
+    ]
+  },
+  "dataPreservation": {
+    "before": "artifacts/ux/espresso/marketing-business-before.json",
+    "after": "artifacts/ux/espresso/marketing-business-after.json",
+    "result": "All485selected business rows across11models retain exact hashes. No new checkout/shift/stock/order transaction this checkpoint.",
+    "publicFixtureReadback": "artifacts/ux/espresso/marketing-fixture-readback-final.json",
+    "observed": "Previous isolated public fixture remains exactly one unpaid110KGS order/one variant/qty1, zero sale payments or stock movements; member125points/reserved0/one initial ledger entry. QA staff preferences restored toRU/DARK/Admin User.",
+    "protectedSources": [
+      {
+        "source": "src/components/inventory/receiving-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+      },
+      {
+        "source": "src/components/inventory/transfer-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+      },
+      {
+        "source": "src/components/inventory/write-off-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+      },
+      {
+        "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+      }
+    ]
+  },
+  "qaIsolation": {
+    "devEvidence": "artifacts/ux/espresso/marketing-dev-isolation.json",
+    "devHelper": "scripts/espresso/dev.mjs --family marketing",
+    "result": "Separate source workspace/3123. Production middleware manifest unchanged across that preview; later legitimate production rebuild is separate. Preview stopped. User3121server/tabs untouched; live providers disabled."
+  },
+  "sourceAudit": "artifacts/ux/espresso/marketing-source-audit-final.json",
+  "sourceAuditSummary": {
+    "files": 157,
+    "classifications": {
+      "requires-semantic-review": 105,
+      "jsx-style-attributes-only": 47,
+      "added-or-removed-requires-semantic-review": 5
+    },
+    "note": "Recursive TypeScript AST comparison omits only JSX className/style attributes, traverses retained attribute initializers and render callbacks. Classification does not establish CSS layout approval or runtime acceptance. Semantic changes require the separate checkpoint explanations and tests."
+  },
+  "sourceScope": {
+    "newServerChangesThisCheckpoint": [],
+    "newPrismaChangesThisCheckpoint": [],
+    "cumulativeCorrectiveServerFiles": [
+      "src/app/api/loyalty/card/qr/route.ts",
+      "src/app/api/loyalty/card/route.ts",
+      "src/server/services/loyalty/ledger.ts",
+      "src/server/services/pos.ts",
+      "src/server/services/reporting/operations.ts",
+      "src/server/services/reports.ts",
+      "src/server/trpc/routers/pos.ts"
+    ],
+    "note": "Seven previously disclosed server/API corrections remain; middleware cookie agreement is separately historical. Current checkpoint changes marketing/layout/theme client behavior only."
+  },
+  "evidence": {
+    "geometry": "artifacts/ux/espresso/marketing-style-preservation.json",
+    "captureProvenance": "artifacts/ux/espresso/marketing-product-captures.json",
+    "captureAssets": "artifacts/ux/espresso/marketing-capture-assets.json"
+  },
+  "remaining": [
+    "All97page sources have primary selected-state evidence, not final acceptance.26of32shared controls still require their dedicated review; six are in_review.",
+    "Final cross-state, role/store/plan, responsive and Espresso reference-fidelity acceptance remains. Historical family limitations and disclosed composition changes are retained in their reports.",
+    "Legacy copy/accessibility and mobile title fallback issues remain separately tracked. Live provider/email/merchant acceptance, physical devices and every-browser coverage are not claimed."
+  ],
+  "delivery": "Local playground checkpoint only; no main merge, push, deployment or provider activation."
+}

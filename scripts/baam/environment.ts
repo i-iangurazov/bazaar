@@ -2,10 +2,16 @@ export const baamTestDatabaseUrl =
   "postgresql://bazaar_test:bazaar_test_only@127.0.0.1:55440/bazaar_hardening_baam";
 export const baamTestRedisUrl = "redis://127.0.0.1:56390/0";
 
-export function baamTestEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function baamTestEnvironment(
+  source: NodeJS.ProcessEnv = process.env,
+): Record<string, string | undefined> & { NODE_ENV: "test" } {
   const env = { ...source };
   for (const key of Object.keys(env)) {
-    if (/^(?:RESEND_|OPENAI_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_)/.test(key))
+    if (
+      /^(?:RESEND_|OPENAI_|DEEPSEEK_|AI_PROVIDER|BAAM_(?!TEST_HTTPS$|BROWSER_CHANNEL$|LIVE_PROVIDER$|AUDIO_SAMPLE$)|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_)/.test(
+        key,
+      )
+    )
       env[key] = "";
   }
   return {

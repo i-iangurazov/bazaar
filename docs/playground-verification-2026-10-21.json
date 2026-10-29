@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-21",
+  "timezone": "Asia/Bishkek",
+  "branch": "codex/playground",
+  "baseCommit": "6aadb6c8947b82df7632fdd0ef4d82eddbd72e47",
+  "completedScope": [
+    "B01: consistent public/server/billing tariffs and Starter POS",
+    "B19: authorize forecast by current store grant before business reads"
+  ],
+  "preserved": [
+    "KGS prices and capacity limits",
+    "other module gates",
+    "manual and approved subscription access",
+    "forecast calculations"
+  ],
+  "fullVitest": {
+    "command": "pnpm exec vitest run --reporter=default --reporter=json",
+    "databaseTestsEnabled": true,
+    "status": "passed",
+    "files": 335,
+    "tests": 2354,
+    "passed": 2354,
+    "skipped": 0,
+    "failed": 0
+  },
+  "targetedIntegration": {
+    "status": "passed",
+    "files": 5,
+    "tests": 29,
+    "passed": 29,
+    "skipped": 0,
+    "failed": 0
+  },
+  "baselineRegressionCrossCheck": {
+    "status": "passed",
+    "files": 8,
+    "tests": 41,
+    "passed": 41,
+    "skipped": 0,
+    "failed": 0
+  },
+  "productionBrowser": {
+    "status": "PASS",
+    "checks": [
+      "ru 390: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "ru 1440: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "kg 390: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "kg 1440: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "en 390: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "en 1440: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "Starter cashier can load POS and read the allowed register through HTTP"
+    ],
+    "productionBundle": true,
+    "syntheticFixturesOnly": true
+  },
+  "existingLandingBrowser": {
+    "status": "passed",
+    "checks": 21,
+    "errors": [],
+    "widths": [
+      360,
+      390,
+      768,
+      1440
+    ],
+    "locales": [
+      "ru",
+      "kg",
+      "en"
+    ],
+    "withoutJavaScript": true
+  },
+  "smokeTransport": {
+    "status": "passed",
+    "command": "node --test scripts/deployment/public-smoke.test.mjs",
+    "tests": 11,
+    "network": "mocked"
+  },
+  "staticChecks": {
+    "typescript": "passed (includes new QA script)",
+    "eslint": "passed without warnings",
+    "i18n": "passed",
+    "diffWhitespace": "passed"
+  },
+  "productionBuild": {
+    "status": "passed",
+    "command": "node scripts/qa/playground-runtime.mjs build",
+    "runtime": "Next.js standalone server",
+    "temporaryQaArtifactsExcluded": true
+  },
+  "isolation": {
+    "database": "disposable local PostgreSQL 16",
+    "databaseTimezone": "UTC",
+    "databaseLocale": "en_US.UTF-8",
+    "redis": "disposable local, separate test/browser databases",
+    "fixtures": "synthetic only",
+    "externalProviders": "disabled",
+    "productionDataUsed": false,
+    "productionDeployment": false
+  },
+  "ci": {
+    "enabledOnPlaygroundPush": true,
+    "baselineMainStatus": "success",
+    "baselineMainRun": "https://github.com/i-iangurazov/bazaar/actions/runs/39428527837",
+    "playgroundResult": "Tracked per commit in GitHub Actions; not inferred from local tests"
+  },
+  "limitations": [
+    "No live payment integration or acquiring contract",
+    "No real payment/provider operation",
+    "Existing date-sensitive fixtures require UTC test PostgreSQL; no change to Bazaar business timezone",
+    "Native and broader browser gates run separately in CI"
+  ],
+  "sourceHashes": {
+    ".github/workflows/ci.yml": "ab978949b9118e3849c549ce94587b36346359fbd2ef98039fb906ec6a883a2b",
+    "messages/en.json": "4484f3be90d47ff5663ae0c60124825ef7dc62c4e86d33726d3475f84f0d3e96",
+    "messages/kg.json": "d3ead5d0bb0cd8062403b97cdde65a8ba469749bb3cb6b745a89a26bde2438a8",
+    "messages/ru.json": "673a748e4c67bdef1246188ac8eb08178af81d3a42a2a7bcfcd3328c0b493e5e",
+    "next.config.mjs": "953cc28e49ea7ca5bf6fd2e750e24612b2b2dda53b4975b5c890f012d0d8f982",
+    "scripts/marketing/browser.mjs": "64567e539369037fd7c0bacac7c43632641d6c1609e47a0fccb4bc3884015dd0",
+    "scripts/qa/playground-pricing-browser.ts": "c48beb607b694bc13e1c0a3088e5094c7c47827e25b4e4a1a6a8c79466509753",
+    "scripts/qa/playground-runtime.mjs": "77d5a246c99daa7bf070ed3b6a556529fb40649d68aa7f9a43f7748667e919ba",
+    "src/app/(app)/billing/page.tsx": "4e54f7e8bfbf261d8d752cd93058a20bbc1eb71f1852bf71d0e845ef5a83c5bb",
+    "src/components/marketing/MarketingLanding.tsx": "535554af68904440a97e65ff84b13e1d169bc5125b6ca083121ef666b03e14de",
+    "src/components/marketing/MarketingPricing.tsx": "faaf1a11f90a2f9ba77e60b83a41ebf58751a4b3b280512e770a3febd6391193",
+    "src/components/marketing/marketing.module.css": "369bbfcce72905143fb54db93b2d6ab54d5c802456b8135d0057a5acdf60802d",
+    "src/lib/billing/plans.ts": "7a5ec0cd7a9feb93b6c690c4a32dd1e12fb4ee2cf8429a792d18737f1f653c7a",
+    "src/server/billing/planCatalog.ts": "2b9f1ccdfa5d77aaba0cb4eade0a6b9c8bf78b44815ef8d65f0ead51d21be468",
+    "src/server/services/billing.ts": "662ddd7a266467abf7377ac80e577a1fdc648cf44e79572104246e13bf41e8a3",
+    "src/server/trpc/routers/forecast.ts": "6abe866fa3e1bf6037410ee42d0713bf48952ea5761a44af659ec6fba1a1b3df",
+    "tests/integration/billing.test.ts": "7d7458989fc469ac3a9a4aab132b97adc137e844c7797a627b616472798e1d93",
+    "tests/integration/forecast-access.test.ts": "c40e7d101089a58cb9c59908b9476bcdd3ffaf05e0f42d797c8983872cd5840c",
+    "tests/integration/plan-features.test.ts": "20f4286b59ea5ae6d383a064bea551e24629fde690eb2f951f8fba67732c1b1d",
+    "tests/unit/forecast-access.test.ts": "5e83ab0bc1dc27cd8294638a9553aba8e6f119754f70aa2a4546e318467e9862",
+    "tests/unit/marketing-landing-source.test.ts": "de33bf7bd25315663c878a28fa7b870f8ae8d7bfab09160ceaa886f9d0b434d0",
+    "tests/unit/marketing-pricing.test.tsx": "63035c1bb1e25cfc032b6fc9ca95a1b7390fbf0efb64acd9448f16999bf8c2d3",
+    "tests/unit/plan-catalog.test.ts": "c8044cc8d3f969bfec5b2217a142ec9cea83b572d3b533d081ec2f8ae2eb1f96",
+    "tsconfig.json": "32381398158c7423f84b76565ad93965252d9d7c206501ebcde5e76c89caec2c",
+    "vitest.config.ts": "27eaf52b40fb10fc60b01cc74c90843c9afea580494cb53c474746566eb2fa69"
+  }
+}

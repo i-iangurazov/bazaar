@@ -1,0 +1,147 @@
+{
+  "status": "implemented-and-verified",
+  "date": "2026-10-27",
+  "branch": "codex/playground",
+  "purpose": "Persistent local Bazaar with PostgreSQL, Redis and existing background job groups managed together. This is the isolated local UI fixture, not a customer or production database.",
+  "commands": {
+    "directory": "/Users/ilias_iangurazov/Commercial/bazaar",
+    "start": "pnpm local",
+    "url": "http://localhost:3122",
+    "status": "pnpm local:status",
+    "stop": "pnpm local:stop",
+    "backup": "pnpm local:backup",
+    "logs": "pnpm local:logs",
+    "behavior": "Start waits for authenticated database/Redis/migration health, then exits successfully. The supervisor and services remain in the background after closing the terminal. Repeating start is safe; changed source/configuration triggers a backed-up restart and a build when necessary.",
+    "afterReboot": "Run pnpm local again. No macOS boot agent was installed.",
+    "development": "Existing pnpm dev/start and database scripts retain their meanings. Use pnpm local for this managed stack. Do not run prepare/seed/reset to restart it."
+  },
+  "prerequisites": {
+    "verifiedHost": "macOS with existing Node, pnpm, PostgreSQL 16 and Redis binaries",
+    "installation": "No automatic software installation; missing binaries produce an explicit error. Homebrew Apple Silicon/Intel paths and PATH are checked.",
+    "build": "First start or changed application sources requires a production build. Unchanged subsequent starts use the verified private app copy."
+  },
+  "services": {
+    "application": "127.0.0.1:3122",
+    "postgres": "127.0.0.1:55440 / bazaar_espresso_ui",
+    "redis": "127.0.0.1:56391 / DB4",
+    "supervision": "Readiness and ownership checks, 2-second monitoring, application/database/Redis crash recovery. Foreign listeners are not terminated or adopted.",
+    "control": "Private authenticated Unix socket. An unauthenticated stop attempt returned 403 and left the supervisor running.",
+    "jobs": {
+      "recovery": "every 30 seconds",
+      "email": "every 60 seconds; local log delivery",
+      "maintenance": "every 6 hours",
+      "verification": "Existing recovery and email endpoints returned HTTP 200. Per-group in-flight guards prevent overlap. No new business job implementation was added."
+    }
+  },
+  "storage": {
+    "data": ".local/bazaar",
+    "postgres": ".local/bazaar/postgres",
+    "redis": ".local/bazaar/redis",
+    "applicationCopy": ".local/bazaar/app",
+    "files": ".local/bazaar/files",
+    "uploads": "Private app public/uploads and uploads link to persistent files/public-uploads and files/uploads.",
+    "exports": "Private app tmp and TMPDIR/TMP/TEMP use persistent files/tmp.",
+    "logs": ".local/bazaar/logs",
+    "backups": ".local/bazaar-backups",
+    "identity": "Stable private manifest secrets preserve local sign-in sessions across ordinary stack restarts; data and backup roots use mode 0700, manifest mode 0600.",
+    "isolation": "Ignored by Git, TypeScript/Vitest scanning, formatting and Next standalone output tracing. App dependencies resolve inside its private copy, independent of .next build-cache cleanup.",
+    "durability": "PostgreSQL fsync, synchronous_commit and full_page_writes verified on. Dedicated Redis uses AOF with appendfsync always and RDB snapshots.",
+    "adoption": "Recovered legacy cluster was backed up, stopped cleanly and copied once. All rows across 132 tables matched. Original cluster/dump retained. Existing uploads are copied without overwriting differing files; legacy Redis DB4 migration copied 0 keys.",
+    "missingData": "Initialization/adoption markers refuse automatic empty recreation or stale legacy reuse when existing managed data is missing. Recovery must be explicit. No seed, db push or reset runs during startup; pending migrations use prisma migrate deploy after a backup."
+  },
+  "backups": {
+    "schedule": "Before startup migrations, after persistent app files are ready, every 30 minutes while the supervisor runs, on manual request and during controlled shutdown.",
+    "database": "Unique custom-format pg_dump files; shutdown snapshot follows stopping the application.",
+    "files": "Per-snapshot .dump.files.json manifests and SHA256-addressed immutable objects. Identical bytes are stored once; earlier versions remain restorable.",
+    "redis": "Matching .dump.redis.rdb snapshots alongside database dumps.",
+    "retention": "No automatic pruning or deletion. Monitor capacity with local:status/logs and ordinary disk tools.",
+    "spaceGuards": "Minimum 512 MiB reserve during normal operation, 3 GiB before a build, plus estimated database/file-copy requirements before writing backups. Low space produces an explicit blocked state; existing data and backups are not deleted to make room.",
+    "restoreVerification": "Shutdown dump restored into a separate disposable database with all 132 table hashes equal. File snapshots restored with hash/size checks and Redis RDB restored in a separate temporary Redis instance.",
+    "restorePolicy": "No automatic destructive restore command. Keep the current directory intact; restore a chosen dump into a separate database and verify before any deliberate replacement. File restore helper refuses path escapes, corrupted objects and overwriting different existing content."
+  },
+  "dataIncident": {
+    "priorFailure": "The previous temporary cluster lost internal files at midnight on 2026-10-27. The deleting process was not established. Its broken directory remains untouched.",
+    "historicalLoss": "Recovery used the 2026-10-26 07:29 Bishkek snapshot: 472 business rows across 11 tracked models. Thirteen synthetic QA rows created later remain absent; this work does not claim to recover them. Historical 485-row acceptance evidence describes the earlier dataset.",
+    "currentPreservation": "All 472 recovered business rows still match the before-adoption dump by model row hashes after the new runtime, crash and restore checks. No customer or production database was used."
+  },
+  "verification": {
+    "unit": {
+      "result": "passed",
+      "files": 277,
+      "tests": 2168,
+      "newLocalRuntimeCases": 20,
+      "log": "artifacts/ux/espresso/local-runtime-all-unit.log"
+    },
+    "types": "passed; artifacts/ux/espresso/local-runtime-types.log",
+    "applicationLint": "passed without warnings; artifacts/ux/espresso/local-runtime-lint.log",
+    "scriptAndTestLint": "passed without warnings; artifacts/ux/espresso/local-runtime-script-lint.log",
+    "translations": "passed; artifacts/ux/espresso/local-runtime-i18n.log",
+    "productionBuild": "passed; .local/bazaar/logs/build.log; build J_ih-Y46hTOembHux6EVZ",
+    "faultChecks": {
+      "result": "passed",
+      "cases": [
+        "idempotent start",
+        "clean restart",
+        "SIGKILL application recovery",
+        "SIGKILL Redis recovery",
+        "SIGKILL PostgreSQL recovery",
+        "committed database sentinel retained",
+        "Redis sentinel retained",
+        "uploads/export files retained",
+        "132-table dump restore equality",
+        "file backup restore",
+        "Redis RDB restore"
+      ],
+      "evidence": "artifacts/ux/espresso/local-runtime-fault-verification.json",
+      "command": "BAZAAR_LOCAL_AI=disabled BAZAAR_LOCAL_FAULT_TEST=1 node --import tsx scripts/local/verify.ts",
+      "boundary": "Explicit isolated fixture/organization checks; unique disposable verification databases and Redis test keys. External providers disabled throughout."
+    },
+    "browser": {
+      "result": "Real fresh admin login and dashboard read passed on canonical localhost:3122 in IAB. Session survived the final stack restart.",
+      "evidence": "artifacts/ux/espresso/local-runtime-browser.json",
+      "screenshot": "artifacts/ux/espresso/screenshots/local-runtime-final-login.png",
+      "limit": "Existing Chrome tab automation timed out; successful login/restart evidence is IAB, not a claimed Chrome-specific acceptance."
+    },
+    "finalState": "artifacts/ux/espresso/local-runtime-final-state.json",
+    "preservation": "artifacts/ux/espresso/local-runtime-business-preservation.json"
+  },
+  "correctionsDuringImplementation": [
+    "Fixed initial PostgreSQL/Redis readiness timing before dependent commands.",
+    "Fixed process ownership checks to use actual cwd and listener ownership: Next changes process.title, making a ps command-name check unreliable.",
+    "Initial whole-file backup duplication filled local disk during repeated verification. Replaced it with content-addressed snapshots; all 16 existing file snapshot versions were converted and independently restored/hash-checked before obsolete tar representations were removed. Backup footprint fell from about 2.4 GB to about 122 MB at conversion. Reproducible .next/cache and an incomplete verification copy were also removed; no database or logical backup version was discarded. Final complete verification passed after these fixes."
+  ],
+  "providers": {
+    "normalManualUse": "Existing local AI configuration including DeepSeek is available to the user; the key was not changed or committed.",
+    "automatedTests": "AI/provider calls disabled. No actual AI, acquiring, marketplace or external mail request was made by these checks.",
+    "otherIntegrations": "Local payment collection disabled, email log-only, marketplace credentials isolated. This task verifies the local infrastructure, not live external integration quality.",
+    "handoffApproval": "Initial normal-mode handoff was rejected by automatic approval review because AI settings could allow real requests. Read-only proof confirmed no pending AI jobs and all automated checks complete; the explicit manual-use handoff was then approved. Evidence: artifacts/ux/espresso/local-runtime-handoff-provider-boundary.json."
+  },
+  "limits": [
+    "Backups are on the same computer. This protects ordinary restart/crash workflows, not hardware loss or deliberate deletion of all copies. Off-device backups are not configured.",
+    "A live periodic database/file/Redis snapshot is not a single distributed transaction. Controlled shutdown backup and separate restore equality were tested; no cross-service point-in-time recovery claim is made.",
+    "No macOS boot auto-start or supervisor-of-supervisor was installed. If the supervisor itself is killed or the machine reboots, pnpm local recovers the managed stack.",
+    "Low disk capacity needs operator attention; backups are never silently pruned.",
+    "Native-host checks were run on this macOS environment; other operating systems are not certified by this delivery."
+  ],
+  "delivery": {
+    "running": "ready; database up, migrations ok, Redis up",
+    "sourceBuildAndRunningRuntimeFingerprintsMatch": true,
+    "businessApplicationAndSchemaChanges": [],
+    "mainUnchanged": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+    "mainMerge": false,
+    "push": false,
+    "deployment": false
+  },
+  "primaryReferences": [
+    "https://www.postgresql.org/docs/16/app-pg-ctl.html",
+    "https://www.postgresql.org/docs/16/app-pgdump.html",
+    "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
+  ],
+  "followups": [
+    {
+      "date": "2026-10-27",
+      "report": "docs/espresso/ui-refinements-20261027.json",
+      "note": "Later UI improvements rebuilt the same persistent runtime; a manual draft predating that task raises its preserved business baseline to473. Earlier472-row verification remains point-in-time evidence."
+    }
+  ]
+}

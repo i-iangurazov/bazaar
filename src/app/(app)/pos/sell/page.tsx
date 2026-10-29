@@ -17,14 +17,14 @@ import {
 import Link from "next/link";
 import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
 import {
-  CalendarBlank,
-  ChatCircle,
-  ClipboardText,
-  Coins,
-  Hash,
-  Storefront,
-  User as UserGlyph,
-} from "@phosphor-icons/react";
+  CalendarIcon as CalendarBlank,
+  ChatIcon as ChatCircle,
+  ClipboardIcon as ClipboardText,
+  CoinsIcon as Coins,
+  HashIcon as Hash,
+  StoresIcon as Storefront,
+  UserIcon as UserGlyph,
+} from "@/components/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -52,6 +52,7 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { SearchInput } from "@/components/search-input";
 import { ScanInput } from "@/components/ScanInput";
 import { PosPaymentMethodControl } from "@/components/pos/payment-method-control";
+import { QueryErrorState } from "@/components/query-error-state";
 import { PosProductPhotoButton, PosProductPhotoDialog, type PosProductPhoto } from "@/components/pos/product-photo-dialog";
 import { LoyaltyDialog } from "@/components/pos/loyalty-dialog";
 import { LoyaltyButton, CompletedLoyaltySummary } from "@/components/pos/loyalty-panel";
@@ -772,7 +773,13 @@ const PosSellPage = () => {
   const saleQuery = trpc.pos.sales.get.useQuery(
     { saleId: saleId ?? "" },
     {
-      enabled: Boolean(saleId && !hasLocalCartLines && !journalEditSaleId),
+      // Local lines keep scanning responsive, but a cold receipt cache still
+      // needs its saved discount, customer and currency before checkout.
+      enabled: Boolean(
+        saleId && !journalEditSaleId && (
+          !hasLocalCartLines || !trpcUtils.pos.sales.get.getData({ saleId })
+        ),
+      ),
       refetchOnWindowFocus: true,
     },
   );
@@ -1589,6 +1596,7 @@ const PosSellPage = () => {
 
   useSse({
     "assortment.updated": () => { void trpcUtils.products.invalidate(); },
+    "pricing.updated": () => { void trpcUtils.products.invalidate(); },
     "inventory.updated": () => {
       void Promise.all([catalogProductsQuery.refetch()]);
     },
@@ -3391,13 +3399,16 @@ const PosSellPage = () => {
       return { line, availableQty, selectedQty };
     }) ?? [];
   const hasJournalReturnableLines = journalReturnLineStates.some((state) => state.availableQty > 0);
-  const journalReturnTotal = roundMoney(
-    journalReturnLineStates.reduce(
-      (total, state) => total + state.line.unitPriceKgs * state.selectedQty,
-      0,
-    ),
-  );
   const hasJournalReturnSelection = journalReturnLineStates.some((state) => state.selectedQty > 0);
+  const journalReturnQuote = trpc.pos.returns.preview.useQuery({
+    originalSaleId: journalReturnSaleId ?? "",
+    lines: journalReturnLineStates.filter((state) => state.selectedQty > 0).map((state) => ({
+      customerOrderLineId: state.line.id, qty: state.selectedQty,
+    })),
+  }, { enabled: Boolean(journalReturnSaleId && hasJournalReturnSelection), staleTime: 0 });
+  const journalReturnQuoteReady = hasJournalReturnSelection &&
+    journalReturnQuote.isSuccess && !journalReturnQuote.isFetching;
+  const journalReturnTotal = journalReturnQuote.data?.totalKgs ?? 0;
   const isJournalReturnBusy =
     createReturnMutation.isLoading ||
     addReturnLineMutation.isLoading ||
@@ -3633,7 +3644,8 @@ const PosSellPage = () => {
       }
 
       const serverReturn = await trpcUtils.pos.returns.get.fetch({saleReturnId:draft.id});
-      const refundTotal = serverReturn?.totalKgs ?? journalReturnTotal;
+      if (!serverReturn) throw new Error("posReturnNotFound");
+      const refundTotal = serverReturn.totalKgs;
       const completion = await completeReturnMutation.mutateAsync({
         saleReturnId: draft.id,
         idempotencyKey: createIdempotencyKey(),
@@ -4323,7 +4335,7 @@ const PosSellPage = () => {
         }}
         title={t("sell.receiptJournal")}
         subtitle={selectedRegisterLabel}
-        className="h-[100dvh] max-h-[100dvh] max-w-none overflow-y-auto rounded-none border-0 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-[1440px] sm:rounded-xl sm:border"
+        className="h-[100dvh] max-h-[100dvh] max-w-none overflow-y-auto rounded-none border-0 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-[1440px] sm:rounded-lg sm:border"
         bodyClassName="overflow-visible p-3 sm:p-5"
         mobileSheet
       >
@@ -4564,10 +4576,10 @@ const PosSellPage = () => {
                   return (
                     <article
                       key={saleItem.id}
-                      className={`rounded-xl border p-3 shadow-sm ring-1 ring-foreground/[0.01] ${
+                      className={`rounded-lg border p-3 shadow-none ${
                         saleItem.isHeld
                           ? "border-warning/40 bg-warning/10"
-                          : "border-border/65 bg-card/95"
+                          : "border-border bg-card"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -4953,9 +4965,16 @@ const PosSellPage = () => {
             </Select>
           </div>
 
-          <p className="text-sm font-semibold text-foreground">
+          {hasJournalReturnSelection && journalReturnQuote.error ? (
+            <QueryErrorState error={journalReturnQuote.error} onRetry={() => void journalReturnQuote.refetch()} />
+          ) : null}
+          <p className="text-sm font-semibold text-foreground" aria-live="polite">
             {t("history.returnTotal")}:{" "}
-            {formatKgsMoney(journalReturnTotal, locale, journalSelectedSaleCurrencySource)}
+            {journalReturnQuote.error && hasJournalReturnSelection
+              ? tCommon("notAvailable")
+              : hasJournalReturnSelection && !journalReturnQuoteReady
+              ? tCommon("loading")
+              : formatKgsMoney(journalReturnTotal, locale, journalSelectedSaleCurrencySource)}
           </p>
 
           <ModalFooter>
@@ -4974,7 +4993,7 @@ const PosSellPage = () => {
               type="button"
               onClick={() => void handleStartJournalReturn()}
               disabled={
-                isJournalReturnBusy || !hasJournalReturnableLines || !hasJournalReturnSelection
+                isJournalReturnBusy || !hasJournalReturnableLines || !journalReturnQuoteReady
               }
             >
               {isJournalReturnBusy ? <Spinner className="h-4 w-4" /> : null}
@@ -5234,7 +5253,7 @@ const PosSellPage = () => {
 
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
-      <header className="sticky top-0 z-30 flex min-h-16 flex-wrap border-b border-border bg-background shadow-sm lg:h-16 lg:flex-nowrap">
+      <header className="sticky top-0 z-30 flex min-h-16 flex-wrap border-b border-border bg-background shadow-none lg:h-16 lg:flex-nowrap">
         <Button
           asChild
           className="h-16 shrink-0 rounded-md bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90"
@@ -5483,7 +5502,7 @@ const PosSellPage = () => {
       ) : (
         <section className="grid min-h-[calc(100dvh-4rem)] pb-20 lg:h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1fr)_480px] lg:pb-0 2xl:grid-cols-[minmax(0,1fr)_520px]">
           <section className="flex min-h-0 flex-col bg-muted/40">
-            <div className="min-h-14 overflow-x-auto border-b border-border/70 bg-card px-4 py-3 shadow-sm">
+            <div className="min-h-14 overflow-x-auto border-b border-border bg-card px-4 py-3 shadow-none">
               <div className="flex w-max min-w-full items-center justify-center gap-2">
                 <Button
                   type="button"
@@ -5597,7 +5616,7 @@ const PosSellPage = () => {
 
           <aside
             data-baam-obstacle
-            className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[88vh] min-h-[76px] flex-col rounded-t-2xl border border-border/70 bg-card/95 shadow-2xl ring-1 ring-foreground/[0.015] backdrop-blur transition-transform duration-200 lg:static lg:z-auto lg:max-h-none lg:min-h-0 lg:translate-y-0 lg:rounded-none lg:border-y-0 lg:border-l lg:border-r-0 lg:shadow-none lg:ring-0 ${
+            className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[88vh] min-h-[76px] flex-col rounded-t-lg border border-border bg-card shadow-lg transition-transform duration-200 lg:static lg:z-auto lg:max-h-none lg:min-h-0 lg:translate-y-0 lg:rounded-none lg:border-y-0 lg:border-l lg:border-r-0 lg:shadow-none lg:ring-0 ${
               mobileCheckoutOpen ? "translate-y-0" : "translate-y-[calc(100%-76px)]"
             }`}
           >
@@ -5761,7 +5780,7 @@ const PosSellPage = () => {
                   {!hasCartLines && !saleQuery.isLoading && !saleQuery.error ? (
                     <div className="grid min-h-[300px] place-items-center p-6 text-center">
                       <div>
-                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-dashed border-border bg-muted/30 text-muted-foreground">
+                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-lg border border-dashed border-border bg-muted/30 text-muted-foreground">
                           <EmptyIcon className="h-5 w-5" aria-hidden />
                         </div>
                         <p className="mt-4 text-sm font-medium text-foreground">
@@ -6149,11 +6168,6 @@ const PosSellPage = () => {
         </section>
       )}
       {PosToolsDialogs()}
-      {CustomerEditModal()}
-      {ReceiptJournalModal()}
-      {JournalSaleDetailModal()}
-      {JournalReturnModal()}
-      {CartPriceSyncDialog()}
     </div>
   );
 
@@ -6174,7 +6188,7 @@ const PosSellPage = () => {
           role="dialog"
           aria-modal="true"
           aria-label={t("sell.customerSelectorTitle")}
-          className="absolute inset-x-0 bottom-0 max-h-[86dvh] overflow-y-auto rounded-t-2xl border border-border/70 bg-background/95 p-4 shadow-2xl ring-1 ring-foreground/[0.015] backdrop-blur"
+          className="absolute inset-x-0 bottom-0 max-h-[86dvh] overflow-y-auto rounded-t-lg border border-border bg-background p-4 shadow-lg"
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -6661,7 +6675,7 @@ const PosSellPage = () => {
 
       const renderRegisterPanel = () =>
         showMobileRegisterPanel ? (
-          <section className="mx-0 border-y border-border bg-card/95 px-3 py-3">
+          <section className="mx-0 border-y border-border bg-card px-3 py-3">
             <label className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               {t("entry.register")}
             </label>
@@ -6716,7 +6730,7 @@ const PosSellPage = () => {
 
       const renderOrderSection = () =>
         hasCartLines ? (
-          <section className="border-y border-border bg-card/95 px-3 py-3">
+          <section className="border-y border-border bg-card px-3 py-3">
             <div className="mb-2">
               <h2 className="text-[15px] font-semibold leading-none text-primary">
                 {isCompletedSaleEdit ? checkoutPanelTitle : t("sell.mobile.order")}
@@ -6772,7 +6786,7 @@ const PosSellPage = () => {
         ) : null;
 
       const renderPropertiesSection = () => (
-        <section className="border-y border-border bg-card/95">
+        <section className="border-y border-border bg-card">
           <div className="px-3">{saleOptions}</div>
           <button
             type="button"
@@ -6831,7 +6845,7 @@ const PosSellPage = () => {
       );
 
       const renderCounterpartiesSection = () => (
-        <section className="border-y border-border bg-card/95 px-3 py-3">
+        <section className="border-y border-border bg-card px-3 py-3">
           <h2 className="mb-2 text-[15px] font-semibold leading-none text-primary">
             {t("sell.mobile.counterparties")}
           </h2>
@@ -6853,7 +6867,7 @@ const PosSellPage = () => {
       );
 
       const renderAddProductsBar = () => (
-        <section className="border-y border-border bg-card/95 px-3 py-3">
+        <section className="border-y border-border bg-card px-3 py-3">
           <div className="grid grid-cols-[minmax(0,1fr)_50px] gap-2.5">
             <button
               type="button"
@@ -6878,7 +6892,7 @@ const PosSellPage = () => {
 
       const renderMobileLines = () =>
         hasCartLines ? (
-          <section className="border-y border-border bg-card/95 px-3 py-3">
+          <section className="border-y border-border bg-card px-3 py-3">
             <h2 className="mb-2 text-[15px] font-semibold text-primary">
               {t("sell.mobile.products")}
             </h2>
@@ -6928,7 +6942,7 @@ const PosSellPage = () => {
         ) : null;
 
       const renderCommentBar = () => (
-        <section className="border-y border-border bg-card/95 px-3 py-2">
+        <section className="border-y border-border bg-card px-3 py-2">
           <label className="flex min-h-[44px] items-center gap-2.5 text-muted-foreground">
             <ChatCircle className="h-6 w-6 shrink-0" aria-hidden />
             <input
@@ -6965,7 +6979,7 @@ const PosSellPage = () => {
             <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
               <button
                 type="button"
-                className="min-h-[48px] w-full rounded-[12px] bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(64,156,255,0.24)]"
+                className="min-h-[48px] w-full rounded-lg bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-none"
                 onClick={() => setMobileSaleTab("payment")}
                 aria-label={t("sell.openCart")}
               >
@@ -7027,7 +7041,7 @@ const PosSellPage = () => {
               <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
                 <button
                   type="button"
-                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-primary-foreground"
+                  className="min-h-[50px] w-full rounded-lg bg-primary text-[15px] font-semibold text-primary-foreground"
                   onClick={() => setMobileSaleTab("document")}
                 >
                   {t("sell.newSale")}
@@ -7038,7 +7052,7 @@ const PosSellPage = () => {
             <div className="space-y-3 pt-3">
               {renderOrderSection()}
               <div className="px-3">{saleOptions}</div>
-              <section className="border-y border-border bg-card/95 px-3 py-3">
+              <section className="border-y border-border bg-card px-3 py-3">
                 <h2 className="text-[15px] font-semibold leading-none text-primary">
                   {t("sell.mobile.paymentSummary")}
                 </h2>
@@ -7079,7 +7093,7 @@ const PosSellPage = () => {
               <section
                 ref={paymentsSectionRef}
                 data-baam-obstacle="action"
-                className="border-y border-border bg-card/95 px-3 py-3"
+                className="border-y border-border bg-card px-3 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-[15px] font-semibold leading-none text-primary">
@@ -7126,7 +7140,7 @@ const PosSellPage = () => {
                 ) : null}
                 <button
                   type="button"
-                  className="min-h-[50px] min-w-0 rounded-[12px] bg-primary px-2 text-[13px] font-semibold text-primary-foreground disabled:opacity-50"
+                  className="min-h-[50px] min-w-0 rounded-lg bg-primary px-2 text-[13px] font-semibold text-primary-foreground disabled:opacity-50"
                   data-baam-obstacle="action"
                   onClick={handleComplete}
                   disabled={completeDisabled}
@@ -7208,7 +7222,7 @@ const PosSellPage = () => {
             </div>
 
             {visibleProductCategories.length ? (
-              <div className="scrollbar-none overflow-x-auto border-b border-border bg-card/95 px-3 py-2">
+              <div className="scrollbar-none overflow-x-auto border-b border-border bg-card px-3 py-2">
                 <div className="flex w-max min-w-full gap-2">
                   <button
                     type="button"
@@ -7353,7 +7367,7 @@ const PosSellPage = () => {
               <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
                 {t("sell.mobile.cameraScannerHint")}
               </p>
-              <div className="mt-5 rounded-[12px] border border-border bg-card/95 px-3 py-2">
+              <div className="mt-5 rounded-lg border border-border bg-card px-3 py-2">
                 <ScanInput
                   context="pos"
                   showClearButton
@@ -7399,7 +7413,7 @@ const PosSellPage = () => {
               role="dialog"
               aria-modal="true"
               aria-label={t("sell.saleDiscount")}
-              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-card px-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] pt-3 text-foreground shadow-2xl"
+              className="absolute inset-x-0 bottom-0 rounded-t-lg bg-card px-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] pt-3 text-foreground shadow-lg"
               data-testid="pos-mobile-discount-sheet"
             >
               <div className="mx-auto h-1 w-12 rounded-full bg-muted-foreground/50" />
@@ -7451,7 +7465,7 @@ const PosSellPage = () => {
                   </div>
                 </label>
 
-                <div className="rounded-[12px] border border-border bg-muted/70 p-3">
+                <div className="rounded-lg border border-border bg-muted/70 p-3">
                   <div className="flex justify-between gap-3 text-[13px] text-muted-foreground">
                     <span>{t("sell.discount")}</span>
                     <span className="text-foreground">{formatSaleMoney(cartDiscountKgs)}</span>
@@ -7516,7 +7530,7 @@ const PosSellPage = () => {
               role="dialog"
               aria-modal="true"
               aria-label={activeLine.product.name}
-              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-card px-3 pb-[calc(0.65rem_+_env(safe-area-inset-bottom))] pt-3 text-foreground shadow-2xl"
+              className="absolute inset-x-0 bottom-0 rounded-t-lg bg-card px-3 pb-[calc(0.65rem_+_env(safe-area-inset-bottom))] pt-3 text-foreground shadow-lg"
             >
               <div className="mx-auto h-1 w-12 rounded-full bg-muted-foreground/50" />
               <div className="mt-4">
@@ -7666,11 +7680,6 @@ const PosSellPage = () => {
           </Modal>
           {PosToolsDialogs()}
           {MobileCustomerSheet()}
-          {CustomerEditModal()}
-              {ReceiptJournalModal()}
-          {JournalSaleDetailModal()}
-          {JournalReturnModal()}
-          {CartPriceSyncDialog()}
         </>
       );
     }
@@ -7684,7 +7693,7 @@ const PosSellPage = () => {
 
     return (
       <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/95 px-3 py-3 shadow-sm backdrop-blur md:hidden">
+        <header className="sticky top-0 z-30 border-b border-border bg-background px-3 py-3 shadow-none md:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -7962,7 +7971,7 @@ const PosSellPage = () => {
               role="dialog"
               aria-modal="true"
               aria-label={checkoutPanelTitle}
-              className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col overflow-hidden border-t border-border bg-background shadow-2xl"
+              className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col overflow-hidden border-t border-border bg-background shadow-lg"
               style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
             >
               {showCompletedSale && lastCompletedSale ? (
@@ -8609,11 +8618,6 @@ const PosSellPage = () => {
         ) : null}
 
         {MobileCustomerSheet()}
-        {CustomerEditModal()}
-          {ReceiptJournalModal()}
-        {JournalSaleDetailModal()}
-        {JournalReturnModal()}
-        {CartPriceSyncDialog()}
       </div>
     );
   };
@@ -8679,6 +8683,12 @@ const PosSellPage = () => {
   return <>
     {isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}
     {loyaltyDialog}
+    {/* Keep portal stacks mounted when the responsive sale view changes. */}
+    {CustomerEditModal()}
+    {ReceiptJournalModal()}
+    {JournalSaleDetailModal()}
+    {JournalReturnModal()}
+    {CartPriceSyncDialog()}
     <PosProductPhotoDialog photo={photoPreview} onClose={() => setPhotoPreview(null)} />
   </>;
 };

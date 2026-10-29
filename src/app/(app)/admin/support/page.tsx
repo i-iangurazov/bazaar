@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -26,7 +27,7 @@ const AdminSupportPage = () => {
   const locale = useLocale();
   const router = useRouter();
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = status === "authenticated" && session?.user?.role === "ADMIN";
   const isForbidden = status === "authenticated" && !isAdmin;
   const { toast } = useToast();
 
@@ -96,11 +97,29 @@ const AdminSupportPage = () => {
     },
   });
 
-  if (isForbidden) {
+  if (status !== "authenticated" || isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">{isForbidden ? tErrors("forbidden") : tCommon("loading")}</p>
+      </div>
+    );
+  }
+
+  const supportPlanLocked = storeFlagsQuery.isError &&
+    storeFlagsQuery.error?.data?.code === "FORBIDDEN" &&
+    storeFlagsQuery.error.message.replace(/^errors\./, "") === "featureLockedSupportToolkit";
+  if (supportPlanLocked) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <Card>
+          <CardHeader><CardTitle>{t("planLockedTitle")}</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{translateError(tErrors, storeFlagsQuery.error)}</p>
+            <Button asChild><Link href="/billing">{t("viewPlans")}</Link></Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -145,7 +164,7 @@ const AdminSupportPage = () => {
               {tCommon("loading")}
             </div>
           ) : usersQuery.isError ? (
-            <QueryErrorState onRetry={() => void usersQuery.refetch()} />
+            <QueryErrorState error={usersQuery.error} onRetry={() => void usersQuery.refetch()} />
           ) : (
             <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -200,10 +219,10 @@ const AdminSupportPage = () => {
               {tCommon("loading")}
             </div>
           ) : storeFlagsQuery.isError ? (
-            <QueryErrorState onRetry={() => void storeFlagsQuery.refetch()} />
+            <QueryErrorState error={storeFlagsQuery.error} onRetry={() => void storeFlagsQuery.refetch()} />
           ) : (
             (storeFlagsQuery.data ?? []).map((store) => (
-              <div key={store.id} className="rounded-md border border-border/70 p-4">
+              <div key={store.id} className="rounded-md border border-border p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">{store.name}</p>

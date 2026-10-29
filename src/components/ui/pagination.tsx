@@ -17,7 +17,7 @@ Pagination.displayName = "Pagination";
 
 export const PaginationContent = React.forwardRef<HTMLUListElement, React.ComponentProps<"ul">>(
   ({ className, ...props }, ref) => (
-    <ul ref={ref} className={cn("flex flex-wrap items-center gap-2", className)} {...props} />
+    <ul ref={ref} className={cn("flex flex-wrap items-center gap-1", className)} {...props} />
   ),
 );
 PaginationContent.displayName = "PaginationContent";
@@ -37,8 +37,9 @@ export const PaginationLink = React.forwardRef<
     ref={ref}
     aria-current={isActive ? "page" : undefined}
     className={cn(
-      buttonVariants({ variant: isActive ? "secondary" : "ghost", size: "sm" }),
+      buttonVariants({ variant: "ghost", size: "sm" }),
       "min-w-9",
+      isActive && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
       className,
     )}
     {...props}
@@ -54,7 +55,7 @@ export const PaginationButton = React.forwardRef<
     ref={ref}
     variant={variant}
     size={size}
-    className={cn("h-10 w-10 sm:h-8 sm:w-8", className)}
+    className={cn("h-10 w-10 md:h-8 md:w-8", className)}
     {...props}
   />
 ));

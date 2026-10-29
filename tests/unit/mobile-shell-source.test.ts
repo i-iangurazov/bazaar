@@ -33,7 +33,7 @@ describe("mobile app shell source", () => {
 
   it("keeps desktop chrome at md and wider while routing mobile bottom tabs", () => {
     expect(appShellSource).toContain("<SidebarProvider");
-    expect(appShellSource).toContain("<Sidebar className=");
+    expect(appShellSource).toMatch(/<Sidebar\s+className=/);
     expect(appShellSource).toContain("md:sticky md:top-0 md:h-screen");
     expect(appShellSource).toContain("MobileAppShell");
     expect(appShellSource).toContain('href: "/dashboard"');
@@ -41,7 +41,7 @@ describe("mobile app shell source", () => {
     expect(appShellSource).toContain("href: appRoutes.products");
     expect(appShellSource).toContain('href: "/sales/orders"');
     expect(appShellSource).toContain("href: appRoutes.inventory");
-    expect(appShellSource).toContain("<Sidebar className=");
+    expect(appShellSource).toContain('collapsible="offcanvas"');
     expect(appShellSource).toContain('requiredPermission: "usePos"');
     expect(appShellSource).toContain('requiredPermission: "viewProducts"');
     expect(appShellSource).toContain('requiredPermission: "viewSales"');
@@ -58,21 +58,19 @@ describe("mobile app shell source", () => {
     expect(profileButtonSource).toContain("button-focus-ring");
     expect(profileButtonSource).toContain("bazaar-mobile-header-button");
     expect(globalsSource).toContain(".bazaar-mobile-header-button");
-    expect(globalsSource).toContain("h-11 w-11 rounded-xl");
+    expect(globalsSource).toContain("h-11 w-11 rounded-[var(--radius)]");
     expect(globalsSource).toContain("focus-visible:ring-2 focus-visible:ring-ring/40");
   });
 
-  it("keeps the mobile bottom nav surface and items rounded", () => {
+  it("keeps mobile navigation fixed above the safe area with blue active states", () => {
     const bottomNavStart = mobileShellSource.indexOf("export const MobileBottomNav");
     const bottomNavSource = mobileShellSource.slice(bottomNavStart, bottomNavStart + 1800);
 
-    expect(bottomNavSource).toContain("fixed inset-x-3 bottom-3 z-40 rounded-[1.65rem] border");
+    expect(bottomNavSource).toContain("fixed inset-x-0 bottom-0 z-40 border-t");
     expect(bottomNavSource).toContain(
-      "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem]",
+      "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius)]",
     );
-    expect(bottomNavSource).toContain(
-      "bg-primary text-primary-foreground shadow-lg shadow-primary/20",
-    );
+    expect(bottomNavSource).toContain("bg-primary/10 text-primary shadow-none");
   });
 
   it("shares the same actual dashboard data and scoped actions across screen sizes", () => {

@@ -15,7 +15,7 @@ export const ProductEditorPage = ({
       className,
     )}
   >
-    <div className="mx-auto w-full max-w-[1120px]">{children}</div>
+    <div className="mx-auto w-full max-w-[1280px]">{children}</div>
   </div>
 );
 
@@ -23,24 +23,32 @@ export const ProductEditorHeader = ({
   eyebrow,
   title,
   actions,
+  saveBar,
 }: {
   eyebrow?: ReactNode;
   title: ReactNode;
   actions?: ReactNode;
+  saveBar?: ReactNode;
 }) => (
-  <div className="mb-5 min-w-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
+  <div
+    data-product-editor-header
+    className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-3 bg-background py-1 md:sticky md:top-14 md:z-30 md:py-3"
+  >
     <div className="min-w-0">
       {eyebrow ? (
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
           {eyebrow}
         </div>
       ) : null}
-      <h1 className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+      <h1 className="break-words text-[22px] font-semibold leading-7 tracking-tight text-foreground">
         {title}
       </h1>
     </div>
-    {actions ? (
-      <div className="mt-3 flex shrink-0 items-center gap-2 sm:mt-0">{actions}</div>
+    {actions || saveBar ? (
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+        {actions}
+        {saveBar}
+      </div>
     ) : null}
   </div>
 );
@@ -54,20 +62,30 @@ export const ProductEditorSaveBar = ({
 }) => (
   <div
     data-baam-obstacle
-    className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-30 rounded-xl border border-border bg-card p-2 text-card-foreground shadow-md sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-3 sm:z-10 sm:mb-4 sm:p-2"
+    className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-30 rounded-lg border border-border bg-card p-2 text-card-foreground shadow-md md:static md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none"
   >
-    <div className="mx-auto flex min-h-10 w-full max-w-[1120px] items-center justify-between gap-3 sm:min-h-9 sm:max-w-none">
-      <div className="min-w-0 truncate px-2 text-sm font-semibold text-foreground">{label}</div>
+    <div className="flex min-h-10 w-full items-center justify-between gap-3 md:min-h-8">
+      <div role="status" className="min-w-0 px-2 text-xs text-muted-foreground md:px-0">
+        {label}
+      </div>
       <div className="flex shrink-0 items-center gap-1.5">{actions}</div>
     </div>
   </div>
 );
 
 export const ProductEditorGrid = ({ main, sidebar }: { main: ReactNode; sidebar?: ReactNode }) => (
-  <div className="grid gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-    <div className="min-w-0 space-y-4 sm:space-y-5">{main}</div>
+  <div
+    data-product-editor-document
+    className={cn(
+      "grid min-w-0 rounded-lg border border-border bg-card",
+      sidebar && "lg:grid-cols-[minmax(0,1fr)_260px]",
+    )}
+  >
+    <div className="min-w-0">{main}</div>
     {sidebar ? (
-      <aside className="min-w-0 space-y-4 sm:space-y-5 lg:sticky lg:top-20">{sidebar}</aside>
+      <aside className="min-w-0 rounded-b-lg border-t border-border bg-muted/30 lg:rounded-b-none lg:rounded-r-lg lg:border-l lg:border-t-0">
+        {sidebar}
+      </aside>
     ) : null}
   </div>
 );
@@ -88,17 +106,12 @@ export const ProductEditorCard = ({
   contentClassName?: string;
 }) => (
   <section
-    className={cn(
-      "min-w-0 rounded-xl border border-border bg-card shadow-sm dark:shadow-none",
-      className,
-    )}
+    className={cn("min-w-0 border-b border-border px-4 py-5 last:border-b-0 sm:px-5", className)}
   >
     {title || description || action ? (
-      <div className="flex items-start justify-between gap-3 rounded-t-xl border-b border-border px-4 py-3 sm:px-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {title ? (
-            <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
-          ) : null}
+          {title ? <h2 className="text-sm font-medium text-foreground">{title}</h2> : null}
           {description ? (
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
           ) : null}
@@ -106,15 +119,7 @@ export const ProductEditorCard = ({
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
     ) : null}
-    <div
-      className={cn(
-        "space-y-4 p-4 sm:space-y-5 sm:p-5",
-        title || description || action ? "pt-4" : "",
-        contentClassName,
-      )}
-    >
-      {children}
-    </div>
+    <div className={cn("space-y-4", contentClassName)}>{children}</div>
   </section>
 );
 

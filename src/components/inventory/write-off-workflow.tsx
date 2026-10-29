@@ -600,7 +600,7 @@ export const InventoryWriteOffsPage = ({
             </Button>
           }
         />
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {t("writeOffPermissionDenied")}
         </div>
       </div>
@@ -642,7 +642,7 @@ export const InventoryWriteOffsPage = ({
             </Button>
           }
         />
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {translateError(tErrors, editableDocumentQuery.error)}
         </div>
       </div>
@@ -703,7 +703,7 @@ export const InventoryWriteOffsPage = ({
             </div>
             <div className="space-y-2">
               <Label>{t("writeOffAuthor")}</Label>
-              <div className="flex h-10 items-center rounded-xl border border-input bg-muted/30 px-3 text-sm text-foreground">
+              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/30 px-3 text-sm text-foreground">
                 {authorLabel}
               </div>
             </div>

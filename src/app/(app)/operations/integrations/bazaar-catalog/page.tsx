@@ -13,10 +13,13 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HideIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -189,7 +192,7 @@ const BazaarCatalogSettingsPage = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const role = session?.user?.role ?? "STAFF";
-  const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
+  const canView = role === "ADMIN" || role === "MANAGER";
   const canEdit = role === "ADMIN" || role === "MANAGER";
 
   const storesQuery = trpc.bazaarCatalog.listStores.useQuery(undefined, {
@@ -444,7 +447,9 @@ const BazaarCatalogSettingsPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role={session?.user ? "alert" : "status"} className="text-sm text-danger">
+          {session?.user ? tErrors("forbidden") : tCommon("loading")}
+        </p>
       </div>
     );
   }
@@ -458,7 +463,11 @@ const BazaarCatalogSettingsPage = () => {
           <CardTitle>{t("storeSelectorTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <Select value={selectedStoreId} onValueChange={syncStoreParam}>
+          <Select
+            value={selectedStoreId}
+            onValueChange={syncStoreParam}
+            disabled={storesQuery.isLoading || Boolean(storesQuery.error) || !stores.length}
+          >
             <SelectTrigger aria-label={t("storeSelector")}>
               <SelectValue placeholder={t("storeSelector")} />
             </SelectTrigger>
@@ -473,7 +482,17 @@ const BazaarCatalogSettingsPage = () => {
         </CardContent>
       </Card>
 
-      {!selectedStoreId || settingsQuery.isLoading || !settingsData || !formState ? (
+      {storesQuery.error ? (
+        <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
+      ) : settingsQuery.error ? (
+        <QueryErrorState error={settingsQuery.error} onRetry={() => void settingsQuery.refetch()} />
+      ) : !selectedStoreId && !storesQuery.isLoading ? (
+        <Card className="bazaar-admin-surface">
+          <CardContent className="bazaar-admin-empty min-h-[8rem]">
+            {tCommon("selectStore")}
+          </CardContent>
+        </Card>
+      ) : !selectedStoreId || settingsQuery.isLoading || !settingsData || !formState ? (
         <Card className="bazaar-admin-surface">
           <CardContent className="bazaar-admin-empty min-h-[8rem] gap-2">
             <Spinner className="h-4 w-4" />
@@ -552,16 +571,14 @@ const BazaarCatalogSettingsPage = () => {
                     <SelectItem value="visible">
                       {t("productsVisibility.filters.visible")}
                     </SelectItem>
-                    <SelectItem value="hidden">
-                      {t("productsVisibility.filters.hidden")}
-                    </SelectItem>
+                    <SelectItem value="hidden">{t("productsVisibility.filters.hidden")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {!canEdit ? (
-                <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p>
-              ) : null}
+                  <p className="text-xs text-muted-foreground">{t("readOnlyHint")}</p>
+                ) : null}
 
               {canEdit && selectedProductIds.size > 0 ? (
                 <SelectionToolbar
@@ -598,7 +615,10 @@ const BazaarCatalogSettingsPage = () => {
                   {tCommon("loading")}
                 </div>
               ) : productsQuery.error ? (
-                <p className="bazaar-admin-error">{translateError(tErrors, productsQuery.error)}</p>
+                <QueryErrorState
+                  error={productsQuery.error}
+                  onRetry={() => void productsQuery.refetch()}
+                />
               ) : (
                 <ResponsiveDataList
                   items={productItems}
@@ -610,9 +630,7 @@ const BazaarCatalogSettingsPage = () => {
                   onPageSizeChange={setProductsPageSize}
                   scrollToTopOnPageChange
                   empty={
-                    <p className="text-sm text-muted-foreground">
-                      {t("productsVisibility.empty")}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t("productsVisibility.empty")}</p>
                   }
                   renderDesktop={(visibleItems) =>
                     visibleItems.length ? (
@@ -688,19 +706,20 @@ const BazaarCatalogSettingsPage = () => {
                                 </TableCell>
                                 {canEdit ? (
                                   <TableCell>
-                                    <Button
+                                    <IconButton
                                       type="button"
-                                      size="sm"
                                       variant={product.hidden ? "secondary" : "outline"}
                                       onClick={() =>
                                         handleUpdateProducts(!product.hidden, [product.id])
                                       }
                                       disabled={updateProductsMutation.isLoading}
-                                    >
-                                      {product.hidden
-                                        ? t("productsVisibility.rowShow")
-                                        : t("productsVisibility.rowHide")}
-                                    </Button>
+                                      icon={product.hidden ? ViewIcon : HideIcon}
+                                      label={
+                                        product.hidden
+                                          ? t("productsVisibility.rowShow")
+                                          : t("productsVisibility.rowHide")
+                                      }
+                                    />
                                   </TableCell>
                                 ) : null}
                               </TableRow>
@@ -710,9 +729,7 @@ const BazaarCatalogSettingsPage = () => {
                         </div>
                       </div>
                     ) : (
-                      <p className="bazaar-admin-empty">
-                        {t("productsVisibility.empty")}
-                      </p>
+                      <p className="bazaar-admin-empty">{t("productsVisibility.empty")}</p>
                     )
                   }
                   renderMobile={(product) => (
@@ -759,18 +776,19 @@ const BazaarCatalogSettingsPage = () => {
                             />
                             {t("productsVisibility.selectProductShort")}
                           </label>
-                          <Button
+                          <IconButton
                             type="button"
-                            size="sm"
                             variant={product.hidden ? "secondary" : "outline"}
-                            className="ml-auto"
                             onClick={() => handleUpdateProducts(!product.hidden, [product.id])}
                             disabled={updateProductsMutation.isLoading}
-                          >
-                            {product.hidden
-                              ? t("productsVisibility.rowShow")
-                              : t("productsVisibility.rowHide")}
-                          </Button>
+                            className="ml-auto"
+                            icon={product.hidden ? ViewIcon : HideIcon}
+                            label={
+                              product.hidden
+                                ? t("productsVisibility.rowShow")
+                                : t("productsVisibility.rowHide")
+                            }
+                          />
                         </div>
                       ) : null}
                     </div>
@@ -908,7 +926,7 @@ const BazaarCatalogSettingsPage = () => {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/20">
+              <div className="overflow-hidden rounded-lg border border-border bg-muted/20">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
@@ -928,7 +946,7 @@ const BazaarCatalogSettingsPage = () => {
                 {advancedOpen ? (
                   <div
                     id="catalog-advanced"
-                    className="grid gap-4 border-t border-border/70 p-4 md:grid-cols-2"
+                    className="grid gap-4 border-t border-border p-4 md:grid-cols-2"
                   >
                     <div className="space-y-2">
                       <Label htmlFor="catalog-font">{t("fontLabel")}</Label>
@@ -997,7 +1015,7 @@ const BazaarCatalogSettingsPage = () => {
               >
                 <p className="mb-3 text-sm text-muted-foreground">{t("previewTitle")}</p>
                 <div
-                  className="rounded-xl border border-border/70 bg-background p-3"
+                  className="rounded-lg border border-border bg-background p-3"
                   style={previewFontStyle(formState.fontFamily)}
                 >
                   <div
@@ -1120,7 +1138,6 @@ const BazaarCatalogSettingsPage = () => {
               </div>
             </CardContent>
           </Card>
-
         </>
       )}
     </div>

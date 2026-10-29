@@ -66,7 +66,9 @@ export async function verifyStoreVisibilityAndTransfer(
   );
   const settings = (await api("stores.catalogSettings", { storeId: target.id })).settings;
   settings.connections = [
-    ...settings.connections.filter((connection: { key: string }) => connection.key !== `store:${source.id}`),
+    ...settings.connections.filter(
+      (connection: { key: string }) => connection.key !== `store:${source.id}`,
+    ),
     { key: `store:${source.id}`, enabled: true, scope: "ALL", productIds: [] },
   ];
   const preview = await api("stores.previewCatalogSettings", settings, true);
@@ -230,7 +232,8 @@ export async function verifyStoreVisibilityAndTransfer(
       assert.equal(layout.shifted, false, "Quantity focus must not shift the form sideways");
       const keys: string[] = [];
       let committed: any;
-      await current.route("**/api/trpc/inventory.transfer*", async (route) => {
+      // Only the posting endpoint: transferLineContext is read-only validation.
+      await current.route("**/api/trpc/inventory.transfer?*", async (route) => {
         const raw = route.request().postDataJSON();
         const input = raw.json ?? raw["0"]?.json;
         keys.push(input.idempotencyKey);
@@ -252,6 +255,7 @@ export async function verifyStoreVisibilityAndTransfer(
           .filter({ visible: true, hasText: "Повторите отправку без изменений" }),
       ).toContainText("Повторите отправку без изменений");
       await expect(quantity).toHaveValue("2");
+      await expect(quantity).toBeDisabled();
       await expect(post).toBeVisible();
       await current.screenshot({ path: `${output}/transfer-error-${width}.png`, fullPage: true });
       await post.click();
@@ -267,7 +271,7 @@ export async function verifyStoreVisibilityAndTransfer(
       assert.equal(movementDocument.totalQuantity, 2);
       await current.screenshot({ path: `${output}/transfer-retry-${width}.png`, fullPage: true });
       checks.push(
-        `Transfer retry ${width}px: lost committed response replays the same key; stock moves once and the draft stays editable`,
+        `Transfer retry ${width}px: lost committed response replays the same key; stock moves once and uncertain document fields remain locked`,
       );
     }
     assert.deepEqual(touchErrors, []);

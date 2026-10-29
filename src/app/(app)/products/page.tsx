@@ -1,5 +1,7 @@
 "use client";
 
+import { liveQueryRefreshOptions } from "@/lib/live-query";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table";
 import Link from "next/link";
@@ -15,6 +17,7 @@ import {
 } from "@prisma/client";
 
 import { commonListFields, useScopedListState } from "@/lib/useScopedListState";
+import { cn } from "@/lib/utils";
 import { ListViewOptions, ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
@@ -461,7 +464,7 @@ const ProductsPage = () => {
     defaultValue: defaultProductsTableState,
     parse: parseProductsTableState,
   });
-  const defaultProductsSavedViewsState = useMemo(() => ({ views: [], defaultViewId: null }), []);
+  const defaultProductsSavedViewsState = useMemo(() => ({ views: [], defaultViewId: null, activeViewId: null }), []);
   const productsSavedViewsStorageKey = useMemo(
     () =>
       buildScopedStorageKey({
@@ -609,8 +612,8 @@ const ProductsPage = () => {
     [setProductsTableState],
   );
   const matchingProductsSavedView = useMemo(
-    () => findMatchingSavedTableView(productsSavedViewsState.views, productsTableState),
-    [productsSavedViewsState.views, productsTableState],
+    () => findMatchingSavedTableView(productsSavedViewsState.views, productsTableState, productsSavedViewsState.activeViewId),
+    [productsSavedViewsState.views, productsSavedViewsState.activeViewId, productsTableState],
   );
   const baseProductColumnOptions = useMemo(
     () => [
@@ -1157,6 +1160,7 @@ const ProductsPage = () => {
       return;
     }
     setProductsTableState(defaultView.state);
+    setProductsSavedViewsState((current) => ({ ...current, activeViewId: defaultView.id }));
   }, [
     hasStoredProductsTableState,
     productsSavedViewsReady,
@@ -1164,6 +1168,7 @@ const ProductsPage = () => {
     productsSavedViewsState.views,
     productsTableStateReady,
     setProductsTableState,
+    setProductsSavedViewsState,
   ]);
 
   useEffect(() => {
@@ -1405,9 +1410,12 @@ const ProductsPage = () => {
   );
 
   useSse({
-    "assortment.updated": () => { void trpcUtils.products.invalidate(); },
+    // A live event must not cancel the refresh awaited by an inline save.
+    // Otherwise that save can finish with the previous stock revision cached.
+    "assortment.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
+    "pricing.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
     "inventory.updated": () => {
-      void trpcUtils.products.bootstrap.invalidate();
+      void trpcUtils.products.bootstrap.invalidate(undefined, undefined, liveQueryRefreshOptions);
     },
   });
 
@@ -1751,16 +1759,19 @@ const ProductsPage = () => {
         return;
       }
       setProductsTableState({ ...view.state, page: 1 });
+      setProductsSavedViewsState((current) => ({ ...current, activeViewId: view.id }));
       setSelectedIds(new Set());
     },
-    [productsSavedViewsState.views, setProductsTableState],
+    [productsSavedViewsState.views, setProductsTableState, setProductsSavedViewsState],
   );
 
   const saveProductsView = useCallback(
     (name: string) => {
+      const view = createSavedTableView({ name, state: productsTableState });
       setProductsSavedViewsState((current) => ({
         ...current,
-        views: [...current.views, createSavedTableView({ name, state: productsTableState })],
+        views: [...current.views, view],
+        activeViewId: view.id,
       }));
     },
     [productsTableState, setProductsSavedViewsState],
@@ -1785,6 +1796,7 @@ const ProductsPage = () => {
         views: current.views.map((view) =>
           view.id === viewId ? overwriteSavedTableView(view, productsTableState) : view,
         ),
+        activeViewId: viewId,
       }));
     },
     [productsTableState, setProductsSavedViewsState],
@@ -1793,7 +1805,9 @@ const ProductsPage = () => {
   const deleteProductsView = useCallback(
     (viewId: string) => {
       setProductsSavedViewsState((current) => ({
+        ...current,
         views: current.views.filter((view) => view.id !== viewId),
+        activeViewId: current.activeViewId === viewId ? null : current.activeViewId,
         defaultViewId: current.defaultViewId === viewId ? null : current.defaultViewId,
       }));
     },
@@ -2694,9 +2708,6 @@ const ProductsPage = () => {
                   executeMutation={executeInlineProductMutation}
                   className="font-semibold text-foreground"
                 />
-                {showEffectivePrice && product.priceOverridden ? (
-                  <Badge variant="muted">{t("priceOverridden")}</Badge>
-                ) : null}
               </div>
             );
           },
@@ -3416,9 +3427,9 @@ const ProductsPage = () => {
                         <SparklesIcon className="h-4 w-4" aria-hidden />
                       )}
                       {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
-                      <Badge variant="muted" className="ml-auto">
+                      {aiFeaturesVisuallyDisabled ? <Badge variant="muted" className="ml-auto">
                         {t("aiUnavailableBadge")}
-                      </Badge>
+                      </Badge> : null}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={
@@ -3681,7 +3692,7 @@ const ProductsPage = () => {
         </FilterField>
       </ListToolbar>
 
-      <Card className="overflow-hidden border-border/80 bg-card/95 shadow-sm">
+      <Card className="overflow-hidden">
         <CardHeader className="flex flex-col gap-3 border-b border-border bg-card md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle className="tracking-tight">{t("title")}</CardTitle>
@@ -3720,14 +3731,15 @@ const ProductsPage = () => {
                   />
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/80 bg-background/70 p-1 shadow-sm">
+              <div className="flex shrink-0 items-center gap-0.5 rounded-md bg-secondary p-0.5">
                 <Button
                   type="button"
                   size="sm"
                   variant={viewMode === "table" ? "secondary" : "ghost"}
-                  className="flex-1 sm:flex-none"
+                  className={cn("flex-1 sm:flex-none", viewMode === "table" && "bg-card shadow-sm")}
                   onClick={() => setViewMode("table")}
                   aria-label={t("viewTable")}
+                  aria-pressed={viewMode === "table"}
                 >
                   <TableViewIcon className="h-4 w-4" aria-hidden />
                   {t("viewTable")}
@@ -3736,9 +3748,10 @@ const ProductsPage = () => {
                   type="button"
                   size="sm"
                   variant={viewMode === "grid" ? "secondary" : "ghost"}
-                  className="flex-1 sm:flex-none"
+                  className={cn("flex-1 sm:flex-none", viewMode === "grid" && "bg-card shadow-sm")}
                   onClick={() => setViewMode("grid")}
                   aria-label={t("viewGrid")}
+                  aria-pressed={viewMode === "grid"}
                 >
                   <GridViewIcon className="h-4 w-4" aria-hidden />
                   {t("viewGrid")}
@@ -4107,7 +4120,7 @@ const ProductsPage = () => {
                       return (
                         <div
                           key={product.id}
-                          className="overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-sm transition hover:border-primary/25 hover:shadow-md"
+                          className="overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/25"
                         >
                           <div className="relative aspect-[4/3] bg-muted/45">
                             {previewImageUrl ? (
@@ -4263,7 +4276,7 @@ const ProductsPage = () => {
                 // a photo-first product card so the catalog does not become a squeezed table.
                 if (renderPhotoFirstMobileCard) {
                   return (
-                    <div className="rounded-xl border border-border/80 bg-card/95 p-3 shadow-sm">
+                    <div className="rounded-lg border border-border bg-card p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p
@@ -4403,7 +4416,7 @@ const ProductsPage = () => {
                 }
 
                 return (
-                  <div className="rounded-xl border border-border/80 bg-card/95 p-4 shadow-sm">
+                  <div className="rounded-lg border border-border bg-card p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         {canSelectProducts ? (
@@ -4554,7 +4567,7 @@ const ProductsPage = () => {
                 icon={<EmptyIcon className="h-6 w-6" aria-hidden />}
                 title={t("storeEmptyTitle")}
                 description={t("storeEmptySubtitle", { store: selectedStore.name })}
-                className="mt-4 rounded-xl bg-muted/20"
+                className="mt-4 rounded-lg bg-muted/20"
                 action={
                   <div className="flex flex-col gap-2 sm:flex-row">
                     {canManageProducts ? (
@@ -4614,7 +4627,7 @@ const ProductsPage = () => {
                     </Button>
                   ) : undefined
                 }
-                className="m-4 rounded-xl bg-muted/20"
+                className="m-4 rounded-lg bg-muted/20"
               />
             )
           ) : null}

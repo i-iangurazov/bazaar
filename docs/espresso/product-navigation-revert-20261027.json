@@ -1,0 +1,75 @@
+{
+  "status": "implemented-and-verified",
+  "date": "2026-10-27",
+  "branch": "codex/playground",
+  "baseline": "0650901",
+  "request": "Withdraw only product row/name navigation and restore the previous behavior.",
+  "changes": {
+    "productRows": "Removed the added row click handler, pointer treatment and name links, including the mobile card title link.",
+    "inlineEditing": "Restored InlineEditableCell exactly from f4d1b39; previous desktop double-click/keyboard and touch edit behavior retained. Removed the added name pencil/navigation prop.",
+    "table": "Restored shared DataTable exactly from f4d1b39. No row-link API remains.",
+    "existingActions": "Product access still uses the existing Edit action, with its prior destination, store/list return context and same-tab behavior.",
+    "otherImprovements": "New BAAM icon, equal header heights, contained help badge, icon-only actions, price badge cleanup and display scale settings remain byte-unchanged from 0650901.",
+    "tests": "Removed 12 tests for the withdrawn capability; existing inline editor tests restored. No unrelated regression test was removed.",
+    "agreement": "Human withdrawal recorded in AGENTS.md."
+  },
+  "verification": {
+    "source": "Shared components and existing inline editor test byte-exact f4d1b39; product page differs from f4d1b39 only by the retained removal of the price-overridden badge.",
+    "unit": {
+      "files": 279,
+      "tests": 2178,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/product-navigation-revert-unit.log"
+    },
+    "types": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/product-navigation-revert-types.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/product-navigation-revert-lint.log"
+    },
+    "translations": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/product-navigation-revert-i18n.log"
+    },
+    "database": "No server/schema/business-operation change. Prior 520-test isolated database gate remains historical evidence; not rerun for this exact UI rollback. Read-only business preservation checked separately.",
+    "productionBuild": {
+      "result": "passed",
+      "buildId": "p2P0b5l-g9aqxmpGn7zim",
+      "sourceMatchesBuild": true,
+      "startup": "artifacts/ux/espresso/product-navigation-revert-start.log"
+    },
+    "browser": {
+      "engine": "Chrome",
+      "rowClick": "No navigation and no new tab",
+      "nameClick": "No navigation and no new tab",
+      "inlineEditor": "Double-click opens previous name editor; Escape cancels without saving",
+      "existingEditAction": "Opens product card in the same tab; Back returns to list",
+      "mobile": "390px title is P, not a link; click does not navigate or create a tab; no horizontal page overflow",
+      "viewportOverride": "reset",
+      "screenshots": [
+        "artifacts/ux/espresso/screenshots/product-navigation-reverted-desktop.png",
+        "artifacts/ux/espresso/screenshots/product-navigation-reverted-mobile.png"
+      ]
+    },
+    "preservation": {
+      "businessRows": 473,
+      "allBusinessHashesMatch": true,
+      "pendingAiJobs": {
+        "image": 0,
+        "description": 0
+      },
+      "sourceMatchesBuild": true,
+      "buildId": "p2P0b5l-g9aqxmpGn7zim",
+      "providerCalls": "disabled during automated/browser checks; no AI request submitted"
+    }
+  },
+  "delivery": {
+    "mainMerge": false,
+    "push": false,
+    "deployment": false,
+    "url": "http://localhost:3122/products",
+    "normalAiConfigurationRestored": "Existing local AI configuration retained for manual user use after provider-disabled verification; no real AI/provider request made by agent."
+  }
+}

@@ -20,6 +20,8 @@ export type BaamProductResult = {
   cards: BaamProductCard[];
   evidence: BaamProductEvidence;
   contextProductId?: string;
+  total?: number;
+  population?: number;
 };
 
 const copy = {
@@ -98,11 +100,11 @@ export const executeBaamProductPlan = async (input: {
   const c = copy[input.locale];
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-    const access = await readBaamAccessScope(tx, input.actorId, input.storeId);
+    const access = await readBaamAccessScope(tx, input.actorId, input.storeId, dated);
     const selectedStores = access.availableStores.filter(store => access.storeIds.includes(store.id));
     const queriedAt = new Date().toISOString();
     const evidence: BaamProductEvidence = {
-      summary: plan.productAction === "performance" ? c.performance : dated ? c.ranking : c.catalog,
+      summary: plan.productAction === "performance" ? c.performance : plan.productAction === "zero_sales" ? c.zero : dated ? c.ranking : c.catalog,
       appliedPeriod: dated,
       details: [
         `${c.scope}: ${selectedStores.map(store => store.name).join(", ") || c.noStores}`,
@@ -140,18 +142,18 @@ export const executeBaamProductPlan = async (input: {
       WHERE o."organizationId" = ${access.organizationId}
         AND ${access.storeIds.length ? Prisma.sql`o."storeId" IN (${Prisma.join(access.storeIds)})` : Prisma.sql`false`}
         AND o."isPosSale" = true AND o."isHeld" = false AND o.status::text = 'COMPLETED'
-        AND o."completedAt" >= ${range.fromUtc} AND o."completedAt" < ${range.toUtcExclusive}
+        AND o."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC') AND o."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
       UNION ALL
       SELECT rl."productId", 0::numeric, rl.qty::numeric, 0::numeric, rl."lineTotalKgs"
       FROM "SaleReturnLine" rl JOIN "SaleReturn" r ON r.id = rl."saleReturnId"
       WHERE r."organizationId" = ${access.organizationId}
         AND ${access.storeIds.length ? Prisma.sql`r."storeId" IN (${Prisma.join(access.storeIds)})` : Prisma.sql`false`}
         AND r.status::text = 'COMPLETED'
-        AND r."completedAt" >= ${range.fromUtc} AND r."completedAt" < ${range.toUtcExclusive}
+        AND r."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC') AND r."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
     ` : Prisma.sql`SELECT NULL::text AS "productId", 0::numeric AS sold, 0::numeric AS returned,
       0::numeric AS revenue, 0::numeric AS refunds WHERE false`;
     const order = plan.productAction === "ranking"
-      ? Prisma.sql`${plan.metric === "revenue" ? Prisma.sql`"netRevenueKgs"` : Prisma.sql`"netQuantity"`}
+      ? Prisma.sql`${plan.metric === "revenue" ? Prisma.sql`"netRevenueKgs"` : plan.metric === "return_units" ? Prisma.sql`"quantityReturned"` : Prisma.sql`"netQuantity"`}
           ${plan.direction === "bottom" ? Prisma.sql`ASC` : Prisma.sql`DESC`}, name ASC, id ASC`
       : query ? Prisma.sql`CASE WHEN lower(sku) = lower(${query}) OR lower(name) = lower(${query})
           OR EXISTS (SELECT 1 FROM "ProductBarcode" pb WHERE pb."productId" = filtered.id
@@ -172,6 +174,8 @@ export const executeBaamProductPlan = async (input: {
         FROM population p LEFT JOIN grouped g ON g."productId" = p.id
         WHERE true ${search}
           ${plan.productAction === "zero_sales" ? Prisma.sql`AND COALESCE(g.sold, 0) = 0` : Prisma.empty}
+          ${plan.productAction === "ranking" && plan.metric === "return_units" ? Prisma.sql`AND COALESCE(g.returned, 0) > 0` : Prisma.empty}
+          ${plan.productAction === "ranking" && plan.direction === "top" && plan.metric !== "return_units" ? Prisma.sql`AND COALESCE(g.sold, 0) > 0` : Prisma.empty}
       )
       SELECT *, COUNT(*) OVER()::int AS total, (SELECT COUNT(*)::int FROM population) AS population
       FROM filtered ORDER BY ${order} LIMIT ${plan.limit}
@@ -197,11 +201,16 @@ export const executeBaamProductPlan = async (input: {
     const clarification = singleProduct && total > 1;
     evidence.details.push(`${c.matches}: ${total}; ${c.shown}: ${rows.length}${rows[0] ? `; ${c.count}: ${rows[0].population}` : ""}`);
     const heading = plan.productAction === "performance" ? c.performance : plan.productAction === "zero_sales" ? c.zero : dated ? c.ranking : c.catalog;
-    const ordering = plan.productAction === "ranking" ? ` ${plan.direction === "bottom" ? c.bottom : c.top}: ${plan.metric === "revenue" ? c.netRevenue : c.netUnits}.` : "";
+    const ordering = plan.productAction === "ranking" ? ` ${plan.direction === "bottom" ? c.bottom : c.top}: ${plan.metric === "revenue" ? c.netRevenue : plan.metric === "return_units" ? c.returned : c.netUnits}.` : "";
+    const noMatch = plan.productAction === "ranking" && plan.metric === "return_units"
+      ? { ru: "За выбранный период завершённых возвратов этих товаров нет.", en: "No completed returns for these products in the selected period.", kg: "Тандалган мезгилде бул товарлардын аяктаган кайтаруулары жок." }[input.locale]
+      : plan.productAction === "ranking"
+        ? { ru: "В выбранном периоде нет завершённых продаж этих товаров.", en: "No completed sales for these products in the selected period.", kg: "Тандалган мезгилде бул товарлардын аяктаган сатуулары жок." }[input.locale]
+        : c.noMatch;
     return {
       status: clarification ? "clarification" : "answer",
-      answer: `${heading}.${ordering} ${rows.length ? `${c.shown}: ${rows.length} / ${total}.` : c.noMatch}${clarification ? ` ${c.pick}` : ""}`,
-      cards, evidence,
+      answer: `${heading}.${ordering} ${rows.length ? `${c.shown}: ${rows.length} / ${total}.` : noMatch}${clarification ? ` ${c.pick}` : ""}`,
+      cards, evidence, total, population: rows[0]?.population,
       ...((!dated || plan.productAction === "performance") && total === 1 ? { contextProductId: rows[0].id } : {}),
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15_000 });

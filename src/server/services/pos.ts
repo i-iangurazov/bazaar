@@ -558,7 +558,7 @@ const resolveUnitPrice = async (input: {
 
   const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { retailWholesaleEnabled: true } });
   const extras = organization.retailWholesaleEnabled ? await tx.storePriceTypes.findUnique({ where: { organizationId_storeId_productId_variantKey: { organizationId, storeId, productId, variantKey } } }) : null;
-  const selected = resolveStoreSellingPrice({ enabled: organization.retailWholesaleEnabled, mode: input.priceMode ?? "RETAIL", standard: override?.priceKgs ?? product.basePriceKgs ?? new Prisma.Decimal(0), retail: extras?.retailPriceKgs, wholesale: extras?.wholesalePriceKgs });
+  const selected = resolveStoreSellingPrice({ enabled: organization.retailWholesaleEnabled, mode: input.priceMode ?? "RETAIL", standard: override?.priceKgs ?? product.basePriceKgs ?? new Prisma.Decimal(0), preferStandard: override?.priceKgs != null || (!variantId && product.basePriceKgs != null), retail: extras?.retailPriceKgs, wholesale: extras?.wholesalePriceKgs });
   const effective = getEffectiveProductPrice({
     basePrice: selected.price,
     discount:
@@ -5458,14 +5458,28 @@ const assertRefundWithinPaidAmount = async (tx: Prisma.TransactionClient, custom
   }
 };
 
+const allocatedReturnDelta = (
+  refundable: Prisma.Decimal,
+  lineQty: number,
+  previousQty: number,
+  selectedQty: number,
+  previouslyRefunded: Prisma.Decimal,
+) => {
+  const cumulative = Math.min(lineQty, roundQuantity(previousQty + selectedQty));
+  return refundable
+    .mul(cumulative)
+    .div(lineQty)
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    .minus(previouslyRefunded);
+};
+
 const allocatedReturnAmount = async (tx: Prisma.TransactionClient, line: { id: string; customerOrderId: string; qty: number; lineTotalKgs: Prisma.Decimal }, qty: number, excludeReturnLineId?: string, cap?: Prisma.Decimal) => {
   const previous = await tx.saleReturnLine.aggregate({
     where: { customerOrderLineId: line.id, saleReturn: { status: "COMPLETED" }, ...(excludeReturnLineId ? { id: { not: excludeReturnLineId } } : {}) },
     _sum: { qty: true, lineTotalKgs: true },
   });
-  const cumulative = Math.min(line.qty, roundQuantity((previous._sum.qty ?? 0) + qty));
   const refundable = cap ?? (await refundLineCaps(tx, line.customerOrderId)).get(line.id) ?? new Prisma.Decimal(0);
-  return refundable.mul(cumulative).div(line.qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).minus(previous._sum.lineTotalKgs ?? 0);
+  return allocatedReturnDelta(refundable, line.qty, previous._sum.qty ?? 0, qty, previous._sum.lineTotalKgs ?? new Prisma.Decimal(0));
 };
 
 const assertReturnLineAvailable = async (
@@ -5519,6 +5533,99 @@ const assertReturnLineAvailable = async (
   }
 
   return orderLine;
+};
+
+/** Read-only quote using the same discounted caps and cumulative rounding as posting. */
+export const previewSaleReturn = async (input: {
+  organizationId: string;
+  originalSaleId: string;
+  lines: Array<{ customerOrderLineId: string; qty: number }>;
+  user: StoreAccessUser;
+}) => {
+  if (
+    !input.lines.length ||
+    input.lines.length > 1000 ||
+    new Set(input.lines.map((line) => line.customerOrderLineId)).size !== input.lines.length
+  ) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  return prisma.$transaction(
+    async (tx) => {
+      const sale = await tx.customerOrder.findFirst({
+        where: { id: input.originalSaleId, organizationId: input.organizationId, isPosSale: true },
+        select: {
+          id: true,
+          status: true,
+          storeId: true,
+          lines: {
+            select: {
+              id: true,
+              qty: true,
+              product: {
+                select: {
+                  organizationId: true,
+                  isDeleted: true,
+                  baseUnit: { select: { quantityPrecision: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!sale) throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+      await assertUserCanAccessStore(tx, input.user, sale.storeId);
+      if (sale.status !== CustomerOrderStatus.COMPLETED) {
+        throw new AppError("posReturnSourceNotCompleted", "CONFLICT", 409);
+      }
+      const caps = await refundLineCaps(tx, sale.id);
+      const returned = await tx.saleReturnLine.groupBy({
+        by: ["customerOrderLineId"],
+        where: {
+          customerOrderLineId: { in: input.lines.map((line) => line.customerOrderLineId) },
+          saleReturn: { status: PosReturnStatus.COMPLETED, originalSaleId: sale.id },
+        },
+        _sum: { qty: true, lineTotalKgs: true },
+      });
+      const previousByLine = new Map(returned.map((line) => [line.customerOrderLineId, line._sum]));
+      const saleLinesById = new Map(sale.lines.map((line) => [line.id, line]));
+      const lines = input.lines.map((selected) => {
+        const line = saleLinesById.get(selected.customerOrderLineId);
+        if (!line) throw new AppError("posSaleLineNotFound", "NOT_FOUND", 404);
+        if (line.product.isDeleted || line.product.organizationId !== input.organizationId) {
+          throw new AppError("productNotFound", "NOT_FOUND", 404);
+        }
+        const precision = line.product.baseUnit.quantityPrecision;
+        if (selected.qty <= 0 || !isValidQuantity(selected.qty, precision)) {
+          throw new AppError(
+            precision === 0 ? "wholeQuantityRequired" : "invalidQuantity",
+            "BAD_REQUEST",
+            400,
+          );
+        }
+        const previous = previousByLine.get(line.id);
+        const available = roundQuantity(line.qty - (previous?.qty ?? 0));
+        if (available <= 0 || selected.qty > available) {
+          throw new AppError("posReturnQtyExceeded", "CONFLICT", 409);
+        }
+        const amount = allocatedReturnDelta(
+          caps.get(line.id) ?? new Prisma.Decimal(0),
+          line.qty,
+          previous?.qty ?? 0,
+          selected.qty,
+          previous?.lineTotalKgs ?? new Prisma.Decimal(0),
+        );
+        return { customerOrderLineId: line.id, qty: selected.qty, lineTotalKgs: amount };
+      });
+      return {
+        originalSaleId: sale.id,
+        totalKgs: toMoney(
+          lines.reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0)),
+        ),
+        lines: lines.map((line) => ({ ...line, lineTotalKgs: toMoney(line.lineTotalKgs) })),
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+  );
 };
 
 export const addSaleReturnLine = async (input: {

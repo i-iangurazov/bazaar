@@ -10,9 +10,10 @@ const reasons: Record<Locale, Record<BaamScopeReason, string>> = {
     complete_weeks: "Previous complete seven-day periods, ending yesterday.",
     complete_months: "Previous complete calendar months; the current month is excluded.",
     month_to_date: "From the first of this month through today; today is incomplete.",
-    calendar_week: "The previous complete calendar week, Monday through Sunday.",
+    calendar_week: "Calendar week in Bishkek time; the exact dates are shown above.",
     explicit_dates: "The explicitly requested dates, including both endpoints.",
-    named_months: "The explicitly requested complete calendar months and year.",
+    named_months:
+      "Complete calendar months. An omitted year means the current year in Bishkek time.",
   },
   ru: {
     controls: "Даты выбраны в фильтрах.",
@@ -23,9 +24,9 @@ const reasons: Record<Locale, Record<BaamScopeReason, string>> = {
     complete_weeks: "Предыдущие полные семидневные периоды, заканчивая вчерашним днём.",
     complete_months: "Предыдущие полные календарные месяцы; текущий месяц не включён.",
     month_to_date: "С первого числа текущего месяца по сегодня; сегодняшний день не завершён.",
-    calendar_week: "Предыдущая полная календарная неделя, с понедельника по воскресенье.",
+    calendar_week: "Календарная неделя по времени Бишкека; точные даты указаны выше.",
     explicit_dates: "Указанные даты, включая обе границы периода.",
-    named_months: "Указанные полные календарные месяцы и год.",
+    named_months: "Полные календарные месяцы. Если год не указан — текущий год по времени Бишкека.",
   },
   kg: {
     controls: "Күндөр чыпкаларда тандалды.",
@@ -36,9 +37,10 @@ const reasons: Record<Locale, Record<BaamScopeReason, string>> = {
     complete_weeks: "Кечээ менен аяктаган мурунку толук жети күндүк мезгилдер.",
     complete_months: "Мурунку толук календардык айлар; учурдагы ай кошулбайт.",
     month_to_date: "Ушул айдын биринчи күнүнөн бүгүнкүгө чейин; бүгүнкү күн бүтө элек.",
-    calendar_week: "Мурунку толук календардык апта, дүйшөмбүдөн жекшембиге чейин.",
+    calendar_week: "Бишкек убактысы боюнча календардык апта; так күндөр жогоруда көрсөтүлгөн.",
     explicit_dates: "Көрсөтүлгөн күндөр, мезгилдин эки чеги тең кошулат.",
-    named_months: "Көрсөтүлгөн толук календардык айлар жана жыл.",
+    named_months:
+      "Толук календардык айлар. Жыл көрсөтүлбөсө, Бишкек убактысы боюнча учурдагы жыл колдонулат.",
   },
 };
 const clarification: Record<Locale, Record<BaamClarification, string>> = {
@@ -46,7 +48,7 @@ const clarification: Record<Locale, Record<BaamClarification, string>> = {
     product: "Please provide the exact product name, SKU or barcode, or open its product page.",
     product_comparison:
       "I can show product results for one period, but cannot yet compare product rankings or product-specific sales measures across periods. Ask for a product ranking in a specified period, or compare overall sales.",
-    date: "Which exact dates do you mean? Include a year for named months, or select the dates above. For example: Summarize sales from 2026-07-01 to 2026-08-31.",
+    date: "I could not determine a valid date or period. For example: Show sales on 22 October 2026, or from 1 to 15 October. An omitted year means the current year.",
     store:
       "Which accessible store do you mean? Choose one in the store control, or use its exact unique name. Comparing individual stores is not supported yet.",
     context:
@@ -57,7 +59,7 @@ const clarification: Record<Locale, Record<BaamClarification, string>> = {
     product: "Укажите точное название, артикул или штрихкод товара либо откройте его карточку.",
     product_comparison:
       "Я могу показать результаты товаров за один период, но пока не сравниваю рейтинги и показатели отдельных товаров между периодами. Запросите рейтинг за конкретный период или сравните общие продажи.",
-    date: "Какие именно даты вы имеете в виду? Для названия месяца укажите год или выберите даты выше. Например: Подведи итоги продаж с 2026-07-01 по 2026-08-31.",
+    date: "Не удалось определить корректную дату или период. Например: продажи за 22 октября 2026 года или с 1 по 15 октября. Если год не указан — используется текущий.",
     store:
       "Какой доступный магазин вы имеете в виду? Выберите его в фильтре или укажите точное уникальное название. Сравнение отдельных магазинов пока не поддерживается.",
     context:
@@ -68,7 +70,7 @@ const clarification: Record<Locale, Record<BaamClarification, string>> = {
     product: "Товардын так атын, артикулун же штрихкодун жазыңыз же анын барагын ачыңыз.",
     product_comparison:
       "Товарлардын жыйынтыгын бир мезгил үчүн көрсөтө алам, бирок товар рейтингдерин жана өзүнчө товар көрсөткүчтөрүн мезгилдер арасында азырынча салыштырбайм. Так мезгилге рейтинг сураңыз же жалпы сатууну салыштырыңыз.",
-    date: "Так кайсы күндөрдү айтып жатасыз? Айдын аталышына жылын кошуңуз же жогорудан күндөрдү тандаңыз. Мисалы: 2026-07-01 — 2026-08-31 мезгилиндеги сатууну жыйынтыкта.",
+    date: "Туура күндү же мезгилди аныктай алган жокмун. Мисалы: 2026-жылдын 22-октябры же 1–15-октябрь. Жыл көрсөтүлбөсө, учурдагы жыл колдонулат.",
     store:
       "Кайсы жеткиликтүү дүкөндү айтып жатасыз? Чыпкадан тандаңыз же так, уникалдуу атын жазыңыз. Өзүнчө дүкөндөрдү салыштыруу азырынча колдоого алынбайт.",
     context:

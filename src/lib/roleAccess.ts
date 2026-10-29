@@ -126,6 +126,7 @@ const routeAccessRules: Array<{ prefix: string; permission: AppPermission }> = [
   { prefix: "/settings/attributes", permission: "manageProducts" },
   { prefix: "/settings/categories", permission: "manageProducts" },
   { prefix: "/settings/units", permission: "manageProducts" },
+  { prefix: "/settings/price-lists", permission: "manageSettings" },
   { prefix: "/settings/store-groups", permission: "manageSettings" },
   { prefix: "/settings/printing", permission: "managePrinting" },
   { prefix: "/settings/whats-new", permission: "manageSettings" },

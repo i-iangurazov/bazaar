@@ -8,6 +8,7 @@ import { reportHref, reportUrlState } from "@/lib/reporting";
 import { addBusinessDays, businessDateKey } from "@/lib/timezone";
 import { translateError } from "@/lib/translateError";
 import { Button } from "@/components/ui/button";
+import { QueryErrorState } from "@/components/query-error-state";
 import {
   Select,
   SelectContent,
@@ -103,7 +104,9 @@ export function useReportScope(mode: "sales" | "hub") {
           ? verifiedStores.items
           : undefined
       : undefined;
-  const error = !state.valid
+  const error = status === "authenticated" && !allowed
+    ? tErrors("forbidden")
+    : !state.valid
     ? tErrors("invalidInput")
     : stores.error
       ? translateError(tErrors, stores.error)
@@ -186,8 +189,11 @@ export function ReportPeriodControls({
   return (
     <section
       aria-label={t("filters")}
-      className="space-y-3 rounded-xl border border-border bg-card p-4"
+      className="space-y-3 rounded-lg border border-border bg-card p-4"
     >
+      {scope.allowed && scope.stores.error ? (
+        <QueryErrorState error={scope.stores.error} onRetry={() => void scope.stores.refetch()} />
+      ) : null}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>label:first-child]:col-span-2 [&>label:last-child]:col-span-2 sm:[&>label]:col-span-1">
         <ReportSelect
           label={a("filters.store")}

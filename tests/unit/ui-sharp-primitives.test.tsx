@@ -50,6 +50,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -70,8 +71,8 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
-describe("soft-rounded UI primitives", () => {
-  it("renders core interactive primitives with small rounded corners", () => {
+describe("Espresso UI primitives", () => {
+  it("renders interactive controls using the shared design system and semantic statuses", () => {
     render(
       <div>
         <Button>Save</Button>
@@ -88,21 +89,21 @@ describe("soft-rounded UI primitives", () => {
       </div>,
     );
 
-    expect(screen.getByRole("button", { name: "Save" }).className).toContain("rounded-md");
-    expect(screen.getByLabelText("name").className).toContain("rounded-md");
-    expect(screen.getByLabelText("description").className).toContain("rounded-md");
-    expect(screen.getByLabelText("select").className).toContain("rounded-md");
-    expect(screen.getByRole("switch", { name: "archive" }).className).toContain("bg-secondary");
+    expect(screen.getByRole("button", { name: "Save" }).className).toContain("es-button");
+    expect(screen.getByLabelText("name").className).toContain("rounded-[var(--radius)]");
+    expect(screen.getByLabelText("description").className).toContain("rounded-[var(--radius)]");
+    expect(screen.getByLabelText("select").className).toContain("rounded-[var(--radius)]");
+    expect(screen.getByRole("switch", { name: "archive" }).className).toContain("rounded-full");
     expect(screen.getByRole("switch", { name: "archive" }).className).toContain(
-      "data-[state=checked]:bg-primary/10",
+      "data-[state=checked]:bg-primary",
     );
     expect(screen.getByRole("checkbox", { name: "selected" }).className).toContain(
       "data-[state=checked]:bg-primary",
     );
-    expect(screen.getByText("Active").className).toContain("rounded-md");
-    expect(screen.getByText("Active").className).toContain("bg-muted");
+    expect(screen.getByText("Active").className).toContain("es-badge");
+    expect(screen.getByText("Active").className).toContain("bg-secondary");
     expect(screen.getByText("Missing price").className).toContain("bg-danger/10");
-    expect(screen.getByText("Saved").className).toContain("rounded-md");
+    expect(screen.getByText("Saved").className).toContain("es-alert");
   });
 
   it("renders layout surfaces with small rounded corners", () => {
@@ -125,14 +126,16 @@ describe("soft-rounded UI primitives", () => {
       </div>,
     );
 
-    expect(screen.getByTestId("card").className).toContain("rounded-xl");
+    expect(screen.getByTestId("card").className).toContain("rounded-lg");
     expect(screen.getByTestId("table-container").className).toContain("rounded-lg");
-    expect(screen.getByTestId("popover").className).toContain("rounded-md");
+    expect(screen.getByTestId("popover").className).toContain("rounded-lg");
     expect(screen.getByTestId("skeleton").className).toContain("rounded-md");
     expect(screen.getByText("Nothing here").className).toContain("text-sm");
     expect(screen.getByTestId("pagination").className).toContain("items-center");
-    expect(screen.getByTestId("tabs-list").className).toContain("rounded-md");
-    expect(screen.getByRole("tab", { name: "Overview" }).className).toContain("rounded-md");
+    expect(screen.getByTestId("tabs-list").className).toContain("es-tabs__list");
+    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
     expect(screen.getByTestId("tabs-panel").className).toContain("rounded-md");
   });
 
@@ -366,8 +369,28 @@ describe("soft-rounded UI primitives", () => {
 
     const activeItem = screen.getByRole("button", { name: "Movements" });
     expect(activeItem.getAttribute("data-active")).toBe("true");
-    expect(activeItem.className).toContain("data-[active=true]:bg-sidebar-primary/10");
+    expect(activeItem.className).toContain("data-[active=true]:bg-card");
     expect(activeItem.className).toContain("data-[active=true]:text-sidebar-primary");
+  });
+
+  it("hides a collapsed module menu from keyboard and assistive navigation and reopens it", async () => {
+    const user = userEvent.setup();
+    render(
+      <SidebarProvider>
+        <Sidebar collapsible="offcanvas">
+          <button>Nested destination</button>
+        </Sidebar>
+        <SidebarTrigger />
+      </SidebarProvider>,
+    );
+    const toggle = screen.getByRole("button", { name: "toggleSidebar" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Nested destination" })).toBeNull();
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Nested destination" })).toBeTruthy();
   });
 
   it("prevents trackpad wheel changes on focused number inputs", () => {

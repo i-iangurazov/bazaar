@@ -18,11 +18,31 @@ const heicHeaderBytes = new Uint8Array([
 const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 
 describe("product image upload preprocessing", () => {
+  it.each(["image/heic", "image/heif", "application/octet-stream"])(
+    "uses the real server conversion endpoint without the old browser decoder for %s",
+    async (type) => {
+      const source = new File([heicHeaderBytes], "CAMERA.HEIC", { type });
+      const convertHeicToJpeg = vi.fn().mockRejectedValue(new Error("Old browser codec"));
+      const result = await prepareProductImageFileForUpload({
+        file: source,
+        maxImageBytes: 5_000_000,
+        maxInputImageBytes: 32_000_000,
+        serverConversionMaxBytes: 3_750_000,
+        convertHeicToJpeg,
+        optimizeImageToLimit: vi.fn(),
+      });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.file.type).toMatch(/^image\/hei[cf]$/);
+      expect(convertHeicToJpeg).not.toHaveBeenCalled();
+    },
+  );
   it("optimizes normal phone photos before sending them even below the upload limit", async () => {
     const file = new File([new Uint8Array(900_000)], "phone.jpg", { type: "image/jpeg" });
     const compact = new File([jpegBytes], "phone.jpg", { type: "image/jpeg" });
     const result = await prepareProductImageFileForUpload({
-      file, maxImageBytes: 3_750_000, maxInputImageBytes: 32_000_000,
+      file,
+      maxImageBytes: 3_750_000,
+      maxInputImageBytes: 32_000_000,
       optimizeAboveBytes: 512 * 1024,
       optimizeImageToLimit: vi.fn().mockResolvedValue(compact),
       convertHeicToJpeg: vi.fn(),
@@ -34,13 +54,22 @@ describe("product image upload preprocessing", () => {
     const file = new File([new Uint8Array(900_000)], "phone.jpg", { type: "image/jpeg" });
     for (const optimizeImageToLimit of [
       vi.fn().mockRejectedValue(new Error("Canvas unavailable")),
-      vi.fn().mockResolvedValue(new File([new Uint8Array(1_000_000)], "larger.jpg", { type: "image/jpeg" })),
+      vi
+        .fn()
+        .mockResolvedValue(
+          new File([new Uint8Array(1_000_000)], "larger.jpg", { type: "image/jpeg" }),
+        ),
     ]) {
-      expect(await prepareProductImageFileForUpload({
-        file, maxImageBytes: 3_750_000, maxInputImageBytes: 32_000_000,
-        optimizeAboveBytes: 512 * 1024, optimizeImageToLimit,
-        convertHeicToJpeg: vi.fn(),
-      })).toEqual({ ok: true, file });
+      expect(
+        await prepareProductImageFileForUpload({
+          file,
+          maxImageBytes: 3_750_000,
+          maxInputImageBytes: 32_000_000,
+          optimizeAboveBytes: 512 * 1024,
+          optimizeImageToLimit,
+          convertHeicToJpeg: vi.fn(),
+        }),
+      ).toEqual({ ok: true, file });
     }
   });
   it("resolves primary image URL from first non-empty image", () => {

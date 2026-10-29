@@ -89,7 +89,7 @@ export function BaamAssistantPanel({
     </div>
     <div ref={historyRef} data-baam-history className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
       {!entries.length && !pending ? <div className={cn("space-y-4", compact ? "py-0" : "py-3")}>
-        <div className={cn("h-11 w-11 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary", compact ? "hidden" : "flex")}>
+        <div className={cn("h-11 w-11 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary", compact ? "hidden" : "flex")}>
           <SparklesIcon className="h-6 w-6" aria-hidden />
         </div>
         <div className="space-y-2">
@@ -107,7 +107,7 @@ export function BaamAssistantPanel({
       </div> : null}
       <ol className="space-y-5" aria-label={t("conversation")} aria-live="polite" aria-relevant="additions" role="log">
         {entries.map((entry, entryIndex) => <li key={entry.id} data-baam-entry className="space-y-3">
-          <div className="ml-auto max-w-[90%] break-words rounded-2xl rounded-br-md bg-secondary px-4 py-3 text-sm leading-6">
+          <div className="ml-auto max-w-[90%] break-words rounded-lg rounded-br-md bg-secondary px-4 py-3 text-sm leading-6">
             <span className="sr-only">{t("you")}: </span>{entry.question}
           </div>
           <div className="space-y-3">
@@ -125,7 +125,7 @@ export function BaamAssistantPanel({
             </div> : null}
             <p className="whitespace-pre-line break-words text-sm leading-7">{entry.answer}</p>
             {entry.products?.length ? <ul className="space-y-2" aria-label={t("productResults")}>
-              {entry.products.map(product => <li key={product.id} className="min-w-0 rounded-xl border border-border/80 p-3">
+              {entry.products.map(product => <li key={product.id} className="min-w-0 rounded-lg border border-border/80 p-3">
                 <Link href={product.href} prefetch={false} className="button-focus-ring flex min-h-9 items-center justify-between gap-3 rounded-md text-sm font-medium text-primary hover:underline">
                   <span className="break-words">{product.title}</span><ArrowRightIcon className="h-4 w-4 shrink-0" aria-hidden />
                 </Link>
@@ -137,11 +137,11 @@ export function BaamAssistantPanel({
                 </dl>
               </li>)}
             </ul> : null}
-            {entry.productEvidence ? <details className="break-words rounded-xl border border-border/80 bg-secondary/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
+            {entry.productEvidence ? <details className="break-words rounded-lg border border-border/80 bg-secondary/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
               <summary className="cursor-pointer font-medium text-foreground">{entry.productEvidence.summary}</summary>
               <ul className="mt-2 list-disc space-y-1 pl-4">{entry.productEvidence.details.map((detail, index) => <li key={index}>{detail}</li>)}</ul>
             </details> : null}
-            {entry.evidence ? <details className="break-words rounded-xl border border-border/80 bg-secondary/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
+            {entry.evidence ? <details className="break-words rounded-lg border border-border/80 bg-secondary/20 px-3 py-2 text-xs leading-5 text-muted-foreground">
               <summary className="cursor-pointer font-medium text-foreground">{entry.evidence.summary}</summary>
               <ul className="mt-2 list-disc space-y-1 pl-4">{entry.evidence.details.map((detail, index) => <li key={index}>{detail}</li>)}</ul>
             </details> : null}
@@ -158,7 +158,7 @@ export function BaamAssistantPanel({
         </li>)}
       </ol>
       {pending ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner className="h-4 w-4" />{t("thinking")}</p> : null}
-      {error ? <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-3 text-sm leading-6">{error}</div> : null}
+      {error ? <div role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm leading-6">{error}</div> : null}
     </div>
     <form onSubmit={submit} className={cn(
       "shrink-0 space-y-2 border-t border-border/70 bg-card px-4 py-3 sm:px-5",
@@ -180,10 +180,10 @@ export function BaamAssistantPanel({
           }}
           enterKeyHint="send"
           placeholder={t("questionPlaceholder")}
-          className="min-h-[4.5rem] max-h-36 resize-y rounded-xl"
+          className="min-h-[4.5rem] max-h-36 resize-y rounded-lg"
           disabled={!available}
         />
-        <Button type="submit" size="icon" className="mb-0.5 h-11 w-11 shrink-0 rounded-xl"
+        <Button type="submit" size="icon" className="mb-0.5 h-11 w-11 shrink-0 rounded-lg"
           disabled={!available || pending || !question.trim()} aria-label={t("send")}>
           {pending ? <Spinner className="h-4 w-4" /> : <SendIcon className="h-5 w-5" aria-hidden />}
         </Button>

@@ -3,6 +3,8 @@ import { createContext } from "@/server/trpc/trpc";
 import { ownBaamConversation } from "@/server/services/baamConversations";
 import { transcribeBaamAudio } from "@/server/services/baamAudio";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
+import { resolveProductPhotoSourceMimeType } from "@/lib/productImageUpload";
+import { prepareProductStudioSource } from "@/server/services/productImageSourceUpload";
 import { createRateLimiter } from "@/server/middleware/rateLimiter";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -100,22 +102,18 @@ export async function POST(request: Request) {
         needsReview: true,
       });
     }
-    if (
-      kind !== "image" ||
-      !["image/jpeg", "image/png", "image/webp", "image/avif", "image/heic", "image/heif"].includes(
-        file.type,
-      )
-    )
+    if (kind !== "image" || !resolveProductPhotoSourceMimeType(file))
       throw new AppError("imageInvalidType", "BAD_REQUEST", 400);
     const contentHash = createHash("sha256").update(buffer).digest("hex");
     const existing = await prisma.baamAttachment.findUnique({
       where: { conversationId_contentHash: { conversationId, contentHash } },
     });
     if (existing) return Response.json(existing);
+    const prepared = await prepareProductStudioSource(file);
     const uploaded = await uploadProductImageBuffer({
       organizationId: access.scope.organizationId,
-      buffer,
-      contentType: file.type,
+      buffer: prepared.buffer,
+      contentType: prepared.contentType,
       sourceFileName: file.name,
     });
     await ownBaamConversation(ctx, conversationId);
@@ -127,7 +125,7 @@ export async function POST(request: Request) {
         conversationId,
         url: uploaded.url,
         name: file.name.slice(0, 180),
-        mimeType: file.type,
+        mimeType: prepared.contentType,
       },
     });
     return Response.json(attachment);

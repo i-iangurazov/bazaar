@@ -9,6 +9,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
+import { IconButton } from "@/components/ui/icon-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -524,7 +525,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                             <TableHead className="w-[160px] min-w-[160px] px-4 py-3">
                               {t("columns.fiscal")}
                             </TableHead>
-                            <TableHead className="sticky right-0 z-10 w-[340px] min-w-[340px] bg-muted/40 px-4 py-3 text-right shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)]">
+                            <TableHead className="sticky right-0 z-10 w-[340px] min-w-[11rem] bg-muted/40 px-4 py-3 text-right shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)]">
                               {t("columns.actions")}
                             </TableHead>
                           </TableRow>
@@ -603,68 +604,51 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                 </TableCell>
                                 <TableCell className="sticky right-0 z-10 min-w-[340px] bg-card px-4 py-3 align-top shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)] group-hover:bg-muted/25">
                                   <div className="flex justify-end">
-                                    <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-sm">
-                                      <Button
+                                    <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-none">
+                                      <IconButton
                                         type="button"
                                         variant="ghost"
-                                        className="h-8 whitespace-nowrap rounded-none bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-                                        aria-label={t("previewShort")}
                                         onClick={() => setPreviewSaleId(item.id)}
-                                      >
-                                        <ViewIcon className="h-4 w-4" aria-hidden />
-                                        <span>{t("previewShort")}</span>
-                                      </Button>
-                                      <Button
+                                        icon={ViewIcon}
+                                        label={t("previewShort")}
+                                        className="rounded-none border-0 bg-transparent shadow-none"
+                                      />
+                                      <IconButton
                                         type="button"
                                         variant="ghost"
-                                        className="h-8 whitespace-nowrap rounded-none border-l border-border bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-                                        aria-label={tPos("history.printPrecheck")}
                                         disabled={Boolean(receiptAction)}
                                         onClick={() =>
                                           void handleReceiptPdf(item.id, item.number, "print")
                                         }
-                                      >
-                                        {isBusy && receiptAction?.mode === "print" ? (
-                                          <Spinner className="h-4 w-4" />
-                                        ) : (
-                                          <PrintIcon className="h-4 w-4" aria-hidden />
-                                        )}
-                                        <span>{t("printShort")}</span>
-                                      </Button>
-                                      <Button
+                                        icon={PrintIcon}
+                                        label={tPos("history.printPrecheck")}
+                                        loading={isBusy && receiptAction?.mode === "print"}
+                                        className="rounded-none border-0 bg-transparent shadow-none"
+                                      />
+                                      <IconButton
                                         type="button"
                                         variant="ghost"
-                                        className="h-8 whitespace-nowrap rounded-none border-l border-border bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-                                        aria-label={tPos("history.downloadPrecheck")}
                                         disabled={Boolean(receiptAction)}
                                         onClick={() =>
                                           void handleReceiptPdf(item.id, item.number, "download")
                                         }
-                                      >
-                                        {isBusy && receiptAction?.mode === "download" ? (
-                                          <Spinner className="h-4 w-4" />
-                                        ) : (
-                                          <DownloadIcon className="h-4 w-4" aria-hidden />
-                                        )}
-                                        <span>{t("downloadShort")}</span>
-                                      </Button>
-                                      <Button
+                                        icon={DownloadIcon}
+                                        label={tPos("history.downloadPrecheck")}
+                                        loading={isBusy && receiptAction?.mode === "download"}
+                                        className="rounded-none border-0 bg-transparent shadow-none"
+                                      />
+                                      <IconButton
                                         type="button"
                                         variant="ghost"
-                                        className="h-8 whitespace-nowrap rounded-none border-l border-border bg-transparent px-2.5 text-xs text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-                                        aria-label={tPos("history.shareReceipt")}
                                         disabled={Boolean(receiptAction)}
                                         onClick={() =>
                                           void handleShareReceiptPdf(item.id, item.number)
                                         }
-                                      >
-                                        {isBusy && receiptAction?.mode === "share" ? (
-                                          <Spinner className="h-4 w-4" />
-                                        ) : (
-                                          <ShareIcon className="h-4 w-4" aria-hidden />
-                                        )}
-                                        <span>{t("shareShort")}</span>
-                                      </Button>
+                                        icon={ShareIcon}
+                                        label={tPos("history.shareReceipt")}
+                                        loading={isBusy && receiptAction?.mode === "share"}
+                                        className="rounded-none border-0 bg-transparent shadow-none"
+                                      />
                                     </div>
                                   </div>
                                 </TableCell>
@@ -728,59 +712,22 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                             </Badge>
                           ))}
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 px-2 text-xs"
-                          onClick={() => setPreviewSaleId(item.id)}
-                        >
-                          <ViewIcon className="h-4 w-4" aria-hidden />
-                          {t("previewShort")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 px-2 text-xs"
-                          onClick={() => void handleReceiptPdf(item.id, item.number, "print")}
-                          disabled={Boolean(receiptAction)}
-                        >
-                          {receiptAction?.saleId === item.id && receiptAction.mode === "print" ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <PrintIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {t("printShort")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 px-2 text-xs"
-                          onClick={() => void handleReceiptPdf(item.id, item.number, "download")}
-                          disabled={Boolean(receiptAction)}
-                        >
-                          {receiptAction?.saleId === item.id &&
-                          receiptAction.mode === "download" ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <DownloadIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {t("downloadShort")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-10 px-2 text-xs"
-                          onClick={() => void handleShareReceiptPdf(item.id, item.number)}
-                          disabled={Boolean(receiptAction)}
-                        >
-                          {receiptAction?.saleId === item.id && receiptAction.mode === "share" ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <ShareIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {t("shareShort")}
-                        </Button>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <IconButton type="button"
+variant="outline"
+onClick={() => setPreviewSaleId(item.id)} icon={ViewIcon} label={t("previewShort")}  />
+                        <IconButton type="button"
+variant="outline"
+onClick={() => void handleReceiptPdf(item.id, item.number, "print")}
+disabled={Boolean(receiptAction)} icon={PrintIcon} label={tPos("history.printPrecheck")} loading={receiptAction?.saleId === item.id && receiptAction.mode === "print"} />
+                        <IconButton type="button"
+variant="outline"
+onClick={() => void handleReceiptPdf(item.id, item.number, "download")}
+disabled={Boolean(receiptAction)} icon={DownloadIcon} label={tPos("history.downloadPrecheck")} loading={receiptAction?.saleId === item.id && receiptAction.mode === "download"} />
+                        <IconButton type="button"
+variant="outline"
+onClick={() => void handleShareReceiptPdf(item.id, item.number)}
+disabled={Boolean(receiptAction)} icon={ShareIcon} label={tPos("history.shareReceipt")} loading={receiptAction?.saleId === item.id && receiptAction.mode === "share"} />
                       </div>
                     </div>
                   )}

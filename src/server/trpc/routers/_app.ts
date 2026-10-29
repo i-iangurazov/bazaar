@@ -50,7 +50,10 @@ import { productImageStudioRouter } from "@/server/trpc/routers/productImageStud
 import { emailMarketingRouter } from "@/server/trpc/routers/emailMarketing";
 import { loyaltyRouter } from "@/server/trpc/routers/loyalty";
 
+import { priceBooksRouter } from "./priceBooks";
+
 export const appRouter = router({
+  priceBooks: priceBooksRouter,
   baam: baamRouter,
   inventory: inventoryRouter,
   products: productsRouter,

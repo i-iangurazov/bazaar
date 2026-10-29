@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 
 import { HideIcon, ViewIcon } from "@/components/icons";
 import { Input, type InputProps } from "@/components/ui/input";
@@ -22,8 +23,8 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
       className,
       defaultVisible = false,
       disabled,
-      hideLabel = "Hide value",
-      showLabel = "Show value",
+      hideLabel,
+      showLabel,
       toggleDisabled,
       visible,
       wrapperClassName,
@@ -32,6 +33,7 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
     },
     ref,
   ) => {
+    const tCommon = useTranslations("common");
     const [internalVisible, setInternalVisible] = React.useState(defaultVisible);
     const isVisible = visible ?? internalVisible;
 
@@ -57,7 +59,9 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
           className="absolute right-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50"
           onClick={handleToggle}
           disabled={toggleDisabled ?? disabled}
-          aria-label={isVisible ? hideLabel : showLabel}
+          aria-label={
+            isVisible ? (hideLabel ?? tCommon("hideSecret")) : (showLabel ?? tCommon("showSecret"))
+          }
           aria-pressed={isVisible}
         >
           {isVisible ? (

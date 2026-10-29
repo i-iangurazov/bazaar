@@ -1,3 +1,4 @@
+import { toIntlLocale } from "../../src/lib/locales";
 import { chromium, type Page } from "playwright";
 import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
 import assert from "node:assert/strict";
@@ -243,7 +244,8 @@ try {
             .first()
             .click();
           await until(
-            async () => (await page.evaluate(() => document.documentElement.lang)) === locale,
+            async () =>
+              (await page.evaluate(() => document.documentElement.lang)) === toIntlLocale(locale),
             "Language switch did not apply",
           );
           for (const width of [390, 1440])
@@ -256,7 +258,7 @@ try {
               await capture(path, width, `-${theme}-${locale}`);
               const observation = report.at(-1)!;
               assert.equal(observation.theme, theme);
-              assert.equal(observation.locale, locale);
+              assert.equal(observation.locale, toIntlLocale(locale));
             }
         }
       }

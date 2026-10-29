@@ -65,7 +65,7 @@ describe("local BAAM product plans", () => {
   it.each(["Why are these products selling badly?", "Delete product Tea", "Прогноз продаж товаров", "Эмне үчүн товарлар сатылбай жатат?", "Products that never sold", "Товары которые никогда не продавались", "Эч качан сатылбаган товарлар"])("does not reinterpret unsupported request %s", question => expect(parseLocalBaamProductPlan(question)).toBeNull());
   it("rejects model supplied URLs/IDs/extra facts and oversized limits", () => {
     expect(productPlanSchema.safeParse({ ...plan(), productId: "foreign", href: "https://evil.test" }).success).toBe(false);
-    expect(productPlanSchema.safeParse(plan({ limit: 11 })).success).toBe(false);
+    expect(productPlanSchema.safeParse(plan({ limit: 51 })).success).toBe(false);
     expect(productPlanSchema.safeParse(plan({ query: " " })).success).toBe(false);
   });
 });
@@ -80,7 +80,7 @@ describe("BAAM product read boundary", () => {
   it("reads current catalog only after fresh access and never includes reporting or inventory tables in that query", async () => {
     const result = await executeBaamProductPlan(input());
     expect(mocks.execute.mock.calls[0][0].join("")).toBe("SET TRANSACTION READ ONLY");
-    expect(mocks.readScope).toHaveBeenCalledWith(expect.anything(), "actor-a", undefined);
+    expect(mocks.readScope).toHaveBeenCalledWith(expect.anything(), "actor-a", undefined, false);
     expect(mocks.readScope.mock.invocationCallOrder[0]).toBeLessThan(mocks.query.mock.invocationCallOrder[0]);
     const sql = mocks.query.mock.calls[0][0] as Prisma.Sql;
     expect(sql.text).not.toMatch(/CustomerOrder|SaleReturn|Inventory|StockMovement/);

@@ -1,7 +1,4 @@
-import {
-  ProductImageStudioBackground,
-  ProductImageStudioOutputFormat,
-} from "@prisma/client";
+import { ProductImageStudioBackground, ProductImageStudioOutputFormat } from "@prisma/client";
 import { z } from "zod";
 
 import {
@@ -67,6 +64,7 @@ export const productImageStudioRouter = router({
         softShadow: z.boolean().optional(),
         tighterCrop: z.boolean().optional(),
         brighterPresentation: z.boolean().optional(),
+        highQuality: z.boolean().default(false),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -84,6 +82,7 @@ export const productImageStudioRouter = router({
           softShadow: input.softShadow,
           tighterCrop: input.tighterCrop,
           brighterPresentation: input.brighterPresentation,
+          highQuality: input.highQuality,
         });
       } catch (error) {
         throw toTRPCError(error);

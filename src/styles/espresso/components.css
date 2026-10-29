@@ -1,0 +1,630 @@
+/* Espresso design system, adapted from Frappe Framework (MIT).
+ * Source revision e8d41dd0061a32ee781caefe5d0b0d2bb7c15362.
+ * Copyright (c) Frappe Technologies Pvt. Ltd. See THIRD_PARTY_NOTICES.md.
+ */
+@layer components {
+  /* Espresso Button — framework-neutral component styles.
+ *
+ * Pure CSS. No SCSS, no Tailwind utilities. Styled entirely through the
+ * `.es-button` class + data-attributes, binding only to the semantic token
+ * custom properties in tokens/espresso-*.css. Consumed verbatim by the plain
+ * HTML page, the React app, and the Vue app — each framework's only job is to
+ * render <button class="es-button"> and set the data-attributes.
+ *
+ * Scope per the design-system decision: themes gray + red, variants
+ * solid | subtle | outline | ghost, sizes xs | sm | md | lg.
+ *
+ * Attributes (all optional):
+ *   data-variant   solid | subtle | outline | ghost   (default: subtle)
+ *   data-size      xs | sm | md | lg                         (default: sm)
+ *   data-theme     gray | red                                (default: gray)
+ *   data-icon-button="true"   square, no inline padding
+ *   aria-busy="true"          loading: blocks interaction without the disabled dimming
+ *   aria-invalid="true"       red focus ring + red border
+ *
+ * DEFAULTS live on the base `.es-button` rule (variant=subtle, size=sm,
+ * theme=gray) so a bare <button class="es-button"> renders correctly; the
+ * data-* selectors only OVERRIDE when present.
+ *
+ * Lives in @layer components so a consumer's Tailwind utility (later `utilities`
+ * layer) overrides without !important.
+ *
+ * Dimensions use spacing-scale steps via `--spacing` (the 0.25rem unit
+ * h-7 / px-2 derive from), which comes from the espresso tokens.
+ */
+
+  .es-button {
+    /* default theme = gray. Local vars are the "unrolled @each": the theme
+         selector remaps them, every variant rule reads only these. */
+    /* Bazaar keeps its blue action identity on Espresso neutral surfaces. */
+    --bt-solid-bg: hsl(var(--primary));
+    --bt-solid-bg-hover: hsl(var(--primary) / 0.9);
+    --bt-solid-bg-active: hsl(var(--primary) / 0.8);
+    --bt-solid-fg: hsl(var(--primary-foreground));
+    --bt-fill-bg: var(--surface-gray-2);
+    --bt-fill-bg-hover: var(--surface-gray-3);
+    --bt-fill-bg-active: var(--surface-gray-4);
+    --bt-fg: var(--ink-gray-8);
+    --bt-border: var(--outline-gray-2);
+    --bt-border-hover: var(--outline-gray-3);
+    --bt-outline-bg-active: var(--surface-gray-4);
+    --bt-disabled-bg: var(--surface-gray-2);
+    --bt-disabled-fg: var(--ink-gray-4);
+    --bt-disabled-border: var(--outline-gray-2);
+    --bt-focus: var(--focus-outline-default);
+
+    /* default size = sm */
+    --es-bt-h: calc(var(--spacing) * 7);
+    --es-bt-icon: calc(var(--spacing) * 4);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 2);
+    flex-shrink: 0;
+    white-space: nowrap;
+    user-select: none;
+    cursor: pointer;
+    height: var(--es-bt-h);
+    padding-inline: calc(var(--spacing) * 2);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-regular);
+    line-height: 1;
+    outline: none;
+    transition:
+      background-color 120ms,
+      border-color 120ms,
+      color 120ms;
+
+    /* default variant = subtle */
+    background: var(--bt-fill-bg);
+    color: var(--bt-fg);
+  }
+
+  /* the class is element-neutral: links dressed as buttons (empty-state links,
+   attachment preview actions) must not pick up anchor underlines */
+  a.es-button,
+  a.es-button:hover,
+  a.es-button:focus {
+    text-decoration: none;
+  }
+
+  /* subtle is the default; scope hover/active to default-or-explicit subtle so
+       they don't leak onto the other variants. Hovers here and below apply only
+       with a real pointer: touch keeps :hover on the last button tapped. */
+  @media (hover: hover) {
+    .es-button:not(.es-button--solid):not(.es-button--outline):not(.es-button--ghost):hover,
+    .es-button--subtle:hover {
+      background: var(--bt-fill-bg-hover);
+    }
+  }
+
+  /* an open menu or popover keeps its trigger pressed (Dropdown and Popover set
+   aria-haspopup; plain disclosure toggles only set aria-expanded) */
+  .es-button:not(.es-button--solid):not(.es-button--outline):not(.es-button--ghost):active,
+  .es-button:not(.es-button--solid):not(.es-button--outline):not(
+      .es-button--ghost
+    )[aria-haspopup][aria-expanded="true"],
+  .es-button--subtle:active,
+  .es-button--subtle[aria-haspopup][aria-expanded="true"] {
+    background: var(--bt-fill-bg-active);
+  }
+
+  /* ---- theme: red (overrides the gray default) ---- */
+  .es-button--red {
+    --bt-solid-bg: var(--surface-red-7);
+    --bt-solid-bg-hover: var(--surface-red-8);
+    --bt-solid-bg-active: var(--surface-red-9);
+    --bt-solid-fg: var(--ink-red-1);
+    --bt-fill-bg: var(--surface-red-2);
+    --bt-fill-bg-hover: var(--surface-red-3);
+    --bt-fill-bg-active: var(--surface-red-4);
+    --bt-fg: var(--ink-red-8);
+    --bt-border: var(--outline-red-1);
+    --bt-border-hover: var(--outline-red-3);
+    --bt-outline-bg-active: var(--surface-red-3);
+    --bt-disabled-bg: var(--surface-red-2);
+    --bt-disabled-fg: var(--ink-red-5);
+    --bt-disabled-border: var(--outline-red-1);
+    --bt-focus: var(--focus-outline-red);
+  }
+
+  /* ---- sizes (override the sm default) ---- */
+  .es-button[data-size="xs"] {
+    --es-bt-h: calc(var(--spacing) * 6);
+    --es-bt-icon: calc(var(--spacing) * 3.5);
+    padding-inline: calc(var(--spacing) * 1.5);
+    font-size: var(--text-xs);
+    border-radius: var(--radius-3);
+  }
+
+  .es-button[data-size="md"] {
+    --es-bt-h: calc(var(--spacing) * 8);
+    --es-bt-icon: calc(var(--spacing) * 4.5);
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .es-button[data-size="lg"] {
+    --es-bt-h: calc(var(--spacing) * 10);
+    --es-bt-icon: calc(var(--spacing) * 5);
+    padding-inline: calc(var(--spacing) * 3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-md);
+  }
+
+  /* ---- variants (override the subtle default) ---- */
+  .es-button--solid {
+    background: var(--bt-solid-bg);
+    color: var(--bt-solid-fg);
+  }
+
+  @media (hover: hover) {
+    .es-button--solid:hover {
+      background: var(--bt-solid-bg-hover);
+    }
+  }
+
+  .es-button--solid:active,
+  .es-button--solid[aria-haspopup][aria-expanded="true"] {
+    background: var(--bt-solid-bg-active);
+  }
+
+  .es-button--outline {
+    background: var(--surface-base);
+    color: var(--bt-fg);
+    border-color: var(--bt-border);
+  }
+
+  @media (hover: hover) {
+    .es-button--outline:hover {
+      border-color: var(--bt-border-hover);
+    }
+  }
+
+  .es-button--outline:active,
+  .es-button--outline[aria-haspopup][aria-expanded="true"] {
+    border-color: var(--bt-border-hover);
+    background: var(--bt-outline-bg-active);
+  }
+
+  .es-button--ghost {
+    background: transparent;
+    color: var(--bt-fg);
+  }
+
+  @media (hover: hover) {
+    .es-button--ghost:hover {
+      background: var(--bt-fill-bg-hover);
+    }
+  }
+
+  .es-button--ghost:active,
+  .es-button--ghost[aria-haspopup][aria-expanded="true"] {
+    background: var(--bt-fill-bg-active);
+  }
+
+  /* ---- icon button (square, no inline padding) ---- */
+  .es-button[data-icon-button="true"] {
+    padding-inline: 0;
+    width: var(--es-bt-h);
+  }
+
+  /* ---- focus ring (neutral --focus-outline-* tokens) ---- */
+  .es-button:focus-visible {
+    outline: var(--bt-focus);
+    outline-offset: 0;
+  }
+
+  /* ---- aria-invalid: red border + red focus ring ---- */
+  .es-button[aria-invalid="true"] {
+    border-color: var(--outline-red-3);
+  }
+
+  .es-button[aria-invalid="true"]:focus-visible {
+    outline: var(--focus-outline-red);
+  }
+
+  /* ---- disabled (after variants so it wins; pointer-events:none blocks hover).
+       Default covers solid + subtle; ghost clear the bg; outline keeps a
+       border. ---- */
+  .es-button:disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+    background: var(--bt-disabled-bg);
+    color: var(--bt-disabled-fg);
+    border-color: transparent;
+  }
+
+  .es-button--outline:disabled {
+    border-color: var(--bt-disabled-border);
+  }
+
+  .es-button--ghost:disabled {
+    background: transparent;
+  }
+
+  /* ---- loading: block interaction without the disabled dimming. Styled off
+       aria-busy so the visual and accessibility states cannot drift. ---- */
+  .es-button[aria-busy="true"] {
+    pointer-events: none;
+  }
+
+  .es-button:not([aria-busy="true"]) > .es-spinner,
+  .es-button:not([aria-busy="true"]) > .es-button__loading-label {
+    display: none;
+  }
+
+  /* while busy, the spinner replaces the icons — always, with or without a
+   loading label (otherwise spinner and icon show side by side) */
+  .es-button[aria-busy="true"] > svg {
+    display: none;
+  }
+
+  /* and a loading label, when present, replaces the normal label */
+  .es-button[aria-busy="true"]:has(> .es-button__loading-label) > .es-button__label {
+    display: none;
+  }
+
+  /* ---- icons + spinner (painted by components/spinner.css): size follows
+       the button size ---- */
+  :where(.es-button) > svg,
+  :where(.es-button) > .es-spinner {
+    pointer-events: none;
+    flex-shrink: 0;
+    width: var(--es-bt-icon);
+    height: var(--es-bt-icon);
+  }
+  /* ---- legacy compat shims (remove in v17 with the bootstrap button CSS) ----
+   External desk apps poke bootstrap-era classes onto held dialog-button
+   references (found by the selector gate): india_compliance adds .disabled
+   to guard double submits, erpnext adds .btn-danger for destructive
+   primaries. Map both onto the es contract so the behavior survives until
+   those call sites migrate. */
+  .es-button.disabled {
+    pointer-events: none;
+    background: var(--bt-disabled-bg);
+    color: var(--bt-disabled-fg);
+    border-color: var(--bt-disabled-border);
+  }
+
+  .es-button.btn-danger {
+    --bt-bg: var(--surface-red-5);
+    --bt-fg: var(--ink-white);
+    --bt-hover-bg: var(--surface-red-6);
+    --bt-active-bg: var(--surface-red-7);
+  }
+
+  /* Espresso Badge — framework-neutral component, plain CSS. Styled via .es-badge
+ * + data-attributes (data-variant / data-size / data-theme), binding only to
+ * espresso color/radius/spacing tokens. Source of truth in Framework; frappe-ui
+ * apps import this and wrap it in @layer components for Tailwind override.
+ * Unlayered here (Frappe/Bootstrap is unlayered; a layer would lose to it). */
+
+  .es-badge {
+    /* default theme = gray (gray is the exception: solid bg is -10, text is
+     ink-base / ink-gray-6 instead of the -1 / -8 scale) */
+    --c-solid-bg: var(--surface-gray-10);
+    --c-solid-fg: var(--ink-base);
+    --c-fill: var(--surface-gray-2);
+    --c-line: var(--outline-gray-2);
+    --c-fg: var(--ink-gray-6);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing);
+    /* 1 step (gap-1) */
+    width: fit-content;
+    flex-shrink: 0;
+    user-select: none;
+    white-space: nowrap;
+    overflow: clip;
+    border: 1px solid transparent;
+    border-radius: var(--radius-full, 9999px);
+    font-weight: var(--font-weight-regular, 420);
+
+    /* default size = md */
+    height: calc(var(--spacing) * 5);
+    padding-inline: calc(var(--spacing) * 1.5);
+    font-size: 0.75rem;
+    line-height: 1;
+
+    /* default variant = subtle */
+    background: var(--c-fill);
+    color: var(--c-fg);
+  }
+
+  /* ---- sizes (override the md default) ---- */
+  .es-badge[data-size="sm"] {
+    height: calc(var(--spacing) * 4);
+    padding-inline: calc(var(--spacing) * 1.5);
+  }
+
+  .es-badge[data-size="lg"] {
+    height: calc(var(--spacing) * 6);
+    padding-inline: calc(var(--spacing) * 2);
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+  }
+
+  /* ---- themes (override the gray default — the unrolled @each) ---- */
+  .es-badge[data-theme="blue"] {
+    --c-solid-bg: var(--surface-blue-7);
+    --c-solid-fg: var(--ink-blue-1);
+    --c-fill: var(--surface-blue-2);
+    --c-line: var(--outline-blue-3);
+    --c-fg: var(--ink-blue-8);
+  }
+
+  .es-badge[data-theme="green"] {
+    --c-solid-bg: var(--surface-green-7);
+    --c-solid-fg: var(--ink-green-1);
+    --c-fill: var(--surface-green-2);
+    --c-line: var(--outline-green-3);
+    --c-fg: var(--ink-green-8);
+  }
+
+  .es-badge[data-theme="amber"] {
+    --c-solid-bg: var(--surface-amber-7);
+    --c-solid-fg: var(--ink-amber-1);
+    --c-fill: var(--surface-amber-2);
+    --c-line: var(--outline-amber-3);
+    --c-fg: var(--ink-amber-8);
+  }
+
+  .es-badge[data-theme="red"] {
+    --c-solid-bg: var(--surface-red-7);
+    --c-solid-fg: var(--ink-red-1);
+    --c-fill: var(--surface-red-2);
+    --c-line: var(--outline-red-3);
+    --c-fg: var(--ink-red-8);
+  }
+
+  .es-badge[data-theme="violet"] {
+    --c-solid-bg: var(--surface-violet-7);
+    --c-solid-fg: var(--ink-violet-1);
+    --c-fill: var(--surface-violet-2);
+    --c-line: var(--outline-violet-3);
+    --c-fg: var(--ink-violet-8);
+  }
+
+  /* ---- variants (override the subtle default) ----
+ * outline/ghost must reset the subtle background the base applies. */
+  .es-badge[data-variant="solid"] {
+    background: var(--c-solid-bg);
+    color: var(--c-solid-fg);
+  }
+
+  .es-badge[data-variant="outline"] {
+    background: transparent;
+    color: var(--c-fg);
+    border-color: var(--c-line);
+  }
+
+  .es-badge[data-variant="ghost"] {
+    background: transparent;
+    color: var(--c-fg);
+  }
+
+  /* shrinks with an ellipsis when the badge is narrower than its label */
+  .es-badge__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---- icons ----
+ * One rule covers both framework idioms: React passes icons as direct <svg>
+ * children; Vue wraps prefix/suffix slots in
+ * .es-badge__affix (like the frappe-ui badge). Sizing lives here, not per app.
+ * Icon size follows the badge size; the md default applies when size is absent. */
+  .es-badge > svg {
+    pointer-events: none;
+  }
+
+  .es-badge > svg,
+  .es-badge__affix {
+    flex-shrink: 0;
+    width: calc(var(--spacing) * 2.5);
+    height: calc(var(--spacing) * 2.5);
+  }
+
+  .es-badge__affix {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* slot icons size to the affix, whatever size class they carry themselves */
+  .es-badge__affix > svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .es-badge[data-size="lg"] > svg,
+  .es-badge[data-size="lg"] .es-badge__affix {
+    width: calc(var(--spacing) * 3);
+    height: calc(var(--spacing) * 3);
+  }
+  /* Espresso Tabs — an underline tab bar with panels. For switching between
+ * views of the same thing; for picking a value use Pills (es-pills).
+ *
+ * Framework-neutral: the class + data-attribute contract below is
+ * everything. data-state="active|inactive" and data-orientation are what
+ * radix/reka tab primitives emit, so React and Vue apps get this styling
+ * as-is; classic frappe gets the markup from frappe.ui.tabs.
+ *
+ *   <div class="es-tabs" data-orientation="horizontal">
+ *     <div class="es-tabs__list" role="tablist">
+ *       <button class="es-tabs__tab" role="tab" data-state="active"
+ *               aria-selected="true">Details</button>
+ *       <button class="es-tabs__tab" role="tab" data-state="inactive"
+ *               aria-selected="false">Settings</button>
+ *       <span class="es-tabs__indicator"></span>
+ *     </div>
+ *     <div class="es-tabs__panel" role="tabpanel" data-state="active">...</div>
+ *     <div class="es-tabs__panel" role="tabpanel" data-state="inactive">...</div>
+ *   </div>
+ *
+ * The indicator is the moving 2px bar under the active tab. Its position
+ * comes from two custom properties the owner sets on it — and reka's
+ * TabsIndicator publishes the same numbers under its own names, which are
+ * wired in as fallbacks, so frappe-ui apps get the slide animation with
+ * zero extra code:
+ *   --es-tabs-indicator-x     offset to the active tab (px)
+ *   --es-tabs-indicator-w     width of the active tab (px)
+ * Without JS (static markup) there is no bar — the active tab still reads
+ * clearly from its ink color. */
+
+  .es-tabs {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .es-tabs[data-orientation="vertical"] {
+    flex-direction: row;
+  }
+
+  /* ---- the tab bar (paddings/gaps straight from frappe-ui's Tabs.vue:
+   list = p-1 gap-5, horizontal adds px-5, vertical adds py-3; horizontal
+   triggers carry py-2.5, vertical ones px-2.5 and NO vertical padding —
+   row rhythm in a vertical bar comes from the list's gap) ---- */
+  .es-tabs__list {
+    position: relative;
+    display: flex;
+    gap: calc(var(--spacing) * 5);
+    padding: calc(var(--spacing) * 1) calc(var(--spacing) * 0.5);
+    border-bottom: 1px solid var(--outline-gray-1);
+    /* many tabs on a narrow screen: the bar scrolls, the page doesn't */
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .es-tabs[data-orientation="vertical"] > .es-tabs__list {
+    flex-direction: column;
+    padding: calc(var(--spacing) * 3) calc(var(--spacing) * 1);
+    border-bottom: 0;
+    border-inline-end: 1px solid var(--outline-gray-1);
+    overflow: visible;
+  }
+
+  /* ---- tabs ---- */
+  .es-tabs__tab {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    padding: calc(var(--spacing) * 2.5) 0;
+    border: 0;
+    background: transparent;
+    font-size: var(--text-base);
+    line-height: calc(var(--spacing) * 4);
+    color: var(--ink-gray-5);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: color 300ms ease-in-out;
+  }
+
+  .es-tabs[data-orientation="vertical"] .es-tabs__tab {
+    padding: 0 calc(var(--spacing) * 2.5);
+    /* every row hugs the left edge: full width so short labels don't
+       shrink-wrap, and explicit start-alignment so no button default can
+       center the icon+label group (buttons center text by default) */
+    width: 100%;
+    justify-content: flex-start;
+    text-align: start;
+  }
+
+  .es-tabs__tab:hover {
+    color: var(--ink-gray-9);
+  }
+
+  .es-tabs__tab[data-state="active"] {
+    color: hsl(var(--primary));
+    border-bottom-color: hsl(var(--primary));
+  }
+
+  .es-tabs__tab:disabled,
+  .es-tabs__tab[data-disabled] {
+    color: var(--ink-gray-4);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .es-tabs__tab:focus-visible {
+    outline: var(--focus-outline-default, 2px solid var(--outline-gray-3));
+    outline-offset: -2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .es-tabs__tab > svg,
+  .es-tabs__tab > img,
+  .es-tabs__tab > .icon {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    flex-shrink: 0;
+    margin: 0;
+  }
+
+  /* ---- the sliding indicator ---- */
+  .es-tabs__indicator {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: var(--radius-full);
+    background: hsl(var(--primary));
+    width: var(--es-tabs-indicator-w, var(--reka-tabs-indicator-size, 0px));
+    /* the 1px downward shift is frappe-ui's trick: the bar straddles the
+       list's bottom border, and the list clips it, so it reads as a thin
+       line sitting ON the rail instead of a 2px block above it */
+    transform: translateX(var(--es-tabs-indicator-x, var(--reka-tabs-indicator-position, 0px)))
+      translateY(1px);
+    transition:
+      transform 300ms cubic-bezier(0.23, 1, 0.32, 1),
+      width 300ms cubic-bezier(0.23, 1, 0.32, 1);
+    pointer-events: none;
+  }
+
+  .es-tabs[data-orientation="vertical"] .es-tabs__indicator {
+    left: auto;
+    bottom: auto;
+    top: 0;
+    inset-inline-end: 0;
+    width: 2px;
+    height: var(--es-tabs-indicator-w, var(--reka-tabs-indicator-size, 0px));
+    transform: translateY(var(--es-tabs-indicator-x, var(--reka-tabs-indicator-position, 0px)));
+    transition:
+      transform 300ms cubic-bezier(0.23, 1, 0.32, 1),
+      height 300ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .es-tabs__tab,
+    .es-tabs__indicator {
+      transition: none;
+    }
+  }
+
+  /* ---- panels ---- */
+  .es-tabs__panel {
+    padding-top: calc(var(--spacing) * 2);
+    outline: none;
+    min-width: 0;
+  }
+
+  .es-tabs[data-orientation="vertical"] > .es-tabs__panel {
+    padding-top: 0;
+    padding-inline-start: calc(var(--spacing) * 2);
+    flex: 1 1 auto;
+  }
+
+  .es-tabs__panel[data-state="inactive"] {
+    display: none;
+  }
+}

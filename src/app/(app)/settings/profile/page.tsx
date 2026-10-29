@@ -37,6 +37,7 @@ import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { applyThemePreference, persistThemeCookie } from "@/lib/theme";
+import { DisplayScaleSettings } from "@/components/display-scale";
 import { locales, normalizeLocale } from "@/lib/locales";
 import {
   defaultCurrencyRateKgsPerUnit,
@@ -560,6 +561,8 @@ const ProfilePage = () => {
           </Form>
         </CardContent>
       </Card>
+
+      <DisplayScaleSettings />
 
       <Card id="language-settings" className="bazaar-admin-surface scroll-mt-24">
         <CardHeader className="border-b border-border/60 bg-muted/20">

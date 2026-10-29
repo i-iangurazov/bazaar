@@ -190,6 +190,7 @@ export type JobDefinition = {
   handler: (payload?: JobPayload) => Promise<JobResult>;
   maxAttempts?: number;
   baseDelayMs?: number;
+  lockScope?: (payload: JobPayload) => string | undefined;
 };
 
 const cleanupIdempotencyKeys = async (): Promise<JobResult> => {
@@ -204,7 +205,23 @@ const cleanupIdempotencyKeys = async (): Promise<JobResult> => {
   };
 };
 
+const imageTaskScope = (payload: JobPayload) =>
+  payload &&
+  typeof payload === "object" &&
+  !Array.isArray(payload) &&
+  "jobId" in payload &&
+  typeof payload.jobId === "string" &&
+  /^[a-zA-Z0-9_-]{1,80}$/.test(payload.jobId)
+    ? payload.jobId
+    : undefined;
 const jobs: Record<string, JobDefinition> = {
+  "subscription-payment-reconcile": {
+    handler: async () => {
+      const { reconcileSubscriptionPayments } =
+        await import("@/server/billing/subscriptionPayments");
+      return reconcileSubscriptionPayments();
+    },
+  },
   "cleanup-idempotency-keys": {
     handler: cleanupIdempotencyKeys,
     maxAttempts: 3,
@@ -263,6 +280,7 @@ const jobs: Record<string, JobDefinition> = {
     baseDelayMs: 1,
   },
   "product-description-generation": {
+    lockScope: imageTaskScope,
     handler: async (payload) => {
       const { runProductDescriptionGenerationJob } =
         await import("@/server/services/productDescriptionGenerationJobs");
@@ -270,6 +288,9 @@ const jobs: Record<string, JobDefinition> = {
     },
   },
   "product-image-studio-process": {
+    // Each image has its own durable lease. A global lock previously skipped
+    // dispatch of a second image until a later recovery/cron run.
+    lockScope: imageTaskScope,
     handler: async (payload) => {
       const { runProductImageStudioJob } = await import("@/server/services/productImageStudio");
       return runProductImageStudioJob(payload);
@@ -342,8 +363,16 @@ const startLockRenewal = (name: string, lock: LockHandle) => {
 };
 
 /** Shares the normal runner's owner-checked lock with recovery control actions. */
-export const withJobLock = async <T>(name: string, action: () => Promise<T>) => {
-  const lock = await acquireLock(name, 5 * 60 * 1000);
+const jobLockName = (name: string, payload?: JobPayload) => {
+  const scope = jobs[name]?.lockScope?.(payload);
+  return scope ? `${name}:${scope}` : name;
+};
+export const withJobLock = async <T>(
+  name: string,
+  action: () => Promise<T>,
+  payload?: JobPayload,
+) => {
+  const lock = await acquireLock(jobLockName(name, payload), 5 * 60 * 1000);
   if (!lock) return { acquired: false as const };
   const timer = startLockRenewal(name, lock);
   try {
@@ -362,7 +391,7 @@ export const runJob = async (name: string, payload?: JobPayload): Promise<JobRes
     return { job: name, status: "skipped", details: { reason: "unknown" } };
   }
 
-  const lock = await acquireLock(name, 5 * 60 * 1000);
+  const lock = await acquireLock(jobLockName(name, payload), 5 * 60 * 1000);
   if (!lock) {
     incrementCounter(jobsSkippedTotal, { job: name, reason: "locked" });
     return { job: name, status: "skipped", details: { reason: "locked" } };
@@ -420,13 +449,17 @@ export const retryJob = async (
       error: null,
     };
   }
-  const locked = await withJobLock(jobName, async () => {
-    // Durable ownership may change between a database claim and lock acquisition.
-    // Validate it only after owning the same lock used by manual resolution.
-    await beforeExecute?.();
-    const { result, attempts, error } = await executeJob(jobName, payload);
-    return { result, attempts, error: result ? null : error };
-  });
+  const locked = await withJobLock(
+    jobName,
+    async () => {
+      // Durable ownership may change between a database claim and lock acquisition.
+      // Validate it only after owning the same lock used by manual resolution.
+      await beforeExecute?.();
+      const { result, attempts, error } = await executeJob(jobName, payload);
+      return { result, attempts, error: result ? null : error };
+    },
+    payload,
+  );
   if (!locked.acquired) {
     return {
       result: { job: jobName, status: "skipped" as const, details: { reason: "locked" } },
@@ -442,6 +475,7 @@ export const registerJobForTests = (name: string, handler: JobDefinition["handle
     return;
   }
   jobs[name] = {
+    lockScope: jobs[name]?.lockScope,
     handler,
     maxAttempts: 2,
     baseDelayMs: 1,

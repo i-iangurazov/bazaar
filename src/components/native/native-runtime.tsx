@@ -254,7 +254,7 @@ export const NativeRuntime = () => {
     <>
       {showPushPrompt ? (
         <aside
-          className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-[950] mx-auto max-w-md rounded-2xl border border-primary/25 bg-background p-4 shadow-2xl"
+          className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-[950] mx-auto max-w-md rounded-lg border border-primary/25 bg-background p-4 shadow-2xl"
           role="dialog"
           aria-labelledby="native-push-title"
           data-native-push-prompt

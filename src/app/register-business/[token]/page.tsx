@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { useLocaleChange } from "@/hooks/use-locale-change";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -19,6 +21,7 @@ import { useToast } from "@/components/ui/toast";
 import { translateError } from "@/lib/translateError";
 
 const RegisterBusinessPage = () => {
+  const hydrated = useHydrated();
   const params = useParams();
   const token = String(params?.token ?? "");
   const t = useTranslations("registerBusiness");
@@ -28,7 +31,7 @@ const RegisterBusinessPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<Parameters<typeof translateError>[1]>(null);
   const [values, setValues] = useState<{
     orgName: string;
     storeName: string;
@@ -62,6 +65,12 @@ const RegisterBusinessPage = () => {
     address: z.string().optional(),
     phone: z.string().optional(),
   });
+  useLocaleChange(() => {
+    if (Object.values(fieldErrors).some(Boolean)) {
+      const result = schema.safeParse(values);
+      setFieldErrors(result.success ? {} : Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message])));
+    }
+  });
 
   const mutation = trpc.publicAuth.registerBusiness.useMutation({
     onSuccess: (result) => {
@@ -81,7 +90,7 @@ const RegisterBusinessPage = () => {
     },
     onError: (error) => {
       const message = translateError(tErrors, error);
-      setFormError(message);
+      setFormError(error);
       toast({ variant: "error", description: message });
     },
   });
@@ -145,9 +154,9 @@ const RegisterBusinessPage = () => {
               </Link>
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
+            <form method="post" onSubmit={handleSubmit}>
               <FormStack>
-                {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
+                {formError ? <p className="text-sm font-medium text-danger">{translateError(tErrors, formError)}</p> : null}
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground" htmlFor="register-org-name">
                     {t("orgName")}
@@ -207,7 +216,7 @@ const RegisterBusinessPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground">{t("legalEntityType")}</label>
+                  <label htmlFor="register-legal-type" className="text-sm font-medium text-foreground">{t("legalEntityType")}</label>
                   <Select
                     value={values.legalEntityType}
                     onValueChange={(value) => {
@@ -217,7 +226,7 @@ const RegisterBusinessPage = () => {
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="register-legal-type">
                       <SelectValue placeholder={t("selectLegalEntityType")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -305,7 +314,7 @@ const RegisterBusinessPage = () => {
                   />
                   {fieldErrors.address ? <p className="text-xs font-medium text-danger">{fieldErrors.address}</p> : null}
                 </div>
-                <Button type="submit" className="w-full" disabled={mutation.isLoading}>
+                <Button type="submit" className="w-full" disabled={!hydrated || mutation.isLoading}>
                   {mutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                   {mutation.isLoading ? tCommon("loading") : t("submit")}
                 </Button>

@@ -72,6 +72,7 @@ export async function verifyProductCameraSearch(
   const video = join(temporary, "barcode.y4m");
   await barcodeVideo(video, barcode);
   const browser = await chromium.launch({
+    ...(process.env.UI_BROWSER_CHANNEL ? { channel: process.env.UI_BROWSER_CHANNEL } : {}),
     args: [
       "--use-fake-device-for-media-stream",
       "--use-fake-ui-for-media-stream",
@@ -182,7 +183,8 @@ export async function verifyProductCameraSearch(
               box.x + box.width <= inputBox.x + inputBox.width + 1 &&
               box.y + box.height <= inputBox.y + inputBox.height + 1,
           );
-          assert.ok(box.width >= 40 && box.height >= 36);
+          // Espresso keeps 32px desktop fields and 40px mobile touch targets.
+          assert.ok(box.width >= 40 && box.height >= (width < 640 ? 40 : 32));
         }
         assert.ok(clearBox.x + clearBox.width <= cameraBox.x + 1);
         await page.screenshot({ path: `${output}/camera-search-${width}.png` });

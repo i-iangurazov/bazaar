@@ -16,7 +16,8 @@ describe("mobile customers source", () => {
     expect(source).toContain('t("filters.searchPlaceholder")');
     expect(source).toContain("customer.lastOrderAt");
     expect(source).toContain("customer.orderCount");
-    expect(source).toContain("href={`tel:${customer.phone}`}");
+    expect(source).toContain("`tel:${customer.phone}`");
+    expect(source).toContain("disabled={!customer.phone}");
     expect(source).toContain("viewCustomerSales(customer)");
   });
 

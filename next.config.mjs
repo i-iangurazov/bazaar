@@ -7,6 +7,9 @@ const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
   experimental: {
+    outputFileTracingExcludes: {
+      "*": ["./tmp/**/*", "./artifacts/**/*", "./.local/**/*"],
+    },
     serverComponentsExternalPackages: ["pdfkit", "heic-convert", "heic-decode", "libheif-js"],
   },
 };

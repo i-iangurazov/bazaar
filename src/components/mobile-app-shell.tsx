@@ -142,7 +142,7 @@ export const MobileTopBar = ({
   showAssistant = false,
 }: MobileTopBarProps) => (
   <header
-    className="sticky top-0 z-40 border-b border-border/80 bg-card/95 px-4 pb-3 pt-3 shadow-sm backdrop-blur-xl md:hidden"
+    className="sticky top-0 z-40 border-b border-border/80 bg-card px-4 pb-2 pt-2 shadow-none md:hidden"
     style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
   >
     <div className="flex min-h-11 items-center justify-between gap-3">
@@ -150,16 +150,20 @@ export const MobileTopBar = ({
         <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {storeName ?? "BAZAAR"}
         </p>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2">
-          <p className="truncate text-base font-semibold text-foreground">{pageTitle}</p>
-          {statusLabel ? (
-            <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
-              {statusLabel}
-            </span>
-          ) : null}
-        </div>
+        {pageTitle || statusLabel ? (
+          <div className="mt-0.5 flex min-w-0 items-center gap-2">
+            {pageTitle ? (
+              <p className="truncate text-base font-semibold text-foreground">{pageTitle}</p>
+            ) : null}
+            {statusLabel ? (
+              <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
+                {statusLabel}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1" data-mobile-header-actions>
         <PageTipsButton className="bazaar-mobile-header-button" />
         {showAssistant ? (
           <div data-baam-mobile-slot className="h-11 w-11 shrink-0" />
@@ -198,7 +202,7 @@ export const MobileBottomNav = ({
 }: MobileBottomNavProps) => (
   <nav
     data-native-bottom-nav
-    className="fixed inset-x-3 bottom-3 z-40 rounded-[1.65rem] border border-border/80 bg-card/95 px-2 py-2 shadow-[0_-12px_34px_rgba(15,23,42,0.18)] ring-1 ring-foreground/[0.03] backdrop-blur-xl md:hidden"
+    className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card px-2 py-1 shadow-none md:hidden"
     style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
     aria-label={navigationLabel}
   >
@@ -212,9 +216,9 @@ export const MobileBottomNav = ({
       <button
         type="button"
         className={cn(
-          "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-1 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+          "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius)] px-1 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
           moreActive
-            ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+            ? "bg-primary/10 text-primary shadow-none"
             : "text-muted-foreground hover:bg-secondary hover:text-foreground",
         )}
         onClick={onOpenMore}
@@ -232,9 +236,9 @@ const MobileBottomNavLink = ({ item }: { item: MobileShellNavItem }) => (
     href={item.href}
     prefetch={false}
     className={cn(
-      "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-1 py-1 text-[11px] font-semibold no-underline transition hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+      "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[var(--radius)] px-1 py-1 text-[11px] font-semibold no-underline transition hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
       item.active
-        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+        ? "bg-primary/10 text-primary shadow-none"
         : "text-muted-foreground hover:bg-secondary hover:text-foreground",
     )}
     aria-current={item.active ? "page" : undefined}
@@ -266,7 +270,7 @@ export const MobileMoreMenu = ({
         <DialogPrimitive.Overlay className="fixed inset-0 z-[1000] bg-black/30 data-[state=closed]:opacity-0 data-[state=open]:opacity-100 md:hidden" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-[1001] max-h-[85dvh] overflow-y-auto rounded-t-[1.75rem] border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden"
+          className="fixed inset-x-0 bottom-0 z-[1001] max-h-[85dvh] overflow-y-auto rounded-t-xl border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden"
           onOpenAutoFocus={() => {
             previouslyFocusedRef.current =
               document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -301,9 +305,8 @@ export const MobileMoreMenu = ({
                 prefetch={false}
                 onClick={onClose}
                 className={cn(
-                  "flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold no-underline shadow-sm transition hover:border-primary/40 hover:bg-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-                  item.active &&
-                    "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20",
+                  "flex min-h-11 items-center gap-3 rounded-md border border-transparent bg-transparent px-3 py-2 text-sm font-normal text-foreground no-underline transition hover:bg-secondary hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  item.active && "bg-primary/10 text-primary",
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" aria-hidden />
@@ -320,7 +323,7 @@ export const MobileMoreMenu = ({
           </div>
 
           <div className="space-y-2 border-t border-border/70 bg-muted/25 px-4 py-4">
-            <div className="flex min-h-11 items-center justify-center rounded-xl border border-border/70 bg-background/80 px-3 py-2 shadow-sm">
+            <div className="flex min-h-11 items-center justify-center px-3 py-2">
               <LanguageSwitcher
                 compact
                 className="border-0 bg-transparent p-0 shadow-none"
@@ -329,9 +332,9 @@ export const MobileMoreMenu = ({
             </div>
             <PwaInstallButton
               presentation="card"
-              className="min-h-11 rounded-xl border-border/70 bg-background/80 shadow-sm"
+              className="min-h-11 rounded-md border-border bg-card shadow-none"
             />
-            <SignOutButton className="min-h-11 rounded-xl border-border/70 bg-background/80 shadow-sm" />
+            <SignOutButton className="min-h-11 rounded-md border-border bg-card shadow-none" />
           </div>
           <div style={{ height: "max(1rem, env(safe-area-inset-bottom))" }} />
         </DialogPrimitive.Content>
@@ -363,7 +366,7 @@ export const MobileQuickActionButton = ({
       href={href}
       prefetch={false}
       className={cn(
-        "flex min-h-14 items-center gap-3 rounded-xl border px-3 py-3 text-left no-underline shadow-sm transition hover:no-underline",
+        "flex min-h-14 items-center gap-3 rounded-lg border px-3 py-3 text-left no-underline shadow-sm transition hover:no-underline",
         variant === "primary" &&
           "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
         variant === "secondary" &&
@@ -376,7 +379,7 @@ export const MobileQuickActionButton = ({
       {Icon ? (
         <span
           className={cn(
-            "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
+            "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border",
             variant === "primary"
               ? "border-primary-foreground/30 bg-primary-foreground/10"
               : "bazaar-mobile-icon-surface border-border",

@@ -8,6 +8,7 @@ import SignupPage from "@/app/signup/page";
 
 const mocks = vi.hoisted(() => ({
   locale: "ru",
+  localizeErrors: false,
   modeQuery: {
     data: undefined as { mode: "open" | "invite_only" } | undefined,
     isLoading: true,
@@ -26,7 +27,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.replace }
 vi.mock("next-intl", () => ({
   useLocale: () => mocks.locale,
   useTranslations: (namespace: string) =>
-    Object.assign((key: string) => `${namespace}.${key}`, { has: () => true }),
+    Object.assign((key: string) => `${namespace}.${key}${mocks.localizeErrors && (namespace === "errors" || ["emailInvalid", "nameRequired", "passwordMin"].includes(key)) ? `:${mocks.locale}` : ""}`, { has: () => true }),
 }));
 vi.mock("@/components/auth-brand", () => ({ AuthBrand: () => <span>BAZAAR</span> }));
 vi.mock("@/components/language-switcher", () => ({
@@ -57,6 +58,7 @@ describe("signup mode transitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.locale = "ru";
+    mocks.localizeErrors = false;
     mocks.modeQuery.data = undefined;
     mocks.modeQuery.isLoading = true;
     mocks.modeQuery.error = null;
@@ -65,6 +67,42 @@ describe("signup mode transitions", () => {
   });
 
   afterEach(cleanup);
+
+  it("translates displayed validation without clearing values or changing the selected account language", () => {
+    mocks.localizeErrors = true;
+    mocks.modeQuery.isLoading = false;
+    mocks.modeQuery.data = { mode: "open" };
+    const page = render(<SignupPage />);
+    const language = screen.getByRole("combobox", { name: "signup.preferredLocale" });
+    fireEvent.keyDown(language, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "common.locales.en" }));
+    fireEvent.change(screen.getByLabelText("signup.name"), { target: { value: "Synthetic User" } });
+    fireEvent.change(screen.getByLabelText("signup.email"), { target: { value: "synthetic@example.invalid" } });
+    fireEvent.click(screen.getByRole("button", { name: "signup.createAccount" }));
+    expect(screen.getByText("signup.passwordMin:ru")).toBeTruthy();
+    mocks.locale = "kg";
+    page.rerender(<SignupPage />);
+    expect(screen.getByText("signup.passwordMin:kg")).toBeTruthy();
+    expect(screen.queryByText("signup.passwordMin:ru")).toBeNull();
+    expect((screen.getByLabelText("signup.name") as HTMLInputElement).value).toBe("Synthetic User");
+    expect((screen.getByLabelText("signup.email") as HTMLInputElement).value).toBe("synthetic@example.invalid");
+    expect(language.textContent).toContain("common.locales.en");
+    expect(mocks.signupMutate).not.toHaveBeenCalled();
+  });
+
+  it("retranslates a server error without resubmitting a registration", () => {
+    mocks.localizeErrors = true;
+    mocks.modeQuery.isLoading = false;
+    mocks.modeQuery.data = { mode: "open" };
+    const page = render(<SignupPage />);
+    act(() => mocks.signupError?.({ message: "signupInviteOnly" }));
+    expect(screen.getByText("errors.signupInviteOnly:ru")).toBeTruthy();
+    mocks.locale = "en";
+    page.rerender(<SignupPage />);
+    expect(screen.getByText("errors.signupInviteOnly:en")).toBeTruthy();
+    expect(screen.queryByText("errors.signupInviteOnly:ru")).toBeNull();
+    expect(mocks.signupMutate).not.toHaveBeenCalled();
+  });
 
   it.each(["kg", "en"])(
     "keeps the %s language selected on the landing when registering",

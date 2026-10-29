@@ -123,11 +123,19 @@ const CategorySettingsPage = () => {
           <p className="text-sm text-muted-foreground">{t("controlsDescription")}</p>
         </CardHeader>
         <CardContent className="space-y-4 pt-5">
+          {storesQuery.error ? (
+            <div role="alert" className="bazaar-admin-error flex flex-wrap items-center gap-2">
+              <span>{translateError(tErrors, storesQuery.error)}</span>
+              <Button type="button" variant="secondary" size="sm" onClick={() => storesQuery.refetch()}>
+                {tErrors("tryAgain")}
+              </Button>
+            </div>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">{t("store")}</label>
+              <label htmlFor="category-settings-store" className="text-sm font-medium text-foreground">{t("store")}</label>
               <Select value={storeId} onValueChange={setStoreId} disabled={storesQuery.isLoading}>
-                <SelectTrigger>
+                <SelectTrigger id="category-settings-store">
                   <SelectValue placeholder={t("storePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -145,8 +153,10 @@ const CategorySettingsPage = () => {
               ) : null}
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">{t("search")}</label>
+              <label htmlFor="category-settings-search" className="text-sm font-medium text-foreground">{t("search")}</label>
               <SearchInput
+                id="category-settings-search"
+                aria-label={t("search")}
                 value={search}
                 onValueChange={setSearch}
                 placeholder={t("searchPlaceholder")}
@@ -183,10 +193,19 @@ const CategorySettingsPage = () => {
           <p className="text-sm text-muted-foreground">{t("listDescription")}</p>
         </CardHeader>
         <CardContent>
-          {categoriesQuery.isLoading ? (
+          {storesQuery.error ? null : !storeId && !storesQuery.isLoading ? (
+            <div className="bazaar-admin-empty">{t("storePlaceholder")}</div>
+          ) : storesQuery.isLoading || categoriesQuery.isLoading ? (
             <div className="bazaar-admin-empty min-h-[9rem] gap-2">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
+            </div>
+          ) : categoriesQuery.error ? (
+            <div role="alert" className="bazaar-admin-error flex flex-wrap items-center gap-2">
+              <span>{translateError(tErrors, categoriesQuery.error)}</span>
+              <Button type="button" variant="secondary" size="sm" onClick={() => categoriesQuery.refetch()}>
+                {tErrors("tryAgain")}
+              </Button>
             </div>
           ) : categories.length ? (
             <div className="grid gap-3">

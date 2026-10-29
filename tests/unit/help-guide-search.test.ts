@@ -5,7 +5,9 @@ import { searchHelpGuides } from "@/content/help/search";
 
 describe("Bazaar Guide catalog and search", () => {
   it("ships complete multilingual short guides", () => {
-    expect(helpGuides).toHaveLength(24);
+    expect(helpGuides).toHaveLength(26);
+    expect(getHelpGuideById("products/shared-catalog")).toBeTruthy();
+    expect(getHelpGuideById("products/shared-prices")).toBeTruthy();
     expect(helpCategories).toHaveLength(9);
     for (const guide of helpGuides) {
       expect(guide.steps.length).toBeGreaterThanOrEqual(3);

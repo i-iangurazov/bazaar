@@ -174,7 +174,7 @@ export const ResponsiveDataList = <T,>({
             <span className="text-xs text-muted-foreground">
               {tCommon("pagination.rowsPerPage")}
             </span>
-            <div className="w-[96px] sm:w-[88px]">
+            <div className="w-20">
               <Select
                 value={String(pageSize)}
                 onValueChange={(value) => {
@@ -199,10 +199,7 @@ export const ResponsiveDataList = <T,>({
                   }
                 }}
               >
-                <SelectTrigger
-                  className="h-10 sm:h-8"
-                  aria-label={tCommon("pagination.rowsPerPage")}
-                >
+                <SelectTrigger aria-label={tCommon("pagination.rowsPerPage")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -223,7 +220,6 @@ export const ResponsiveDataList = <T,>({
               type="button"
               variant="secondary"
               size="icon"
-              className="h-10 w-10 sm:h-8 sm:w-8"
               onClick={() => {
                 if (isServerPagination) {
                   onPageChange?.(Math.max(1, page - 1));
@@ -241,7 +237,6 @@ export const ResponsiveDataList = <T,>({
               type="button"
               variant="secondary"
               size="icon"
-              className="h-10 w-10 sm:h-8 sm:w-8"
               onClick={() => {
                 if (isServerPagination) {
                   onPageChange?.(Math.min(totalPages, page + 1));

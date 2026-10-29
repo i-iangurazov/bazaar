@@ -1,0 +1,181 @@
+{
+  "status": "in-review-directory-checkpoint-complete-other-route-families-pending",
+  "branch": "codex/playground",
+  "baselineForThisCheckpoint": "3f953f2",
+  "routes": [
+    "src/app/(app)/customers/page.tsx",
+    "src/app/(app)/customers/new/page.tsx",
+    "src/app/(app)/suppliers/page.tsx",
+    "src/app/(app)/suppliers/new/page.tsx",
+    "src/app/(app)/stores/page.tsx",
+    "src/app/(app)/stores/new/page.tsx",
+    "src/app/(app)/stores/[id]/compliance/page.tsx",
+    "src/app/(app)/stores/[id]/hardware/page.tsx"
+  ],
+  "composition": "Directory tables, mobile cards, creation dialogs, column order and store form sections retained. Customer error states now replace the false empty-list message; existing role/store permissions are reflected in customer creation controls.",
+  "fixes": [
+    {
+      "area": "Mobile suppliers heading",
+      "before": "BAZAAR appeared both as brand caption and fallback page title",
+      "after": "Page title uses the existing localized Suppliers label in RU/KG/EN.",
+      "source": "src/components/app-shell.tsx"
+    },
+    {
+      "area": "Hardware breadcrumb",
+      "before": "Raw hardware URL segment was displayed in Russian/Kyrgyz UI",
+      "after": "Localized hardware label in RU/KG/EN",
+      "source": "src/components/page-breadcrumbs.tsx"
+    },
+    {
+      "area": "Row action keyboard focus",
+      "before": "Escape closed the menu and left focus on document.body; reopening with Enter no longer worked",
+      "after": "Escape and cancellation of confirmations restore the actual More button. Confirmation actions run after menu focus restoration; action order, dimensions and tooltip are unchanged.",
+      "source": "src/components/row-actions.tsx",
+      "regression": "tests/unit/row-actions-focus.test.tsx",
+      "beforeLog": "artifacts/ux/espresso/row-actions-focus-before.log"
+    },
+    {
+      "area": "Customer query errors",
+      "before": "A denied request displayed both an access error and an empty-customer message; no retry action",
+      "after": "An accessible error alert with retry replaces the list while a request is in error; choosing an assigned store recovers the normal view",
+      "source": "src/app/(app)/customers/page.tsx",
+      "regression": "tests/unit/customer-directory-state.test.tsx"
+    },
+    {
+      "area": "Customer create permission in UI",
+      "before": "Staff/cashier direct links exposed an Add button and the creation alias could open a form even though the server denies these roles",
+      "after": "The existing manageCustomers policy controls creation and the add alias; an assigned store is also required for Add/Save buttons and submission. Server authorization is unchanged.",
+      "source": "src/app/(app)/customers/page.tsx",
+      "regression": "tests/unit/customer-directory-state.test.tsx"
+    },
+    {
+      "area": "Directory English copy",
+      "before": "Stores, suppliers and compliance contained placeholder labels such as Notes hint, Section basic and Card overview",
+      "after": "Labels, hints, actions and feedback describe the existing functions; Kyrgyz supplier directory heading also translated",
+      "source": "messages/en.json"
+    },
+    {
+      "area": "One-shot customer creation link",
+      "before": "The add=1 flag remained in the URL and changing a filter reopened a blank creation form after a successful save or cancellation",
+      "after": "Opening the form consumes only add=1; the store and other filters remain, and later search changes do not reopen the form",
+      "source": "src/app/(app)/customers/page.tsx",
+      "regression": "tests/unit/customer-directory-state.test.tsx"
+    }
+  ],
+  "verifiedBrowserFlows": [
+    "Admin customer creation, search, edit and return focus to Edit",
+    "Customer export format and columns dialog; export disabled when zero columns",
+    "Customer mobile card, contacts, empty purchase history and link to period analytics",
+    "Customer creation alias opens same modal",
+    "Store-scoped customer list: created contact appears in Bishkek and not in empty Osh list",
+    "Supplier creation alias, required name validation, creation and search",
+    "Supplier inline notes edit commits on Enter and returns focus",
+    "Supplier mobile card, edit form and action menu",
+    "Store view dialog, creation alias, required name/code validation",
+    "Admin compliance settings and advanced section; all external connectors left disabled",
+    "Hardware default copies saved 1 to 2, persisted across reload, then restored to 1",
+    "Customer, compliance and hardware mobile page widths measured at 390/390px",
+    "Final More trigger: Enter opens, Escape focuses the actual button, untargeted Enter opens again; measured mobile page width 390px",
+    "Manager store selector lists only Bishkek and Osh; the unassigned third store is absent",
+    "Manager compliance settings are disabled; hardware settings remain editable",
+    "Staff hardware settings are read-only; compliance and suppliers deny access",
+    "Cashier direct hardware route denies access",
+    "Final build: STAFF and CASHIER add aliases open no modal and Add remains disabled; server error no longer shows a false empty list",
+    "Final build: manager unavailable-store error supports retry; selecting assigned Bishkek restores all 13 customer rows and enables Add",
+    "Final build: supplier confirmation receives focus; cancellation restores More and preserves the supplier",
+    "Final build: manager creation alias still opens normally",
+    "Final build before one-shot-link correction: admin creates Espresso — контроль прав successfully; exactly two Espresso customer records appear in search",
+    "Final English store-form labels and read-only manager compliance hints inspected in the production UI",
+    "Latest production build: /customers/new opens the admin form and consumes add=1, preserving the auto-selected assigned store",
+    "Latest production build: cancel then change search; no creation dialog reopens, both Espresso customer records remain visible",
+    "Latest production build: 390px customer list has page width 390px and no open dialog",
+    "Latest production build: Kyrgyz supplier mobile title and directory heading rendered; RU restored afterwards"
+  ],
+  "testEnvironment": {
+    "browserOrigin": "http://localhost:3122",
+    "browserDatabase": "bazaar_espresso_ui",
+    "regressionDatabase": "bazaar_hardening_ci",
+    "postgresPort": 55440,
+    "providerCalls": "disabled by scripts/ux/environment.ts",
+    "customerName": "Espresso — проверка клиента",
+    "supplierName": "Espresso — проверка поставщика",
+    "additionalCustomerName": "Espresso — контроль прав",
+    "finalBrowserState": "Admin, RU, dark theme; preferences restored; supplier list open for continuation"
+  },
+  "checks": {
+    "unit": {
+      "files": 256,
+      "tests": 1863,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/directories-unit-final.log"
+    },
+    "database": {
+      "files": 5,
+      "tests": 36,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/directories-db.log"
+    },
+    "typecheck": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/directories-typecheck.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/directories-lint.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/directories-i18n-final.log"
+    },
+    "productionBuild": {
+      "result": "passed; type/lint checks and all 125 static pages completed",
+      "log": "artifacts/ux/espresso/build-directories-final.log"
+    },
+    "focusAndRecovery": {
+      "files": 2,
+      "tests": 7,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/directory-recovery-unit.log"
+    }
+  },
+  "limitations": [
+    "This is one route family checkpoint, not completion of the full 97-route redesign.",
+    "No physical printer, Connector, fiscal or payment provider was used.",
+    "Permanent deletion was not executed in the browser; the reported database suites do not imply complete deletion coverage.",
+    "No forced browser network/server error injection; rendered error/retry coverage still pending."
+  ],
+  "delivery": "Local playground only, no main merge, push or production deployment",
+  "crossFamilyObservations": [
+    {
+      "area": "Sign-in landing for STAFF/CASHIER",
+      "observation": "During role verification, plain /login led to /dashboard, whose data request was denied. Role navigation correctly hides dashboard. Authentication route handling needs its own verification before the complete redesign can be accepted.",
+      "status": "resolved-in-authentication-checkpoint",
+      "resolution": {
+        "evidence": "docs/espresso/auth-verification.json",
+        "result": "Default login now uses existing role-home policy; all four roles verified in the isolated rendered app."
+      }
+    }
+  ],
+  "sourceFingerprints": {
+    "src/app/(app)/customers/page.tsx": "d4f78f5dcf9fbcc5c040d428cf82edd5721ebb7f269671738b87df9d4b42e516",
+    "src/components/app-shell.tsx": "cf1b87da38d3727c8ff9f64f6535369e98fa2795d647b1e72aa7b8d36b4a196a",
+    "src/components/page-breadcrumbs.tsx": "266f71f1e2c4bbeb4c6598b9c2a12489dab193cb621fbb7cea068d3596100233",
+    "src/components/row-actions.tsx": "5f263f8c82732f2d0b68a1aebfa6ef41118439f2603db1c5d7bc4d32a7c6e28f",
+    "messages/en.json": "737035bec9a42c0b3013a15b4de6d82302944640af2bf065575c91bf7b1b0001",
+    "messages/ru.json": "bdb20dcaf9e19e62e7f471bcdf68ef22eb4c618d3ad76aa9a34c15d4886f5ac3",
+    "messages/kg.json": "6464c94bdb05b0179ce7363c32a9bc295c2cc8df86fdbed67fc5a5db886a7f88"
+  },
+  "screenshots": {
+    "customerDesktopFinal": "artifacts/ux/espresso/screenshots/customers-desktop-dark-final.png",
+    "customerMobileFinal": "artifacts/ux/espresso/screenshots/customers-mobile-dark-final.png",
+    "customerErrorRecovery": "artifacts/ux/espresso/screenshots/customer-forbidden-retry-mobile-final.png",
+    "customerStaffDenied": "artifacts/ux/espresso/screenshots/customer-staff-denied-final.png",
+    "customerCashierDenied": "artifacts/ux/espresso/screenshots/customer-cashier-denied-final.png",
+    "supplierConfirmation": "artifacts/ux/espresso/screenshots/supplier-confirmation-mobile-final.png",
+    "supplierEnglish": "artifacts/ux/espresso/screenshots/suppliers-desktop-light-en-final.png",
+    "supplierKyrgyz": "artifacts/ux/espresso/screenshots/suppliers-mobile-dark-kg.png",
+    "storeFormEnglish": "artifacts/ux/espresso/screenshots/store-form-desktop-light-en-final.png",
+    "managerCompliance": "artifacts/ux/espresso/screenshots/store-compliance-manager-light-en.png",
+    "supplierRussianFinal": "artifacts/ux/espresso/screenshots/suppliers-mobile-dark-final.png"
+  }
+}

@@ -281,7 +281,7 @@ const ToggleRow = ({
   disabled: boolean;
   onChange: (checked: boolean) => void;
 }) => (
-  <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-muted/30 p-3 text-sm">
+  <label className="flex items-center justify-between gap-3 rounded-lg border border-border/65 bg-muted/30 p-3 text-sm">
     <span>{label}</span>
     <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
   </label>
@@ -303,7 +303,7 @@ const MobileWizardStep = ({
   <Card className="bazaar-admin-surface">
     <CardHeader className="bazaar-admin-section-header px-4 py-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
           {step}
         </span>
         <div className="min-w-0 flex-1">
@@ -342,7 +342,7 @@ const MobileStatusRow = ({
   value: string;
   ready?: boolean;
 }) => (
-  <div className="flex items-start justify-between gap-3 rounded-xl border border-border/65 bg-muted/30 p-3 text-sm">
+  <div className="flex items-start justify-between gap-3 rounded-lg border border-border/65 bg-muted/30 p-3 text-sm">
     <span className="text-muted-foreground">{label}</span>
     <span
       className={`max-w-[58%] text-right font-medium ${
@@ -793,7 +793,7 @@ const PrintingSettingsPage = () => {
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
               <Select value={storeId} onValueChange={selectStore}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger aria-label={tCommon("store")} className="h-11">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -981,7 +981,7 @@ const PrintingSettingsPage = () => {
                   onValueChange={(value) => updateBinding({ receiptPrinterName: value })}
                   disabled={!canEdit || qzStatus !== "connected"}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("receiptPrinter")} className="h-11">
                     <SelectValue placeholder={t("selectPrinter")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1008,7 +1008,7 @@ const PrintingSettingsPage = () => {
                   onValueChange={(value) => updateBinding({ labelPrinterName: value })}
                   disabled={!canEdit || qzStatus !== "connected"}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("labelPrinter")} className="h-11">
                     <SelectValue placeholder={t("selectPrinter")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1043,7 +1043,7 @@ const PrintingSettingsPage = () => {
                   onValueChange={(value) => updateValue("receiptPaperSize", value as ReceiptPaperSize)}
                   disabled={!canEdit}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("paperSize")} className="h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1104,7 +1104,7 @@ const PrintingSettingsPage = () => {
                   onValueChange={(value) => updateValue("labelLayoutOrder", value as LabelLayoutOrder)}
                   disabled={!canEdit}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("layoutOrder")} className="h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1271,7 +1271,7 @@ const PrintingSettingsPage = () => {
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
             <Select value={storeId} onValueChange={selectStore}>
-              <SelectTrigger>
+              <SelectTrigger aria-label={tCommon("store")}>
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
               <SelectContent>
@@ -1523,7 +1523,7 @@ const PrintingSettingsPage = () => {
                 </ol>
               </div>
               {values.receiptPrintProvider === "QZ_TRAY" ? (
-                <div className="space-y-3 rounded-xl border border-border/65 bg-muted/25 p-4">
+                <div className="space-y-3 rounded-lg border border-border/65 bg-muted/25 p-4">
                   <div className="flex flex-wrap items-center gap-3">
                     {qzTrustStatus !== "certificate-missing" ? (
                       <Button asChild type="button" variant="secondary">
@@ -1536,7 +1536,7 @@ const PrintingSettingsPage = () => {
                       {t("downloadQzCertificateHint")}
                     </span>
                   </div>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-card p-3 text-sm">
+                  <label className="flex items-center justify-between gap-3 rounded-lg border border-border/65 bg-card p-3 text-sm">
                     <span className="space-y-1">
                       <span className="block font-medium text-foreground">
                         {t("qzClientProvisionConfirm")}
@@ -1564,7 +1564,7 @@ const PrintingSettingsPage = () => {
                     onValueChange={(value) => updateBinding({ receiptPrinterName: value })}
                     disabled={!canEdit || qzStatus !== "connected"}
                   >
-                    <SelectTrigger><SelectValue placeholder={t("selectPrinter")} /></SelectTrigger>
+                    <SelectTrigger aria-label={t("receiptPrinter")}><SelectValue placeholder={t("selectPrinter")} /></SelectTrigger>
                     <SelectContent>
                       {printerOptions.map((printer) => (
                         <SelectItem key={printer} value={printer}>
@@ -1592,7 +1592,7 @@ const PrintingSettingsPage = () => {
                     onValueChange={(value) => updateBinding({ labelPrinterName: value })}
                     disabled={!canEdit || qzStatus !== "connected"}
                   >
-                    <SelectTrigger><SelectValue placeholder={t("selectPrinter")} /></SelectTrigger>
+                    <SelectTrigger aria-label={t("labelPrinter")}><SelectValue placeholder={t("selectPrinter")} /></SelectTrigger>
                     <SelectContent>
                       {printerOptions.map((printer) => (
                         <SelectItem key={printer} value={printer}>
@@ -1631,7 +1631,7 @@ const PrintingSettingsPage = () => {
                       onValueChange={(value) => updateValue("receiptTemplateUsage", value as ReceiptUsage)}
                       disabled={!canEdit}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("receiptUsage")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="BOTH">{t("usageBoth")}</SelectItem>
                         <SelectItem value="PRINT">{t("usagePrint")}</SelectItem>
@@ -1654,7 +1654,7 @@ const PrintingSettingsPage = () => {
                       onValueChange={(value) => updateValue("receiptPaperSize", value as ReceiptPaperSize)}
                       disabled={!canEdit}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("paperSize")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="58MM">{t("paper58")}</SelectItem>
                         <SelectItem value="80MM">{t("paper80")}</SelectItem>
@@ -1665,7 +1665,7 @@ const PrintingSettingsPage = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">{t("widthMm")}</label>
-                    <Input
+                    <Input aria-label={t("widthMm")}
                       type="number"
                       value={values.receiptCustomWidthMm}
                       onChange={(event) => updateValue("receiptCustomWidthMm", Number(event.target.value))}
@@ -1674,7 +1674,7 @@ const PrintingSettingsPage = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">{t("heightMm")}</label>
-                    <Input
+                    <Input aria-label={t("heightMm")}
                       type="number"
                       value={values.receiptCustomHeightMm}
                       onChange={(event) => updateValue("receiptCustomHeightMm", Number(event.target.value))}
@@ -1683,7 +1683,7 @@ const PrintingSettingsPage = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">{t("fontSize")}</label>
-                    <Input
+                    <Input aria-label={t("fontSize")}
                       type="number"
                       step="0.1"
                       value={values.receiptFontSize}
@@ -1701,7 +1701,7 @@ const PrintingSettingsPage = () => {
                   ] as const).map(([key, label]) => (
                     <div key={key} className="space-y-2">
                       <label className="text-sm font-medium text-foreground">{t(label)}</label>
-                      <Input
+                      <Input aria-label={t(label)}
                         type="number"
                         step="0.5"
                         value={values[key]}
@@ -1742,7 +1742,7 @@ const PrintingSettingsPage = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">{t("footerText")}</label>
-                  <Textarea
+                  <Textarea aria-label={t("footerText")}
                     value={values.receiptFooterText}
                     onChange={(event) => updateValue("receiptFooterText", event.target.value)}
                     rows={3}
@@ -1826,7 +1826,7 @@ const PrintingSettingsPage = () => {
                       }
                       disabled={!canEdit}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("barcodeType")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="auto">{t("barcodeAuto")}</SelectItem>
                         <SelectItem value="ean13">{t("barcodeEan13")}</SelectItem>
@@ -1843,7 +1843,7 @@ const PrintingSettingsPage = () => {
                       }
                       disabled={!canEdit}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={t("labelTemplate")}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="xp365b-roll-58x40">{t("templateRoll")}</SelectItem>
                         <SelectItem value="3x8">{t("templateA4ThreeByEight")}</SelectItem>

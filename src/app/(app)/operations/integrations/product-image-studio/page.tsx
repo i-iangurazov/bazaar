@@ -12,9 +12,12 @@ import {
 
 import { FormActions, FormGrid } from "@/components/form-layout";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ViewIcon, RestoreIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +53,8 @@ import {
   putProductImageDirectUpload,
   resolveProductImageProxyUploadMaxBytes,
   type ProductImageDirectUploadTarget,
+  productPhotoAccept,
+  supportedProductImageUploadMimeTypes,
 } from "@/lib/productImageUpload";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -73,9 +78,7 @@ const studioMaxProxyImageBytes = Math.min(
   studioMaxImageBytes,
   resolveProductImageProxyUploadMaxBytes(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES),
 );
-const studioAcceptedFileTypes =
-  "image/jpeg,image/png,image/webp,image/heic,image/heif,image/heic-sequence,image/heif-sequence,.jpg,.jpeg,.png,.webp,.heic,.heics,.heif,.heifs,.hif";
-const productImageStudioVisuallyDisabled = true;
+const studioAcceptedFileTypes = productPhotoAccept;
 
 const isWorkingStudioJobStatus = (status?: ProductImageStudioJobStatus | null) =>
   status === ProductImageStudioJobStatus.QUEUED ||
@@ -155,10 +158,11 @@ const ProductImageStudioPage = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canEdit = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
-  const canView = Boolean(session?.user?.organizationId);
+  const canView = canEdit;
 
   const [sourceImage, setSourceImage] = useState<UploadedSource | null>(null);
   const [uploadingSource, setUploadingSource] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"preparing" | "uploading">("preparing");
   const [productSearch, setProductSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<{
     id: string;
@@ -172,6 +176,8 @@ const ProductImageStudioPage = () => {
   const [softShadow, setSoftShadow] = useState(false);
   const [tighterCrop, setTighterCrop] = useState(false);
   const [brighterPresentation, setBrighterPresentation] = useState(false);
+  const [highQuality, setHighQuality] = useState(false);
+  const [clockNow, setClockNow] = useState(Date.now());
   const [saveAsPrimary, setSaveAsPrimary] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
@@ -199,7 +205,9 @@ const ProductImageStudioPage = () => {
     { jobId: selectedJobId ?? "" },
     {
       enabled: canView && Boolean(selectedJobId),
-      refetchInterval: isWorkingStudioJobStatus(selectedJobFromList?.status) ? 1_500 : false,
+      // The list can observe completion before this query does. Only this
+      // query's own terminal response may stop its polling.
+      refetchInterval: (job) => (!job || isWorkingStudioJobStatus(job.status) ? 1_500 : false),
     },
   );
   const productSearchQuery = trpc.products.searchQuick.useQuery(
@@ -443,17 +451,24 @@ const ProductImageStudioPage = () => {
     }
 
     setUploadingSource(true);
+    setUploadPhase("preparing");
     try {
       const prepared = await prepareManagedProductImageForUpload({
         file,
         maxImageBytes: studioMaxImageBytes,
         maxInputImageBytes: studioMaxInputImageBytes,
+        serverConversionMaxBytes: studioMaxProxyImageBytes,
       });
       if (!prepared.ok) {
         throw new Error(resolveSourceUploadErrorMessage(prepared.code));
       }
 
-      const directUpload = await uploadSourceImageDirectly(prepared.file);
+      // HEIC/HEIF and other source formats must be decoded before they can
+      // reach the retoucher. Direct PUT intentionally accepts web formats only.
+      setUploadPhase("uploading");
+      const directUpload = supportedProductImageUploadMimeTypes.has(prepared.file.type)
+        ? await uploadSourceImageDirectly(prepared.file)
+        : { attempted: false, source: null };
       const uploadedSource =
         directUpload.source ?? (await uploadSourceImageViaProxy(prepared.file));
 
@@ -471,7 +486,13 @@ const ProductImageStudioPage = () => {
   };
 
   const handleGenerate = () => {
-    if (!canEdit || providerMissing || !sourceImage?.url) {
+    if (
+      !canEdit ||
+      !overviewQuery.data ||
+      overviewQuery.error ||
+      providerMissing ||
+      !sourceImage?.url
+    ) {
       return;
     }
 
@@ -485,6 +506,7 @@ const ProductImageStudioPage = () => {
       softShadow,
       tighterCrop,
       brighterPresentation,
+      highQuality,
     });
   };
 
@@ -504,17 +526,44 @@ const ProductImageStudioPage = () => {
   const providerMissing = overview?.configured === false;
   const generateDisabledReason = !canEdit
     ? t("actions.generateDisabledNoAccess")
-    : !sourceImage?.url
+    : overviewQuery.error
+      ? tCommon("notAvailable")
+      : !overview
+        ? tCommon("loading")
+        : !sourceImage?.url
       ? t("actions.generateDisabledNoSource")
       : providerMissing
         ? t("overview.providerMissing")
         : null;
   const generateDisabled =
-    !canEdit || providerMissing || !sourceImage?.url || createJobMutation.isLoading;
+    !canEdit ||
+    !overview ||
+    Boolean(overviewQuery.error) ||
+    providerMissing ||
+    !sourceImage?.url ||
+    createJobMutation.isLoading;
   const targetProductId = selectedProduct?.id ?? selectedJob?.product?.id ?? null;
   const isBusy =
     createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
   const previewIsWorking = jobMutationInFlight || isWorkingStudioJobStatus(selectedJob?.status);
+  useEffect(() => {
+    if (!previewIsWorking) return;
+    setClockNow(Date.now());
+    const interval = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [previewIsWorking, selectedJob?.id]);
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor(
+      (clockNow -
+        new Date(
+          isWorkingStudioJobStatus(selectedJob?.status)
+            ? (selectedJob?.createdAt ?? clockNow)
+            : clockNow,
+        ).getTime()) /
+        1000,
+    ),
+  );
   const sourcePreviewUrl = selectedJob?.sourceImageUrl ?? sourceImage?.url ?? null;
   const generatedPreviewUrl = selectedJob?.outputImageUrl
     ? appendImageCacheBuster(
@@ -528,21 +577,22 @@ const ProductImageStudioPage = () => {
     [productSearchQuery.data],
   );
 
+  if (!canView) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <p role={session?.user ? "alert" : "status"}>
+          {session?.user ? tErrors("forbidden") : tCommon("loading")}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-        action={<Badge variant="muted">{t("soonBadge")}</Badge>}
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <div
-        className={
-          productImageStudioVisuallyDisabled
-            ? "pointer-events-none space-y-6 opacity-40"
-            : "space-y-6"
-        }
-      >
+      <div className="space-y-6">
         <Card className="bazaar-admin-surface">
           <CardHeader className="bazaar-admin-section-header space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -550,8 +600,12 @@ const ProductImageStudioPage = () => {
                 <CardTitle className="text-xl">{t("overview.title")}</CardTitle>
                 <p className="text-sm text-muted-foreground">{t("overview.subtitle")}</p>
               </div>
-              <Badge variant={overviewBadgeVariant(overviewStatus)}>
-                {overviewLoading
+              <Badge
+                variant={overviewQuery.error ? "danger" : overviewBadgeVariant(overviewStatus)}
+              >
+                {overviewQuery.error
+                  ? tCommon("notAvailable")
+                  : overviewLoading
                   ? tCommon("loading")
                   : overviewStatus === "READY"
                     ? t("overview.status.ready")
@@ -562,7 +616,14 @@ const ProductImageStudioPage = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
+            {overviewQuery.error ? (
+              <QueryErrorState
+                error={overviewQuery.error}
+                onRetry={() => void overviewQuery.refetch()}
+              />
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-4">
               <div className="bazaar-admin-info-tile p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   {t("overview.metrics.totalJobs")}
@@ -592,11 +653,13 @@ const ProductImageStudioPage = () => {
                 </p>
               </div>
             </div>
-            {providerMissing ? (
-              <p className="bazaar-admin-notice mt-4 text-sm">
-                {t("overview.providerMissing")}
-              </p>
-            ) : null}
+                {providerMissing ? (
+                  <p className="bazaar-admin-notice mt-4 text-sm">
+                    {t("overview.providerMissing")}
+                  </p>
+                ) : null}
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -611,12 +674,15 @@ const ProductImageStudioPage = () => {
                 <Label>{t("input.uploadLabel")}</Label>
                 <button
                   type="button"
-                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/25 px-6 py-10 text-center transition hover:border-primary/40 hover:bg-primary/[0.035]"
+                  className="flex w-full flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/25 px-6 py-10 text-center transition hover:border-primary/40 hover:bg-primary/[0.035]"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={!canEdit || uploadingSource}
                 >
                   {uploadingSource ? (
-                    <Spinner className="h-5 w-5" />
+                    <span className="flex items-center gap-2" role="status">
+                      <Spinner className="h-5 w-5" />
+                      {t(`input.${uploadPhase}`)}
+                    </span>
                   ) : (
                     <>
                       <span className="text-sm font-medium">{t("input.uploadCta")}</span>
@@ -688,8 +754,13 @@ const ProductImageStudioPage = () => {
                   </div>
                 ) : null}
                 {!selectedProduct && productSearch.trim().length >= 2 ? (
-                  <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
-                    {productSearchQuery.isLoading ? (
+                  <div className="overflow-hidden rounded-lg border border-border bg-card">
+                    {productSearchQuery.error ? (
+                      <QueryErrorState
+                        error={productSearchQuery.error}
+                        onRetry={() => void productSearchQuery.refetch()}
+                      />
+                    ) : productSearchQuery.isLoading ? (
                       <div className="px-3 py-3 text-sm text-muted-foreground">
                         {tCommon("loading")}
                       </div>
@@ -719,9 +790,7 @@ const ProductImageStudioPage = () => {
                 ) : null}
               </div>
 
-              <p className="bazaar-admin-notice text-sm">
-                {t("input.reviewNote")}
-              </p>
+              <p className="bazaar-admin-notice text-sm">{t("input.reviewNote")}</p>
             </CardContent>
           </Card>
 
@@ -740,7 +809,7 @@ const ProductImageStudioPage = () => {
                       setBackgroundMode(value as ProductImageStudioBackground)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("presets.backgroundLabel")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -756,7 +825,7 @@ const ProductImageStudioPage = () => {
                 <div className="space-y-2">
                   <Label>{t("presets.outputLabel")}</Label>
                   <Select value={ProductImageStudioOutputFormat.SQUARE} disabled>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("presets.outputLabel")}>
                       <SelectValue placeholder={t("presets.output.square")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -769,6 +838,18 @@ const ProductImageStudioPage = () => {
               </FormGrid>
 
               <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">{t("presets.highQuality")}</p>
+                    <p className="text-xs text-muted-foreground">{t("presets.highQualityHint")}</p>
+                  </div>
+                  <Switch
+                    aria-label={t("presets.highQuality")}
+                    checked={highQuality}
+                    onCheckedChange={setHighQuality}
+                    disabled={!canEdit || isBusy}
+                  />
+                </div>
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium">{t("presets.always.centeredTitle")}</p>
@@ -798,6 +879,7 @@ const ProductImageStudioPage = () => {
                   </div>
                   <Switch
                     checked={softShadow}
+                    aria-label={t("presets.optional.softShadowTitle")}
                     onCheckedChange={setSoftShadow}
                     disabled={!canEdit}
                   />
@@ -811,6 +893,7 @@ const ProductImageStudioPage = () => {
                   </div>
                   <Switch
                     checked={tighterCrop}
+                    aria-label={t("presets.optional.tighterCropTitle")}
                     onCheckedChange={setTighterCrop}
                     disabled={!canEdit}
                   />
@@ -824,6 +907,7 @@ const ProductImageStudioPage = () => {
                   </div>
                   <Switch
                     checked={brighterPresentation}
+                    aria-label={t("presets.optional.brighterTitle")}
                     onCheckedChange={setBrighterPresentation}
                     disabled={!canEdit}
                   />
@@ -879,7 +963,7 @@ const ProductImageStudioPage = () => {
                   <Label>{t("preview.generated")}</Label>
                   {selectedJob ? (
                     <Badge variant={jobBadgeVariant(selectedJob.status)}>
-                      {selectedJob.status}
+                      {t(`status.${selectedJob.status}`)}
                     </Badge>
                   ) : null}
                 </div>
@@ -891,7 +975,17 @@ const ProductImageStudioPage = () => {
                         <div className="h-2 overflow-hidden rounded-full bg-secondary">
                           <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/80" />
                         </div>
-                        <p>{t("preview.processing")}</p>
+                        <p>
+                          {selectedJob?.status === "QUEUED"
+                            ? t("preview.queued")
+                            : t("preview.processing")}
+                        </p>
+                        <p className="font-mono tabular-nums" role="status">
+                          {t("preview.elapsed", { seconds: elapsedSeconds })}
+                        </p>
+                        {elapsedSeconds >= 45 ? (
+                          <p className="text-xs">{t("preview.slow")}</p>
+                        ) : null}
                       </div>
                     </div>
                   ) : generatedPreviewUrl ? (
@@ -919,6 +1013,7 @@ const ProductImageStudioPage = () => {
               <div className="flex items-center gap-3">
                 <Switch
                   checked={saveAsPrimary}
+                  aria-label={t("preview.setAsPrimary")}
                   onCheckedChange={setSaveAsPrimary}
                   disabled={!canEdit}
                 />
@@ -968,9 +1063,12 @@ const ProductImageStudioPage = () => {
             <p className="text-sm text-muted-foreground">{t("history.subtitle")}</p>
           </CardHeader>
           <CardContent>
-            <TableContainer className="bazaar-admin-table-shell">
-              <Table className="min-w-[860px]">
-                <TableHeader>
+            {jobsQuery.error ? (
+              <QueryErrorState error={jobsQuery.error} onRetry={() => void jobsQuery.refetch()} />
+            ) : (
+              <TableContainer className="bazaar-admin-table-shell">
+                <Table className="min-w-[860px]">
+                  <TableHeader>
                   <TableRow>
                     <TableHead>{t("history.columns.status")}</TableHead>
                     <TableHead>{t("history.columns.product")}</TableHead>
@@ -980,14 +1078,16 @@ const ProductImageStudioPage = () => {
                     <TableHead>{t("history.columns.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {(jobsQuery.data ?? []).map((job) => (
+                  <TableBody>
+                    {(jobsQuery.data ?? []).map((job) => (
                     <TableRow
                       key={job.id}
                       className={selectedJobId === job.id ? "bg-secondary/30" : undefined}
                     >
                       <TableCell>
-                        <Badge variant={jobBadgeVariant(job.status)}>{job.status}</Badge>
+                        <Badge variant={jobBadgeVariant(job.status)}>
+                          {t(`status.${job.status}`)}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {job.product ? (
@@ -1014,35 +1114,36 @@ const ProductImageStudioPage = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-2">
-                          <Button
+                          <IconButton
                             type="button"
                             variant="outline"
                             onClick={() => setSelectedJobId(job.id)}
-                          >
-                            {t("actions.preview")}
-                          </Button>
-                          <Button
+                            icon={ViewIcon}
+                            label={t("actions.preview")}
+                          />
+                          <IconButton
                             type="button"
                             variant="outline"
                             onClick={() => retryJobMutation.mutate({ jobId: job.id })}
                             disabled={!canEdit || !job.canRetry}
-                          >
-                            {t("actions.regenerate")}
-                          </Button>
+                            icon={RestoreIcon}
+                            label={t("actions.regenerate")}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!jobsQuery.data?.length ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
-                        {t("history.empty")}
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    {!jobsQuery.data?.length ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                          {jobsQuery.isLoading ? tCommon("loading") : t("history.empty")}
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </CardContent>
         </Card>
       </div>

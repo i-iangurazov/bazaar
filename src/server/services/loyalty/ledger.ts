@@ -33,9 +33,11 @@ export const lockLoyaltyAccount = async (tx: LoyaltyTx, accountId: string) => {
 
 const sweepExpired = async (tx: LoyaltyTx, accountId: string, now: Date) => {
   await lockLoyaltyAccount(tx, accountId);
+  // Prisma DateTime columns store UTC wall time without a PostgreSQL time zone.
+  // Bind the same representation so session TimeZone cannot expire a live hold.
   const changed = await tx.$queryRaw<Array<{ points: number }>>`
-    UPDATE "LoyaltyReservation" SET status = 'EXPIRED', "releasedAt" = ${now}
-    WHERE "accountId" = ${accountId} AND status = 'ACTIVE' AND "expiresAt" <= ${now}
+    UPDATE "LoyaltyReservation" SET status = 'EXPIRED', "releasedAt" = ${now.toISOString()}::timestamp
+    WHERE "accountId" = ${accountId} AND status = 'ACTIVE' AND "expiresAt" <= ${now.toISOString()}::timestamp
     RETURNING points
   `;
   const released = changed.reduce((sum, row) => sum + row.points, 0);
@@ -57,7 +59,7 @@ export const availablePoints = async (tx: LoyaltyTx, accountId: string, now = ne
   const [row] = await tx.$queryRaw<Array<{ available: number }>>`
     SELECT GREATEST(0, a."balancePoints" - COALESCE((
       SELECT SUM(r.points) FROM "LoyaltyReservation" r
-      WHERE r."accountId" = a.id AND r.status = 'ACTIVE' AND r."expiresAt" > ${now}
+      WHERE r."accountId" = a.id AND r.status = 'ACTIVE' AND r."expiresAt" > ${now.toISOString()}::timestamp
     ), 0))::int AS available FROM "LoyaltyAccount" a WHERE a.id = ${accountId}
   `;
   return row?.available ?? 0;

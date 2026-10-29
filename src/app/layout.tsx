@@ -6,20 +6,9 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { GlobalNumberInputGuard } from "@/components/global-number-input-guard";
 import { bazaarBaseFontStylesheetHref } from "@/lib/catalogFonts";
-import { defaultLocale } from "@/lib/locales";
+import { defaultLocale, toIntlLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
 import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/theme";
-
-const forceLandingLightThemeScript = `
-(function () {
-  try {
-    if (window.location.pathname === "/") {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.dataset.forceLightTheme = "landing";
-    }
-  } catch (_) {}
-})();
-`;
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -68,14 +57,20 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   const htmlClassName = themeClassName(theme);
 
   return (
-    <html lang={locale} className={htmlClassName} suppressHydrationWarning>
+    <html lang={toIntlLocale(locale)} className={htmlClassName} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: forceLandingLightThemeScript }} />
+        <link
+          rel="preload"
+          href="/fonts/inter/InterVariable.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={bazaarBaseFontStylesheetHref} />
       </head>
-      <body className="font-sans min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
+      <body className="min-h-screen bg-background font-sans">
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
           <GlobalNumberInputGuard />
           {children}

@@ -1,9 +1,15 @@
 "use client";
+import { registerBaamWorkflowFlush } from "@/lib/baam/workflowFlush";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { localizeWorkflowFields } from "@/lib/baam/workflowLabels";
-import { CaretDown, Plus, X, ImageSquare } from "@phosphor-icons/react";
+import {
+  ChevronDownIcon as CaretDown,
+  AddIcon as Plus,
+  CloseIcon as X,
+  ImagePlusIcon as ImageSquare,
+} from "@/components/icons";
 import { trpc } from "@/lib/trpc";
 import { baamText, isBaamLink, type BaamActionResult } from "@/lib/baam/companion";
 import {
@@ -525,6 +531,17 @@ function WorkflowCard({ initial, c }: { initial: Workflow; c: BaamController }) 
     await queue.current;
     queue.current = Promise.resolve();
   }, [storageKey]);
+  useEffect(() => {
+    if (!editable) return;
+    return registerBaamWorkflowFlush(wf.conversationId, async () => {
+      // An edit queued during a preceding save must also reach the server.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await flush();
+        if (!ref.current.dirty) return;
+      }
+      throw new Error("baamWorkflowChanged");
+    });
+  }, [editable, wf.conversationId, flush]);
   function change(path: string, value: WorkflowValue | undefined) {
     const next = workflowSet(ref.current.values, path, value);
     ref.current.values = next;
@@ -600,7 +617,7 @@ function WorkflowCard({ initial, c }: { initial: Workflow; c: BaamController }) 
   return (
     <section
       data-baam-workflow={wf.id}
-      className="min-w-0 space-y-4 rounded-xl border bg-card p-4 shadow-sm"
+      className="min-w-0 space-y-4 rounded-lg border bg-card p-4 shadow-sm"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-semibold">{workflowTitle(wf.kind, c.locale)}</h3>
@@ -646,6 +663,16 @@ function WorkflowCard({ initial, c }: { initial: Workflow; c: BaamController }) 
           }}
           className="space-y-4"
         >
+          {wf.kind === "customer_create" ? (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {baamText(
+                c.locale,
+                "Для клиента нужен хотя бы один контакт: телефон или email.",
+                "A customer needs at least one contact: phone or email.",
+                "Кардар үчүн жок дегенде бир байланыш керек: телефон же email.",
+              )}
+            </p>
+          ) : null}
           <fieldset
             disabled={submitting || c.busy || mediaBusy}
             className={`min-w-0 ${["product_create", "product_update"].includes(wf.kind) ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : "space-y-4"}`}
@@ -754,6 +781,9 @@ function WorkflowCard({ initial, c }: { initial: Workflow; c: BaamController }) 
                 : c.t("cancel")}
             </Button>
           </div>
+          {!receipt ? (
+            <p className="text-xs leading-5 text-muted-foreground">{c.t("voiceConfirmHint")}</p>
+          ) : null}
         </form>
       ) : null}
       {!editable && !receipt && result ? (

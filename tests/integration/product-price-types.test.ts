@@ -271,7 +271,9 @@ describeDb("product form retail and wholesale prices", () => {
         { id: large.id, name: large.name!, retailPriceKgs: 90, wholesalePriceKgs: 0 },
       ],
     });
-    await checkTotal("RETAIL", 255);
+    // Clearing the typed alias preserves the ordinary variant price: explicit zero
+    // remains a free retail price and must not be replaced by wholesale 40.
+    await checkTotal("RETAIL", 215);
     await checkTotal("WHOLESALE", 135);
     const reloaded = await f.caller.products.storePricing({ productId: product.id });
     expect(reloaded.stores[0]).toMatchObject({ retailPriceKgs: 125, wholesalePriceKgs: 95 });

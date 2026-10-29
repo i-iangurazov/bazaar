@@ -1,3 +1,4 @@
+import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
 import { defaultUnitPrecision, isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { saveProductPriceTypes, syncExistingRetailPrice, type ProductPriceTypeValues } from "@/server/services/productPriceTypes";
 import { resolveProductFormRetailPrice } from "@/server/services/productFormPricing";
@@ -11,7 +12,6 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
-import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
@@ -35,7 +35,7 @@ import {
   resolveProductImageUrl,
   type ResolveProductImageUrlResult,
 } from "@/server/services/productImageStorage";
-import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
+import { generateProductDescriptionFromImages, prepareProductAiImage } from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { assignProductToStore } from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
@@ -125,7 +125,6 @@ const GENERATED_SKU_PAD_LENGTH = 6;
 const GENERATED_SKU_MAX_PROBES = 10_000;
 const GENERATED_SKU_MAX_RETRIES = 5;
 const MIN_PRODUCT_BARCODE_LENGTH = 4;
-const CATEGORY_ARRANGEMENT_OPENAI_URL = "https://api.openai.com/v1/responses";
 const CATEGORY_ARRANGEMENT_MODEL =
   process.env.PRODUCT_CATEGORY_AI_MODEL?.trim() ||
   process.env.OPENAI_MODEL?.trim() ||
@@ -640,6 +639,7 @@ const resolveCategoryArrangementImageUrl = (value?: string | null) => {
   if (normalized.startsWith("data:image/")) {
     return normalized.length <= CATEGORY_ARRANGEMENT_MAX_IMAGE_DATA_URL_LENGTH ? normalized : null;
   }
+  if (normalized.startsWith("/uploads/imported-products/")) return normalized;
   try {
     const parsed = new URL(normalized);
     return parsed.protocol === "https:" || parsed.protocol === "http:" ? normalized : null;
@@ -685,7 +685,7 @@ const buildCategoryArrangementEvidence = (
     imageCount: imageUrlsForCategoryArrangement(product).length,
   }));
 
-const buildCategoryArrangementUserContent = (
+const buildCategoryArrangementUserContent = async (
   products: CategoryArrangementProduct[],
   context: CategoryArrangementContext,
 ) => {
@@ -714,7 +714,8 @@ const buildCategoryArrangementUserContent = (
   ];
 
   for (const product of products) {
-    const imageUrl = imageUrlsForCategoryArrangement(product)[0];
+    const source = imageUrlsForCategoryArrangement(product)[0];
+    const imageUrl = source?.startsWith("/uploads/") ? await prepareProductAiImage(source).catch(() => null) : source;
     if (!imageUrl) {
       continue;
     }
@@ -736,8 +737,8 @@ const callCategoryArrangementAi = async (
   products: CategoryArrangementProduct[],
   context: CategoryArrangementContext,
 ) => {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey || !products.length) {
+  const config = resolveTextAiConfig("vision", CATEGORY_ARRANGEMENT_MODEL);
+  if (!config || !products.length) {
     return new Map<string, CategoryArrangementDecision>();
   }
 
@@ -760,7 +761,7 @@ const callCategoryArrangementAi = async (
         },
         {
           role: "user",
-          content: buildCategoryArrangementUserContent(products, context),
+          content: await buildCategoryArrangementUserContent(products, context),
         },
       ],
     };
@@ -768,16 +769,7 @@ const callCategoryArrangementAi = async (
       requestBody.reasoning = { effort: "minimal" };
     }
 
-    assertExternalProviderCallAllowed("openai");
-    response = await fetch(CATEGORY_ARRANGEMENT_OPENAI_URL, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
+    response = await fetchAiResponse(config, requestBody, controller.signal);
   } catch {
     return new Map<string, CategoryArrangementDecision>();
   } finally {
@@ -2314,9 +2306,13 @@ export const updateProduct = async (input: UpdateProductInput) => {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
 
-    const retailPriceKgs = input.requireRetailPrice
+    const validatedRetailPriceKgs = input.requireRetailPrice
       ? await resolveProductFormRetailPrice(tx, input)
       : input.retailPriceKgs;
+    // Validation may read the current shared price. A metadata-only save must
+    // not turn that fallback into an individual store price.
+    const retailPriceKgs = input.retailPriceKgs !== undefined || input.storePriceKgs !== undefined
+      ? validatedRetailPriceKgs : undefined;
 
     const selectedStore = input.storeId
       ? await tx.store.findFirst({
@@ -2333,6 +2329,9 @@ export const updateProduct = async (input: UpdateProductInput) => {
     await applyArchivedBarcodeTransfers(tx, { ...input, targetProductId: input.productId, barcodes, transfers: input.barcodeTransfers });
     await ensureBarcodesAvailable(tx, input.organizationId, barcodes, input.productId);
     if (before.baseUnitId !== baseUnit.id) {
+      if (await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) {
+        throw new AppError("priceBookUnitConflict", "CONFLICT", 409);
+      }
       const previousUnit = await ensureUnit(tx, input.organizationId, before.baseUnitId);
       if (baseUnit.quantityPrecision < previousUnit.quantityPrecision) {
         await assertProductUnitPrecision(tx, input.productId, baseUnit.quantityPrecision);
@@ -4822,6 +4821,10 @@ export const deleteProduct = async (input: DeleteProductInput) =>
     const before = await tx.product.findUnique({ where: { id: input.productId } });
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+
+    if (await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) {
+      throw new AppError("priceBookProductInUse", "CONFLICT", 409);
     }
 
     const [

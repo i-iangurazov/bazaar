@@ -54,6 +54,7 @@ describeDb("billing", () => {
       expect(summary.featureFlags.exports).toBe(false);
       expect(summary.featureFlags.analytics).toBe(false);
       expect(summary.featureFlags.priceTags).toBe(true);
+      expect(summary.featureFlags.pos).toBe(true);
     } finally {
       process.env.PLAN_PRICE_STARTER_KGS = previousStarter;
       process.env.PLAN_PRICE_BUSINESS_KGS = previousBusiness;

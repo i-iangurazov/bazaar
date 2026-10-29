@@ -369,7 +369,7 @@ const buildStoreSellingPriceSql = (
 ) => {
   const typedPrice = mode === "WHOLESALE"
     ? Prisma.sql`COALESCE(extra."wholesalePriceKgs", extra."retailPriceKgs", price."priceKgs", p."basePriceKgs")`
-    : Prisma.sql`COALESCE(extra."retailPriceKgs", extra."wholesalePriceKgs", price."priceKgs", p."basePriceKgs")`;
+    : Prisma.sql`COALESCE(extra."retailPriceKgs", price."priceKgs", p."basePriceKgs", extra."wholesalePriceKgs")`;
   const amount = Prisma.sql`CASE WHEN organization."retailWholesaleEnabled"
     THEN ${typedPrice} ELSE COALESCE(price."priceKgs", p."basePriceKgs") END`;
   const effective = pricingTime ? Prisma.sql`CASE
@@ -1868,7 +1868,7 @@ export const getProductStorePricing = async ({
           const variantOverride = variantOverrideByStoreAndVariant.get(`${store.id}:${variant.id}`);
           const variantExtras = extraByKey.get(`${store.id}:${variant.id}`);
           const variantPrice = resolveStoreSellingPrice({
-            enabled: organization.retailWholesaleEnabled, mode: "RETAIL", standard: variantOverride ?? effective,
+            enabled: organization.retailWholesaleEnabled, mode: "RETAIL", standard: variantOverride ?? effective, preferStandard: variantOverride !== undefined,
             retail: decimalToNumber(variantExtras?.retailPriceKgs), wholesale: decimalToNumber(variantExtras?.wholesalePriceKgs),
           }).price;
           return {

@@ -1,11 +1,34 @@
 import { describe, it, expect } from "vitest";
 import { parseBaamFastIntent } from "@/server/services/baamWorkflowIntent";
-import { workflowActions, workflowSet, workflowValuesSchema } from "@/lib/baam/workflows";
+import {
+  workflowActions,
+  workflowSet,
+  workflowValuesSchema,
+  mergeWorkflowCorrection,
+} from "@/lib/baam/workflows";
 import { baamActions } from "@/server/services/baamBusiness";
 import { workflowFields } from "@/server/services/baamWorkflowCatalog";
 import { baamReportPeriod } from "@/server/services/baamCompanion";
 import { localizeWorkflowFields, workflowLabels } from "@/lib/baam/workflowLabels";
 describe("BAAM deterministic workflow boundary", () => {
+  it("keeps product references, zero cost and other lines when correcting a scalar leaf", () => {
+    const before = {
+      storeId: "store",
+      lines: [
+        { productId: "tea", quantity: 2, unitCost: 0 },
+        { productId: "coffee", quantity: 7, unitCost: 15 },
+      ],
+    };
+    const result = mergeWorkflowCorrection(before, { lines: [{ quantity: 3 }] });
+    expect(result).toEqual({
+      storeId: "store",
+      lines: [
+        { productId: "tea", quantity: 3, unitCost: 0 },
+        { productId: "coffee", quantity: 7, unitCost: 15 },
+      ],
+    });
+    expect(before.lines[0].quantity).toBe(2);
+  });
   it.each([
     ["Создай товар", "product_create"],
     ["Create a product", "product_create"],
@@ -90,10 +113,15 @@ describe("BAAM deterministic workflow boundary", () => {
       ["product_update", { productId: "product", name: "Coffee" }],
     ] as const) {
       expect(baamActions[name].schema.safeParse(valid).success).toBe(true);
-      expect(baamActions[name].schema.safeParse({
-        ...valid, barcodeTransfers: [{ sourceProductId: "archived", barcode: "12345678" }],
-      }).success).toBe(false);
-      expect(workflowFields(name, "ru").some(field => field.key === "barcodeTransfers")).toBe(false);
+      expect(
+        baamActions[name].schema.safeParse({
+          ...valid,
+          barcodeTransfers: [{ sourceProductId: "archived", barcode: "12345678" }],
+        }).success,
+      ).toBe(false);
+      expect(workflowFields(name, "ru").some((field) => field.key === "barcodeTransfers")).toBe(
+        false,
+      );
     }
   });
   it("rejects prototype and overly deep form paths", () => {

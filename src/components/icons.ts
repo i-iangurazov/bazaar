@@ -1,115 +1,120 @@
-import { createElement, type ComponentType } from "react";
-import type { IconProps, IconWeight } from "@phosphor-icons/react";
+import { createElement } from "react";
+import type { LucideIcon, LucideProps } from "lucide-react";
 import {
-  AddressBook,
+  BookUser as AddressBook,
   Archive,
-  ArrowCounterClockwise,
+  RotateCcw as ArrowCounterClockwise,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   ArrowUp,
-  ArrowsDownUp,
-  ArrowsLeftRight,
+  ArrowUpDown as ArrowsDownUp,
+  ArrowLeftRight as ArrowsLeftRight,
   Barcode,
   BookOpen,
-  CashRegister,
-  ChartBar,
-  ChartLineUp,
-  ChartPieSlice,
+  Calculator as CashRegister,
+  Calendar,
+  ChartColumn as ChartBar,
+  ChartNoAxesCombined as ChartLineUp,
+  ChartPie as ChartPieSlice,
   Check,
-  CheckCircle,
-  CheckSquare,
+  CircleCheck as CheckCircle,
+  SquareCheck as CheckSquare,
   Clock,
-  ClockCounterClockwise,
+  ClipboardList,
+  Coins,
+  History as ClockCounterClockwise,
   Copy,
   CreditCard,
-  CurrencyDollar,
+  DollarSign as CurrencyDollar,
   Database,
-  DeviceMobile,
-  DotsSixVertical,
-  DotsThree,
-  Envelope,
+  Smartphone as DeviceMobile,
+  GripVertical as DotsSixVertical,
+  Ellipsis as DotsThree,
+  Mail as Envelope,
   Eye,
-  EyeSlash,
-  FilePdf,
+  EyeOff as EyeSlash,
   FileText,
-  FileXls,
+  FileSpreadsheet as FileXls,
   Gauge,
-  GearSix,
+  Settings as GearSix,
   Gift,
-  GridFour,
+  Grid2X2 as GridFour,
   Handshake,
+  Hash,
   House,
-  IdentificationCard,
-  ImageSquare,
-  Lifebuoy,
-  List,
+  ContactRound as IdentificationCard,
+  Image as ImageSquare,
+  LifeBuoy as Lifebuoy,
+  Menu as List,
   ListChecks,
   Key,
   Lock,
-  MagnifyingGlass,
+  Search as MagnifyingGlass,
   Megaphone,
+  MessageCircle,
+  Mic,
+  Phone,
   Minus,
   Monitor,
   Package,
-  PaperPlaneTilt,
-  Path,
-  PencilSimple,
-  PlugsConnected,
+  Send as PaperPlaneTilt,
+  Share2 as Path,
+  Pencil as PencilSimple,
+  PlugZap as PlugsConnected,
   Plus,
-  PlusCircle,
+  CirclePlus as PlusCircle,
   Printer,
-  Pulse,
-  Question,
+  Activity as Pulse,
+  CircleHelp as Question,
   Receipt,
-  ReceiptX,
+  ReceiptText as ReceiptX,
   Rocket,
   Ruler,
-  SealCheck,
-  ShoppingBagOpen,
-  SignOut,
+  BadgeCheck as SealCheck,
+  ShoppingBag as ShoppingBagOpen,
+  LogOut as SignOut,
   SlidersHorizontal,
-  Sparkle,
-  StackMinus,
-  StackPlus,
-  Storefront,
-  TreeStructure,
+  Square,
+  Sparkles as Sparkle,
+  PackageMinus as StackMinus,
+  PackagePlus as StackPlus,
+  Store as Storefront,
+  Network as TreeStructure,
   Tag,
-  TextAlignCenter,
-  TextAlignLeft,
-  TextAlignRight,
-  Translate,
+  AlignCenter as TextAlignCenter,
+  AlignLeft as TextAlignLeft,
+  AlignRight as TextAlignRight,
+  Languages as Translate,
   Trash,
-  Tray,
+  Inbox as Tray,
   Truck,
-  UploadSimple,
+  Upload as UploadSimple,
   User,
   Users,
+  Volume2,
   Warehouse,
-  WarningCircle,
+  CircleAlert as WarningCircle,
   X,
-  XCircle,
-  CaretDown,
-  CaretLeft,
-  CaretRight,
-  DownloadSimple,
+  CircleX as XCircle,
+  ChevronDown as CaretDown,
+  ChevronLeft as CaretLeft,
+  ChevronRight as CaretRight,
+  Download as DownloadSimple,
   ShieldCheck,
-} from "@phosphor-icons/react";
+} from "lucide-react";
 
-const createBazaarIcon = (
-  Icon: ComponentType<IconProps>,
-  defaultWeight: IconWeight = "regular",
-) => {
-  const BazaarIcon = ({ weight, ...props }: IconProps) =>
-    createElement(Icon, { ...props, weight: weight ?? defaultWeight });
-  BazaarIcon.displayName = Icon.displayName ?? Icon.name ?? "BazaarIcon";
+// Keep the Bazaar icon API stable while all screens use Espresso's Lucide stroke style.
+const createBazaarIcon = (Icon: LucideIcon) => {
+  const BazaarIcon = ({ strokeWidth = 1.6, ...props }: LucideProps) =>
+    createElement(Icon, { ...props, strokeWidth });
+  BazaarIcon.displayName = Icon.displayName ?? "BazaarIcon";
   return BazaarIcon;
 };
 
-const navIcon = (Icon: ComponentType<IconProps>) => createBazaarIcon(Icon, "duotone");
-const actionIcon = (Icon: ComponentType<IconProps>, weight: IconWeight = "regular") =>
-  createBazaarIcon(Icon, weight);
+const navIcon = createBazaarIcon;
+const actionIcon = createBazaarIcon;
 
 export const DashboardIcon = navIcon(Gauge);
 export const InventoryIcon = navIcon(Warehouse);
@@ -151,7 +156,7 @@ export const ArrowDownIcon = actionIcon(ArrowDown);
 export const GripIcon = actionIcon(DotsSixVertical);
 export const ImagePlusIcon = actionIcon(ImageSquare);
 export const AdjustIcon = actionIcon(SlidersHorizontal);
-export const PdfIcon = actionIcon(FilePdf);
+export const PdfIcon = actionIcon(FileText);
 export const PrintIcon = actionIcon(Printer);
 export const InstallAppIcon = actionIcon(DeviceMobile);
 export const MailIcon = actionIcon(Envelope);
@@ -214,5 +219,14 @@ export const AlignLeftIcon = actionIcon(TextAlignLeft);
 export const AlignCenterIcon = actionIcon(TextAlignCenter);
 export const AlignRightIcon = actionIcon(TextAlignRight);
 export const FailedReceiptIcon = actionIcon(ReceiptX);
+export const CalendarIcon = actionIcon(Calendar);
+export const ClipboardIcon = actionIcon(ClipboardList);
+export const CoinsIcon = actionIcon(Coins);
+export const HashIcon = actionIcon(Hash);
+export const ChatIcon = actionIcon(MessageCircle);
+export const MicrophoneIcon = actionIcon(Mic);
+export const PhoneIcon = actionIcon(Phone);
+export const StopIcon = actionIcon(Square);
+export const SpeakerIcon = actionIcon(Volume2);
 
 export { BaamIcon } from "./baam-icon";

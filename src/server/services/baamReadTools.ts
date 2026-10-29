@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { baamSpokenSkuKey } from "./baamSpokenSku";
 import { helpGuides, helpGuideId, getHelpGuideById } from "@/content/help/catalog";
 import { prisma } from "@/server/db/prisma";
 import type { Context } from "@/server/trpc/trpc";
@@ -49,19 +50,47 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
   switch (input.kind) {
     case "stores":
       items = scope.availableStores.filter(
-        (s) => !input.query || s.name.toLocaleLowerCase().includes(input.query.toLocaleLowerCase()),
+        (s) =>
+          !input.query ||
+          s.id === input.query ||
+          s.name.toLocaleLowerCase().includes(input.query.toLocaleLowerCase()),
       );
       break;
     case "units":
-      items = await prisma.unit.findMany({
-        where: {
-          organizationId,
-          OR: [{ code: contains }, { labelRu: contains }, { labelKg: contains }],
-        },
-        select: { id: true, code: true, labelRu: true, labelKg: true },
-        ...page,
-        orderBy: { id: "asc" },
-      });
+      {
+        const unitAliases: Record<string, string[]> = {
+          штука: ["pcs", "pc", "piece", "each", "ea"],
+          штуки: ["pcs", "pc", "piece", "each", "ea"],
+          штук: ["pcs", "pc", "piece", "each", "ea"],
+          шт: ["pcs", "pc", "piece", "each", "ea"],
+          piece: ["pcs", "pc", "piece", "each", "ea"],
+          pieces: ["pcs", "pc", "piece", "each", "ea"],
+          даана: ["pcs", "pc", "piece", "each", "ea"],
+          килограмм: ["kg", "кг"],
+          килограмма: ["kg", "кг"],
+          килограммов: ["kg", "кг"],
+          грамм: ["g", "гр"],
+          литр: ["l", "л"],
+          метр: ["m", "м"],
+        };
+        const codes =
+          unitAliases[(input.query ?? "").trim().toLowerCase().replace(/\.$/, "")] ?? [];
+        items = await prisma.unit.findMany({
+          where: {
+            organizationId,
+            OR: [
+              { id: input.query ?? "" },
+              { code: contains },
+              { labelRu: contains },
+              { labelKg: contains },
+              ...(codes.length ? [{ code: { in: codes, mode: "insensitive" as const } }] : []),
+            ],
+          },
+          select: { id: true, code: true, labelRu: true, labelKg: true },
+          ...page,
+          orderBy: { id: "asc" },
+        });
+      }
       break;
     case "attributes":
       items = await prisma.attributeDefinition.findMany({
@@ -79,40 +108,80 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
         orderBy: { id: "asc" },
       });
       break;
-    case "products":
-      items = await prisma.product.findMany({
+    case "products": {
+      const accessible = {
+        organizationId,
+        isDeleted: false,
+        ...(input.storeId || (scope.role !== "ADMIN" && !scope.isOrgOwner)
+          ? { storeProducts: { some: { storeId, isActive: true } } }
+          : {}),
+      };
+      const select = {
+        id: true,
+        name: true,
+        sku: true,
+        baseUnitId: true,
+        unit: true,
+        basePriceKgs: true,
+        variants: {
+          where: { isActive: true },
+          select: { id: true, name: true, sku: true, attributes: true },
+        },
+        storeProducts: { where: { storeId, isActive: true }, select: { storeId: true } },
+      } as const;
+      let products = await prisma.product.findMany({
         where: {
-          organizationId,
-          isDeleted: false,
-          ...(input.storeId || (scope.role !== "ADMIN" && !scope.isOrgOwner)
-            ? { storeProducts: { some: { storeId, isActive: true } } }
-            : {}),
-          OR: [{ name: contains }, { sku: contains }, { barcodes: { some: { value: contains } } }],
+          ...accessible,
+          OR: [
+            { id: input.query ?? "" },
+            { name: contains },
+            { sku: contains },
+            { barcodes: { some: { value: contains } } },
+          ],
         },
-        select: {
-          id: true,
-          name: true,
-          sku: true,
-          baseUnitId: true,
-          unit: true,
-          basePriceKgs: true,
-          variants: {
-            where: { isActive: true },
-            select: { id: true, name: true, sku: true, attributes: true },
-          },
-          storeProducts: { where: { storeId, isActive: true }, select: { storeId: true } },
-        },
+        select,
         ...page,
         orderBy: [{ name: "asc" }, { id: "asc" }],
       });
+      const spoken = input.query ? baamSpokenSkuKey(input.query) : null;
+      if (!products.length && spoken) {
+        const possible = await prisma.product.findMany({
+          where: {
+            ...accessible,
+            OR: spoken.prefixes.flatMap((prefix) => [
+              { sku: { startsWith: prefix, mode: "insensitive" as const } },
+              { name: { startsWith: prefix, mode: "insensitive" as const } },
+            ]),
+          },
+          select,
+          take: 101,
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+        });
+        // An incomplete candidate window must never become a unique match.
+        if (possible.length <= 100)
+          products = possible
+            .filter(
+              (product) =>
+                baamSpokenSkuKey(product.sku)?.key === spoken.key ||
+                baamSpokenSkuKey(product.name)?.key === spoken.key,
+            )
+            .slice(input.offset, input.offset + 21);
+      }
+      items = products;
       break;
+    }
     case "customers":
       items = await prisma.customer.findMany({
         where: {
           organizationId,
           storeId,
           deletedAt: null,
-          OR: [{ name: contains }, { phone: contains }, { email: contains }],
+          OR: [
+            { id: input.query ?? "" },
+            { name: contains },
+            { phone: contains },
+            { email: contains },
+          ],
         },
         select: { id: true, name: true, phone: true, email: true, storeId: true },
         ...page,
@@ -121,45 +190,68 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
       break;
     case "suppliers":
       items = await prisma.supplier.findMany({
-        where: { organizationId, OR: [{ name: contains }, { phone: contains }] },
+        where: {
+          organizationId,
+          OR: [{ id: input.query ?? "" }, { name: contains }, { phone: contains }],
+        },
         select: { id: true, name: true, phone: true, email: true },
         ...page,
         orderBy: { id: "asc" },
       });
       break;
     case "registers":
-      items = await api.pos.registers.list({ storeId: input.storeId, status: "active" });
+      items = (await api.pos.registers.list({ storeId: input.storeId, status: "active" })).filter(
+        (row) =>
+          !input.query ||
+          row.id === input.query ||
+          row.name.toLowerCase().includes(input.query.toLowerCase()),
+      );
       break;
     case "orders":
     case "sales":
-      items = await prisma.customerOrder.findMany({
-        where: {
-          organizationId,
-          storeId,
-          isPosSale: input.kind === "sales",
-          OR: [{ number: contains }, { customerName: contains }],
-        },
-        select: {
-          id: true,
-          number: true,
-          status: true,
-          storeId: true,
-          registerId: true,
-          customerName: true,
-          totalKgs: true,
-          createdAt: true,
-          isHeld: true,
-        },
-        ...page,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      });
+      {
+        const documentNumber = /^(S|SO|PO|R|COUNT)[\s-]*(\d{1,12})$/i.exec(
+          (input.query ?? "").trim(),
+        );
+        const canonicalNumber = documentNumber
+          ? `${documentNumber[1].toUpperCase()}-${String(Number(documentNumber[2])).padStart(6, "0")}`
+          : undefined;
+        items = await prisma.customerOrder.findMany({
+          where: {
+            organizationId,
+            storeId,
+            isPosSale: input.kind === "sales",
+            OR: [
+              { id: input.query ?? "" },
+              { number: contains },
+              { customerName: contains },
+              ...(canonicalNumber
+                ? [{ number: { equals: canonicalNumber, mode: "insensitive" as const } }]
+                : []),
+            ],
+          },
+          select: {
+            id: true,
+            number: true,
+            status: true,
+            storeId: true,
+            registerId: true,
+            customerName: true,
+            totalKgs: true,
+            createdAt: true,
+            isHeld: true,
+          },
+          ...page,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+      }
       break;
     case "purchases":
       items = await prisma.purchaseOrder.findMany({
         where: {
           organizationId,
           storeId,
-          ...(input.query ? { supplier: { name: contains } } : {}),
+          ...(input.query ? { OR: [{ id: input.query }, { supplier: { name: contains } }] } : {}),
         },
         select: {
           id: true,
@@ -174,7 +266,7 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
       break;
     case "stock_counts":
       items = await prisma.stockCount.findMany({
-        where: { organizationId, storeId, code: contains },
+        where: { organizationId, storeId, OR: [{ id: input.query ?? "" }, { code: contains }] },
         select: { id: true, code: true, storeId: true, status: true, createdAt: true },
         ...page,
         orderBy: { id: "desc" },
@@ -182,7 +274,7 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
       break;
     case "returns":
       items = await prisma.saleReturn.findMany({
-        where: { organizationId, storeId, number: contains },
+        where: { organizationId, storeId, OR: [{ id: input.query ?? "" }, { number: contains }] },
         select: {
           id: true,
           number: true,

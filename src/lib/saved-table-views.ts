@@ -9,6 +9,7 @@ export type SavedTableView<TState> = {
 export type SavedTableViewsState<TState> = {
   views: SavedTableView<TState>[];
   defaultViewId: string | null;
+  activeViewId: string | null;
 };
 
 const normalizeSavedViewName = (value: string) => value.trim().replace(/\s+/g, " ");
@@ -27,6 +28,7 @@ export const parseSavedTableViews = <TState>(
         updatedAt?: unknown;
       }>;
       defaultViewId?: unknown;
+      activeViewId?: unknown;
     };
 
     const views = Array.isArray(parsed.views)
@@ -55,9 +57,14 @@ export const parseSavedTableViews = <TState>(
         ? parsed.defaultViewId
         : null;
 
-    return { views, defaultViewId };
+    const activeViewId =
+      typeof parsed.activeViewId === "string" &&
+      views.some((view) => view.id === parsed.activeViewId)
+        ? parsed.activeViewId
+        : null;
+    return { views, defaultViewId, activeViewId };
   } catch {
-    return { views: [], defaultViewId: null };
+    return { views: [], defaultViewId: null, activeViewId: null };
   }
 };
 
@@ -67,7 +74,23 @@ export const statesAreEqual = <TState>(left: TState, right: TState) =>
 export const findMatchingSavedTableView = <TState>(
   views: SavedTableView<TState>[],
   currentState: TState,
-) => views.find((view) => statesAreEqual(view.state, currentState)) ?? null;
+  activeViewId: string | null = null,
+) => {
+  // A view describes filters, sorting and columns. Browsing another page does
+  // not change that view, and applying one intentionally starts at page one.
+  const settings = (state: TState) => {
+    if (!state || typeof state !== "object" || Array.isArray(state)) return state;
+    const configuration = { ...(state as Record<string, unknown>) };
+    delete configuration.page;
+    return configuration;
+  };
+  const currentSettings = settings(currentState);
+  const matches = (view: SavedTableView<TState>) =>
+    statesAreEqual(settings(view.state), currentSettings);
+  return (
+    views.find((view) => view.id === activeViewId && matches(view)) ?? views.find(matches) ?? null
+  );
+};
 
 export const createSavedTableView = <TState>({
   name,

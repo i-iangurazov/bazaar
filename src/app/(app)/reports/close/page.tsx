@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,7 +51,7 @@ const PeriodClosePage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status } = useSession();
-  const canView = session?.user?.role && session.user.role !== "STAFF";
+  const canView = ["ADMIN", "MANAGER"].includes(session?.user?.role ?? "");
   const { toast } = useToast();
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: status === "authenticated" });
@@ -95,7 +96,7 @@ const PeriodClosePage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role="alert" className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
   }
@@ -118,6 +119,9 @@ const PeriodClosePage = () => {
           <CardTitle>{t("closeTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {storesQuery.error ? (
+            <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
+          ) : null}
           <FormGrid>
             <Field htmlFor="close-storeLabel" label={t("storeLabel")}>
               <Select value={storeId} onValueChange={setStoreId}>

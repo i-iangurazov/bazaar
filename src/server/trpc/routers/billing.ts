@@ -10,8 +10,10 @@ import {
 } from "@/server/services/billing";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
+import { subscriptionPaymentsRouter } from "./subscriptionPayments";
 
 export const billingRouter = router({
+  payments: subscriptionPaymentsRouter,
   get: adminProcedure.query(async ({ ctx }) => {
     return getBillingSummary({ organizationId: ctx.user.organizationId });
   }),

@@ -17,7 +17,7 @@ const parseOptionalFlag = (value: string | undefined, defaultValue: boolean) => 
   return parseFlag(value);
 };
 
-export const isAiFeaturesEnabled = () => parseFlag(process.env.NEXT_PUBLIC_AI_FEATURES_ENABLED);
+export const isAiFeaturesEnabled = () => parseOptionalFlag(process.env.NEXT_PUBLIC_AI_FEATURES_ENABLED, true);
 
 export const isAiDescriptionGenerationEnabled = () =>
   parseOptionalFlag(process.env.NEXT_PUBLIC_AI_DESCRIPTION_GENERATION_ENABLED, true);

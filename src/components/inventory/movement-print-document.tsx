@@ -334,6 +334,13 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           min-height: 8mm;
         }
 
+        @media screen and (max-width: 840px) {
+          .movement-print-sheet {
+            max-width: none;
+            margin: 12px;
+          }
+        }
+
         @media print {
           @page {
             size: A4;
@@ -370,6 +377,12 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
             min-height: auto !important;
             padding: 0 !important;
             background: #ffffff !important;
+          }
+
+          .movement-print-viewport {
+            width: auto !important;
+            overflow: visible !important;
+            outline: none !important;
           }
 
           .movement-print-sheet {

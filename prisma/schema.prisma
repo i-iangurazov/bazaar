@@ -505,6 +505,7 @@ enum MobilePlatform {
 }
 
 model Organization {
+  priceBooks PriceBook[]
   id                  String                         @id @default(cuid())
   name                String
   retailWholesaleEnabled Boolean                     @default(false)
@@ -512,6 +513,8 @@ model Organization {
   subscriptionStatus  OrganizationSubscriptionStatus @default(ACTIVE)
   trialEndsAt         DateTime?
   currentPeriodEndsAt DateTime?
+  subscriptionBillingMode SubscriptionBillingMode @default(MANUAL)
+  billingAnchorDay Int?
   createdAt           DateTime                       @default(now())
   updatedAt           DateTime                       @updatedAt
 
@@ -604,9 +607,92 @@ model Organization {
   printerSettings             StorePrinterSettings[]
   bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
   mobileDevices               MobileDevice[]
+  subscriptionInvoices        SubscriptionInvoice[]
+  subscriptionPeriods         SubscriptionPeriod[]
+}
+
+enum SubscriptionBillingMode {
+  MANUAL
+  SELF_SERVE
+}
+
+enum SubscriptionInvoiceStatus {
+  CREATING
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  REVIEW
+  RESOLVED
+}
+
+model SubscriptionInvoice {
+  id                String                     @id @default(cuid())
+  organizationId    String
+  createdById       String
+  idempotencyKey    String
+  pendingSlot       String?                    @unique
+  plan              OrganizationPlan
+  amountMinor       Int
+  currency          String                     @default("KGS")
+  status            SubscriptionInvoiceStatus  @default(CREATING)
+  merchantId        String
+  isTest            Boolean
+  providerPaymentId String?
+  checkoutUrl       String?
+  termsVersion      String
+  termsUrl          String
+  sellerName        String
+  termsAcceptedAt   DateTime                   @default(now())
+  expiresAt         DateTime
+  paidAt            DateTime?
+  nextCheckAt       DateTime                   @default(now())
+  processingToken   String?
+  processingUntil   DateTime?
+  lastIssue         String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  events            SubscriptionPaymentEvent[]
+  period            SubscriptionPeriod?
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([id, organizationId])
+  @@unique([merchantId, isTest, providerPaymentId])
+  @@index([status, nextCheckAt])
+  @@index([organizationId, createdAt, id])
+}
+
+model SubscriptionPaymentEvent {
+  id               String              @id @default(cuid())
+  invoiceId        String
+  deduplicationKey String              @unique
+  source           String
+  state            String
+  payloadDigest    String
+  createdAt        DateTime            @default(now())
+  invoice          SubscriptionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, createdAt])
+}
+
+model SubscriptionPeriod {
+  id             String              @id @default(cuid())
+  organizationId String
+  invoiceId      String              @unique
+  plan           OrganizationPlan
+  startsAt       DateTime
+  endsAt         DateTime
+  createdAt      DateTime            @default(now())
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoice        SubscriptionInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([invoiceId, organizationId])
+  @@index([organizationId, endsAt])
 }
 
 model User {
+  priceBookChanges PriceBookChange[]
   canTransferStock Boolean @default(false)
   id              String          @id @default(cuid())
   organizationId  String?
@@ -753,6 +839,8 @@ model MobileDevice {
 }
 
 model Store {
+  priceBookBinding PriceBookStore?
+  priceBookItems PriceBookStoreItem[]
   catalogSourcesConfigured Boolean @default(false)
   catalogSubscriptions StoreCatalog[]
   sourceCatalogs ProductCatalog[] @relation("catalogSource")
@@ -1456,6 +1544,7 @@ model Supplier {
 }
 
 model Unit {
+  priceBookEntries PriceBookEntry[]
   id             String   @id @default(cuid())
   organizationId String
   code           String
@@ -1505,6 +1594,8 @@ model StoreCategoryPreference {
 }
 
 model Product {
+  priceBookEntries PriceBookEntry[]
+  priceBookItems PriceBookStoreItem[]
   catalogMemberships ProductCatalogProduct[]
   assortmentGrants AssortmentGrant[]
   id             String   @id @default(cuid())
@@ -1663,6 +1754,7 @@ model ProductImageStudioJob {
   softShadow           Boolean                        @default(false)
   tighterCrop          Boolean                        @default(false)
   brighterPresentation Boolean                        @default(false)
+  highQuality          Boolean                        @default(true)
   provider             String
   providerJobId        String?
   requestPrompt        String?                        @db.Text
@@ -3736,4 +3828,83 @@ model StorePriceTypes {
   updatedById String?
   @@unique([organizationId, storeId, productId, variantKey])
   @@index([storeId, productId])
+}
+
+// Explicitly connected shared selling prices. Existing stores are not connected by migration.
+model PriceBook {
+  organization Organization @relation(fields: [organizationId], references: [id])
+  entries PriceBookEntry[]
+  stores PriceBookStore[]
+  items PriceBookStoreItem[]
+  changes PriceBookChange[]
+  id             String @id @default(cuid())
+  organizationId String
+  name           String
+  currencyCode   String @default("KGS")
+  version        Int @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@unique([organizationId, name])
+  @@unique([id, organizationId])
+}
+
+model PriceBookEntry {
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  baseUnit Unit @relation(fields: [baseUnitId], references: [id], onDelete: Restrict)
+  book PriceBook @relation(fields: [bookId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  id             String @id @default(cuid())
+  organizationId String
+  bookId         String
+  productId      String
+  variantKey     String @default("BASE")
+  baseUnitId     String
+  retailPriceKgs Decimal @db.Decimal(12, 2)
+  wholesalePriceKgs Decimal? @db.Decimal(12, 2)
+  @@unique([bookId, productId, variantKey])
+  @@index([organizationId, productId])
+}
+
+model PriceBookStore {
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  book PriceBook @relation(fields: [bookId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  id             String @id @default(cuid())
+  organizationId String
+  bookId         String
+  storeId        String @unique
+  preserveLocal  Boolean @default(true)
+  @@index([organizationId, bookId])
+}
+
+model PriceBookStoreItem {
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  book PriceBook @relation(fields: [bookId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  id             String @id @default(cuid())
+  organizationId String
+  bookId         String
+  storeId        String
+  productId      String
+  variantKey     String @default("BASE")
+  retailShared   Boolean
+  wholesaleShared Boolean
+  @@unique([storeId, productId, variantKey])
+  @@index([organizationId, bookId])
+}
+
+model PriceBookChange {
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  book PriceBook @relation(fields: [bookId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  id             String @id @default(cuid())
+  organizationId String
+  bookId         String
+  actorId        String
+  kind           String
+  version        Int
+  scope          Json
+  before         Json
+  afterHash      String
+  snapshot       Bytes?
+  summary        Json
+  createdAt      DateTime @default(now())
+  @@index([organizationId, bookId, createdAt])
 }

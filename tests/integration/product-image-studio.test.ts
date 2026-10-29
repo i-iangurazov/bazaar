@@ -212,8 +212,8 @@ describeDb("product image studio integration", () => {
       output_format: "jpeg",
       output_compression: 95,
       background: "opaque",
-      input_fidelity: "high",
     });
+    expect(fetchBody?.tools?.[0]).not.toHaveProperty("input_fidelity");
     expect(fetchBody?.tools?.[0]).not.toHaveProperty("format");
     expect(fetchBody?.tools?.[0]).not.toHaveProperty("compression");
 
@@ -255,6 +255,86 @@ describeDb("product image studio integration", () => {
     expect(listedJobs).toHaveLength(1);
     expect(listedJobs[0]?.savedProductImageId).toBe(productAfterSave.images[0]?.id);
   });
+
+  it("persists balanced/detail modes separately and sends the selected quality", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    vi.stubEnv("PRODUCT_IMAGE_STUDIO_IMAGE_MODEL", "");
+    vi.stubEnv("OPENAI_IMAGE_MODEL", "");
+    vi.stubEnv("PRODUCT_IMAGE_STUDIO_IMAGE_QUALITY", "medium");
+    const { org, adminUser } = await seedBase();
+    const source = await uploadProductImageBuffer({
+      organizationId: org.id,
+      buffer: await createImageBuffer(),
+      contentType: "image/png",
+      sourceFileName: "quality.png",
+    });
+    const output = await createImageBuffer({ width: 1024, height: 1024 });
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      Response.json({
+        status: "completed",
+        output: [{ type: "image_generation_call", result: output.toString("base64") }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const ids: string[] = [];
+    for (const highQuality of [false, true]) {
+      const job = await createProductImageStudioJob({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: `quality-${highQuality}`,
+        sourceImageUrl: source.url,
+        backgroundMode: ProductImageStudioBackground.WHITE,
+        outputFormat: ProductImageStudioOutputFormat.SQUARE,
+        centered: true,
+        improveVisibility: true,
+        highQuality,
+      });
+      ids.push(job.jobId);
+      expect((await getProductImageStudioJob(org.id, job.jobId)).highQuality).toBe(highQuality);
+    }
+    expect(ids[0]).not.toBe(ids[1]);
+    for (const id of ids) await runProductImageStudioJob({ jobId: id });
+    expect(
+      fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).tools[0].quality),
+    ).toEqual(["medium", "high"]);
+    expect(
+      fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).tools[0].model),
+    ).toEqual(["gpt-image-2.5-sunburst", "gpt-image-2.5-sunburst"]);
+  });
+
+  it.each(["network-timeout", "empty-success"])(
+    "does not silently pay for another image after %s",
+    async (outcome) => {
+      vi.stubEnv("OPENAI_API_KEY", "sk-test");
+      const { org, adminUser } = await seedBase();
+      const source = await uploadProductImageBuffer({
+        organizationId: org.id,
+        buffer: await createImageBuffer(),
+        contentType: "image/png",
+        sourceFileName: "timeout.png",
+      });
+      const fetchMock = vi.fn().mockImplementation(async () => {
+        if (outcome === "network-timeout") throw new DOMException("Timed out", "TimeoutError");
+        return Response.json({ status: "completed", output: [] });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const job = await createProductImageStudioJob({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: outcome,
+        sourceImageUrl: source.url,
+        backgroundMode: ProductImageStudioBackground.WHITE,
+        outputFormat: ProductImageStudioOutputFormat.SQUARE,
+        centered: true,
+        improveVisibility: true,
+      });
+      await runProductImageStudioJob({ jobId: job.jobId });
+      expect((await getProductImageStudioJob(org.id, job.jobId)).status).toBe(
+        ProductImageStudioJobStatus.FAILED,
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("enforces organization scoping for job reads", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");

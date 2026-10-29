@@ -127,6 +127,7 @@ const canReceiveStoreScope = (access: EventAccess, scope: StoreScope | null) =>
 const canReceiveEvent = async (access: EventAccess, event: { type: string; payload: unknown }) => {
   if (
     event.type === "assortment.updated" ||
+    event.type === "pricing.updated" ||
     event.type === "inventory.updated" ||
     event.type === "lowStock.triggered" ||
     event.type === "sale.completed" ||

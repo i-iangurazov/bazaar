@@ -1,0 +1,212 @@
+{
+  "status": "in-review-authentication-checkpoint-browser-replay-complete-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "fa3b0d0",
+  "scope": [
+    "src/app/login/page.tsx",
+    "src/app/signup/page.tsx",
+    "src/app/reset/page.tsx",
+    "src/app/reset/[token]/page.tsx",
+    "src/app/invite/page.tsx",
+    "src/app/invite/[token]/page.tsx",
+    "src/app/verify/[token]/page.tsx",
+    "src/app/register-business/[token]/page.tsx"
+  ],
+  "changes": [
+    {
+      "area": "Default login destination",
+      "before": "All non-platform-owner accounts went to /dashboard, including STAFF/CASHIER who cannot view its data",
+      "after": "Existing getRoleHomePath policy selects /pos for STAFF/CASHIER and /dashboard for ADMIN/MANAGER; platform-owner default and explicit safe internal next links are preserved",
+      "sources": [
+        "src/components/login-form.tsx"
+      ]
+    },
+    {
+      "area": "Login recovery",
+      "after": "Transport errors, failed session lookup and absent session are shown as a translated alert. Loading resets and existing entered credentials remain for retry; server rejection/verification-resend behavior remains.",
+      "sources": [
+        "src/components/login-form.tsx"
+      ]
+    },
+    {
+      "area": "Invitation and verification states",
+      "after": "Invalid/expired links remain errors; service failures offer retry instead of claiming the link is invalid. Verification success is shown only after successful API response and is reset when its token changes. Invalid invitations link to the existing invite entry page.",
+      "sources": [
+        "src/app/invite/[token]/page.tsx",
+        "src/app/verify/[token]/page.tsx"
+      ]
+    },
+    {
+      "area": "Shared auth appearance",
+      "after": "Existing Bazaar blue brand is used once on reset and invite screens, alongside the same Espresso cards, controls, alerts and typography. Existing form widths, field order and mutation inputs are retained.",
+      "sources": [
+        "src/app/reset/page.tsx",
+        "src/app/reset/[token]/page.tsx",
+        "src/app/invite/page.tsx",
+        "src/app/invite/[token]/page.tsx"
+      ]
+    },
+    {
+      "area": "Form semantics",
+      "after": "Locale/legal-form selects have associated labels. Business registration uses POST and its submit is disabled until hydration. English generic error copy describes failure instead of displaying Generic.",
+      "sources": [
+        "src/app/invite/[token]/page.tsx",
+        "src/app/register-business/[token]/page.tsx",
+        "messages/en.json"
+      ]
+    },
+    {
+      "area": "Existing validation when switching interface language",
+      "before": "A submitted signup form kept Russian field errors after switching its interface to Kyrgyz",
+      "after": "Displayed validation is refreshed for the new interface locale without clearing input or changing the selected account locale; server errors are translated from their original error on render. The same mechanism covers login, reset, signup, invitation and business-registration forms.",
+      "sources": [
+        "src/hooks/use-locale-change.ts",
+        "src/components/login-form.tsx",
+        "src/app/reset/page.tsx",
+        "src/app/reset/[token]/page.tsx",
+        "src/app/signup/page.tsx",
+        "src/app/invite/page.tsx",
+        "src/app/invite/[token]/page.tsx",
+        "src/app/register-business/[token]/page.tsx"
+      ]
+    }
+  ],
+  "checks": {
+    "unit": {
+      "files": 258,
+      "tests": 1892,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-all-unit.log"
+    },
+    "focusedUnit": {
+      "files": 5,
+      "tests": 41,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-focused-unit.log"
+    },
+    "database": {
+      "files": 1,
+      "tests": 9,
+      "result": "passed; real bcrypt, PostgreSQL users, signed JWTs, session callbacks and Redis auth limiter",
+      "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
+      "log": "artifacts/ux/espresso/auth-entry-db.log"
+    },
+    "typecheck": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-typecheck.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/auth-lint.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-i18n.log"
+    },
+    "productionBuild": {
+      "result": "passed; final application sources, type/lint checks and 125 static pages",
+      "log": "artifacts/ux/espresso/build-auth-final.log"
+    }
+  },
+  "browserChecks": [
+    "All four existing fixture credentials: ADMIN and MANAGER reach their dashboard with data; STAFF and CASHIER reach the usable POS entry instead of a denied dashboard",
+    "Invalid credentials show a localized alert; correcting only the email then signing in succeeds, so the entered password remains available for retry",
+    "Explicit /kg/products?storeId=...&page=2 is normalized to /products with the same store and page 2; cashier can still view it",
+    "External next=//outside.invalid never leaves localhost and falls back to staff POS",
+    "Mobile password visibility toggles text/password; reset request to an unknown synthetic email shows the generic non-enumerating confirmation",
+    "Mobile new-password empty validation is shown; no new credential is entered or changed",
+    "Invite entry validates empty input; pasted local invite link opens the missing-link state with an Enter another invitation action that returns to entry",
+    "Missing verification link never claims verification and returns to login",
+    "Open signup empty validation and named locale selector checked at 390px; no account created",
+    "Production browser replay confirms RU → KG → EN translates existing signup validation while retaining entered name/email and the separately selected EN account locale; no account was created or request resubmitted",
+    "New-password empty validation follows EN → KG without a password being entered or changed",
+    "Business-registration empty store-code validation follows KG → EN while retaining organization and first-store values; no business was created",
+    "EN/light desktop review of all eight authentication route sources: login, signup, reset request, reset token, invite entry, missing invitation, invalid verification and business-registration form. Single Bazaar brand, existing widths/field order and blue actions retained",
+    "EN/light business-registration form at 390px has page width 390px, all eight input/select controls are 40px tall, and labels identify their controls",
+    "Existing admin sign-in repeated on the final production build; test profile preferences restored to RU/dark, interface restored to RU, and account signed out"
+  ],
+  "screenshots": [
+    "artifacts/ux/espresso/screenshots/login-error-desktop-dark.png",
+    "artifacts/ux/espresso/screenshots/login-staff-pos-final.png",
+    "artifacts/ux/espresso/screenshots/login-cashier-pos-final.png",
+    "artifacts/ux/espresso/screenshots/login-manager-dashboard-final.png",
+    "artifacts/ux/espresso/screenshots/login-admin-dashboard-final.png",
+    "artifacts/ux/espresso/screenshots/login-explicit-next-final.png",
+    "artifacts/ux/espresso/screenshots/login-external-next-safe-final.png",
+    "artifacts/ux/espresso/screenshots/login-mobile-dark-final.png",
+    "artifacts/ux/espresso/screenshots/reset-request-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/reset-request-confirmed-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/reset-token-validation-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/invite-entry-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/invite-invalid-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/verify-invalid-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/signup-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/signup-validation-mobile-dark.png",
+    "artifacts/ux/espresso/screenshots/signup-validation-mobile-kg-final.png",
+    "artifacts/ux/espresso/screenshots/signup-validation-mobile-en-final.png",
+    "artifacts/ux/espresso/screenshots/reset-validation-mobile-kg-final.png",
+    "artifacts/ux/espresso/screenshots/register-business-mobile-kg.png",
+    "artifacts/ux/espresso/screenshots/register-business-desktop-dark-en.png",
+    "artifacts/ux/espresso/screenshots/login-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/signup-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/reset-request-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/reset-token-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/invite-entry-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/invite-invalid-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/verify-invalid-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/register-business-desktop-light-en.png",
+    "artifacts/ux/espresso/screenshots/register-business-mobile-light-en.png",
+    "artifacts/ux/espresso/screenshots/auth-fixture-preferences-restored.png",
+    "artifacts/ux/espresso/screenshots/login-desktop-dark-final.png"
+  ],
+  "sourceFingerprints": {
+    "src/app/login/page.tsx": "56375f466bbd6c6e53dcff417b79eb455ea87d3cb40b9a0ad9620d8823e658b2",
+    "src/app/signup/page.tsx": "48c0f8d3558e27dc416f0586d9c165ded9f9f150bd31b244cbc18327bc256903",
+    "src/app/reset/page.tsx": "277678677af4ab41dea67e70e24e9369a6036303fff4a6839ddf1c2e5db15a84",
+    "src/app/reset/[token]/page.tsx": "ad7f209e6051f7d5fe1aa03bb80f716efd54cf3b7772bcc45da911423b3d840e",
+    "src/app/invite/page.tsx": "93e67b4757222a19babfd63afde420cf13f53f16442b5787d963c572c198b219",
+    "src/app/invite/[token]/page.tsx": "a3ef17ada34613f3c89e29b63dca5c70b2abe55b5b411f9dfd2dd22a065ecf4d",
+    "src/app/verify/[token]/page.tsx": "6b8de84e3845cf15c7ad35c4406a35bee8ef8e7e30a71ade85d6fb06544aa96b",
+    "src/app/register-business/[token]/page.tsx": "b57bdc4a19d9ec9a0e0ef2aeb6568b06bd2690e5be8226366d3d2a0503015507",
+    "src/components/login-form.tsx": "bfa7febb15c90c2c2ee0fb08de2d98298c986324a86521a34132769f830aefc1",
+    "messages/en.json": "34fda220cc4f85a2a6a172b56cfcea7c9aebafbec8d115cf59f4f47df21418e4",
+    "messages/ru.json": "a4e1ca1d78b0b3c6a9c3718dd99c5fbef6bb5768009361e2dead05c82a041f6e",
+    "messages/kg.json": "e88830d8b8ce37277ac9eedf81085d6e156049c38bad3bfeba9668bd511d3b1e",
+    "src/hooks/use-locale-change.ts": "ad6af6406602df4b37071850210611460d195ff2050d9f67e086cac5bc224709"
+  },
+  "environment": {
+    "origin": "http://localhost:3122",
+    "browserDatabase": "bazaar_espresso_ui",
+    "postgresPort": 55440,
+    "externalProviders": "disabled"
+  },
+  "limitations": [
+    "The old Docker stabilization endpoints on 55432/56379 did not respond (read-only database connection timed out and Docker ps remained pending). Their auth-lifecycle/rate-limit suites were not run in this checkpoint; the new narrow auth-entry suite ran against the verified Espresso regression DB. No isolation guard was bypassed.",
+    "No live SMTP delivery, new account credentials or password changes are performed through the browser. Those actions are outside the browser replay; existing credential sign-in is exercised using synthetic fixture accounts.",
+    "The valid invitation acceptance form is covered by component tests; its successful account-creation path and all signup modes have not been replayed end to end in this browser checkpoint. In-review status does not imply final acceptance.",
+    "This is an authentication route-family checkpoint, not completion or acceptance of all 97 routes."
+  ],
+  "delivery": "Local codex/playground only; no merge, push or production deployment",
+  "preservedCustomerLayouts": {
+    "src/components/inventory/receiving-workflow.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+    },
+    "src/components/inventory/transfer-workflow.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+    },
+    "src/components/inventory/write-off-workflow.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+    },
+    "src/app/(app)/inventory/counts/[id]/page.tsx": {
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+    }
+  }
+}

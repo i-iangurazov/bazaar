@@ -1,10 +1,9 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { AddIcon, ChevronDownIcon, DeleteIcon, MinusIcon } from "@/components/icons";
@@ -230,7 +229,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   const t = useTranslations("catalogPublic");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const router = useRouter();
+  const tCommon = useTranslations("common");
+  const categoryId = useId();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const cartReturnFocusRef = useRef<HTMLElement | null>(null);
+  const [reload, setReload] = useState(0);
+  const [notFound, setNotFound] = useState(false);
 
   const [catalog, setCatalog] = useState<CatalogPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -289,6 +293,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       setLoadingMore(false);
       setLoadMoreError(null);
       setErrorMessage(null);
+      setNotFound(false);
       try {
         const params = new URLSearchParams({ page: "1", pageSize: String(catalogPageSize) });
         if (appliedSearch) {
@@ -306,7 +311,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           },
         );
         const body = (await response.json().catch(() => ({}))) as CatalogResponse;
+        if (controller.signal.aborted) return;
         if (!response.ok || !("products" in body)) {
+          setNotFound(response.status === 404);
           const key = "message" in body && body.message ? body.message : "genericMessage";
           const message = tErrors.has?.(key) ? tErrors(key) : tErrors("genericMessage");
           throw new Error(message);
@@ -317,7 +324,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
-        setErrorMessage(error instanceof Error ? error.message : tErrors("genericMessage"));
+        if (!controller.signal.aborted) setErrorMessage(tErrors("genericMessage"));
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -326,7 +333,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     };
     void load();
     return () => controller.abort();
-  }, [appliedSearch, categoryFilter, mergeKnownProducts, slug, tErrors]);
+  }, [appliedSearch, categoryFilter, mergeKnownProducts, reload, slug, tErrors]);
 
   const loadMore = async () => {
     if (!catalog?.pagination.hasMore || loadingMore) {
@@ -383,6 +390,15 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   };
 
   const accentColor = sanitizeAccent(catalog?.accentColor);
+  // Keep the merchant's accent, including very light colours, with readable text.
+  const luminance = [1, 3, 5].map((offset) => {
+    const channel = parseInt(accentColor.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  const accentStyle = {
+    backgroundColor: accentColor,
+    color: luminance[0] * 0.2126 + luminance[1] * 0.7152 + luminance[2] * 0.0722 > 0.179 ? "#000000" : "#ffffff",
+  };
   const catalogCurrencyCode = catalog?.currencyCode ?? defaultCurrencyCode;
 
   const visibleProducts = useMemo(() => catalog?.products ?? [], [catalog?.products]);
@@ -583,11 +599,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     setLineQty(lineKey, Math.trunc(qty));
   };
 
-  const openCart = () => {
+  const openCart = (event: MouseEvent<HTMLButtonElement>) => {
     if (!cartItems.length) {
       return;
     }
     setCheckoutStep("cart");
+    cartReturnFocusRef.current = event.currentTarget;
     setSubmitError(null);
     setCartOpen(true);
   };
@@ -596,6 +613,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     if (submitting) {
       return;
     }
+    if (!cartReturnFocusRef.current?.isConnected) cartReturnFocusRef.current = searchRef.current;
     setCartOpen(false);
     setCheckoutStep("cart");
     setSubmitError(null);
@@ -825,7 +843,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                     className="h-10 w-10 shrink-0 text-white hover:opacity-95"
                     aria-label={t("qtyIncrease", { product: product.name })}
                     onClick={() => adjustLineQty(lineKey, 1)}
-                    style={{ backgroundColor: accentColor }}
+                    style={accentStyle}
                   >
                     <AddIcon className="h-4 w-4" aria-hidden />
                   </Button>
@@ -862,7 +880,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 className="h-10 w-10 shrink-0 text-white hover:opacity-95"
                 aria-label={t("qtyIncrease", { product: product.name })}
                 onClick={() => adjustLineQty(lineKey, 1)}
-                style={{ backgroundColor: accentColor }}
+                style={accentStyle}
               >
                 <AddIcon className="h-4 w-4" aria-hidden />
               </Button>
@@ -875,8 +893,8 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
-        <div className="animate-pulse space-y-6">
+      <div role="status" aria-label={tCommon("loading")} className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
+        <div aria-hidden className="animate-pulse space-y-6">
           <div className="space-y-3">
             <div className="h-16 w-16 rounded-md bg-muted" />
             <div className="h-8 w-56 rounded-md bg-muted" />
@@ -903,9 +921,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   if (!catalog || errorMessage) {
     return (
       <div className="mx-auto flex min-h-[60vh] w-full max-w-xl flex-col items-center justify-center gap-4 px-4 text-center sm:px-6">
-        <p className="text-lg font-semibold">{t("notFoundTitle")}</p>
-        <p className="text-sm text-muted-foreground">{errorMessage ?? t("notFoundDescription")}</p>
-        <Button type="button" onClick={() => router.refresh()}>
+        <h1 className="text-lg font-semibold">{notFound ? t("notFoundTitle") : tErrors("genericTitle")}</h1>
+        <p role="alert" className="text-sm text-muted-foreground">{notFound ? t("notFoundDescription") : errorMessage ?? tErrors("genericMessage")}</p>
+        <Button type="button" onClick={() => setReload((value) => value + 1)}>
           {t("retry")}
         </Button>
       </div>
@@ -930,7 +948,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     >
       <div
         className={cn(
-          "rounded-md border border-border/80 bg-card/80 shadow-sm",
+          "rounded-md border border-border bg-card shadow-sm",
           isCompactHeader ? "p-3 sm:p-4" : "p-4 sm:p-5",
         )}
       >
@@ -987,9 +1005,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             </div>
             <LanguageSwitcher
               compact={isCompactHeader}
-              className="shrink-0 rounded-md bg-background/70"
+              className="shrink-0 rounded-md bg-background"
               activeButtonClassName="text-white"
-              activeButtonStyle={{ backgroundColor: accentColor, borderColor: accentColor }}
+              activeButtonStyle={{ ...accentStyle, borderColor: accentColor }}
               buttonClassName="font-medium"
             />
           </div>
@@ -1005,6 +1023,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             )}
           >
             <SearchInput
+              ref={searchRef}
               value={search}
               onValueChange={setSearch}
               placeholder={t("searchPlaceholder")}
@@ -1045,12 +1064,15 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             )}
           </div>
         ) : (
-          groupedProducts.map((group) => {
+          groupedProducts.map((group, index) => {
             const collapsed = collapsedCategories[group.key] ?? false;
+            const panelId = `${categoryId}-category-${index}`;
             return (
-              <section key={group.key} className="rounded-md border border-border/70 bg-card/70">
+              <section key={group.key} className="rounded-md border border-border bg-card">
                 <button
                   type="button"
+                  aria-expanded={!collapsed}
+                  aria-controls={collapsed ? undefined : panelId}
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                   onClick={() =>
                     setCollapsedCategories((prev) => ({
@@ -1073,7 +1095,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                   </span>
                 </button>
                 {!collapsed ? (
-                  <div className="grid gap-3 border-t border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div id={panelId} className="grid gap-3 border-t border-border p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {group.products.map((product) =>
                       renderProductCard(product, priorityProductIds.has(product.id)),
                     )}
@@ -1084,7 +1106,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           })
         )}
         {catalog.pagination.total > 0 ? (
-          <div className="flex flex-col items-center gap-3 border-t border-border/70 pt-4">
+          <div className="flex flex-col items-center gap-3 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
               {t("shownCount", {
                 shown: visibleProducts.length,
@@ -1121,7 +1143,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             <button
               type="button"
               onClick={openCart}
-              className="mx-auto flex h-[4.35rem] w-full max-w-xl items-center justify-between rounded-md border border-border/80 bg-card px-4 shadow-2xl backdrop-blur"
+              className="mx-auto flex h-[4.35rem] w-full max-w-xl items-center justify-between rounded-md border border-border bg-card px-4 shadow-md"
               style={{ borderLeft: `4px solid ${accentColor}` }}
             >
               <span className="inline-flex items-center gap-2">
@@ -1131,7 +1153,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               </span>
               <span
                 className="inline-flex items-center rounded-md px-3.5 py-2 text-sm font-semibold text-white shadow-sm"
-                style={{ backgroundColor: accentColor }}
+                style={accentStyle}
               >
                 {t("cartButton", { count: cartItemsCount })}
               </span>
@@ -1141,7 +1163,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             <button
               type="button"
               onClick={openCart}
-              className="inline-flex h-12 items-center gap-3 rounded-md border border-border/80 bg-card px-4 shadow-xl"
+              className="inline-flex h-12 items-center gap-3 rounded-md border border-border bg-card px-4 shadow-md"
               style={{ borderLeft: `4px solid ${accentColor}` }}
             >
               <span className="text-sm font-semibold">
@@ -1156,6 +1178,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       ) : null}
 
       <Modal
+        returnFocusRef={cartReturnFocusRef}
         open={cartOpen}
         onOpenChange={(open) => {
           if (!open) {
@@ -1183,7 +1206,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               type="button"
               onClick={closeCart}
               className="text-white hover:opacity-95"
-              style={{ backgroundColor: accentColor }}
+              style={accentStyle}
             >
               {t("successClose")}
             </Button>
@@ -1236,7 +1259,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 placeholder={t("checkoutCommentPlaceholder")}
               />
             </div>
-            {submitError ? <p className="text-sm text-danger">{submitError}</p> : null}
+            {submitError ? <p role="alert" className="text-sm text-danger">{submitError}</p> : null}
             {loyalty ? (
               <div className="space-y-2 rounded-md border border-border p-3 text-sm">
                 <div className="flex items-center justify-between">
@@ -1279,7 +1302,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 onClick={submitCheckout}
                 disabled={submitting}
                 className="text-white hover:opacity-95"
-                style={{ backgroundColor: accentColor }}
+                style={accentStyle}
               >
                 {submitting ? <Spinner className="h-4 w-4" /> : null}
                 {t("checkoutSubmit")}
@@ -1354,7 +1377,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                             className="h-10 w-10 shrink-0 text-white hover:opacity-95"
                             aria-label={t("qtyIncrease", { product: item.product.name })}
                             onClick={() => adjustLineQty(item.lineKey, 1)}
-                            style={{ backgroundColor: accentColor }}
+                            style={accentStyle}
                           >
                             <AddIcon className="h-4 w-4" aria-hidden />
                           </Button>
@@ -1377,7 +1400,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                     type="button"
                     className="mt-3 w-full text-white hover:opacity-95"
                     onClick={() => setCheckoutStep("form")}
-                    style={{ backgroundColor: accentColor }}
+                    style={accentStyle}
                   >
                     {t("checkoutOpen")}
                   </Button>
@@ -1394,7 +1417,6 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           className="inline-flex items-center justify-center rounded-md px-2 py-1 hover:opacity-90"
         >
           <img src="/brand/logo.png" alt={t("poweredBy")} className="h-7 w-auto" />
-          <span className="sr-only">{t("poweredBy")}</span>
         </Link>
       </div>
     </div>

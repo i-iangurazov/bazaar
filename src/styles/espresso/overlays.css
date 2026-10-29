@@ -1,0 +1,1116 @@
+/* Espresso overlays, adapted from Frappe Framework (MIT).
+ * Revision e8d41dd0061a32ee781caefe5d0b0d2bb7c15362; see THIRD_PARTY_NOTICES.md.
+ * Radix retains positioning, focus and interaction; these are upstream appearance rules.
+ */
+@layer components {
+/* Espresso Menu — the floating panel shared by Dropdown and ContextMenu.
+ *
+ * Framework-neutral: the class + data-attribute contract below is everything.
+ * The data-attribute names (data-state, data-highlighted, data-disabled) are
+ * the ones radix/reka emit, so React and Vue apps get this styling from their
+ * menu primitives as-is; classic frappe gets them from frappe.ui.Dropdown.
+ *
+ *   <div class="es-menu" role="menu" data-state="open" data-motion="animated"
+ *        data-side="bottom" data-align="start">
+ *     <div class="es-menu__group" role="group">
+ *       <div class="es-menu__group-label">Group</div>
+ *       <button class="es-menu__item" role="menuitem">
+ *         <svg>...</svg>                        (icon, optional)
+ *         <img class="es-menu__image">          (image mark, optional)
+ *         <span class="es-menu__icon-space"></span>  (aligns iconless rows)
+ *         <span class="es-menu__label">La<span class="es-menu__mnemonic">b</span>el
+ *           <span class="es-menu__description">optional line</span>
+ *         </span>
+ *         <span class="es-menu__shortcut"><kbd>⌘</kbd><kbd>D</kbd></span>
+ *         <svg class="es-menu__icon-right">...</svg> (icon_right)
+ *         <svg class="es-menu__chevron">...</svg>    (submenu rows)
+ *       </button>
+ *     </div>
+ *     <div class="es-menu__empty">No options</div>
+ *   </div>
+ *
+ * Item attributes:
+ *   data-highlighted          the keyboard/pointer-active row
+ *   data-state="checked"      app-marked current choice (visual only)
+ *   data-state="open"         submenu row whose panel is open
+ *   data-disabled / disabled  inert row
+ *   data-theme="red"          destructive row
+ *
+ * Panel attributes:
+ *   data-state="open|closed"          drives enter/exit animation
+ *   data-motion="animated|instant"    pointer opens animate, keyboard opens don't
+ *   data-side / data-align            where the panel sits; sets the scale origin
+ *
+ * Rows are links or buttons; no hover styling on purpose — the highlight
+ * follows data-highlighted so pointer and keyboard can't mark two rows at
+ * once (same as radix/reka). Row height comes from padding + line-height
+ * only, never a fixed height. */
+
+.es-menu {
+    /* the owner (frappe.ui.Dropdown / a portal) sets top/left inline */
+    position: fixed;
+    /* above bootstrap modals (1050) so menus inside dialogs work */
+    z-index: 1060;
+    min-width: calc(var(--spacing) * 40);
+    /* the owner sets max-height inline when the viewport is short */
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--surface-elevation-2);
+    border-radius: var(--radius-lg);
+    /* faint 1px ring under the elevation shadow */
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), var(--elevation-2xl);
+    outline: none;
+}
+
+/* ---- groups ---- */
+.es-menu__group {
+    padding: calc(var(--spacing) * 1.5);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 0.5);
+}
+
+.es-menu__group+.es-menu__group {
+    border-top: 1px solid var(--outline-elevation-2);
+}
+
+.es-menu__group-label {
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 1.5);
+    font-size: var(--text-sm);
+    line-height: calc(var(--spacing) * 4);
+    font-weight: var(--font-weight-medium);
+    color: var(--ink-gray-4);
+}
+
+/* ---- rows ---- */
+.es-menu__item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    width: 100%;
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+    border-radius: var(--radius);
+    font-size: var(--text-base);
+    line-height: calc(var(--spacing) * 4);
+    color: var(--ink-gray-7);
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+
+    /* button rows: strip the native button look */
+    border: 0;
+    background: transparent;
+}
+
+.es-menu__item:hover {
+    /* links: no underline; the highlight background comes from
+       data-highlighted below, not :hover (see the note up top) */
+    text-decoration: none;
+    color: var(--ink-gray-7);
+}
+
+.es-menu__item[data-highlighted] {
+    background: var(--surface-alpha-gray-2);
+}
+
+/* submenu row whose panel is open stays lit */
+.es-menu__item[data-state="open"] {
+    background: var(--surface-gray-2);
+}
+
+/* the app-marked current choice */
+.es-menu__item[data-state="checked"] {
+    background: var(--surface-gray-3);
+    color: var(--ink-gray-8);
+}
+
+.es-menu__item[data-state="checked"][data-highlighted] {
+    background: var(--surface-gray-4);
+}
+
+/* ---- red (destructive) rows ---- */
+.es-menu__item[data-theme="red"] {
+    color: var(--ink-red-6);
+}
+
+.es-menu__item[data-theme="red"]:hover {
+    color: var(--ink-red-6);
+}
+
+.es-menu__item[data-theme="red"][data-highlighted] {
+    background: var(--surface-red-3);
+}
+
+/* ---- disabled rows ---- */
+.es-menu__item[data-disabled],
+.es-menu__item:disabled {
+    color: var(--ink-gray-4);
+    cursor: not-allowed;
+    pointer-events: none;
+    background: transparent;
+}
+
+/* ---- icons ---- */
+.es-menu__item>svg,
+.es-menu__icon-space {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    flex-shrink: 0;
+}
+
+.es-menu__item>svg {
+    color: var(--ink-gray-6);
+}
+
+.es-menu__item[data-theme="red"]>svg {
+    color: var(--ink-red-6);
+}
+
+.es-menu__item[data-disabled]>svg,
+.es-menu__item:disabled>svg {
+    color: var(--ink-gray-4);
+}
+
+/* an image mark where no lucide icon will do — an app's logo, say. Same box as
+   an icon, so a menu mixing the two keeps one label column. */
+.es-menu__image {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    flex-shrink: 0;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+/* ---- label + optional description ---- */
+.es-menu__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.es-menu__description {
+    display: block;
+    font-size: var(--text-p-sm, var(--text-sm));
+    line-height: 1.5;
+    color: var(--ink-gray-5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- Alt-key mnemonics ----
+   Each row has one letter of its label wrapped in .es-menu__mnemonic. It's
+   only underlined while Alt is held (the panel gets data-alt then), matching
+   frappe's Alt+letter menu shortcuts. Alt+that letter activates the row. */
+.es-menu[data-alt] .es-menu__mnemonic {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* ---- keyboard shortcut hint: one <kbd> per key ----
+   Both bootstrap and desk/global.scss style bare kbd (dark background,
+   fixed height, padding) and load after this file — the two-class selector
+   out-specifies them. */
+.es-menu__shortcut {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    margin-inline-start: auto;
+    color: var(--ink-gray-6);
+    font-size: var(--text-xs);
+}
+
+.es-menu__shortcut kbd {
+    padding: 0;
+    height: auto;
+    background: transparent;
+    border-radius: 0;
+    font-family: inherit;
+    font-size: var(--text-xs);
+    line-height: calc(var(--spacing) * 4);
+    letter-spacing: normal;
+    color: var(--ink-gray-6);
+    /** Box Shadow comes from Desk's stylesheet - overriding */
+    box-shadow: none;
+}
+
+/* mobile layouts have no keyboard — the combo hints are noise there
+   (the bindings themselves stay active for attached keyboards) */
+@media (max-width: 767.98px) {
+    .es-menu__shortcut {
+        display: none;
+    }
+}
+
+/* ---- trailing icon (icon_right) ---- */
+.es-menu__icon-right {
+    margin-inline-start: auto;
+}
+
+.es-menu__shortcut+.es-menu__icon-right {
+    margin-inline-start: 0;
+}
+
+/* ---- submenu chevron ---- */
+.es-menu__chevron {
+    margin-inline-start: auto;
+    color: var(--ink-gray-6);
+}
+
+/* rows with a shortcut AND a submenu: the shortcut already pushed right,
+   the chevron just follows the gap */
+.es-menu__shortcut+.es-menu__chevron {
+    margin-inline-start: 0;
+}
+
+[dir="rtl"] .es-menu__chevron {
+    transform: scaleX(-1);
+}
+
+/* ---- empty state ---- */
+.es-menu__empty {
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+    font-size: var(--text-base);
+    color: var(--ink-gray-5);
+}
+
+/* ---- loading state (async options/submenu, swapped out by fill()) ---- */
+.es-menu__loading {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+    font-size: var(--text-base);
+    color: var(--ink-gray-5);
+}
+
+.es-menu__loading>.es-spinner {
+    width: calc(var(--spacing) * 3.5);
+    height: calc(var(--spacing) * 3.5);
+}
+
+/* ---- motion: scale in from the trigger corner (per the frappe-ui spec:
+   enter 180ms / exit 140ms, keyboard opens skip the scale and only get a
+   short fade that masks the position-settle frame) ---- */
+.es-menu[data-motion="animated"][data-state="open"] {
+    animation: es-menu-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.es-menu[data-motion="instant"][data-state="open"] {
+    animation: es-menu-fade-in 80ms linear;
+}
+
+.es-menu[data-state="closed"] {
+    animation: es-menu-out 140ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    pointer-events: none;
+}
+
+@keyframes es-menu-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97) translateY(2px);
+    }
+}
+
+@keyframes es-menu-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes es-menu-out {
+    to {
+        opacity: 0;
+        transform: scale(0.97) translateY(2px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .es-menu {
+        animation-duration: 0ms !important;
+    }
+}
+
+/* scale origin = the edge touching the trigger */
+.es-menu[data-side="bottom"] {
+    transform-origin: top center;
+}
+
+.es-menu[data-side="bottom"][data-align="start"] {
+    transform-origin: top left;
+}
+
+.es-menu[data-side="bottom"][data-align="end"] {
+    transform-origin: top right;
+}
+
+.es-menu[data-side="top"] {
+    transform-origin: bottom center;
+}
+
+.es-menu[data-side="top"][data-align="start"] {
+    transform-origin: bottom left;
+}
+
+.es-menu[data-side="top"][data-align="end"] {
+    transform-origin: bottom right;
+}
+
+.es-menu[data-side="right"] {
+    transform-origin: left center;
+}
+
+.es-menu[data-side="right"][data-align="start"] {
+    transform-origin: left top;
+}
+
+.es-menu[data-side="right"][data-align="end"] {
+    transform-origin: left bottom;
+}
+
+.es-menu[data-side="left"] {
+    transform-origin: right center;
+}
+
+.es-menu[data-side="left"][data-align="start"] {
+    transform-origin: right top;
+}
+
+.es-menu[data-side="left"][data-align="end"] {
+    transform-origin: right bottom;
+}
+/* Espresso Popover — a small non-modal panel anchored to a trigger, for
+ * things like filter panels and quick forms. Unlike a menu it holds real
+ * interactive content (inputs, buttons), and unlike a dialog it doesn't
+ * block the rest of the page.
+ *
+ * Framework-neutral: the class + data-attribute contract below is
+ * everything. The attribute names (data-state, data-side, data-align) are
+ * the ones radix/reka emit, so React and Vue apps get this styling from
+ * their popover primitives as-is; classic frappe gets them from
+ * frappe.ui.Popover.
+ *
+ *   <div class="es-popover" role="dialog" tabindex="-1" data-state="open"
+ *        data-side="bottom" data-align="start">
+ *     <div class="es-popover__header">
+ *       <div class="es-popover__title">Title</div>
+ *       <p class="es-popover__description">Optional line under it.</p>
+ *     </div>
+ *     ... any content ...
+ *   </div>
+ *
+ * Panel attributes:
+ *   data-state="open|closed"    drives enter/exit animation
+ *   data-side / data-align      which side of the trigger it landed on
+ *
+ * The owner sets top/left inline (fixed viewport coordinates, panel
+ * appended to <body> — same rules as .es-menu, see position.js). */
+
+.es-popover {
+    /* the owner (frappe.ui.Popover / a portal) sets top/left inline */
+    position: fixed;
+    box-sizing: border-box;
+    /* same layer as menus; tooltips (1070) stay visible above it */
+    z-index: 1060;
+    width: calc(var(--spacing) * 72);
+    max-width: calc(100vw - calc(var(--spacing) * 4));
+    /* the owner sets max-height inline when the viewport is short */
+    overflow: auto;
+    padding: calc(var(--spacing) * 3);
+    background: var(--surface-elevation-2);
+    border: 1px solid var(--outline-elevation-2);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--elevation-xl);
+    outline: none;
+}
+
+/* ---- optional header block (title + description) ---- */
+.es-popover__header {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 1);
+    margin-bottom: calc(var(--spacing) * 2);
+}
+
+.es-popover__title {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    color: var(--ink-gray-8);
+}
+
+.es-popover__description {
+    margin: 0;
+    font-size: var(--text-p-sm, var(--text-sm));
+    line-height: 1.5;
+    color: var(--ink-gray-5);
+}
+
+/* ---- motion enter = fade-in-0 zoom-in-95 +
+   slide-in-from-<trigger side>-2, exit = fade-out-0 zoom-out-95) ---- */
+.es-popover[data-state="open"] {
+    animation: es-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.es-popover[data-state="closed"] {
+    animation: es-popover-out 100ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    pointer-events: none;
+}
+
+.es-popover[data-side="top"] {
+    --slide-from: translateY(8px);
+}
+
+.es-popover[data-side="bottom"] {
+    --slide-from: translateY(-8px);
+}
+
+.es-popover[data-side="left"] {
+    --slide-from: translateX(8px);
+}
+
+.es-popover[data-side="right"] {
+    --slide-from: translateX(-8px);
+}
+
+@keyframes es-popover-in {
+    from {
+        opacity: 0;
+        transform: var(--slide-from, none) scale(0.95);
+    }
+}
+
+@keyframes es-popover-out {
+    to {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .es-popover {
+        animation-duration: 0ms !important;
+    }
+}
+
+/* scale origin = the edge touching the trigger */
+.es-popover[data-side="bottom"] {
+    transform-origin: top center;
+}
+
+.es-popover[data-side="bottom"][data-align="start"] {
+    transform-origin: top left;
+}
+
+.es-popover[data-side="bottom"][data-align="end"] {
+    transform-origin: top right;
+}
+
+.es-popover[data-side="top"] {
+    transform-origin: bottom center;
+}
+
+.es-popover[data-side="top"][data-align="start"] {
+    transform-origin: bottom left;
+}
+
+.es-popover[data-side="top"][data-align="end"] {
+    transform-origin: bottom right;
+}
+
+.es-popover[data-side="right"] {
+    transform-origin: left center;
+}
+
+.es-popover[data-side="right"][data-align="start"] {
+    transform-origin: left top;
+}
+
+.es-popover[data-side="right"][data-align="end"] {
+    transform-origin: left bottom;
+}
+
+.es-popover[data-side="left"] {
+    transform-origin: right center;
+}
+
+.es-popover[data-side="left"][data-align="start"] {
+    transform-origin: right top;
+}
+
+.es-popover[data-side="left"][data-align="end"] {
+    transform-origin: right bottom;
+}
+
+/* Espresso Tooltip — the small dark bubble that names a control on hover.
+ *
+ * Framework-neutral: the class + data-attribute contract below is everything.
+ * The attribute names (data-state, data-side, data-align) are the ones
+ * radix/reka emit, so React and Vue apps get this styling from their tooltip
+ * primitives as-is; classic frappe gets them from frappe.ui.tooltip().
+ *
+ *   <div class="es-tooltip" role="tooltip" data-state="open"
+ *        data-side="top" data-align="center">
+ *     Label text
+ *     <span class="es-tooltip__arrow"></span>
+ *   </div>
+ *
+ * Panel attributes:
+ *   data-state="open|closed"    drives enter/exit animation
+ *   data-side / data-align      which side of the trigger it landed on
+ *
+ * The owner sets top/left inline (fixed viewport coordinates, panel appended
+ * to <body> — same rules as .es-menu, see position.js). The arrow's position
+ * along the edge comes from --arrow-offset, which the owner sets so the
+ * arrow keeps pointing at the trigger even when the bubble was nudged to
+ * stay on screen.
+ *
+ * pointer-events: none on purpose — a tooltip must never catch the pointer,
+ * or it would flicker (bubble appears under the cursor, "hover leaves" the
+ * trigger, bubble hides, hover returns, ...). It's a label, not a surface. */
+
+.es-tooltip {
+    /* the owner (frappe.ui.tooltip / a portal) sets top/left inline */
+    position: fixed;
+    /* don't depend on the host page having a border-box reset */
+    box-sizing: border-box;
+    /* above menus (1060) — a row's tooltip must not hide under its own menu */
+    z-index: 1070;
+    max-width: calc(var(--spacing) * 60);
+    padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
+    background: var(--surface-gray-10);
+    color: var(--ink-base);
+    border-radius: var(--radius);
+    box-shadow: var(--elevation-xl);
+    font-size: var(--text-xs);
+    line-height: calc(var(--spacing) * 4);
+    text-align: center;
+    /* even out the lines when the text wraps */
+    text-wrap: balance;
+    /* a label may carry its own line breaks */
+    white-space: pre-line;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ---- a label that lists things reads from one left edge ---- */
+.es-tooltip--text-start {
+    text-align: left;
+    text-wrap: initial;
+}
+
+/* ---- keyboard hint: one <kbd> per key after the label ----
+   Bootstrap and desk/global.scss both style bare kbd (dark chip, padding,
+   box-shadow) and load after this file — the two-class selector
+   out-specifies them, same trick as the menu shortcuts. */
+.es-tooltip .es-tooltip__shortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    margin-inline-start: calc(var(--spacing) * 1.5);
+    vertical-align: bottom;
+}
+
+.es-tooltip kbd {
+    padding: 0;
+    height: auto;
+    background: transparent;
+    border-radius: 0;
+    font-family: inherit;
+    font-size: var(--text-xs);
+    line-height: calc(var(--spacing) * 4);
+    letter-spacing: normal;
+    color: var(--ink-gray-4);
+    box-shadow: none;
+}
+
+/* ---- plain: a bubble with no arrow ----
+   For triggers where an arrow adds nothing but clutter: a run of same-sized
+   tiles whose labels all appear in the same place, where the bubble's own
+   position already says which tile it belongs to. The owner omits the arrow
+   node as well (see tooltip.js), so this only has to cover a bubble built
+   elsewhere. */
+.es-tooltip--plain .es-tooltip__arrow {
+    display: none;
+}
+
+/* ---- arrow: an 8x4 triangle on the edge facing the trigger ----
+   Made from borders: a 4px transparent frame where only the side facing
+   away from the bubble is filled, which reads as a triangle. --arrow-offset
+   is the distance from the panel's left (top/bottom sides) or top (left/
+   right sides) edge to the arrow's center. */
+.es-tooltip__arrow {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: 4px solid transparent;
+}
+
+.es-tooltip[data-side="top"] .es-tooltip__arrow {
+    top: 100%;
+    left: var(--arrow-offset, 50%);
+    margin-left: -4px;
+    border-top-color: var(--surface-gray-10);
+    border-bottom-width: 0;
+}
+
+.es-tooltip[data-side="bottom"] .es-tooltip__arrow {
+    bottom: 100%;
+    left: var(--arrow-offset, 50%);
+    margin-left: -4px;
+    border-bottom-color: var(--surface-gray-10);
+    border-top-width: 0;
+}
+
+.es-tooltip[data-side="left"] .es-tooltip__arrow {
+    left: 100%;
+    top: var(--arrow-offset, 50%);
+    margin-top: -4px;
+    border-left-color: var(--surface-gray-10);
+    border-right-width: 0;
+}
+
+.es-tooltip[data-side="right"] .es-tooltip__arrow {
+    right: 100%;
+    top: var(--arrow-offset, 50%);
+    margin-top: -4px;
+    border-right-color: var(--surface-gray-10);
+    border-left-width: 0;
+}
+
+/* ---- motion (enter = fade-in-0 zoom-in-95 +
+   slide-in-from-<trigger side>-2, i.e. the bubble starts near the trigger
+   at 95% scale and settles out; exit = fade-out-0 zoom-out-95, no slide).
+   The zoom grows out of the arrow, not the bubble's center — the arrow
+   marks where the trigger is, so that's where the bubble should come
+   from. --arrow-offset (set by the owner) doubles as the origin. ---- */
+.es-tooltip[data-state="open"] {
+    animation: es-tooltip-in 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.es-tooltip[data-state="closed"] {
+    animation: es-tooltip-out 100ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.es-tooltip[data-side="top"] {
+    --slide-from: translateY(8px);
+    transform-origin: var(--arrow-offset, 50%) 100%;
+}
+
+.es-tooltip[data-side="bottom"] {
+    --slide-from: translateY(-8px);
+    transform-origin: var(--arrow-offset, 50%) 0%;
+}
+
+.es-tooltip[data-side="left"] {
+    --slide-from: translateX(8px);
+    transform-origin: 100% var(--arrow-offset, 50%);
+}
+
+.es-tooltip[data-side="right"] {
+    --slide-from: translateX(-8px);
+    transform-origin: 0% var(--arrow-offset, 50%);
+}
+
+@keyframes es-tooltip-in {
+    from {
+        opacity: 0;
+        transform: var(--slide-from, none) scale(0.95);
+    }
+}
+
+@keyframes es-tooltip-out {
+    to {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .es-tooltip {
+        animation-duration: 0ms !important;
+    }
+}
+/* Espresso Alert — a static message banner with an optional icon,
+ * description and dismiss button.
+ *
+ * Markup:
+ *   <div class="es-alert" role="alert" data-theme="blue">
+ *     <svg>...</svg>                          (themed icon, optional)
+ *     <div class="es-alert__content">
+ *       <span class="es-alert__title">...</span>
+ *       <p class="es-alert__description">...</p>   (optional)
+ *     </div>
+ *     <button class="es-alert__dismiss">...</button>  (optional)
+ *   </div>
+ *
+ * Attributes (all optional):
+ *   data-theme     yellow | blue | red | green   (no theme = plain gray, no icon)
+ *   data-variant   subtle | outline              (default: subtle)
+ *
+ * "yellow" uses the amber tokens — the name comes from frappe-ui's Alert. */
+
+.es-alert {
+
+    /* default (no theme): plain gray */
+    --es-al-bg: var(--surface-gray-2);
+    --es-al-icon: var(--ink-gray-6);
+
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: start;
+    gap: calc(var(--spacing) * 3);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 3.5);
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
+    background: var(--es-al-bg);
+}
+
+/* ---- themes ---- */
+.es-alert[data-theme="yellow"] {
+    --es-al-bg: var(--surface-amber-2);
+    --es-al-icon: var(--ink-amber-6);
+}
+
+.es-alert[data-theme="blue"] {
+    --es-al-bg: var(--surface-blue-2);
+    --es-al-icon: var(--ink-blue-6);
+}
+
+.es-alert[data-theme="red"] {
+    --es-al-bg: var(--surface-red-2);
+    --es-al-icon: var(--ink-red-6);
+}
+
+.es-alert[data-theme="green"] {
+    --es-al-bg: var(--surface-green-2);
+    --es-al-icon: var(--ink-green-6);
+}
+
+/* ---- outline variant: border instead of a filled background ---- */
+.es-alert[data-variant="outline"] {
+    background: transparent;
+    border: 1px solid var(--outline-gray-3);
+}
+
+/* ---- children ---- */
+.es-alert > svg {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    margin-top: 2px;
+    color: var(--es-al-icon);
+    flex-shrink: 0;
+}
+
+.es-alert__content {
+    display: grid;
+    gap: calc(var(--spacing) * 2);
+}
+
+/* no icon: let the content start in the first column */
+.es-alert__content:first-child {
+    grid-column: 1 / span 2;
+}
+
+.es-alert__title {
+    color: var(--ink-gray-9);
+}
+
+.es-alert__description {
+    margin: 0;
+    color: var(--ink-gray-6);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+}
+
+.es-alert__dismiss {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    line-height: 0;
+    color: var(--ink-gray-6);
+}
+
+.es-alert__dismiss:focus-visible {
+    outline: var(--focus-outline-default);
+    border-radius: var(--radius-1);
+}
+
+.es-alert__dismiss > svg {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+}
+
+/* ---- footer (element form): sits under the content, e.g. action buttons ---- */
+.es-alert__footer {
+    grid-column: 2;
+    display: flex;
+    gap: calc(var(--spacing) * 2);
+}
+
+/* no icon: line the footer up with the content, which starts in column 1 */
+.es-alert > .es-alert__content:first-child ~ .es-alert__footer {
+    grid-column: 1 / span 2;
+}
+
+/* Espresso Toast — the floating message pill, bottom-right.
+ *
+ * Dark pill on every theme (same inverted look as frappe-ui's toast):
+ *   <div class="es-toast" role="status" data-type="success">
+ *     <svg>...</svg>
+ *     <div class="es-toast__content">
+ *       <div class="es-toast__message">Saved</div>
+ *       <div class="es-toast__description">optional second line</div>
+ *     </div>
+ *     <button class="es-toast__action">Undo</button>      (optional)
+ *     <button class="es-toast__close close">...</button>  (optional)
+ *   </div>
+ *
+ * data-type  info | success | warning | error  — colors the icon.
+ * Toasts live in .es-toast-container, which frappe.ui.toast manages. */
+
+.es-toast-container {
+    position: fixed;
+    bottom: 12px;
+    inset-inline-end: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 2);
+    pointer-events: none;
+}
+
+@media (max-width: 575.98px) {
+    .es-toast-container {
+        inset-inline: 8px;
+    }
+}
+
+.es-toast {
+    /* icons inherit the pill's text color unless the type recolors them
+       (info has no icon and no color of its own, same as frappe-ui) */
+    --es-toast-icon: currentColor;
+
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 3);
+    min-width: 280px;
+    max-width: 400px;
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 2.5);
+    border-radius: var(--radius-md);
+    background: var(--surface-gray-9);
+    color: var(--ink-base);
+    box-shadow: var(--elevation-lg);
+    pointer-events: auto;
+    animation: es-toast-in 250ms ease-out;
+}
+
+/* .out is the old alert's exit class — old code slides a toast away by
+   adding it to the element show_alert returned, so it keeps working here.
+   The element stays in the DOM until its timer removes it, hence no
+   pointer events while (in)visible. */
+.es-toast--out,
+.es-toast.out {
+    animation: es-toast-out 200ms ease-in forwards;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .es-toast,
+    .es-toast--out,
+    .es-toast.out {
+        animation: none;
+    }
+
+    .es-toast--out,
+    .es-toast.out {
+        opacity: 0;
+    }
+}
+
+/* ---- icon colors per type ---- */
+.es-toast[data-type="info"] {
+    --es-toast-icon: var(--ink-blue-5);
+}
+
+.es-toast[data-type="success"] {
+    --es-toast-icon: var(--ink-green-5);
+}
+
+.es-toast[data-type="warning"] {
+    --es-toast-icon: var(--ink-amber-5);
+}
+
+.es-toast[data-type="error"] {
+    --es-toast-icon: var(--ink-red-5);
+}
+
+.es-toast > svg,
+.es-toast > .es-spinner {
+    flex-shrink: 0;
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    color: var(--es-toast-icon);
+}
+
+/* ---- content ---- */
+.es-toast__content {
+    flex-grow: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.es-toast__message {
+    /* text-p-base + medium, per the frappe-ui toast */
+    font-size: var(--text-p-base, var(--text-base));
+    line-height: 1.5;
+    letter-spacing: 0.015em;
+    font-weight: var(--font-weight-medium);
+    overflow-wrap: break-word;
+}
+
+.es-toast__description {
+    /* text-p-base, inheriting the pill's ink — the message's medium weight
+       is what sets the two lines apart */
+    font-size: var(--text-p-base, var(--text-base));
+    line-height: 1.5;
+    letter-spacing: 0.015em;
+    overflow-wrap: break-word;
+}
+
+/* Links in the message or description have the same problem as 'close' class,
+    it's styled directly by the global `a { color: var(--text-color) }`.
+    This out-specifies the global styles*/
+.es-toast a,
+.es-toast a:hover,
+.es-toast a:focus {
+    color: var(--ink-base);
+}
+
+
+
+/* extra html passed through the legacy body option */
+.es-toast__body {
+    margin-top: var(--spacing);
+    font-size: var(--text-sm);
+}
+
+/* save-success toasts pass "next action" buttons through body */
+.es-toast__body .next-action-container {
+    display: flex;
+    margin-top: var(--spacing);
+}
+
+.es-toast__body .next-action {
+    border: 0;
+    background: none;
+    width: 100%;
+    padding: calc(var(--spacing) * 2);
+    border-top: 1px solid var(--outline-gray-3);
+    color: var(--ink-gray-4);
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+.es-toast__body .next-action:hover {
+    color: var(--ink-base);
+}
+
+/* ---- action + close buttons ---- */
+.es-toast__action {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    border: 0;
+    background: transparent;
+    height: calc(var(--spacing) * 7);
+    padding-block: calc(var(--spacing) * 1.5);
+    padding-inline: calc(var(--spacing) * 2);
+    margin-inline-start: auto;
+    margin-inline-end: calc(var(--spacing) * 2);
+    border-radius: var(--radius);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--ink-blue-link);
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms;
+}
+
+.es-toast__action:hover {
+    background: var(--surface-gray-8);
+}
+
+.es-toast__close {
+    flex-shrink: 0;
+    border: 0;
+    background: transparent;
+    padding: var(--spacing);
+    border-radius: var(--radius);
+    line-height: 0;
+    color: var(--ink-base);
+    cursor: pointer;
+}
+
+.es-toast__close:hover {
+    color: var(--ink-gray-3);
+}
+
+/* The button also carries bootstrap's old "close" class so legacy
+   .find(".close").click() dismissals keep working. Bootstrap styles .close
+   globally and loads after this file, so these selectors out-specify its
+   rules (including the :hover/:focus opacity one) to keep the toast look. */
+.es-toast button.es-toast__close.close {
+    float: none;
+    padding: var(--spacing);
+    line-height: 0;
+    color: var(--ink-base);
+    text-shadow: none;
+    opacity: 1;
+}
+
+.es-toast button.es-toast__close.close:hover {
+    color: var(--ink-gray-3);
+}
+
+.es-toast__action:focus-visible,
+.es-toast__close:focus-visible {
+    outline: var(--focus-outline-default);
+}
+
+.es-toast__close > svg {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    color: currentColor;
+}
+
+@keyframes es-toast-in {
+    from {
+        transform: translateX(120%);
+        opacity: 0.5;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes es-toast-out {
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+
+/* Bazaar exposes title/description as direct children; retain Espresso content spacing. */
+.es-alert > .es-alert__title + .es-alert__description {
+  margin-top: calc(var(--spacing) * 2);
+}
+
+}

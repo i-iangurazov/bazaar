@@ -45,6 +45,19 @@ try {
     where: { storeId: f.otherStoreId, referenceType: "STOCK_RECEIVING" },
     orderBy: { createdAt: "asc" },
   });
+  // Standalone visual runs do not execute browser mutation flows before this fixture.
+  if (!(await prisma.stockMovement.findFirst({
+    where: { storeId: f.otherStoreId, referenceType: "TRANSFER" },
+    select: { id: true },
+  }))) {
+    await api.inventory.transfer({
+      fromStoreId: f.storeId,
+      toStoreId: f.otherStoreId,
+      lines: [{ productId: f.products[5].id, qty: 1 }],
+      note: notes,
+      idempotencyKey: `ux-details-transfer-${f.organizationId}`,
+    });
+  }
   const transfer = await prisma.stockMovement.findFirstOrThrow({
     where: { storeId: f.otherStoreId, referenceType: "TRANSFER" },
     orderBy: { createdAt: "desc" },

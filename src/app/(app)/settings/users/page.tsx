@@ -554,6 +554,7 @@ const UsersPage = () => {
                                     </span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem disabled={transferPermission.isLoading} onSelect={() => transferPermission.mutate({userId:user.id,enabled:!user.canTransferStock})}>
+                                    <TransferIcon className="h-4 w-4" aria-hidden />
                                     {t(user.canTransferStock ? "disableTransfer" : "enableTransfer")}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onSelect={() => setResetUser(user)}>
@@ -702,7 +703,7 @@ const UsersPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-            ) : !usersQuery.data?.length ? (
+            ) : !usersQuery.error && !usersQuery.data?.length ? (
               <div className="bazaar-admin-empty">
                 <div className="flex items-center gap-2">
                   <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -711,7 +712,7 @@ const UsersPage = () => {
               </div>
             ) : null}
             {usersQuery.error ? (
-              <div className="bazaar-admin-error flex flex-wrap items-center gap-2">
+              <div role="alert" className="bazaar-admin-error flex flex-wrap items-center gap-2">
                 <span>{translateError(tErrors, usersQuery.error)}</span>
                 <Button
                   type="button"
@@ -957,11 +958,11 @@ const UsersPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-            ) : !invitesQuery.data?.length ? (
+            ) : !invitesQuery.error && !invitesQuery.data?.length ? (
               <p className="bazaar-admin-empty">{t("inviteEmpty")}</p>
             ) : null}
             {invitesQuery.error ? (
-              <div className="bazaar-admin-error flex flex-wrap items-center gap-2">
+              <div role="alert" className="bazaar-admin-error flex flex-wrap items-center gap-2">
                 <span>{translateError(tErrors, invitesQuery.error)}</span>
                 <Button
                   type="button"

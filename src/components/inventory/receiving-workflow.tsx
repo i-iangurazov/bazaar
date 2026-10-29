@@ -876,7 +876,7 @@ export const InventoryReceivingPage = ({
             </Button>
           }
         />
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {t("receivingPermissionDenied")}
         </div>
       </div>
@@ -918,7 +918,7 @@ export const InventoryReceivingPage = ({
             </Button>
           }
         />
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {translateError(tErrors, editableDocumentQuery.error)}
         </div>
       </div>
@@ -979,7 +979,7 @@ export const InventoryReceivingPage = ({
                 onChange={(event) => setDateTime(event.target.value)}
               />
             </div>
-            <details className="rounded-xl border border-border/65 bg-muted/25 p-3 lg:hidden">
+            <details className="rounded-lg border border-border/65 bg-muted/25 p-3 lg:hidden">
               <summary className="cursor-pointer text-sm font-semibold text-foreground">
                 {tCommon("additional")}
               </summary>

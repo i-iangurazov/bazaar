@@ -8,6 +8,12 @@ import { resolveMigrationDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20261021170000_subscription_payments": "82dce9c6cf1511cb8c970071d9849bf54e9f919bdcf2db639dc131de86275203",
+  "20261022090000_studio_quality": "1c4ef58753f96ff3697cabb969eafc5840178d482e3f7b3232b3186b7589c8a4",
+  "20261029180000_shared_price_books": "34caf7ee88c4cfb69c3e949cd72e7fe44e6bb78449923b774beaf88f9c31b14a",
+  "20261029190000_price_book_references": "29aa80564b641431c59525b1ba562940d1146cb86e4fa6ac9970ecab554c8707",
+  "20261029200000_price_book_snapshots": "3ce9eec33b1c15556774fa4ec2117b47f7e6bda159defb69a15127d0e37fb775",
+
   "20261024090000_store_product_visibility": "06f0cd5ff4cf9b3e1de17b0fccb891e05eb8e6239ba50d726551e921188e4f88",
   "20261007155000_fractional_product_quantities": "56adfd70e51aaa098f6116de7470856e59260ef5f77dc7fb71d108c7d8522a30",
   "20261002010000_organization_price_types": "728a6ca4e0b566c2a81c228267c17aa0db7439a48556d4f8cd5e1bee283ca0e2",

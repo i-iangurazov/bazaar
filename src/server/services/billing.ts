@@ -1,5 +1,6 @@
 import { OrganizationSubscriptionStatus, PlanUpgradeRequestStatus } from "@prisma/client";
 import type { OrganizationPlan } from "@prisma/client";
+import { getPlanRank } from "@/lib/billing/plans";
 
 import { prisma } from "@/server/db/prisma";
 import { writeAuditLog } from "@/server/services/audit";
@@ -7,19 +8,16 @@ import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import {
   getLimitsForPlan,
-  type PlanTier,
   getPlanFeatures,
   getPlanMonthlyPrice,
   resolveOrganizationAccessState,
   toPlanTier,
 } from "@/server/services/planLimits";
-import { getPlanFeatureMap, getPlanMonthlyPriceKgsOverride } from "@/server/billing/planCatalog";
-
-const PLAN_RANK: Record<PlanTier, number> = {
-  STARTER: 1,
-  BUSINESS: 2,
-  ENTERPRISE: 3,
-};
+import {
+  getPlanCatalogEntries,
+  getPlanFeatureMap,
+  getPlanMonthlyPriceKgsOverride,
+} from "@/server/billing/planCatalog";
 
 const normalizeOptional = (value?: string | null) => {
   const trimmed = value?.trim();
@@ -27,16 +25,15 @@ const normalizeOptional = (value?: string | null) => {
 };
 
 export const getPlanCatalog = () => {
-  const tiers: PlanTier[] = ["STARTER", "BUSINESS", "ENTERPRISE"];
-  return tiers.map((tier) => {
-    const plan = tier as OrganizationPlan;
+  return getPlanCatalogEntries().map((entry) => {
+    const plan = entry.code;
     return {
       plan,
-      planTier: tier,
+      planTier: plan,
       limits: getLimitsForPlan(plan),
       features: getPlanFeatures(plan),
-      featureFlags: getPlanFeatureMap(plan),
-      monthlyPriceKgs: getPlanMonthlyPrice(plan),
+      featureFlags: entry.features,
+      monthlyPriceKgs: entry.monthlyPriceKgs,
       monthlyPriceKgsOverride: getPlanMonthlyPriceKgsOverride(plan),
     };
   });
@@ -52,6 +49,7 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
       subscriptionStatus: true,
       trialEndsAt: true,
       currentPeriodEndsAt: true,
+      subscriptionBillingMode: true,
       createdAt: true,
     },
   });
@@ -95,7 +93,8 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     organizationId: org.id,
     plan: org.plan,
     planTier: toPlanTier(org.plan),
-    subscriptionStatus: org.subscriptionStatus,
+    subscriptionStatus: org.subscriptionBillingMode === "SELF_SERVE" && org.subscriptionStatus === "ACTIVE" && !accessState.hasAccess ? "PAST_DUE" as const : org.subscriptionStatus,
+    subscriptionBillingMode: org.subscriptionBillingMode,
     trialEndsAt: org.trialEndsAt,
     currentPeriodEndsAt: org.currentPeriodEndsAt,
     trialExpired,
@@ -151,7 +150,7 @@ export const requestPlanUpgrade = async (input: {
 
     const currentTier = toPlanTier(org.plan);
     const requestedTier = toPlanTier(input.requestedPlan);
-    if (PLAN_RANK[requestedTier] <= PLAN_RANK[currentTier]) {
+    if (getPlanRank(requestedTier) <= getPlanRank(currentTier)) {
       throw new AppError("planUpgradeMustBeHigher", "CONFLICT", 409);
     }
 

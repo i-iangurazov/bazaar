@@ -513,7 +513,10 @@ const transcodeAppleHeifToJpeg = async (buffer: Buffer) => {
   }
 };
 
-const normalizeUploadImage = async (input: { buffer: Buffer; contentType: string }) => {
+export const normalizeProductImageUpload = async (input: {
+  buffer: Buffer;
+  contentType: string;
+}) => {
   const normalizedType = safeImageMimeType(input.contentType);
   if (!normalizedType) {
     throw new Error("imageInvalidType");
@@ -550,7 +553,7 @@ const uploadBufferToStorage = async (input: {
   contentType: string;
   sourceUrl?: string;
 }) => {
-  const prepared = await normalizeUploadImage({
+  const prepared = await normalizeProductImageUpload({
     buffer: input.buffer,
     contentType: input.contentType,
   });

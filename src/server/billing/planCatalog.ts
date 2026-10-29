@@ -1,24 +1,8 @@
 import type { OrganizationPlan } from "@prisma/client";
+import { PLAN_CODES, toPlanCode, type PlanCode, type PlanFeature } from "@/lib/billing/plans";
 
-export const PLAN_CODES = ["STARTER", "BUSINESS", "ENTERPRISE"] as const;
-
-export type PlanCode = (typeof PLAN_CODES)[number];
-
-export type PlanFeature =
-  | "imports"
-  | "exports"
-  | "analytics"
-  | "compliance"
-  | "supportToolkit"
-  | "pos"
-  | "stockCounts"
-  | "priceTags"
-  | "storePrices"
-  | "bundles"
-  | "expiryLots"
-  | "customerOrders"
-  | "periodClose"
-  | "kkm";
+export { PLAN_CODES, toPlanCode } from "@/lib/billing/plans";
+export type { PlanCode, PlanFeature } from "@/lib/billing/plans";
 
 export type PlanLimits = {
   maxStores: number;
@@ -32,6 +16,7 @@ export type PlanDefinition = {
   code: PlanCode;
   limits: PlanLimits;
   features: PlanFeatureMap;
+  monthlyPriceKgs: number;
 };
 
 const PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
@@ -65,7 +50,7 @@ const PLAN_FEATURES: Record<PlanCode, PlanFeatureMap> = {
     analytics: false,
     compliance: false,
     supportToolkit: false,
-    pos: false,
+    pos: true,
     stockCounts: false,
     priceTags: true,
     storePrices: false,
@@ -143,17 +128,6 @@ const toPositiveNumber = (value: string | undefined) => {
   return parsed;
 };
 
-export const toPlanCode = (plan: OrganizationPlan | string): PlanCode => {
-  const value = String(plan);
-  if (value === "ENTERPRISE") {
-    return "ENTERPRISE";
-  }
-  if (value === "BUSINESS" || value === "PRO") {
-    return "BUSINESS";
-  }
-  return "STARTER";
-};
-
 export const getPlanLimits = (plan: OrganizationPlan | string): PlanLimits => {
   return PLAN_LIMITS[toPlanCode(plan)];
 };
@@ -190,6 +164,7 @@ export const getPlanCatalogEntry = (plan: PlanCode): PlanDefinition => ({
   code: plan,
   limits: PLAN_LIMITS[plan],
   features: PLAN_FEATURES[plan],
+  monthlyPriceKgs: getPlanMonthlyPriceKgs(plan),
 });
 
 export const getPlanCatalogEntries = () =>

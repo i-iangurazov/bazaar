@@ -171,10 +171,10 @@ export default function DashboardPage() {
         <Skeleton className="mb-5 h-14 w-full" />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[0, 1, 2, 3].map((key) => (
-            <Skeleton key={key} className="h-36 rounded-xl" />
+            <Skeleton key={key} className="h-36 rounded-lg" />
           ))}
         </div>
-        <Skeleton className="mt-5 h-72 w-full rounded-xl" />
+        <Skeleton className="mt-5 h-72 w-full rounded-lg" />
         <p role="status" className="sr-only">
           {tCommon("loading")}
         </p>
@@ -351,7 +351,7 @@ export default function DashboardPage() {
             href={reportHref()}
             data-dashboard-kpi={kpi.key}
             className={cn(
-              "group min-w-0 rounded-xl border border-border bg-card p-4 text-foreground transition-colors hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:p-5",
+              "group min-w-0 rounded-lg border border-border bg-card p-4 text-foreground transition-colors hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:p-5",
               index === 0 && "border-primary/30",
             )}
           >

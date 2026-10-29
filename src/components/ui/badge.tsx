@@ -7,15 +7,15 @@ import { cn } from "@/lib/utils";
 type Variant = "default" | "success" | "warning" | "danger" | "muted";
 
 export const badgeVariants = cva(
-  "inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium leading-5",
+  "es-badge inline-flex max-w-full items-center gap-1 rounded-full border border-transparent px-1.5 text-xs font-normal leading-5",
   {
     variants: {
       variant: {
-        default: "border-border bg-muted text-foreground",
-        success: "border-success/20 bg-success/10 text-success",
-        warning: "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-300",
-        danger: "border-danger/20 bg-danger/10 text-danger",
-        muted: "border-border bg-muted text-muted-foreground",
+        default: "border-transparent bg-secondary text-secondary-foreground",
+        success: "border-transparent bg-success/10 text-success",
+        warning: "border-transparent bg-warning/10 text-warning",
+        danger: "border-transparent bg-danger/10 text-danger",
+        muted: "border-transparent bg-secondary text-muted-foreground",
       } satisfies Record<Variant, string>,
     },
     defaultVariants: {

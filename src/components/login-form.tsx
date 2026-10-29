@@ -11,6 +11,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { normalizeLocale } from "@/lib/locales";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
+import { getRoleHomePath } from "@/lib/roleAccess";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -26,13 +28,14 @@ import { FormStack } from "@/components/form-layout";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useLocaleChange } from "@/hooks/use-locale-change";
 
 export const LoginForm = () => {
   const hydrated = useHydrated();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationSent, setVerificationSent] = useState(false);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<Parameters<typeof translateError>[1]>(null);
   const t = useTranslations("auth");
   const tCommon = useTranslations("common");
   const tNav = useTranslations("nav");
@@ -41,7 +44,7 @@ export const LoginForm = () => {
   const searchParams = useSearchParams();
   const resendVerification = trpc.publicAuth.resendVerification.useMutation({
     onSuccess: () => setVerificationSent(true),
-    onError: (error) => setVerificationError(translateError(tErrors, error)),
+    onError: (error) => setVerificationError(error),
   });
 
   const normalizeNext = (next: string | null) => {
@@ -74,6 +77,10 @@ export const LoginForm = () => {
     },
     mode: "onSubmit",
   });
+  useLocaleChange(() => {
+    const fields = Object.keys(form.formState.errors) as ("email" | "password")[];
+    if (fields.length) void form.trigger(fields);
+  });
 
   const handleSubmit = async (values: z.infer<typeof schema>) => {
     setIsLoading(true);
@@ -81,41 +88,53 @@ export const LoginForm = () => {
     setVerificationSent(false);
     setVerificationError(null);
 
-    const result = await signIn("credentials", {
-      email: values.email,
-      password: values.password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+      });
 
-    setIsLoading(false);
-
-    if (result?.error) {
-      if (result.error === "loginRateLimited") {
-        setError("loginRateLimited");
-      } else if (result.error === "loginLocked") {
-        setError("loginLocked");
-      } else if (result.error === "loginBackoff") {
-        setError("loginBackoff");
-      } else if (result.error === "emailNotVerified") {
-        setError("emailNotVerified");
-      } else if (result.error === "registrationNotCompleted") {
-        setError("registrationNotCompleted");
-      } else {
-        setError("invalidCredentials");
+      if (result?.error) {
+        if (result.error === "loginRateLimited") {
+          setError("loginRateLimited");
+        } else if (result.error === "loginLocked") {
+          setError("loginLocked");
+        } else if (result.error === "loginBackoff") {
+          setError("loginBackoff");
+        } else if (result.error === "emailNotVerified") {
+          setError("emailNotVerified");
+        } else if (result.error === "registrationNotCompleted") {
+          setError("registrationNotCompleted");
+        } else {
+          setError("invalidCredentials");
+        }
+        return;
       }
-      return;
-    }
+      if (!result?.ok) {
+        setError("loginUnavailable");
+        return;
+      }
 
-    const next = searchParams.get("next");
-    const normalizedNext = normalizeNext(next);
-    if (normalizedNext) {
-      router.replace(normalizedNext);
-      return;
-    }
+      const next = searchParams.get("next");
+      const normalizedNext = normalizeNext(next);
+      if (normalizedNext) {
+        router.replace(normalizedNext);
+        return;
+      }
 
-    const session = await getSession();
-    const destination = session?.user?.isPlatformOwner ? "/platform" : "/dashboard";
-    router.replace(destination);
+      const session = await getSession();
+      if (!session?.user) {
+        setError("loginUnavailable");
+        return;
+      }
+      const destination = session.user.isPlatformOwner ? "/platform" : getRoleHomePath(session.user);
+      router.replace(destination);
+    } catch {
+      setError("loginUnavailable");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -161,7 +180,7 @@ export const LoginForm = () => {
               </FormItem>
             )}
           />
-          {error ? <p className="text-sm text-danger">{t(error)}</p> : null}
+          {error ? <Alert variant="destructive" role="alert">{t(error)}</Alert> : null}
           {error === "emailNotVerified" ? (
             <div className="space-y-2" aria-live="polite">
               <Button
@@ -181,7 +200,7 @@ export const LoginForm = () => {
                     ? tNav("emailVerificationSent")
                     : tNav("emailVerificationResend")}
               </Button>
-              {verificationError ? <p className="text-sm text-danger">{verificationError}</p> : null}
+              {verificationError ? <p className="text-sm text-danger">{translateError(tErrors, verificationError)}</p> : null}
             </div>
           ) : null}
           <div className="text-right">

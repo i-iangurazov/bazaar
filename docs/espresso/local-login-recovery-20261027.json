@@ -1,0 +1,71 @@
+{
+  "status": "local-login-restored",
+  "date": "2026-10-27",
+  "branch": "codex/playground",
+  "applicationCommit": "0a1d5ee",
+  "cause": {
+    "observed": "At2026-10-27T00:00+06:00 the existing temporary PostgreSQL cluster logged missing global/pg_filenode.map and postmaster.pid, then shut down. The application remained listening on3122 and credentials failure masked the unavailable database.",
+    "directory": "/private/tmp/bazaar-ai-qa.E4EEU3/postgres",
+    "note": "The process which removed the files was not established. Original partial directory was left untouched."
+  },
+  "recovery": {
+    "method": "Initialized a separate local PostgreSQL16 cluster under ignored project artifacts and restored the saved QA dump into a new empty bazaar_espresso_ui. No existing database overwritten, no seeds/migrations/password/permission changes.",
+    "persistentDirectory": "artifacts/ux/espresso/local-postgres/pgdata",
+    "port": 55440,
+    "listenAddress": "127.0.0.1",
+    "restoredDump": "artifacts/ux/espresso/local-db-backups/bazaar_espresso_ui-before-locale.dump",
+    "dumpCreatedAt": "2026-10-26T07:29:12+06:00",
+    "currentBackup": "artifacts/ux/espresso/local-db-backups/bazaar_espresso_ui-recovered-20261027.dump",
+    "redis": "Existing isolated Redis56390 retained; no flush or reconfiguration.",
+    "application": "Existing final standalone process on3122 reconnects successfully; no code change/rebuild required."
+  },
+  "checks": {
+    "passwordUnchanged": true,
+    "passwordMatchesStoredHash": true,
+    "adminActiveAndVerified": true,
+    "browserLogin": {
+      "result": "passed",
+      "url": "http://espresso-final.localhost:3122/dashboard",
+      "heading": "Обзор бизнеса",
+      "screenshot": "artifacts/ux/espresso/screenshots/login-recovered-20261027.png"
+    },
+    "originalUserChrome": "Email/password fields populated, but Chrome extension UI blocked automatic click. Successful fresh sign-in verified in separate IAB tab on the same3122runtime.",
+    "dataCounts": {
+      "inventorySnapshot": 155,
+      "stockMovement": 163,
+      "productCost": 146,
+      "customerOrder": 2,
+      "saleReturn": 0,
+      "salePayment": 1,
+      "cashDrawerMovement": 0,
+      "registerShift": 1,
+      "purchaseOrder": 1,
+      "stockCount": 3,
+      "periodClose": 0
+    },
+    "evidence": "artifacts/ux/espresso/login-recovery-20261027.json",
+    "postgres": "pg_ctl status:running;pg_isready:accepting connections on127.0.0.1:55440 after browser sign-in."
+  },
+  "limits": [
+    "Snapshot predates the final review. Later synthetic operations are not restored; historical485-row final acceptance hashes describe the pre-incident dataset.",
+    "Current restored main fixture has472business rows across the11previously counted models; thirteen later rows are absent from this older snapshot. This is test data,not customer data. The final acceptance report remains historical code/test evidence,not a current485-row dataset assertion.",
+    "No macOS boot agent was installed. After reboot run pnpm local to start Bazaar, PostgreSQL, Redis and the job runner together; see docs/local-runtime.json."
+  ],
+  "restart": {
+    "command": "pnpm local",
+    "status": "pnpm local:status",
+    "stop": "pnpm local:stop",
+    "note": "Managed persistent stack supersedes the manual legacy cluster commands. Do not start the retained adoption source or run seed/reset."
+  },
+  "delivery": {
+    "mainUnchanged": "5a27b8e",
+    "codeChanged": false,
+    "productionDatabaseTouched": false
+  },
+  "supersededBy": "docs/local-runtime.json",
+  "historicalRestart": {
+    "postgres": "/opt/homebrew/opt/postgresql@16/bin/pg_ctl -D artifacts/ux/espresso/local-postgres/pgdata -l artifacts/ux/espresso/local-postgres/server.log -o \"-p 55440 -h 127.0.0.1 -k /Users/ilias_iangurazov/Commercial/bazaar/artifacts/ux/espresso/local-postgres/socket\" -w start",
+    "application": "UX_SUITE=espresso node --import tsx scripts/espresso/start.ts",
+    "note": "Run from the repository root;start only when the local cluster is stopped. Port/bind/socket are explicit. Do not rerun prepare/seed/reset to restart."
+  }
+}

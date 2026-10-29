@@ -12,6 +12,7 @@ import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
 import { runJob, type JobPayload, type JobResult } from "@/server/jobs";
+import { keepBackgroundTaskAlive } from "@/server/jobs/background";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
@@ -291,15 +292,17 @@ export const startProductDescriptionGenerationJob = async (input: {
   });
 
   if (input.runImmediately !== false) {
-    void runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: job.id }).catch((error) => {
-      input.logger?.warn(
-        {
-          jobId: job.id,
-          error: error instanceof Error ? { message: error.message, name: error.name } : error,
-        },
-        "product description generation background job failed to start",
-      );
-    });
+    keepBackgroundTaskAlive(
+      runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: job.id }).catch((error) => {
+        input.logger?.warn(
+          {
+            jobId: job.id,
+            error: error instanceof Error ? { message: error.message, name: error.name } : error,
+          },
+          "product description generation background job failed to start",
+        );
+      }),
+    );
   }
 
   return getGenerationJob(input.organizationId, job.id);
@@ -1204,7 +1207,9 @@ const processJobItem = async (input: {
 
   if (generatedDescription) {
     await prisma.$transaction(async (tx) => {
-      await assertActorCanWriteProducts(tx, input.job.organizationId, input.job.createdById, [product.id]);
+      await assertActorCanWriteProducts(tx, input.job.organizationId, input.job.createdById, [
+        product.id,
+      ]);
       await assertProductDescriptionLease(tx, input.job.id, input.job.leaseToken);
       await assertProductDescriptionItemLease(tx, {
         itemId: input.item.id,

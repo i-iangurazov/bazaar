@@ -1,6 +1,7 @@
 "use client";
 
 import { appRoutes } from "@/lib/appRoutes";
+import { getMobilePageTitle } from "@/lib/mobile-page-title";
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
@@ -11,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { GuidanceOverlay } from "@/components/guidance/guidance-overlay";
 import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
 import { BaamLauncher } from "@/components/baam-launcher";
+import { DisplayScaleProvider } from "@/components/display-scale";
 import { GuidanceProvider } from "@/components/guidance/guidance-provider";
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -41,6 +43,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   CirclePlusIcon,
@@ -83,6 +86,8 @@ import {
   UserIcon,
   ChevronDownIcon,
   TagIcon,
+  PriceIcon,
+  GridViewIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { normalizeLocale } from "@/lib/locales";
@@ -163,6 +168,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
   const tBreadcrumbs = useTranslations("breadcrumbs");
+  const tScanner = useTranslations("scannerTest");
   const tHeader = useTranslations("appHeader");
   const tCommand = useTranslations("commandPalette");
   const tWorkspace = useTranslations("workspace");
@@ -176,6 +182,11 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const [verificationResent, setVerificationResent] = useState(false);
   const [groupState, setGroupState] = useState<Record<NavGroupId, boolean>>(defaultGroupState);
   const [hiddenNavItemKeys, setHiddenNavItemKeys] = useState<string[]>([]);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [desktopNavSelection, setDesktopNavSelection] = useState<{
+    path: string;
+    groupId: NavGroupId;
+  } | null>(null);
   const { toast } = useToast();
   const profileQuery = trpc.userSettings.getMyProfile.useQuery(undefined, {
     enabled: Boolean(user.organizationId),
@@ -384,6 +395,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             href: "/settings/printing",
             icon: PrintIcon,
             requiredPermission: "managePrinting",
+          },
+          {
+            key: "priceLists", href: "/settings/price-lists", icon: PriceIcon,
+            adminOnly: true, requiredPermission: "manageSettings",
           },
           {
             key: "storeGroups",
@@ -658,35 +673,62 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     }))
     .filter((group) => group.items.length > 0);
 
-  const renderNavGroups = (onNavigate?: () => void) =>
+  const desktopNavGroups = navGroups.filter(
+    (group) => isGroupAllowedByRole(group) && group.items.some((item) => isItemVisible(item)),
+  );
+  const selectedDesktopGroup =
+    (desktopNavSelection?.path === normalizedPath
+      ? desktopNavGroups.find((group) => group.id === desktopNavSelection.groupId)
+      : undefined) ??
+    desktopNavGroups.find((group) => group.items.some((item) => isItemActive(item))) ??
+    desktopNavGroups[0];
+  const desktopGroupIcons: Record<NavGroupId, ComponentType<{ className?: string }>> = {
+    core: GridViewIcon,
+    operations: IntegrationsIcon,
+    insights: ReportsIcon,
+    admin: SettingsIcon,
+    help: HelpIcon,
+  };
+
+  const renderNavGroups = (onNavigate?: () => void, selectedGroupId?: NavGroupId) =>
     navGroups
       .filter(
-        (group) => isGroupAllowedByRole(group) && group.items.some((item) => isItemVisible(item)),
+        (group) =>
+          (!selectedGroupId || group.id === selectedGroupId) &&
+          isGroupAllowedByRole(group) &&
+          group.items.some((item) => isItemVisible(item)),
       )
       .map((group) => {
         const visibleItems = group.items.filter((item) => isItemVisible(item));
         if (!visibleItems.length) {
           return null;
         }
-        const isOpen = groupState[group.id];
+        const isOpen = Boolean(selectedGroupId) || groupState[group.id];
         const groupLabel = tNav(group.labelKey);
         return (
           <SidebarGroup key={group.id}>
-            <SidebarGroupLabel asChild>
-              <button
-                type="button"
-                onClick={() => toggleGroup(group.id)}
-                className="flex w-full items-center justify-between rounded-lg transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                aria-expanded={isOpen}
-                aria-label={tNav("groupToggle", { group: groupLabel })}
-              >
-                <span>{groupLabel}</span>
-                <ChevronDownIcon
-                  className={cn("h-4 w-4 transition-transform", isOpen ? "rotate-180" : "rotate-0")}
-                  aria-hidden
-                />
-              </button>
-            </SidebarGroupLabel>
+            {selectedGroupId ? (
+              <SidebarGroupLabel>{groupLabel}</SidebarGroupLabel>
+            ) : (
+              <SidebarGroupLabel asChild>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.id)}
+                  className="flex w-full items-center justify-between rounded-lg transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  aria-expanded={isOpen}
+                  aria-label={tNav("groupToggle", { group: groupLabel })}
+                >
+                  <span>{groupLabel}</span>
+                  <ChevronDownIcon
+                    className={cn(
+                      "h-4 w-4 transition-transform",
+                      isOpen ? "rotate-180" : "rotate-0",
+                    )}
+                    aria-hidden
+                  />
+                </button>
+              </SidebarGroupLabel>
+            )}
             {isOpen ? (
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -705,7 +747,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                             <item.icon aria-hidden />
                             <span>{tNav(item.key)}</span>
                           </SidebarMenuButton>
-                          <SidebarMenu className="ml-4 mt-1 border-l border-sidebar-border pl-2 group-data-[state=collapsed]/sidebar-wrapper:hidden">
+                          <SidebarMenu className="ml-4 mt-0.5 pl-2 group-data-[state=collapsed]/sidebar-wrapper:hidden">
                             {visibleChildren.map((child) => {
                               const isChildActive = isItemActive(child);
                               return (
@@ -716,7 +758,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                                       prefetch={false}
                                       onClick={onNavigate}
                                       data-tour={`nav-${child.key}`}
-                                      className="min-h-9 rounded-lg text-[13px] [&>svg]:h-[18px] [&>svg]:w-[18px]"
+                                      className="min-h-8 rounded-[var(--radius)] text-sm [&>svg]:h-4 [&>svg]:w-4"
                                     >
                                       <child.icon aria-hidden />
                                       <span>{tNav(child.key)}</span>
@@ -815,14 +857,14 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       prefetch={false}
       onClick={onNavigate}
       aria-label={tNav("profile")}
-      className="group flex min-h-11 w-full items-center justify-between rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-left no-underline transition hover:border-sidebar-primary/20 hover:bg-sidebar-accent/75 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:min-h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:py-0"
+      className="group flex min-h-11 w-full items-center justify-between rounded-[var(--radius)] border border-transparent bg-transparent px-2 py-1.5 text-left no-underline transition hover:border-sidebar-primary/20 hover:bg-sidebar-accent/75 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:min-h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:py-0"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sidebar-primary/20 bg-sidebar-primary/10 text-sidebar-primary transition group-hover:border-sidebar-primary/35 group-hover:bg-sidebar-primary/15 group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:text-sidebar-foreground/75">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-accent text-sidebar-primary transition group-hover:bg-sidebar-accent group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:text-sidebar-foreground/75">
           <UserIcon className="h-4 w-4" aria-hidden />
         </span>
         <span className="min-w-0 group-data-[state=collapsed]/sidebar-wrapper:sr-only">
-          <span className="block truncate text-sm font-semibold text-sidebar-foreground">
+          <span className="block truncate text-sm font-medium text-sidebar-foreground">
             {displayName}
           </span>
           <span className="block truncate text-xs text-sidebar-foreground/60">{roleLabel}</span>
@@ -1026,45 +1068,11 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     .filter(isMobileNavCandidateAllowed)
     .map(toMobileShellItem);
 
-  const mobilePageTitle = useMemo(() => {
-    if (normalizedPath === "/" || normalizedPath.startsWith("/dashboard")) {
-      return tBreadcrumbs("home");
-    }
-    if (normalizedPath.startsWith("/pos")) {
-      return tNav("pos");
-    }
-    if (normalizedPath.startsWith("/products")) {
-      return tNav("products");
-    }
-    if (normalizedPath.startsWith("/inventory")) {
-      return tNav("inventory");
-    }
-    if (normalizedPath.startsWith("/sales")) {
-      return tNav("sales");
-    }
-    if (normalizedPath.startsWith("/customers")) {
-      return tNav("customers");
-    }
-    if (normalizedPath === "/baam" || normalizedPath.startsWith("/baam/")) {
-      return tNav("baam");
-    }
-    if (normalizedPath.startsWith("/reports")) {
-      return tNav("reports");
-    }
-    if (normalizedPath.startsWith("/operations/integrations")) {
-      return tNav("integrations");
-    }
-    if (normalizedPath.startsWith("/stores")) {
-      return tNav("stores");
-    }
-    if (normalizedPath.startsWith("/settings/printing")) {
-      return tNav("printing");
-    }
-    if (normalizedPath.startsWith("/settings")) {
-      return tBreadcrumbs("settings");
-    }
-    return tNav("brand");
-  }, [normalizedPath, tBreadcrumbs, tNav]);
+  const mobilePageTitle = useMemo(() => getMobilePageTitle(normalizedPath, {
+    nav: tNav,
+    breadcrumbs: tBreadcrumbs,
+    scanner: tScanner,
+  }), [normalizedPath, tBreadcrumbs, tNav, tScanner]);
 
   // Store scope belongs to the current page; the first accessible store is not its selection.
   const mobileStoreName = null;
@@ -1072,6 +1080,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   return (
     <GuidanceProvider role={guidanceRole}>
       <BaamAssistantProvider>
+        <DisplayScaleProvider enabled={!normalizedPath.startsWith("/printing/")}>
         {normalizedPath === "/pos/sell" ? (
           <div data-bazaar-app className="min-h-screen bg-background">
             {impersonation ? (
@@ -1131,12 +1140,70 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               closeLabel={tCommon("closeMenu")}
               navigationLabel={tNav("mobileNavigation")}
             />
-            <SidebarProvider className="min-h-screen">
-              <Sidebar className="md:sticky md:top-0 md:h-screen">
+            <SidebarProvider
+              open={desktopSidebarOpen}
+              onOpenChange={setDesktopSidebarOpen}
+              className="min-h-screen"
+            >
+              <nav
+                data-module-dock
+                aria-label={tNav("modules")}
+                className="sticky top-0 hidden h-screen w-[57px] shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar pb-3 pt-2 md:flex"
+              >
+                <div className="mb-2 h-8 w-8 shrink-0">
+                  {!desktopSidebarOpen ? (
+                    <Link
+                      href="/dashboard"
+                      prefetch={false}
+                      aria-label={tNav("brand")}
+                      data-bazaar-brand="dock"
+                      className="flex h-8 w-8 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Image src="/brand/icon.png" alt="" width={32} height={32} />
+                    </Link>
+                  ) : null}
+                </div>
+                {desktopNavGroups.map((group) => {
+                  const Icon = desktopGroupIcons[group.id];
+                  const selected = selectedDesktopGroup?.id === group.id;
+                  return (
+                    <Tooltip key={group.id}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={tNav(group.labelKey)}
+                          aria-pressed={selected}
+                          aria-controls="desktop-module-navigation"
+                          onClick={() => {
+                            setDesktopNavSelection({ path: normalizedPath, groupId: group.id });
+                            setDesktopSidebarOpen(true);
+                          }}
+                          className={cn(
+                            "h-[34px] w-[34px] rounded-md",
+                            selected &&
+                              "bg-sidebar-accent text-sidebar-primary hover:text-sidebar-primary",
+                          )}
+                        >
+                          <Icon className="h-[22px] w-[22px]" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{tNav(group.labelKey)}</TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </nav>
+              <Sidebar
+                className="md:sticky md:top-0 md:h-screen"
+                id="desktop-sidebar"
+                collapsible="offcanvas"
+              >
                 <SidebarHeader className="space-y-3 p-3 group-data-[state=collapsed]/sidebar-wrapper:space-y-2 group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
                   <Link
                     href="/dashboard"
                     prefetch={false}
+                    data-bazaar-brand="sidebar"
                     className="flex min-h-10 items-center rounded-lg no-underline hover:no-underline group-data-[state=collapsed]/sidebar-wrapper:justify-center"
                     aria-label={tNav("brand")}
                   >
@@ -1145,7 +1212,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                       alt=""
                       width={724}
                       height={181}
-                      className="h-auto w-[164px] max-w-full drop-shadow-sm group-data-[state=collapsed]/sidebar-wrapper:hidden"
+                      className="h-auto w-[112px] max-w-full group-data-[state=collapsed]/sidebar-wrapper:hidden"
                       priority
                     />
                     <span className="hidden h-10 w-10 items-center justify-center rounded-lg group-data-[state=collapsed]/sidebar-wrapper:inline-flex">
@@ -1161,9 +1228,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   </Link>
                   <Button
                     type="button"
+                    variant="secondary"
                     onClick={() => setCommandPaletteOpen(true)}
                     size="default"
-                    className="h-10 w-full rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/15 hover:bg-sidebar-primary/90 group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none [&>svg]:h-4 [&>svg]:w-4"
+                    className="h-9 w-full justify-start rounded-[var(--radius)] border border-sidebar-border bg-card text-sidebar-foreground shadow-sm hover:bg-sidebar-accent group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none [&>svg]:h-4 [&>svg]:w-4"
                     aria-label={tCommand("openButton")}
                   >
                     <CirclePlusIcon className="h-5 w-5" aria-hidden />
@@ -1174,14 +1242,16 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 </SidebarHeader>
 
                 <SidebarContent className="scrollbar-soft p-2.5 group-data-[state=collapsed]/sidebar-wrapper:px-2">
-                  <nav aria-label={tNav("brand")}>{renderNavGroups()}</nav>
+                  <nav id="desktop-module-navigation" aria-label={tNav("brand")}>
+                    {renderNavGroups(undefined, selectedDesktopGroup?.id)}
+                  </nav>
                 </SidebarContent>
 
                 <SidebarFooter className="p-2.5 text-sm group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
                   {renderEmailVerificationNotice()}
-                  <div className="rounded-2xl border border-sidebar-border/75 bg-sidebar-accent/35 p-1.5 shadow-sm ring-1 ring-sidebar-foreground/[0.015] group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:p-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none group-data-[state=collapsed]/sidebar-wrapper:ring-0">
+                  <div className="rounded-[var(--radius)] border border-transparent bg-transparent p-0 shadow-none group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:p-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none group-data-[state=collapsed]/sidebar-wrapper:ring-0">
                     {renderProfileShortcut()}
-                    <div className="mt-1 grid grid-cols-2 gap-1 border-t border-sidebar-border/60 pt-1 group-data-[state=collapsed]/sidebar-wrapper:mt-1 group-data-[state=collapsed]/sidebar-wrapper:flex group-data-[state=collapsed]/sidebar-wrapper:flex-col group-data-[state=collapsed]/sidebar-wrapper:border-0 group-data-[state=collapsed]/sidebar-wrapper:pt-0">
+                    <div className="mt-1 flex flex-col gap-0.5 border-t border-sidebar-border pt-1 group-data-[state=collapsed]/sidebar-wrapper:border-0 group-data-[state=collapsed]/sidebar-wrapper:pt-0">
                       {renderCustomizeNavButton()}
                       <SignOutButton className="h-9 rounded-lg border border-transparent bg-transparent px-2 text-xs font-semibold text-sidebar-foreground/70 shadow-none hover:border-danger/20 hover:bg-danger/10 hover:text-danger group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0" />
                     </div>
@@ -1189,44 +1259,46 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 </SidebarFooter>
               </Sidebar>
 
-              <SidebarInset className="bg-transparent">
+              <SidebarInset className="bg-background">
+                <header
+                  data-app-header
+                  className="sticky top-0 z-40 hidden min-h-14 min-w-0 items-center justify-between gap-3 border-b border-border bg-card px-5 py-2 md:flex lg:px-6"
+                >
+                  <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
+                    <SidebarTrigger
+                      aria-controls="desktop-sidebar"
+                      aria-expanded={desktopSidebarOpen}
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                    />
+                    <div className="relative min-w-0 flex-1">
+                      <ScanInput
+                        context="global"
+                        dataTour="scan-input"
+                        placeholder={tHeader("scanPlaceholder")}
+                        ariaLabel={tHeader("scanLabel")}
+                        supportsTabSubmit
+                        enableProductSearch
+                        portalDropdown
+                        onResolved={handleScanResolved}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 justify-self-end">
+                    {hasPermission(access, "viewReports") ? (
+                      <div data-baam-desktop-slot className="h-9 w-9 shrink-0 lg:w-[6.25rem]" />
+                    ) : null}
+                    <PageTipsButton className="h-9 w-9" />
+                    <PwaInstallButton className="h-9 w-9" />
+                    <LanguageSwitcher className="h-9 p-0.5" />
+                  </div>
+                </header>
                 <main
                   id="workspace-content"
                   tabIndex={-1}
-                  className="min-w-0 flex-1 px-4 py-4 outline-none sm:px-6 lg:px-8 lg:py-5"
+                  className="min-w-0 flex-1 px-4 py-4 outline-none sm:px-5 lg:px-6 lg:py-5"
                 >
                   <MobilePageContainer>
-                    <div className="mx-auto max-w-[1500px]">
-                      <header
-                        data-app-header
-                        className="mb-5 hidden min-w-0 items-center justify-between gap-3 border-b border-border pb-4 md:grid lg:flex"
-                      >
-                        <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
-                          <SidebarTrigger className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground" />
-                          <div className="relative min-w-0 flex-1">
-                            <ScanInput
-                              context="global"
-                              dataTour="scan-input"
-                              placeholder={tHeader("scanPlaceholder")}
-                              ariaLabel={tHeader("scanLabel")}
-                              supportsTabSubmit
-                              enableProductSearch
-                              portalDropdown
-                              onResolved={handleScanResolved}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2 justify-self-end">
-                          {hasPermission(access, "viewReports") ? (
-                            <div data-baam-desktop-slot className="h-10 w-[6.25rem] shrink-0" />
-                          ) : null}
-                          <PageTipsButton />
-                          <PwaInstallButton />
-                          <LanguageSwitcher />
-                        </div>
-                      </header>
-                      {children}
-                    </div>
+                    <div className="mx-auto max-w-[1500px] 2xl:max-w-[112.5rem]">{children}</div>
                   </MobilePageContainer>
                 </main>
               </SidebarInset>
@@ -1288,6 +1360,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         <BaamLauncher access={access} pathname={normalizedPath}>
           <BaamAssistant compact />
         </BaamLauncher>
+        </DisplayScaleProvider>
       </BaamAssistantProvider>
     </GuidanceProvider>
   );

@@ -1,16 +1,15 @@
+import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 
 import sharp from "sharp";
 
-import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import {
   downloadRemoteImage,
   normalizeProductImageUrl,
 } from "@/server/services/productImageStorage";
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
 const MAX_INPUT_IMAGES = 3;
 const MAX_OUTPUT_TOKENS = 180;
@@ -298,22 +297,15 @@ const callOpenAiResponses = async (input: {
     let response: Response;
     let responseBody: OpenAiResponseBody | null = null;
     try {
-      assertExternalProviderCallAllowed("openai");
-      response = await fetch(OPENAI_RESPONSES_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${input.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: input.body,
-        signal: controller.signal,
-      });
+      const config = resolveTextAiConfig("vision", resolveOpenAiModel());
+      if (!config) throw new AppError("aiSpecsNotConfigured", "BAD_REQUEST", 400);
+      response = await fetchAiResponse(config, JSON.parse(input.body), controller.signal);
       responseBody = (await response.json().catch(() => null)) as OpenAiResponseBody | null;
     } catch (error) {
       if (isAbortLikeError(error)) {
         input.logger?.warn(
           {
-            provider: "openai",
+            provider: resolveTextAiConfig("vision", resolveOpenAiModel())?.provider ?? "unconfigured",
             phase: "spec-suggestion-timeout",
             attempt,
             timeoutMs: OPENAI_REQUEST_TIMEOUT_MS,
@@ -354,7 +346,7 @@ const callOpenAiResponses = async (input: {
         );
     input.logger?.warn(
       {
-        provider: "openai",
+        provider: resolveTextAiConfig("vision", resolveOpenAiModel())?.provider ?? "unconfigured",
         phase: "spec-suggestion-retry",
         attempt,
         nextAttempt: attempt + 1,
@@ -564,8 +556,8 @@ export const suggestProductSpecsFromImages = async (input: {
   requestedSpecs: RequestedSpecSuggestion[];
   logger?: ProductSpecSuggestionLogger;
 }) => {
-  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
-  if (!apiKey) {
+  const config = resolveTextAiConfig("vision", resolveOpenAiModel());
+  if (!config) {
     throw new AppError("aiSpecsNotConfigured", "BAD_REQUEST", 400);
   }
 
@@ -605,7 +597,7 @@ export const suggestProductSpecsFromImages = async (input: {
     throw new AppError("aiSpecNoUsableImages", "BAD_REQUEST", 400);
   }
 
-  const model = resolveOpenAiModel();
+  const { apiKey, model } = config;
   const requestBody = JSON.stringify({
     model,
     reasoning: {
@@ -646,7 +638,7 @@ export const suggestProductSpecsFromImages = async (input: {
 
   input.logger?.info(
     {
-      provider: "openai",
+      provider: resolveTextAiConfig("vision", resolveOpenAiModel())?.provider ?? "unconfigured",
       phase: "spec-suggestion-complete",
       model,
       requestedKinds: normalizedRequestedSpecs.map((spec) => spec.kind),
@@ -681,7 +673,7 @@ export const suggestProductSpecsFromImages = async (input: {
   if (responseBody?.status === "incomplete") {
     input.logger?.warn(
       {
-        provider: "openai",
+        provider: resolveTextAiConfig("vision", resolveOpenAiModel())?.provider ?? "unconfigured",
         phase: "spec-suggestion-incomplete",
         model,
         loadedImageCount,

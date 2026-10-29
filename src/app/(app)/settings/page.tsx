@@ -18,6 +18,7 @@ type SettingsLink = {
 };
 
 const LINKS: SettingsLink[] = [
+  { key: "priceLists", href: "/settings/price-lists", adminOnly: true, permission: "manageSettings" },
   { key: "profile", href: "/settings/profile" },
   { key: "users", href: "/settings/users", adminOnly: true, permission: "manageUsers" },
   { key: "loyalty", href: "/settings/loyalty", adminOnly: true, permission: "manageSettings" },
@@ -58,7 +59,7 @@ export default function SettingsIndexPage() {
             key={link.key}
             href={link.href}
             className={cn(
-              "rounded-xl border border-border bg-card p-4 text-sm font-medium transition",
+              "rounded-lg border border-border bg-card p-4 text-sm font-medium transition",
               "hover:border-primary/40 hover:bg-secondary focus-visible:outline focus-visible:outline-2",
             )}
           >

@@ -23,65 +23,15 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
-import { formatDateTime } from "@/lib/i18nFormat";
+import { PLAN_CODES, PLAN_FEATURE_CODES, getPlanRank, type PlanCode } from "@/lib/billing/plans";
+import { formatDateTime, formatNumber as formatLocaleNumber } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
+import { SubscriptionPayments } from "@/components/billing/subscription-payments";
 
-type PlanTier = "STARTER" | "BUSINESS" | "ENTERPRISE";
-type PlanFeature =
-  | "imports"
-  | "exports"
-  | "analytics"
-  | "compliance"
-  | "supportToolkit"
-  | "pos"
-  | "stockCounts"
-  | "priceTags"
-  | "storePrices"
-  | "bundles"
-  | "expiryLots"
-  | "customerOrders"
-  | "periodClose"
-  | "kkm";
-
-const planRank: Record<PlanTier, number> = {
-  STARTER: 1,
-  BUSINESS: 2,
-  ENTERPRISE: 3,
-};
-
-const planOrder: PlanTier[] = ["STARTER", "BUSINESS", "ENTERPRISE"];
-
-const featureOrder: PlanFeature[] = [
-  "imports",
-  "exports",
-  "analytics",
-  "compliance",
-  "supportToolkit",
-  "pos",
-  "stockCounts",
-  "priceTags",
-  "storePrices",
-  "bundles",
-  "expiryLots",
-  "customerOrders",
-  "periodClose",
-  "kkm",
-];
-
-const comparisonFeatures: PlanFeature[] = [
-  "imports",
-  "exports",
-  "analytics",
-  "pos",
-  "stockCounts",
-  "storePrices",
-  "bundles",
-  "expiryLots",
-  "periodClose",
-  "compliance",
-  "supportToolkit",
-  "kkm",
-];
+type PlanTier = PlanCode;
+const planOrder = PLAN_CODES;
+const featureOrder = PLAN_FEATURE_CODES;
+const comparisonFeatures = PLAN_FEATURE_CODES;
 
 const BillingPage = () => {
   const t = useTranslations("billing");
@@ -90,13 +40,13 @@ const BillingPage = () => {
   const locale = useLocale();
   const { data: session, status } = useSession();
   const { toast } = useToast();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = status === "authenticated" && session?.user?.role === "ADMIN";
   const isForbidden = status === "authenticated" && !isAdmin;
   const [requestedPlan, setRequestedPlan] = useState<PlanTier | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
 
   const billingQuery = trpc.billing.get.useQuery(undefined, {
-    enabled: status === "authenticated",
+    enabled: isAdmin,
   });
   const requestUpgradeMutation = trpc.billing.requestUpgrade.useMutation({
     onSuccess: () => {
@@ -130,13 +80,13 @@ const BillingPage = () => {
   }, [requestedPlan, t]);
 
   const formatNumber = (value: number) =>
-    new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+    formatLocaleNumber(value, locale, { maximumFractionDigits: 2 });
 
-  if (isForbidden) {
+  if (status !== "authenticated" || isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">{isForbidden ? tErrors("forbidden") : tCommon("loading")}</p>
       </div>
     );
   }
@@ -151,7 +101,7 @@ const BillingPage = () => {
           {tCommon("loading")}
         </div>
       ) : billingQuery.isError ? (
-        <QueryErrorState onRetry={() => void billingQuery.refetch()} />
+        <QueryErrorState error={billingQuery.error} onRetry={() => void billingQuery.refetch()} />
       ) : billingQuery.data ? (
         <div className="space-y-4">
           {billingQuery.data.limitState === "LIMIT_EXCEEDED" ? (
@@ -226,6 +176,8 @@ const BillingPage = () => {
             </CardContent>
           </Card>
 
+          <SubscriptionPayments onUpdated={() => void billingQuery.refetch()} />
+
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>{t("usageTitle")}</CardTitle>
@@ -268,7 +220,7 @@ const BillingPage = () => {
                 const tier = planItem.planTier as PlanTier;
                 const isCurrent = tier === currentPlan;
                 const canRequestUpgrade =
-                  Boolean(currentPlan) && planRank[tier] > planRank[currentPlan as PlanTier];
+                  Boolean(currentPlan) && getPlanRank(tier) > getPlanRank(currentPlan as PlanTier);
                 const hasPendingRequest = Boolean(pendingRequest);
                 const requestedThisPlan =
                   pendingRequest && pendingRequest.requestedPlan === planItem.plan;
@@ -498,8 +450,9 @@ const BillingPage = () => {
           >
             <p className="text-sm text-muted-foreground">{t("requestModalDescription")}</p>
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">{t("requestMessageLabel")}</p>
+              <label htmlFor="billing-upgrade-message" className="block text-sm font-medium text-foreground">{t("requestMessageLabel")}</label>
               <Textarea
+                id="billing-upgrade-message"
                 value={requestMessage}
                 onChange={(event) => setRequestMessage(event.target.value)}
                 rows={4}

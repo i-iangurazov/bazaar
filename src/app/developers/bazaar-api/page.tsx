@@ -367,7 +367,7 @@ const errors = [
 ];
 
 const CodeBlock = ({ children }: { children: string }) => (
-  <pre className="overflow-x-auto rounded-md border border-slate-800 bg-slate-950 p-4 text-sm leading-6 text-slate-100 shadow-sm">
+  <pre className="overflow-x-auto rounded-md border border-border bg-card p-4 text-sm leading-6 text-foreground shadow-none">
     <code>{children}</code>
   </pre>
 );
@@ -378,8 +378,8 @@ const MethodBadge = ({ method }: { method: string }) => {
     <span
       className={
         isPost
-          ? "rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700"
-          : "rounded-md bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700"
+          ? "rounded-md bg-success/10 px-2.5 py-1 text-xs font-bold text-success"
+          : "rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary"
       }
     >
       {method}
@@ -394,24 +394,29 @@ const DataTable = ({
   headers: string[];
   rows: string[][];
 }) => (
-  <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+  <div
+    role="region"
+    aria-label={headers.join(", ")}
+    tabIndex={0}
+    className="overflow-x-auto rounded-md border border-border bg-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+  >
     <table className="min-w-[720px] text-sm">
-      <thead className="bg-slate-50">
+      <thead className="bg-muted">
         <tr>
           {headers.map((header) => (
-            <th key={header} className="px-4 py-3 text-left font-semibold text-slate-600">
+            <th key={header} className="px-4 py-3 text-left font-semibold text-muted-foreground">
               {header}
             </th>
           ))}
         </tr>
       </thead>
-      <tbody className="divide-y divide-slate-200">
+      <tbody className="divide-y divide-border">
         {rows.map((row) => (
           <tr key={row.join(":")}>
             {row.map((cell, index) => (
-              <td key={`${cell}-${index}`} className="px-4 py-3 align-top text-slate-700">
+              <td key={`${cell}-${index}`} className="px-4 py-3 align-top text-muted-foreground">
                 {index === 0 || (headers[index] ?? "").includes("message") ? (
-                  <code className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-900">{cell}</code>
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">{cell}</code>
                 ) : (
                   cell
                 )}
@@ -435,69 +440,71 @@ const Section = ({
   title: string;
   children: React.ReactNode;
 }) => (
-  <section id={id} className="scroll-mt-24 border-t border-slate-200 py-12">
-    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-blue-700">{eyebrow}</p>
-    <h2 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950 md:text-3xl">{title}</h2>
+  <section id={id} className="scroll-mt-24 border-t border-border py-12">
+    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
+    <h2 className="mt-2 text-2xl font-semibold tracking-normal text-foreground md:text-3xl">
+      {title}
+    </h2>
     <div className="mt-6 space-y-6">{children}</div>
   </section>
 );
 
 const BazaarApiDocsPage = () => (
-  <main className="min-h-screen bg-slate-50 text-slate-900">
-    <header className="border-b border-slate-200 bg-white">
+  <main className="min-h-screen bg-muted text-foreground">
+    <header className="border-b border-border bg-card">
       <div className="mx-auto flex max-w-7xl flex-col gap-8 px-5 py-8 md:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <Link href="/" className="inline-flex items-center gap-3 text-slate-950">
+          <Link href="/" className="inline-flex items-center gap-3 text-foreground">
             <Image src="/brand/logo.png" alt="Bazaar" width={144} height={36} className="h-9 w-auto" priority />
-            <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+            <span className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary">
               API v1
             </span>
           </Link>
-          <h1 className="mt-8 max-w-4xl text-4xl font-semibold tracking-normal text-slate-950 md:text-6xl">
+          <h1 className="mt-8 max-w-4xl text-4xl font-semibold tracking-normal text-foreground md:text-6xl">
             Документация BAZAAR API для внешних интеграций
           </h1>
-          <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">
+          <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">
             Подключайте сайты, маркетплейсы и внешние системы к BAZAAR: получайте товары, цены и
             остатки, передавайте заказы и синхронизируйте клиентов.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <a
               href="#products"
-              className="inline-flex h-11 items-center gap-2 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800"
+              className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
             >
               Смотреть методы
               <ExternalLinkIcon className="h-4 w-4" aria-hidden />
             </a>
             <a
               href="#flow"
-              className="inline-flex h-11 items-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              className="inline-flex h-11 items-center rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-muted"
             >
               Сценарий интеграции
             </a>
           </div>
         </div>
 
-        <div className="w-full max-w-md rounded-md border border-slate-200 bg-slate-950 p-5 text-slate-100 shadow-xl lg:shrink-0">
+        <div className="w-full max-w-md rounded-md border border-border bg-card p-5 text-foreground shadow-none lg:shrink-0">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-300">Base URL</p>
-            <span className="rounded bg-emerald-400/10 px-2 py-1 text-xs font-semibold text-emerald-300">
+            <p className="text-sm font-semibold text-muted-foreground">Base URL</p>
+            <span className="rounded bg-success/10 px-2 py-1 text-xs font-semibold text-success">
               Store-scoped
             </span>
           </div>
-          <code className="block break-all rounded-md bg-white/5 p-3 text-sm text-slate-100">
+          <code className="block break-all rounded-md bg-muted p-3 text-sm text-foreground">
             {baseUrl}
           </code>
-          <div className="mt-5 grid gap-3 text-sm text-slate-300">
+          <div className="mt-5 grid gap-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <KeyIcon className="h-4 w-4 text-emerald-300" aria-hidden />
+              <KeyIcon className="h-4 w-4 text-success" aria-hidden />
               Authorization: Bearer API key
             </div>
             <div className="flex items-center gap-2">
-              <ShieldCheckIcon className="h-4 w-4 text-emerald-300" aria-hidden />
+              <ShieldCheckIcon className="h-4 w-4 text-success" aria-hidden />
               Один ключ даёт доступ к одному магазину
             </div>
             <div className="flex items-center gap-2">
-              <StatusSuccessIcon className="h-4 w-4 text-emerald-300" aria-hidden />
+              <StatusSuccessIcon className="h-4 w-4 text-success" aria-hidden />
               Максимум 100 товаров на страницу
             </div>
           </div>
@@ -507,15 +514,15 @@ const BazaarApiDocsPage = () => (
 
     <div className="mx-auto grid max-w-7xl gap-8 px-5 py-8 md:px-8 lg:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="hidden lg:block">
-        <nav className="sticky top-6 rounded-md border border-slate-200 bg-white p-3">
-          <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <nav className="sticky top-6 rounded-md border border-border bg-card p-3">
+          <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Разделы
           </p>
           {navItems.map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="block rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+              className="block rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               {item.label}
             </a>
@@ -523,101 +530,104 @@ const BazaarApiDocsPage = () => (
         </nav>
       </aside>
 
-      <div className="min-w-0 rounded-md border border-slate-200 bg-white px-5 py-2 shadow-sm md:px-8">
+      <div className="min-w-0 rounded-md border border-border bg-card px-5 py-2 shadow-none md:px-8">
         <Section id="overview" eyebrow="Overview" title="Назначение API">
           <div className="grid gap-4 md:grid-cols-3">
             {endpoints.map((endpoint) => {
               const Icon = endpoint.icon;
               return (
-                <div key={endpoint.path} className="rounded-md border border-slate-200 bg-white p-5">
-                  <Icon className="h-6 w-6 text-blue-700" aria-hidden />
+                <div key={endpoint.path} className="rounded-md border border-border bg-card p-5">
+                  <Icon className="h-6 w-6 text-primary" aria-hidden />
                   <div className="mt-4 flex items-center gap-2">
                     <MethodBadge method={endpoint.method} />
-                    <code className="rounded bg-slate-100 px-2 py-1 text-sm text-slate-900">
+                    <code className="rounded bg-muted px-2 py-1 text-sm text-foreground">
                       {endpoint.path}
                     </code>
                   </div>
-                  <h3 className="mt-4 text-lg font-semibold text-slate-950">{endpoint.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{endpoint.description}</p>
+                  <h3 className="mt-4 text-lg font-semibold text-foreground">{endpoint.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {endpoint.description}
+                  </p>
                 </div>
               );
             })}
           </div>
-          <p className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
-            API работает в модели <code className="rounded bg-white px-1.5 py-0.5">store-scoped access</code>:
-            каждый API-ключ привязан к одному магазину. Внешняя система видит и создаёт данные
-            только в рамках этого магазина.
+          <p className="rounded-md border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-foreground">
+            API работает в модели{" "}
+            <code className="rounded bg-card px-1.5 py-0.5">store-scoped access</code>: каждый
+            API-ключ привязан к одному магазину. Внешняя система видит и создаёт данные только в
+            рамках этого магазина.
           </p>
         </Section>
 
         <Section id="auth" eyebrow="Authentication" title="Авторизация">
-          <p className="text-slate-700">Для всех запросов требуется API-ключ в заголовке.</p>
+          <p className="text-muted-foreground">Для всех запросов требуется API-ключ в заголовке.</p>
           <CodeBlock>{`Authorization: Bearer <API_KEY>
 Content-Type: application/json`}</CodeBlock>
-          <p className="text-slate-700">
+          <p className="text-muted-foreground">
             API-ключ создаётся в BAZAAR в разделе интеграций. Новый ключ показывается один раз,
             поэтому его нужно сохранить сразу после создания.
           </p>
           <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-            Если ключ отозван или передан неверно, API возвращает HTTP <code>401</code> и
-            сообщение <code>apiUnauthorized</code>.
+            Если ключ отозван или передан неверно, API возвращает HTTP <code>401</code> и сообщение{" "}
+            <code>apiUnauthorized</code>.
           </div>
         </Section>
 
         <Section id="products" eyebrow="Endpoint" title="GET /products">
-          <p className="text-slate-700">
+          <p className="text-muted-foreground">
             Возвращает список активных товаров магазина, доступных для интеграции.
           </p>
-          <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted p-4">
             <MethodBadge method="GET" />
-            <code className="break-all text-sm text-slate-900">
+            <code className="break-all text-sm text-foreground">
               /api/bazaar/v1/products?page=1&amp;pageSize=50&amp;search=coffee
             </code>
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Query параметры</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Query параметры</h3>
             <DataTable headers={["Параметр", "Тип", "Обязательный", "Описание"]} rows={queryParams} />
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Пример запроса</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Пример запроса</h3>
             <CodeBlock>{`curl -X GET "${baseUrl}/products?page=1&pageSize=50" \\
   -H "Authorization: Bearer <API_KEY>"`}</CodeBlock>
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Пример ответа</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Пример ответа</h3>
             <CodeBlock>{productResponse}</CodeBlock>
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Важные поля</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Важные поля</h3>
             <DataTable headers={["Поле", "Описание"]} rows={importantProductFields} />
           </div>
 
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950">
+          <p className="rounded-md border border-success/20 bg-success/10 p-4 text-sm leading-6 text-foreground">
             Закрытые внутренние поля, включая себестоимость и бухгалтерские данные, через API не
             передаются.
           </p>
         </Section>
 
         <Section id="orders" eyebrow="Endpoint" title="Заказы">
-          <p className="text-slate-700">
+          <p className="text-muted-foreground">
             Создаёт заказ в BAZAAR для магазина, к которому привязан API-ключ.
           </p>
-          <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted p-4">
             <MethodBadge method="POST" />
-            <code className="break-all text-sm text-slate-900">/api/bazaar/v1/orders</code>
+            <code className="break-all text-sm text-foreground">/api/bazaar/v1/orders</code>
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Тело запроса</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Тело запроса</h3>
             <DataTable headers={["Поле", "Тип", "Обязательное", "Ограничение"]} rows={orderFields} />
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Пример запроса</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Пример запроса</h3>
             <CodeBlock>{`curl -X POST "${baseUrl}/orders" \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
@@ -625,11 +635,11 @@ Content-Type: application/json`}</CodeBlock>
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Пример ответа</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Пример ответа</h3>
             <CodeBlock>{orderResponse}</CodeBlock>
           </div>
 
-          <ul className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-5 text-sm leading-6 text-slate-700">
+          <ul className="space-y-2 rounded-md border border-border bg-muted p-5 text-sm leading-6 text-muted-foreground">
             <li>Заказ создаётся только в магазине, к которому привязан API-ключ.</li>
             <li>Товары в заказе должны быть активны и доступны в этом же магазине.</li>
             <li>
@@ -641,14 +651,14 @@ Content-Type: application/json`}</CodeBlock>
             <li>Валютный snapshot магазина сохраняется в заказе на момент создания.</li>
           </ul>
 
-          <div className="space-y-4 border-t border-slate-200 pt-6">
-            <h3 className="text-xl font-semibold text-slate-950">GET /orders</h3>
-            <p className="text-slate-700">
+          <div className="space-y-4 border-t border-border pt-6">
+            <h3 className="text-xl font-semibold text-foreground">GET /orders</h3>
+            <p className="text-muted-foreground">
               Возвращает список API-заказов магазина с фильтрами и cursor-пагинацией.
             </p>
-            <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted p-4">
               <MethodBadge method="GET" />
-              <code className="break-all text-sm text-slate-900">
+              <code className="break-all text-sm text-foreground">
                 /api/bazaar/v1/orders?status=CONFIRMED&amp;limit=50
               </code>
             </div>
@@ -658,15 +668,15 @@ Content-Type: application/json`}</CodeBlock>
             <CodeBlock>{orderListResponse}</CodeBlock>
           </div>
 
-          <div className="space-y-4 border-t border-slate-200 pt-6">
-            <h3 className="text-xl font-semibold text-slate-950">GET /orders/{"{id}"}</h3>
-            <p className="text-slate-700">
+          <div className="space-y-4 border-t border-border pt-6">
+            <h3 className="text-xl font-semibold text-foreground">GET /orders/{"{id}"}</h3>
+            <p className="text-muted-foreground">
               Возвращает один API-заказ по ID BAZAAR, номеру заказа или <code>externalId</code>,
               переданному при создании.
             </p>
-            <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted p-4">
               <MethodBadge method="GET" />
-              <code className="break-all text-sm text-slate-900">/api/bazaar/v1/orders/SO-000001</code>
+              <code className="break-all text-sm text-foreground">/api/bazaar/v1/orders/SO-000001</code>
             </div>
             <CodeBlock>{`curl -X GET "${baseUrl}/orders/SO-000001" \\
   -H "Authorization: Bearer <API_KEY>"
@@ -676,9 +686,9 @@ curl -X GET "${baseUrl}/orders/MARKET-10001" \\
             <CodeBlock>{orderDetailResponse}</CodeBlock>
           </div>
 
-          <div className="space-y-4 border-t border-slate-200 pt-6">
-            <h3 className="text-xl font-semibold text-slate-950">Публичные статусы</h3>
-            <p className="text-slate-700">
+          <div className="space-y-4 border-t border-border pt-6">
+            <h3 className="text-xl font-semibold text-foreground">Публичные статусы</h3>
+            <p className="text-muted-foreground">
               Поле <code>status</code> стабильно для внешних интеграций. Поле{" "}
               <code>internalStatus</code> передаётся только для диагностики.
             </p>
@@ -687,21 +697,21 @@ curl -X GET "${baseUrl}/orders/MARKET-10001" \\
         </Section>
 
         <Section id="customers" eyebrow="Endpoint" title="POST /customers">
-          <p className="text-slate-700">
+          <p className="text-muted-foreground">
             Создаёт нового клиента или обновляет существующего клиента в магазине.
           </p>
-          <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted p-4">
             <MethodBadge method="POST" />
-            <code className="break-all text-sm text-slate-900">/api/bazaar/v1/customers</code>
+            <code className="break-all text-sm text-foreground">/api/bazaar/v1/customers</code>
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Тело запроса</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Тело запроса</h3>
             <DataTable headers={["Поле", "Тип", "Обязательное", "Ограничение"]} rows={customerFields} />
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Пример запроса</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Пример запроса</h3>
             <CodeBlock>{`curl -X POST "${baseUrl}/customers" \\
   -H "Authorization: Bearer <API_KEY>" \\
   -H "Content-Type: application/json" \\
@@ -709,19 +719,19 @@ curl -X GET "${baseUrl}/orders/MARKET-10001" \\
           </div>
 
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-slate-950">Пример ответа</h3>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">Пример ответа</h3>
             <CodeBlock>{customerResponse}</CodeBlock>
           </div>
         </Section>
 
         <Section id="errors" eyebrow="Errors" title="Ошибки">
-          <p className="text-slate-700">Ошибки возвращаются в едином формате.</p>
+          <p className="text-muted-foreground">Ошибки возвращаются в едином формате.</p>
           <CodeBlock>{errorResponse}</CodeBlock>
           <DataTable headers={["HTTP статус", "message", "Описание"]} rows={errors} />
         </Section>
 
         <Section id="limits" eyebrow="Limits" title="Ограничения и требования">
-          <ul className="space-y-3 text-slate-700">
+          <ul className="space-y-3 text-muted-foreground">
             <li>Все запросы должны выполняться по HTTPS.</li>
             <li>
               API-ключ нельзя передавать в query string; используйте только заголовок{" "}
@@ -751,7 +761,7 @@ curl -X GET "${baseUrl}/orders/MARKET-10001" \\
         </Section>
 
         <Section id="flow" eyebrow="Integration flow" title="Рекомендуемый сценарий интеграции">
-          <ol className="space-y-3 text-slate-700">
+          <ol className="space-y-3 text-muted-foreground">
             <li>В BAZAAR создаётся API-ключ для нужного магазина.</li>
             <li>
               Маркетплейс периодически вызывает <code>GET /products</code>.
@@ -768,12 +778,12 @@ curl -X GET "${baseUrl}/orders/MARKET-10001" \\
               Маркетплейс повторно читает <code>GET /products</code> для обновления остатков и цен.
             </li>
           </ol>
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-5">
+          <div className="rounded-md border border-border bg-muted p-5">
             <div className="flex items-start gap-3">
-              <BookOpenIcon className="mt-1 h-5 w-5 text-blue-700" aria-hidden />
+              <BookOpenIcon className="mt-1 h-5 w-5 text-primary" aria-hidden />
               <div>
-                <h3 className="font-semibold text-slate-950">Публичная ссылка</h3>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
+                <h3 className="font-semibold text-foreground">Публичная ссылка</h3>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   После деплоя документация будет доступна по адресу{" "}
                   <code>/developers/bazaar-api</code> на вашем домене.
                 </p>

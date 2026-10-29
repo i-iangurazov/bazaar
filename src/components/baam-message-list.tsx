@@ -1,8 +1,16 @@
 "use client";
 import { BaamWorkflowCard } from "./baam-workflow-card";
+import { BaamSpeech } from "./baam-speech";
+import { BaamAnswerText } from "./baam-answer-text";
 import type { WorkflowAction } from "@/lib/baam/workflows";
 import Link from "next/link";
-import { ArrowDown, ArrowUpRight, Check, ImageSquare, Microphone } from "@phosphor-icons/react";
+import {
+  ArrowDownIcon as ArrowDown,
+  ExternalLinkIcon as ArrowUpRight,
+  CheckIcon as Check,
+  ImagePlusIcon as ImageSquare,
+  MicrophoneIcon as Microphone,
+} from "@/components/icons";
 import { BaamIcon } from "./baam-icon";
 import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";
@@ -31,7 +39,7 @@ function ActionCard({ actionId, c }: { actionId: string; c: BaamController }) {
   return (
     <div
       data-baam-action={action.id}
-      className="space-y-3 overflow-hidden break-words rounded-xl border border-border bg-card p-4 shadow-sm"
+      className="space-y-3 overflow-hidden break-words rounded-lg border border-border bg-card p-4 shadow-sm"
     >
       <p
         className={cn(
@@ -115,7 +123,7 @@ export function BaamMessageList({ c }: { c: BaamController }) {
       ? ["createProduct", "receive", "help"]
       : c.pathname.startsWith("/pos")
         ? ["sell", "sales", "help"]
-        : ["createProduct", "sales", "help"];
+        : ["topProducts", "sales", "help"];
   return (
     <>
       <div
@@ -156,22 +164,24 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                     void c.ask(
                       c.t(key as BaamCopyKey),
                       undefined,
-                      key === "help"
-                        ? { kind: "help" }
-                        : key === "sales"
-                          ? { kind: "report", period: "week" }
-                          : {
-                              kind: "action",
-                              action:
-                                key === "createProduct"
-                                  ? "product_create"
-                                  : key === "receive"
-                                    ? "stock_receive"
-                                    : "pos_create_draft",
-                            },
+                      key === "topProducts"
+                        ? undefined
+                        : key === "help"
+                          ? { kind: "help" }
+                          : key === "sales"
+                            ? { kind: "report", period: "week" }
+                            : {
+                                kind: "action",
+                                action:
+                                  key === "createProduct"
+                                    ? "product_create"
+                                    : key === "receive"
+                                      ? "stock_receive"
+                                      : "pos_create_draft",
+                              },
                     )
                   }
-                  className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+                  className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
                 >
                   {c.t(key as BaamCopyKey)}
                   <ArrowUpRight size={16} className="shrink-0 text-muted-foreground" />
@@ -190,8 +200,28 @@ export function BaamMessageList({ c }: { c: BaamController }) {
           {c.messages.map((message) => (
             <li key={message.id} data-baam-entry className="min-w-0">
               {message.role === "user" ? (
-                <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-secondary px-4 py-3 text-sm leading-6">
-                  {message.text}
+                <div>
+                  <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-lg rounded-br-md bg-secondary px-4 py-3 text-sm leading-6">
+                    {message.text}
+                  </div>
+                  {Array.isArray(message.parts) &&
+                  (message.parts as unknown as BaamPart[]).some(
+                    (p) => p.type === "transcription",
+                  ) ? (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={c.busy || c.mediaPending}
+                        className="min-h-9 px-2 text-xs text-muted-foreground underline hover:text-primary disabled:opacity-50"
+                        onClick={() => {
+                          c.setQuestion(message.text);
+                          c.inputRef.current?.focus();
+                        }}
+                      >
+                        {c.t("editVoice")}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -199,14 +229,21 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                     <BaamIcon className="h-5 w-5" />
                     BAAM
                   </p>
-                  <p
-                    className={cn(
-                      "whitespace-pre-wrap break-words text-sm leading-6",
-                      message.role === "error" && "text-destructive",
-                    )}
-                  >
-                    {message.role === "error" ? c.readableError(message.text) : message.text}
-                  </p>
+                  {message.role === "error" ? (
+                    <p role="alert" className="break-words text-sm leading-6 text-destructive">
+                      {c.readableError(message.text)}
+                    </p>
+                  ) : (
+                    <BaamAnswerText
+                      text={message.text}
+                      links={(Array.isArray(message.parts)
+                        ? (message.parts as unknown as BaamPart[])
+                        : []
+                      ).flatMap((part) =>
+                        part.type === "link" || part.type === "record" ? [part.href] : [],
+                      )}
+                    />
+                  )}
                 </div>
               )}
               {message.role === "error" &&
@@ -234,6 +271,48 @@ export function BaamMessageList({ c }: { c: BaamController }) {
               <div className="mt-3 space-y-3">
                 {(Array.isArray(message.parts) ? (message.parts as unknown as BaamPart[]) : []).map(
                   (part, index) => {
+                    if (part.type === "metrics")
+                      return (
+                        <section
+                          key={index}
+                          data-baam-metrics
+                          className="min-w-0 space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5"
+                        >
+                          <div>
+                            <h3 className="text-base font-semibold tracking-tight">{part.title}</h3>
+                            <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
+                              {part.period}
+                            </p>
+                            {part.stores.length ? (
+                              <p className="break-words text-xs leading-5 text-muted-foreground">
+                                {part.stores.join(" · ")}
+                              </p>
+                            ) : null}
+                          </div>
+                          <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
+                            {part.cards.map((card, n) => (
+                              <div key={n} className="min-w-0 rounded-lg bg-muted/50 p-3">
+                                <dt className="text-xs leading-5 text-muted-foreground">
+                                  {card.label}
+                                </dt>
+                                <dd className="mt-1 break-words text-xl font-semibold tabular-nums tracking-tight">
+                                  {card.value}
+                                </dd>
+                                {card.comparison ? (
+                                  <dd className="mt-2 break-words text-xs leading-5 text-muted-foreground">
+                                    {card.comparison}
+                                  </dd>
+                                ) : null}
+                              </div>
+                            ))}
+                          </dl>
+                          {part.notes.map((note, n) => (
+                            <p key={n} className="text-xs leading-5 text-muted-foreground">
+                              {note}
+                            </p>
+                          ))}
+                        </section>
+                      );
                     if (
                       part.type === "workflow" &&
                       lastWorkflowMessage.get(part.workflowId) === message.id
@@ -271,6 +350,98 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                       lastActionMessage.get(part.actionId) === message.id
                     )
                       return <ActionCard key={part.actionId} actionId={part.actionId} c={c} />;
+                    if (
+                      part.type === "record" &&
+                      !part.hidden &&
+                      part.compact &&
+                      part.displayFields.length <= 2 &&
+                      isBaamLink(part.href)
+                    )
+                      return (
+                        <article
+                          key={`${part.id}-${index}`}
+                          data-baam-record
+                          className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <Link
+                              href={part.href}
+                              prefetch={false}
+                              className="inline-flex min-h-8 items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                            >
+                              {part.title}
+                              <ArrowUpRight size={13} className="shrink-0" />
+                            </Link>
+                            {part.sku ? (
+                              <p className="break-all text-[11px] text-muted-foreground">
+                                {part.sku}
+                              </p>
+                            ) : null}
+                          </div>
+                          <dl className="flex shrink-0 gap-3 text-right">
+                            {part.displayFields.map((f, n) => (
+                              <div key={n}>
+                                <dt className="max-w-28 text-[10px] leading-4 text-muted-foreground">
+                                  {f.label}
+                                </dt>
+                                <dd className="text-sm font-semibold tabular-nums">{f.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </article>
+                      );
+                    if (part.type === "record" && !part.hidden && isBaamLink(part.href))
+                      return (
+                        <article
+                          key={`${part.id}-${index}`}
+                          data-baam-record
+                          className={cn(
+                            "min-w-0 space-y-2 rounded-lg border border-border bg-card",
+                            part.compact ? "px-3 py-2" : "p-4",
+                          )}
+                        >
+                          <Link
+                            href={part.href}
+                            prefetch={false}
+                            className="inline-flex min-h-9 max-w-full items-center gap-2 break-words text-sm font-semibold text-primary hover:underline"
+                          >
+                            {part.title}
+                            <ArrowUpRight size={14} className="shrink-0" />
+                          </Link>
+                          {part.sku ? (
+                            <p className="break-all text-xs text-muted-foreground">{part.sku}</p>
+                          ) : null}
+                          <dl
+                            className={cn(
+                              "grid gap-2 text-sm",
+                              part.compact ? "grid-cols-2 sm:grid-cols-3" : "sm:grid-cols-2",
+                            )}
+                          >
+                            {part.displayFields.map((field, n) => (
+                              <div key={n} className="min-w-0">
+                                <dt className="text-xs text-muted-foreground">{field.label}</dt>
+                                <dd className="break-words font-medium">{field.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </article>
+                      );
+                    if (part.type === "evidence")
+                      return (
+                        <details
+                          key={index}
+                          className="rounded-lg border px-3 py-2 text-xs text-muted-foreground"
+                        >
+                          <summary className="min-h-7 cursor-pointer py-1">
+                            {c.t("dataSource")}
+                          </summary>
+                          <ul className="space-y-2 py-2">
+                            {part.details.map((detail, n) => (
+                              <li key={n}>{detail}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      );
                     if (part.type === "choices")
                       return (
                         <div key={index} className="flex flex-wrap gap-2">
@@ -294,7 +465,7 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                           key={index}
                           href={part.href}
                           prefetch={false}
-                          className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                          className="mr-4 inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline"
                         >
                           {part.label}
                           <ArrowUpRight size={14} />
@@ -333,11 +504,14 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                   },
                 )}
               </div>
+              {message.role === "assistant" && message.text ? (
+                <BaamSpeech text={message.text} locale={c.locale} />
+              ) : null}
             </li>
           ))}
         </ol>
         {c.optimistic && c.optimistic.conversationId === c.identity.activeId ? (
-          <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-2xl bg-secondary px-4 py-3 text-sm leading-6">
+          <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-lg bg-secondary px-4 py-3 text-sm leading-6">
             {c.optimistic.text}
           </div>
         ) : null}

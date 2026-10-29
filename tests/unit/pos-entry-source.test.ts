@@ -186,7 +186,10 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("serverLineId?: string;");
     expect(pageSource).toContain("serverLineId: updatedLine.id");
     expect(pageSource).toContain("const resolveRemoteLineId = useCallback");
-    expect(pageSource).toContain("saleId && !hasLocalCartLines && !journalEditSaleId");
+    expect(pageSource).toContain("saleId && !journalEditSaleId");
+    expect(pageSource).toContain(
+      "!hasLocalCartLines || !trpcUtils.pos.sales.get.getData({ saleId })",
+    );
     expect(pageSource).toContain("const PosProductButton = memo(function PosProductButton");
     expect(pageSource).toContain("const handleProductClick = useCallback");
     expect(pageSource).toContain("removedOptimisticLineIdsRef.current.add(lineId);");
@@ -318,7 +321,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain('t("history.returnNotAvailable")');
     expect(pageSource).toContain("disabled={isJournalReturnBusy || !hasJournalReturnableLines}");
     expect(pageSource).toContain(
-      "isJournalReturnBusy || !hasJournalReturnableLines || !hasJournalReturnSelection",
+      "isJournalReturnBusy || !hasJournalReturnableLines || !journalReturnQuoteReady",
     );
     expect(ruMessages).toContain('"returnLinesMissing"');
     expect(ruMessages).toContain('"returnNotAvailable"');
@@ -368,8 +371,12 @@ describe("pos entry navigation", () => {
   it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 
-    expect(pageSource).toContain(
-      '<header className="sticky top-0 z-30 border-b border-border bg-background/95 px-3 py-3 shadow-sm backdrop-blur md:hidden">',
+    const mobileHeaderClasses = Array.from(
+      pageSource.matchAll(/<header className="([^"]*\bmd:hidden\b[^"]*)">/g),
+      (match) => match[1].split(/\s+/),
+    );
+    expect(mobileHeaderClasses).toContainEqual(
+      expect.arrayContaining(["sticky", "top-0", "border-border", "bg-background", "md:hidden"]),
     );
     // Photo rendering and interactions are covered by the runtime photo-button
     // tests and scripts/ux/pos-photo-wholesale-check.ts, rather than source spelling.
@@ -407,7 +414,9 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain(
       "void trackCartSyncPromise(handleAddLine(product.id, product, { refocusSearch: true }));",
     );
-    expect(pageSource).toContain("saleId && !hasLocalCartLines && !journalEditSaleId");
+    expect(pageSource).toContain(
+      "!hasLocalCartLines || !trpcUtils.pos.sales.get.getData({ saleId })",
+    );
   });
 
   it("keeps mobile POS catalog search and add selection stable by product id", async () => {

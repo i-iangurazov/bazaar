@@ -4,9 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { PaymentReviews } from "@/components/billing/payment-reviews";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CheckIcon, CloseIcon, BillingIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
@@ -26,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -40,6 +45,7 @@ type BillingModalState = {
   subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELED";
   trialDays: number;
   currentPeriodDays: number;
+  subscriptionBillingMode: "MANUAL" | "SELF_SERVE";
 };
 
 const normalizePlanForEditor = (plan: string): BillingModalState["plan"] => {
@@ -85,6 +91,10 @@ const PlatformPage = () => {
   const isPlatformOwner = Boolean(session?.user?.isPlatformOwner);
   const isForbidden = status === "authenticated" && !isPlatformOwner;
   const [billingModal, setBillingModal] = useState<BillingModalState | null>(null);
+  const [applyBillingDates, setApplyBillingDates] = useState(false);
+  useEffect(() => {
+    setApplyBillingDates(false);
+  }, [billingModal?.organizationId]);
   const [billingNumberDraft, setBillingNumberDraft] = useState({
     trialDays: "",
     currentPeriodDays: "",
@@ -154,13 +164,13 @@ const PlatformPage = () => {
     }
   };
 
-  if (isForbidden) {
+  if (status !== "authenticated" || isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <Card>
-          <CardContent className="py-8 text-sm text-muted-foreground">
-            {tCommon("notAvailable")}
+          <CardContent role={isForbidden ? "alert" : "status"} className="py-8 text-sm text-muted-foreground">
+            {isForbidden ? tErrors("forbidden") : tCommon("loading")}
           </CardContent>
         </Card>
       </div>
@@ -172,14 +182,10 @@ const PlatformPage = () => {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {summaryQuery.error ? (
-        <Card>
-          <CardContent className="py-4 text-sm text-danger">
-            {translateError(tErrors, summaryQuery.error)}
-          </CardContent>
-        </Card>
+        <QueryErrorState error={summaryQuery.error} onRetry={() => void summaryQuery.refetch()} />
       ) : null}
 
-      {summaryQuery.data ? (
+      {summaryQuery.data && !summaryQuery.error ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
@@ -249,15 +255,15 @@ const PlatformPage = () => {
         </div>
       ) : null}
 
+      <PaymentReviews enabled={status === "authenticated" && isPlatformOwner} />
+
       <Card>
         <CardHeader>
           <CardTitle>{t("upgradeRequestsTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           {upgradeRequestsQuery.error ? (
-            <p className="text-sm text-danger">
-              {translateError(tErrors, upgradeRequestsQuery.error)}
-            </p>
+            <QueryErrorState error={upgradeRequestsQuery.error} onRetry={() => void upgradeRequestsQuery.refetch()} />
           ) : upgradeRequestsQuery.isLoading ? (
             <div className="py-6">
               <Spinner className="h-5 w-5" />
@@ -310,9 +316,8 @@ const PlatformPage = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button
+                          <IconButton
                             type="button"
-                            size="sm"
                             onClick={() =>
                               reviewUpgradeMutation.mutate({
                                 requestId: request.id,
@@ -320,12 +325,11 @@ const PlatformPage = () => {
                               })
                             }
                             disabled={reviewUpgradeMutation.isLoading}
-                          >
-                            {t("upgradeApprove")}
-                          </Button>
-                          <Button
+                            icon={CheckIcon}
+                            label={t("upgradeApprove")}
+                          />
+                          <IconButton
                             type="button"
-                            size="sm"
                             variant="secondary"
                             onClick={() =>
                               reviewUpgradeMutation.mutate({
@@ -334,9 +338,9 @@ const PlatformPage = () => {
                               })
                             }
                             disabled={reviewUpgradeMutation.isLoading}
-                          >
-                            {t("upgradeReject")}
-                          </Button>
+                            icon={CloseIcon}
+                            label={t("upgradeReject")}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -354,7 +358,7 @@ const PlatformPage = () => {
         </CardHeader>
         <CardContent>
           {orgsQuery.error ? (
-            <p className="text-sm text-danger">{translateError(tErrors, orgsQuery.error)}</p>
+            <QueryErrorState error={orgsQuery.error} onRetry={() => void orgsQuery.refetch()} />
           ) : orgsQuery.isLoading ? (
             <div className="py-6">
               <Spinner className="h-5 w-5" />
@@ -429,23 +433,23 @@ const PlatformPage = () => {
                       </TableCell>
                       <TableCell>{formatSafeDateTime(org.createdAt)}</TableCell>
                       <TableCell>
-                        <Button
+                        <IconButton
                           type="button"
                           variant="secondary"
-                          size="sm"
                           onClick={() =>
                             setBillingModal({
                               organizationId: org.id,
                               organizationName: org.name || tCommon("notAvailable"),
                               plan: normalizePlanForEditor(org.plan),
                               subscriptionStatus: org.subscriptionStatus,
+                              subscriptionBillingMode: org.subscriptionBillingMode,
                               trialDays: 14,
                               currentPeriodDays: 30,
                             })
                           }
-                        >
-                          {t("editBilling")}
-                        </Button>
+                          icon={BillingIcon}
+                          label={t("editBilling")}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -479,8 +483,8 @@ const PlatformPage = () => {
                 organizationId: billingModal.organizationId,
                 plan: billingModal.plan,
                 subscriptionStatus: billingModal.subscriptionStatus,
-                trialDays,
-                currentPeriodDays,
+                ...(applyBillingDates ? { trialDays, currentPeriodDays } : {}),
+                subscriptionBillingMode: billingModal.subscriptionBillingMode,
               });
             }}
           >
@@ -491,6 +495,49 @@ const PlatformPage = () => {
               <p className="font-medium text-foreground">{billingModal.organizationName}</p>
             </div>
 
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t("billingMode")}</p>
+              <Select
+                value={billingModal.subscriptionBillingMode}
+                onValueChange={(value) =>
+                  setBillingModal((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          subscriptionBillingMode:
+                            value as BillingModalState["subscriptionBillingMode"],
+                        }
+                      : prev,
+                  )
+                }
+              >
+                <SelectTrigger aria-label={t("billingMode")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MANUAL">{t("billingModeManual")}</SelectItem>
+                  <SelectItem value="SELF_SERVE" disabled={!summaryQuery.data?.paymentsAvailable}>
+                    {t("billingModeSelfServe")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("billingModeHint")}</p>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="apply-billing-dates"
+                checked={applyBillingDates}
+                disabled={updateBillingMutation.isLoading}
+                onCheckedChange={(value) => setApplyBillingDates(value === true)}
+              />
+              <label htmlFor="apply-billing-dates" className="text-sm">
+                {t("applyBillingDates")}
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("applyBillingDatesHint")}
+                </span>
+              </label>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground">{t("plan")}</p>
@@ -502,7 +549,7 @@ const PlatformPage = () => {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("plan")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -528,7 +575,7 @@ const PlatformPage = () => {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("subscriptionStatus")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -543,8 +590,10 @@ const PlatformPage = () => {
                 <p className="text-sm font-medium text-foreground">{t("trialDays")}</p>
                 <Input
                   type="number"
+                  aria-label={t("trialDays")}
                   min={0}
                   max={365}
+                  disabled={!applyBillingDates || updateBillingMutation.isLoading}
                   value={toNumberInputValue(billingNumberDraft.trialDays)}
                   onChange={(event) => {
                     const next = event.target.value;
@@ -562,8 +611,10 @@ const PlatformPage = () => {
                 <p className="text-sm font-medium text-foreground">{t("currentPeriodDays")}</p>
                 <Input
                   type="number"
+                  aria-label={t("currentPeriodDays")}
                   min={1}
                   max={365}
+                  disabled={!applyBillingDates || updateBillingMutation.isLoading}
                   value={toNumberInputValue(billingNumberDraft.currentPeriodDays)}
                   onChange={(event) => {
                     const next = event.target.value;

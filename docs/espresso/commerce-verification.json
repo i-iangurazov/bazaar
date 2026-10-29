@@ -1,0 +1,332 @@
+{
+  "status": "commerce-checkpoint-in-review-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "55c91dc",
+  "mainUnchanged": "5a27b8e",
+  "date": "2026-10-26",
+  "scope": {
+    "routeSources": 19,
+    "distinctScreenSources": 15,
+    "compatibilityAliases": 4,
+    "routes": [
+      {
+        "caseName": "pos-entry",
+        "source": "src/app/(app)/pos/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "pos-sell",
+        "source": "src/app/(app)/pos/sell/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "pos-history",
+        "source": "src/app/(app)/pos/history/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "pos-receipts",
+        "source": "src/app/(app)/pos/receipts/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "pos-registers",
+        "source": "src/app/(app)/pos/registers/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "pos-shifts",
+        "source": "src/app/(app)/pos/shifts/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "pos-debts",
+        "source": "src/app/(app)/pos/debts/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "pos-kkm",
+        "source": "src/app/(app)/pos/kkm/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "sales-orders",
+        "source": "src/app/(app)/sales/orders/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "sales-new",
+        "source": "src/app/(app)/sales/orders/new/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "sales-detail",
+        "source": "src/app/(app)/sales/orders/[id]/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "sales-metrics",
+        "source": "src/app/(app)/sales/orders/metrics/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "purchase-orders",
+        "source": "src/app/(app)/purchase-orders/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "purchase-new",
+        "source": "src/app/(app)/purchase-orders/new/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "purchase-detail",
+        "source": "src/app/(app)/purchase-orders/[id]/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "alias-orders",
+        "source": "src/app/(app)/orders/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "alias-cash",
+        "source": "src/app/(app)/cash/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "alias-income",
+        "source": "src/app/(app)/finance/income/page.tsx",
+        "status": "in_review"
+      },
+      {
+        "caseName": "alias-expense",
+        "source": "src/app/(app)/finance/expense/page.tsx",
+        "status": "in_review"
+      }
+    ]
+  },
+  "appearance": [
+    "POS surfaces use opaque shared card/background/border tokens, flatter shadows and shared corner radii. Existing product/cart placement, dimensions, controls and responsive workflow remain.",
+    "Selected payment controls and receipt registry action groups are flatter; sticky horizontal-scroll affordance remains.",
+    "Registers, shifts, sales and purchase headers use full shared border tokens; fields and actions retain their established order."
+  ],
+  "explicitInteractionChanges": [
+    {
+      "area": "Accessible names",
+      "behavior": "Translated accessible names for opening cash/note, register create/edit names/codes, cash movement and shift closing fields; history return quantity is named using product and remaining quantity. No new translations needed."
+    },
+    {
+      "area": "Cold receipt metadata",
+      "before": "During a responsive switch with the discount sheet, the first QA cart displayed gross 300 while its persisted total was 270. The receipt detail query was disabled whenever optimistic local lines existed.",
+      "after": "Fetch saved receipt metadata if the detail cache is cold even when optimistic lines exist, while retaining the warm-cache scanning optimization.",
+      "evidence": [
+        "artifacts/ux/espresso/commerce-discount-recovery-before.txt",
+        "artifacts/ux/espresso/commerce-discount-recovery-before.json",
+        "artifacts/ux/espresso/screenshots/commerce-discount-recovery-mobile-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-cold-draft-discount-final.png"
+      ],
+      "replay": "Fresh tab restored 270. Final build: new draft 162.50, fixed discount 12.50, total 150; open discount, desktop/mobile switch and close retained 150. Draft was canceled without stock or payment posting.",
+      "limit": "Old unfinished-cart reload attempts were blocked by the existing navigation guard; they are not evidence of a failed hard reload."
+    },
+    {
+      "area": "Discounted refunds",
+      "behavior": "POS journal and standalone history display the authoritative read-only server quote, wait while loading, expose error/retry and disable completion until a valid selection quote is available. Both handlers re-fetch the actual return draft amount before posting; zero-value returns use no payment.",
+      "serverCorrection": "ad68585",
+      "evidence": "docs/espresso/refund-preview-verification.json"
+    },
+    {
+      "area": "Responsive shared dialogs",
+      "before": "A desktop-to-mobile transition while a nested POS return dialog was open remounted shared helpers and lost accessible control names.",
+      "after": "Customer edit, receipt journal, sale detail, return and cart price-sync helpers render once at the common POS root. They remain mounted through responsive view changes; fields/actions are unchanged."
+    },
+    {
+      "area": "Parent dialog focus",
+      "before": "After desktop journal -> return -> 390px -> cancel, focus fell to BODY; Tab reached a focus guard outside the dialog.",
+      "after": "Modal remembers its opening parent dialog. If the original trigger was removed or cannot receive focus after responsive hiding, it focuses the still-connected parent. Existing explicit return-focus refs retain precedence.",
+      "browserReplay": "Production build: same resize/cancel sequence focused the Journal dialog; native Tab moved to its Close button and stayed inside. Accessible names remained.",
+      "evidence": "artifacts/ux/espresso/screenshots/commerce-journal-mobile-focus-final.png",
+      "unitLimit": "The new jsdom runtime case covers a removed original trigger and also passes before this fix. The hidden-desktop-trigger regression is established by the real production browser replay, not by jsdom layout."
+    },
+    {
+      "area": "Mobile purchase title",
+      "before": "The purchase family fell through to brand as the contextual page title, producing BAZAAR twice in the mobile header.",
+      "after": "Purchase list, create and detail use the existing translated purchaseOrders navigation title.",
+      "evidence": "artifacts/ux/espresso/commerce-purchase-header-final.json"
+    },
+    {
+      "area": "Loyalty timezone",
+      "behavior": "Corrected timestamp bindings to keep reservation expiry and sweeping independent of the PostgreSQL session TimeZone. Earn/spend formulas and expiry duration are unchanged.",
+      "serverCorrection": "f77aac4",
+      "evidence": "docs/espresso/loyalty-timezone-verification.json"
+    }
+  ],
+  "browser": {
+    "environment": "Production build on localhost:3122; separate bazaar_espresso_ui DB, Redis DB4. External AI/payment/email/fiscal providers disabled by the QA bootstrap.",
+    "matrix": "artifacts/ux/espresso/commerce-browser-matrix-final.json",
+    "desktop": {
+      "width": 1440,
+      "theme": "dark",
+      "locale": "ru",
+      "screens": 15
+    },
+    "mobile": {
+      "width": 390,
+      "theme": "dark",
+      "locale": "ru",
+      "screens": 15
+    },
+    "overflow": "All 30 inspected screen states had document scrollWidth equal to viewport width; internal table scrolling remains available.",
+    "variants": "artifacts/ux/espresso/commerce-locale-theme-final.json",
+    "variantScope": "Four selected desktop EN/light states and two mobile KG/light states; not a complete locale/state matrix.",
+    "aliases": "artifacts/ux/espresso/commerce-aliases-final.json",
+    "aliasBehavior": "orders -> sales orders; cash -> shifts; finance income/expense -> shifts with PAY_IN/PAY_OUT selected. Four source aliases are not four additional layouts.",
+    "roles": "artifacts/ux/espresso/commerce-role-checks-final.json",
+    "roleResults": "Administrator created and used only synthetic ESP26 register. Manager saw two granted stores and could open the assigned Osh order. Staff/cashier register pages were read-only and unassigned Osh order showed store access denied.",
+    "preservation": "QA admin restored to RU/dark, temporary viewport reset, primary QA register reselected. Original primary shift remains open and unchanged."
+  },
+  "actualCashCycle": {
+    "database": "bazaar_espresso_ui",
+    "registerCode": "ESP26",
+    "productSku": "UX-0006",
+    "saleNumber": "S-000002",
+    "qty": 2,
+    "unitPriceKgs": 150,
+    "discountKgs": 30,
+    "paidKgs": 270,
+    "partialRefundsKgs": [
+      135,
+      135
+    ],
+    "embeddedJournal": "First unit returned through POS journal; final quote of remaining unit verified at 135 on desktop/mobile.",
+    "history": "Second unit quoted and actually returned at 135 through standalone history.",
+    "stockBefore": {
+      "Bishkek": 9,
+      "Osh": 13
+    },
+    "stockAfter": {
+      "Bishkek": 9,
+      "Osh": 13
+    },
+    "costPreserved": true,
+    "cashInKgs": 5,
+    "cashOutKgs": 5,
+    "closedShiftExpectedKgs": 0,
+    "closedShiftCountedKgs": 0,
+    "additionalDraft": "S-000003: discounted draft canceled, never paid or posted.",
+    "readback": "artifacts/ux/espresso/commerce-final-assertions.json",
+    "proof": [
+      "artifacts/ux/espresso/screenshots/commerce-history-return-135-final.png",
+      "artifacts/ux/espresso/screenshots/commerce-shift-closed-zero-final.png"
+    ]
+  },
+  "checks": {
+    "unit": {
+      "files": 261,
+      "tests": 1912,
+      "result": "passed after shared-dialog and refund UI corrections",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/commerce-all-unit-focus-final.log",
+      "note": "Final translated mobile purchase-title branch was subsequently checked by the focused suite and final production build."
+    },
+    "finalFocused": {
+      "files": 4,
+      "tests": 40,
+      "result": "passed; mobile shell, app-shell navigation, POS source invariants and runtime nested dialog focus case",
+      "log": "artifacts/ux/espresso/commerce-shell-focused-final.log"
+    },
+    "commerceDatabase": {
+      "files": 12,
+      "tests": 133,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts commerce",
+      "log": "artifacts/ux/espresso/commerce-refund-preview-db.log"
+    },
+    "loyaltyDatabase": {
+      "files": 8,
+      "tests": 36,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts loyalty",
+      "log": "artifacts/ux/espresso/commerce-final-loyalty-db.log",
+      "note": "Overlaps POS and reservation-timezone cases in commerce; do not add these counts as unique tests."
+    },
+    "typecheck": {
+      "result": "passed; final build also validates types",
+      "log": "artifacts/ux/espresso/commerce-final-typecheck.log"
+    },
+    "lint": {
+      "result": "passed; final build also runs lint",
+      "log": "artifacts/ux/espresso/commerce-final-lint.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/commerce-final-i18n.log"
+    },
+    "productionBuild": {
+      "result": "passed with final application sources, types/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-commerce-checkpoint-final.log"
+    },
+    "databaseReadback": {
+      "result": "passed; sale/refunds, stock/cost recovery, balanced cash movements, closed shift, original register and warehouse count preserved",
+      "evidence": "artifacts/ux/espresso/commerce-final-assertions.json"
+    },
+    "customerWorkflowSources": {
+      "result": "All four operational sources byte-exact c276f30",
+      "sources": [
+        {
+          "source": "src/components/inventory/receiving-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+        },
+        {
+          "source": "src/components/inventory/transfer-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+        },
+        {
+          "source": "src/components/inventory/write-off-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+        },
+        {
+          "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+        }
+      ]
+    },
+    "sourceAudit": {
+      "result": "Recursive AST classification and explicit server-source allowlist; not a claim of CSS layout acceptance",
+      "evidence": "artifacts/ux/espresso/commerce-source-audit-final.json"
+    }
+  },
+  "sourceHashes": {
+    "src/app/(app)/pos/history/page.tsx": "d17a093b58dd0eeece81de797ba3a6efa1d53f277a5c5b53d802ce27fd0d8d38",
+    "src/app/(app)/pos/page.tsx": "cb3cfd8ec9f4b7a6df7e18c05f8ef8a2391f187e6a2208c40baea76d6807ec3d",
+    "src/app/(app)/pos/registers/page.tsx": "7c4228cbe4f1ac96bc478532ae478ccf22e15875f0ce68468fd2fcbc349785e9",
+    "src/app/(app)/pos/sell/page.tsx": "dffe65b17243be657e9dcb8458897c217c28a1d7a0d1b9ea97e4249632966c36",
+    "src/app/(app)/pos/shifts/page.tsx": "10e658fbf7452fd1dc9d895ec22e52141cf96100dc2e0618b093549e71a0ab1e",
+    "src/app/(app)/purchase-orders/[id]/page.tsx": "7262a18555a703d284fe51c76e85f3087c3795245a968388aab0a777c936a8b3",
+    "src/app/(app)/purchase-orders/page.tsx": "00a1f78c752c93304a5adbee1283cf46b321de65d013a9e6643b6bbff1091474",
+    "src/app/(app)/sales/orders/page.tsx": "f26e9cf97c86f82cb0baaf894fc01518d7b652a6a53565eba659f7d349c51e59",
+    "src/components/app-shell.tsx": "db8382a21d4ed2c9b1fe0d3ae8b7ee0ded4ea2db875e57ea0632e89b3fa18208",
+    "src/components/pos/payment-method-control.tsx": "1032cf355da338d58a3cd0b9f498c36906899a1bd499353ddf41df7ad0422172",
+    "src/components/pos/receipt-registry.tsx": "9125fa49336bad3caa13d1972e4887dbfbf062dae7718ff33948ea097f3febe8",
+    "src/components/ui/modal.tsx": "8971d3040ab7fb646b02a5b8d215139b648bad1b3d2741a629cfae601547ca64",
+    "tests/unit/pos-entry-source.test.ts": "0195a057068c2610802c6eb4f03fc468d44d9263199a40284ab6d74695364481",
+    "tests/unit/modal-nested-focus.test.tsx": "630dbf2b8e04a106667862f2e7c60933f54d7b2535168396bec369c5b9cb2aea"
+  },
+  "limits": [
+    "This is an in_review checkpoint, not full acceptance of the 19 sources or the entire redesign. Remaining 31 route sources and final cross-family acceptance remain.",
+    "Ordinary customer-order and purchase screens were visually inspected with existing fixtures; no customer order was confirmed, canceled, shipped or emailed and no purchase receipt was posted in this browser checkpoint. Relevant domain regressions are covered by the commerce DB suite.",
+    "All role/plan/currency/store and every loading/error/empty state permutation is not claimed. Provider-based card/fiscal operations, physical printing and native camera input were not exercised.",
+    "The external ERPNext layout comparison and complete locale/copy matrix remain part of final redesign acceptance. Customer-requested operational layouts remain protected.",
+    "Local screenshot/log artifacts are retained in the ignored artifacts directory and referenced here; they are not embedded in the Git commit."
+  ],
+  "delivery": "Local codex/playground checkpoint only. No main merge/push, schema migration, external provider call or production deployment."
+}

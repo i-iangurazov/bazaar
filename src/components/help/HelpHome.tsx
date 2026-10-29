@@ -23,16 +23,28 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
   const [selectedRole, setSelectedRole] = useState(data.roles[0]?.role ?? "owner");
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
+  const roleRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const results = useMemo(() => searchHelpDocuments(data.guides, query), [data.guides, query]);
   const roleTrack = data.roles.find((track) => track.role === selectedRole) ?? data.roles[0];
 
   useEffect(() => {
     try {
       const value = JSON.parse(window.localStorage.getItem(progressKey) ?? "[]") as string[];
-      setCompleted(new Set(value));
+      setCompleted(new Set(Array.isArray(value) ? value.filter((item) => typeof item === "string") : []));
     } catch {
       setCompleted(new Set());
     }
+  }, []);
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
   }, []);
 
   useEffect(() => {
@@ -49,7 +61,9 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
       const next = new Set(current);
       if (next.has(guideId)) next.delete(guideId);
       else next.add(guideId);
-      window.localStorage.setItem(progressKey, JSON.stringify(Array.from(next)));
+      try {
+        window.localStorage.setItem(progressKey, JSON.stringify(Array.from(next)));
+      } catch { /* Progress remains usable for this visit when browser storage is unavailable. */ }
       return next;
     });
   };
@@ -81,6 +95,10 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
                 setActiveResult(0);
               }}
               onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setQuery("");
+                  return;
+                }
                 if (!results.length) return;
                 if (event.key === "ArrowDown") {
                   event.preventDefault();
@@ -92,16 +110,14 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
                   event.preventDefault();
                   const selected = results[activeResult];
                   if (selected) window.location.assign(`/help/${selected.document.id}`);
-                } else if (event.key === "Escape") {
-                  setQuery("");
                 }
               }}
               placeholder={ui.searchPlaceholder}
               aria-label={ui.searchLabel}
               aria-expanded={Boolean(query)}
-              aria-controls="help-search-results"
+              aria-controls={query ? "help-search-results" : undefined}
               aria-activedescendant={
-                results[activeResult] ? `help-result-${activeResult}` : undefined
+                query && results[activeResult] ? `help-result-${activeResult}` : undefined
               }
               role="combobox"
               autoComplete="off"
@@ -220,16 +236,27 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
           </div>
         </div>
         <div className={styles.roleTabs} role="tablist" aria-label={ui.roleTitle}>
-          {data.roles.map((track) => (
+          {data.roles.map((track, index) => (
             <button
               key={track.role}
+              ref={(node) => { roleRefs.current[index] = node; }}
               type="button"
               role="tab"
               id={`help-role-${track.role}`}
               aria-controls="help-role-panel"
               aria-selected={track.role === selectedRole}
+              tabIndex={track.role === selectedRole ? 0 : -1}
               className={track.role === selectedRole ? styles.roleTabActive : styles.roleTab}
               onClick={() => setSelectedRole(track.role)}
+              onKeyDown={(event) => {
+                const next = event.key === "ArrowRight" ? (index + 1) % data.roles.length
+                  : event.key === "ArrowLeft" ? (index - 1 + data.roles.length) % data.roles.length
+                    : event.key === "Home" ? 0 : event.key === "End" ? data.roles.length - 1 : null;
+                if (next === null) return;
+                event.preventDefault();
+                setSelectedRole(data.roles[next].role);
+                roleRefs.current[next]?.focus();
+              }}
             >
               {track.title}
             </button>
@@ -375,7 +402,7 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
             className={styles.resetProgress}
             type="button"
             onClick={() => {
-              window.localStorage.removeItem(progressKey);
+              try { window.localStorage.removeItem(progressKey); } catch { /* Reset local state even when storage is blocked. */ }
               setCompleted(new Set());
             }}
           >

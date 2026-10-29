@@ -1,0 +1,147 @@
+{
+  "date": "2026-10-21",
+  "timezone": "Asia/Bishkek",
+  "branch": "codex/playground",
+  "parentCommit": "f14f29c14c166e4b5d4efe3c227aac5759cd4c80",
+  "scope": "Gated Freedom Pay KG hosted subscription checkout with durable verification, calendar-month grants, recovery, history and owner review",
+  "merchant": {
+    "sellerType": "IP",
+    "bank": "KICB",
+    "acquiringContract": false,
+    "realProviderSandboxTested": false,
+    "realPaymentsEnabled": false
+  },
+  "fullVitest": {
+    "status": "passed",
+    "databaseTestsEnabled": true,
+    "files": 338,
+    "tests": 2416,
+    "passed": 2416,
+    "failed": 0,
+    "skipped": 0
+  },
+  "targetedRegression": {
+    "status": "passed",
+    "files": 8,
+    "tests": 95,
+    "passed": 95
+  },
+  "paymentBrowser": {
+    "status": "PASS",
+    "productionBundle": true,
+    "realProviderSandbox": false,
+    "checks": [
+      "ru 390: real manual/disabled/empty states; fixture consent and backend refusal, retry key preserved, no invoice, no overflow or JS error",
+      "ru 1440: real manual/disabled/empty states; fixture consent and backend refusal, retry key preserved, no invoice, no overflow or JS error",
+      "kg 390: real manual/disabled/empty states; fixture consent and backend refusal, retry key preserved, no invoice, no overflow or JS error",
+      "kg 1440: real manual/disabled/empty states; fixture consent and backend refusal, retry key preserved, no invoice, no overflow or JS error",
+      "en 390: real manual/disabled/empty states; fixture consent and backend refusal, retry key preserved, no invoice, no overflow or JS error",
+      "en 1440: real manual/disabled/empty states; fixture consent and backend refusal, retry key preserved, no invoice, no overflow or JS error",
+      "Real DB review and invoice history, seller/terms snapshot and support on mobile",
+      "Owner mobile review: explicit confirmation and note, real audited closure, no fictitious paid period",
+      "Owner mode change preserves exact trial/paid dates unless explicitly changed"
+    ]
+  },
+  "pricingBrowser": {
+    "status": "PASS",
+    "checks": [
+      "ru 390: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "ru 1440: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "kg 390: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "kg 1440: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "en 390: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "en 1440: public prices/feature matrix, Starter billing and navigation, no overflow or browser exception",
+      "Starter cashier can load POS and read the allowed register through HTTP"
+    ],
+    "productionBundle": true,
+    "syntheticFixturesOnly": true
+  },
+  "landingBrowser": {
+    "status": "passed",
+    "checks": 21,
+    "errors": []
+  },
+  "checks": {
+    "prismaMigrationsOnFreshIsolatedDatabases": "passed",
+    "productionBuildAndStandalone": "passed",
+    "typescript": "passed",
+    "eslint": "passed, no warnings",
+    "i18n": "passed",
+    "frozenLockfile": "passed",
+    "visualInspection": "mobile payment consent/error, operator resolution and invoice history; desktop Kyrgyz consent"
+  },
+  "preserved": [
+    "Existing MANUAL organization access and prior tariff/store-grant package",
+    "No customer/production DB reset or migration",
+    "No main merge or production deployment",
+    "One invoice payment cannot grant two periods",
+    "Existing access dates survive owner mode-only edits; audit failure rolls back changes"
+  ],
+  "intermediateIssues": [
+    {
+      "issue": "One existing loyalty POS case exceeded its unchanged 5-second limit while a production build ran concurrently",
+      "resolution": "The same case passed in ~0.4 seconds in the focused repeat; final full run was executed without a competing build"
+    },
+    {
+      "issue": "Browser caught existing owner billing defaults resetting access dates on a mode-only edit",
+      "resolution": "Explicit date opt-in on UI; omitted dates preserved by server; atomic owner update+audit, verified against real DB and production UI"
+    }
+  ],
+  "remainingAcceptance": [
+    "Merchant contract and commercial terms, including KICB settlement and enabled KG methods",
+    "Real merchant sandbox on isolated HTTPS preview: KGS/signature/callback/capture/refund behavior",
+    "Seller legal terms/document requirements and explicit cohort rollout; live activation only after acceptance",
+    "Card auto-debit and automated refund API are not part of this version"
+  ],
+  "remoteCI": "Run CI on the pushed commit; the final chat links its verified GitHub Actions run. This file records local evidence.",
+  "rawEvidenceSha256": {
+    "tmp/subscription-payments/full-suite-final.json": "032b50fcefa90cbd655b2278c4b132aa02112108582adea70fa7070a3c36e1f3",
+    "tmp/subscription-payments/targeted-final.json": "34c584157cb21dd67bac7405738a90be6b71993ac597aa12612d2fdbfcbf5957",
+    "tmp/subscription-payments/browser/report.json": "bb397e0a506cea3f587a73bc5b930821c55d9c6f0805823bbf47f6d7ecadd980",
+    "tmp/playground-verification/browser/report.json": "a55d9025c32bf5d267d04c425c5f9ef1b176c77194a12322c908749c46fb367e",
+    "artifacts/bazaar-landing-restoration/local/report.json": "a77c9232b6f37b1a082fafa9c27a8f8faa0e0f4c8e46ceb216d88eb376194382",
+    "tmp/subscription-payments/build-final.log": "383d26f7e7c551f6487288bc51303c2c804b79cda258f7e4a56c679d74e3fcbe",
+    "tmp/subscription-payments/typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tmp/subscription-payments/lint.log": "729a973a2c8deff882c9b99bfbe82dc0d5cd1b4e5daee36c605d31394cb75550",
+    "tmp/subscription-payments/i18n.log": "7928e029387f03e9d2782197363680f8181899bdb69c80bfc76625f6f40c69cd",
+    "tmp/subscription-payments/frozen-lockfile.log": "780001efa9a9e0ea5fad34d02c4eade1a37eb1e475f8dfc67d85168626b1ce24"
+  },
+  "sourceSha256": {
+    ".env.example": "84a41e92116baf2fa3598af158b62263e823ca78f8a88831de9e7a352b48b463",
+    "AGENTS.md": "1835c614f3d3b96ac7717c1bba75dc6112f6b7b6e626127ef5b6556e36423e53",
+    "messages/en.json": "bd74f5d73d0365252f6471a3ea582291577eb0412db7cbd2ee8eb74417c27b90",
+    "messages/kg.json": "54e075679f749bbf751503f010d80d9e5e0c3bd6c0999672dabb39bdbb2ce41e",
+    "messages/ru.json": "33446d03d1b7ebc2648ce7428d8a7450397918cc5d14876b62515c65de29f704",
+    "package.json": "740c36046b0db8d30079ee5984cf3514eaf63a9cff4a11480485e08c5e9d99bf",
+    "pnpm-lock.yaml": "eb1329edee92782189f4cf6d2f883db27a4051440611b68e859db5c96206d662",
+    "prisma/migrations/20261021170000_subscription_payments/migration.sql": "82dce9c6cf1511cb8c970071d9849bf54e9f919bdcf2db639dc131de86275203",
+    "prisma/schema.prisma": "4131587300e7d2e211a5d6150180ac1b1a69652454ffd7270cc53b114437d87a",
+    "scripts/qa/playground-payments-browser.ts": "0b916de979b137fa61c5d6443802ebaf3dbc7db6f2f2bb2a42ebd321287dbfc8",
+    "scripts/qa/playground-runtime.mjs": "e2fd709632277c5dd7f86f0662ffaa180e6a851f16e19a2714caf0681cafa3a7",
+    "src/app/(app)/billing/page.tsx": "eca368bae8b3393fb77639733cf3681427cb634945e44c586b2c4a27e0a1cbb6",
+    "src/app/(app)/platform/page.tsx": "44cc6540b1f656892d0acbec3a94d788039e6da1da0e71620726dbaecbfc84e0",
+    "src/app/api/billing/freedompay/check/route.ts": "83a1103a08bc1c4f3c85b9b765e71b5bcea11f96f751d52f395039277c50eda1",
+    "src/app/api/billing/freedompay/result/route.ts": "fcd4f7274831ca05a21728131a5558c865f7cae965e4f7253f842c0606eef4e9",
+    "src/components/billing/payment-reviews.tsx": "65642febee80aa17c29dadbb62178908d7e96d7204ffb58c22888ea6ba06ee75",
+    "src/components/billing/subscription-payments.tsx": "e0505b59dbd710cd6d941435999a6d22bb7e4578315a4fd0b97bcbf406b6b77d",
+    "src/server/billing/freedomPay.ts": "23aa2c2430ee583c25ce4d0f352ca18a3b952c469977db2e64bfbe43e5420949",
+    "src/server/billing/paymentConfig.ts": "9879023aa9bedc48c0988dd07214ec367f535931c851170ed3a7dfd71704d8d6",
+    "src/server/billing/paymentMath.ts": "332c2b0620b945e31df8ff9bb16c9ff4022353c8756f0dac7d5237edfc575dab",
+    "src/server/billing/paymentWebhook.ts": "d2c270da5c72e6790d16da2f747bf693afcf6d57ca49ee50c3f5878a7d1bf6ab",
+    "src/server/billing/subscriptionPayments.ts": "7ceddf4be301df7ab39d723eb82c28ce1297c5ac12fe200211c1e9630d1ed3d2",
+    "src/server/jobs/index.ts": "e9e2d5c48e020f32609ae87e5f98699fbbe2039a5f7354545e33179ba24a112c",
+    "src/server/jobs/schedule.ts": "9f08a17aac3369f573ebe42db1bfacbf6bda53ae3976dba2cde66d4062dbd565",
+    "src/server/services/baamMetrics.ts": "74c64e8e465e4cbb2ba3356440f8ebac8a85ce5d8858a100f66a22b3a2f972a0",
+    "src/server/services/billing.ts": "5faa313a24041152437263dc415ecf9fd0272c2c0233c49293d8e34c5f29d838",
+    "src/server/services/planLimits.ts": "5df37979acc687cfca14c82f1cececde3d18abdff6823adb2abb6c1afdea09e7",
+    "src/server/services/signup.ts": "0fa30a871a5faa741faab6015f3bac59a32f583f8b1ef6ed3307c057f7e93808",
+    "src/server/trpc/routers/billing.ts": "9d007d00c07d50b68dd897cc130ecefe20a6aff42772f7ecbd053039bfa56ce7",
+    "src/server/trpc/routers/platformOwner.ts": "fc8c5724373283ddd97ca13dda5482bbb3d1945f21a04957eaadbf55fa955295",
+    "src/server/trpc/routers/subscriptionPayments.ts": "b483d84042e39c3e5a379f148d172e9c76bcbf265ca3e2af313d2079d0133dae",
+    "tests/integration/subscription-payments.test.ts": "a4f8b5dda6e81e6b9def79d95fb17a4a121815e98694ea1247f429da2fba9b5c",
+    "tests/unit/scheduled-jobs.test.ts": "88fd94cd3c3331be916ae10c3a1644f6cb323b367ea59c5a441455f3e34a72c6",
+    "tests/unit/subscription-payment-protocol.test.ts": "f148a68af37408936d6530c95675b4bb707be1f1540d7837430c0277448e5bfd",
+    "tests/unit/subscription-payments-ui.test.tsx": "00b45db4aae8253d642f08b275cefd40aa0cfb3b85aa8f81e8361a63a0b6db6e",
+    "tsconfig.json": "e79ab5f26d734cf5ac1e6413a2524d6b95b544c96bbe4605c2a065e448109463"
+  }
+}

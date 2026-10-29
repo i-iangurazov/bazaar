@@ -1,0 +1,673 @@
+{
+  "status": "implementation-complete-bounded-acceptance-passed",
+  "branch": "codex/playground",
+  "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
+  "checks": [
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/typecheck-document.log"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/lint-document.log"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/i18n-document.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "254 files, 1854 tests passed with disabled providers and isolated local DB/Redis; no unhandled errors",
+      "log": "artifacts/ux/espresso/document-unit-isolated.log"
+    },
+    {
+      "command": "UX_SUITE=espresso NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed for current application code, including type/lint checks and static page generation",
+      "log": "artifacts/ux/espresso/build-document-current.log"
+    },
+    {
+      "command": "Browser verification through CUA against localhost:3122",
+      "result": "product create/edit/search, validation, print modal focus, all four product roles, manager store scoping, RU/KG/EN, light/dark product states, mobile controls, saved-view keyboard/focus and single-logo collapse states verified; other route families remain pending",
+      "screenshots": "artifacts/ux/espresso/screenshots/"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts",
+      "result": "3 files, 87 database integration tests passed",
+      "log": "artifacts/ux/espresso/document-db.log",
+      "database": "bazaar_hardening_ci, localhost:55440; separate from browser fixtures"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/app-shell-navigation-source.test.ts tests/unit/baam-navigation-icons.test.ts",
+      "result": "2 files, 10 tests passed after single-logo correction",
+      "log": "artifacts/ux/espresso/single-brand-unit.log"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/saved-table-views-ui.test.tsx tests/unit/ui-sharp-primitives.test.tsx tests/unit/mobile-more-menu-focus.test.tsx",
+      "result": "3 files, 17 tests passed, including explicit return-focus targets",
+      "log": "artifacts/ux/espresso/document-focus-unit.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "255 files, 1858 tests passed before final column-width refinement; focused 32 tests passed again after it",
+      "log": "artifacts/ux/espresso/inventory-unit-isolated-retry.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts",
+      "result": "3 files, 87 real database integration tests passed",
+      "log": "artifacts/ux/espresso/inventory-db.log",
+      "database": "bazaar_hardening_ci; separate from browser fixtures"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "Final application production build passed, including type/lint and 125 static pages",
+      "log": "artifacts/ux/espresso/build-inventory-final.log"
+    },
+    {
+      "command": "CUA normal UI stock document and saved view checks",
+      "result": "Receiving, transfer and write-off posted successfully, DB ledger readback agrees; draft round trip, validation, responsive fields, header widths, KG/EN, duplicate-setting view identity and single-brand states checked",
+      "evidence": "docs/espresso/inventory-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "254 files, 1856 tests passed after restoration",
+      "log": "artifacts/ux/espresso/restore-layout-unit.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts",
+      "result": "3 files, 87 DB tests passed after restoration",
+      "log": "artifacts/ux/espresso/restore-layout-db.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed after restoration, including type/lint checks",
+      "log": "artifacts/ux/espresso/build-restore-operational-layout.log"
+    },
+    {
+      "command": "CUA geometry and selection checks",
+      "result": "Original simultaneous two-column layouts confirmed for all four operational screens; receiving, transfer and write-off selection works; mobile receiving 390px without page overflow",
+      "evidence": "docs/espresso/redesign-change-audit.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts directories",
+      "result": "5 files, 36 database integration tests passed with disabled providers on a separate resettable local database",
+      "log": "artifacts/ux/espresso/directories-db.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "256 files, 1863 tests passed after directory and focus fixes",
+      "log": "artifacts/ux/espresso/directories-unit-final.log"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/customer-directory-state.test.tsx tests/unit/row-actions-focus.test.tsx",
+      "result": "2 files, 7 focused recovery/permission/focus tests passed",
+      "log": "artifacts/ux/espresso/directory-recovery-unit.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "Final directory build passed, including type/lint checks and 125 static pages; one-shot creation and role/focus recovery verified through CUA",
+      "log": "artifacts/ux/espresso/build-directories-final.log",
+      "evidence": "docs/espresso/directory-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "258 files, 1892 tests passed after authentication and locale validation corrections",
+      "log": "artifacts/ux/espresso/auth-all-unit.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "result": "1 file, 9 real DB auth-entry tests passed on separate PostgreSQL/Redis regression infrastructure",
+      "log": "artifacts/ux/espresso/auth-entry-db.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-typecheck.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/auth-lint.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-i18n.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with final auth application sources, type/lint checks and 125 static pages",
+      "log": "artifacts/ux/espresso/build-auth-final.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "CUA browser auth replay on localhost:3122",
+      "result": "All four existing-account role destinations, safe next links, failure recovery, desktop light and mobile dark auth states, RU/KG/EN validation preserving form values. Test preferences restored to RU/dark. No credentials created or changed.",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "259 files / 1903 tests passed after all query-recovery corrections, before the final style-only mobile-paper refinement",
+      "log": "artifacts/ux/espresso/settings-all-unit.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts settings",
+      "result": "passed; attributes, catalog sources, profile preferences/business settings, unit precision/history, users and import preview/apply/rollback",
+      "log": "artifacts/ux/espresso/settings-db.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "RUN_DB_TESTS=0 ALLOW_TEST_DB_RESET=0 pnpm exec vitest run tests/unit/settings-query-recovery.test.tsx",
+      "result": "passed; tests first reproduced five category/unit failures and two user/invitation failures before the corrections",
+      "log": "artifacts/ux/espresso/settings-recovery-final.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "Focused settings/printing tests after mobile paper refinement",
+      "result": "passed after mobile paper background correction",
+      "log": "artifacts/ux/espresso/settings-printing-final.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/settings-typecheck.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/settings-lint.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/settings-i18n.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed after the final mobile paper refinement; type/lint checks and 125 static pages completed",
+      "log": "artifacts/ux/espresso/build-settings-final.log",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "command": "CUA settings replay on localhost:3122",
+      "result": "36 settings route/viewport/theme cases, KG category filter retention, admin/manager/staff/cashier checks, real unit/attribute/template persistence and corrected desktop/mobile paper contrast. Initial visual states and selected functional paths only.",
+      "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "files": 260,
+      "tests": 1911,
+      "result": "passed",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/journal-all-unit.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "files": 4,
+      "tests": 50,
+      "result": "passed after correcting isolated database locale; includes stock-count selection, scanner idempotency, hidden-product/store rejection, count apply, ledger correctness, receiving/transfer/write-off edits and archive",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts warehouse",
+      "log": "artifacts/ux/espresso/journal-warehouse-db-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "files": 3,
+      "tests": 87,
+      "result": "passed after locale repair; products and warehouse regression",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts database",
+      "log": "artifacts/ux/espresso/warehouse-checkpoint-catalog-db.log",
+      "note": "Overlaps inventory/inventory-correctness files in the 50-test suite; these are not 137 unique tests.",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed; final build also checks types",
+      "log": "artifacts/ux/espresso/journal-typecheck-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/journal-lint-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/journal-i18n.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed with final application sources, type/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-warehouse-documents-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "command": "CUA normal UI warehouse replay and Prisma fixture readback",
+      "result": "Original customer columns retained; selected filters, count creation/edit/reload, all four role controls and screen print panning checked. All ledger/snapshot/cost rows unchanged; count not applied.",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "name": "unit",
+      "files": 261,
+      "tests": 1912,
+      "result": "passed after shared-dialog and refund UI corrections",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/commerce-all-unit-focus-final.log",
+      "note": "Final translated mobile purchase-title branch was subsequently checked by the focused suite and final production build.",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "finalFocused",
+      "files": 4,
+      "tests": 40,
+      "result": "passed; mobile shell, app-shell navigation, POS source invariants and runtime nested dialog focus case",
+      "log": "artifacts/ux/espresso/commerce-shell-focused-final.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "commerceDatabase",
+      "files": 12,
+      "tests": 133,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts commerce",
+      "log": "artifacts/ux/espresso/commerce-refund-preview-db.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "loyaltyDatabase",
+      "files": 8,
+      "tests": 36,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts loyalty",
+      "log": "artifacts/ux/espresso/commerce-final-loyalty-db.log",
+      "note": "Overlaps POS and reservation-timezone cases in commerce; do not add these counts as unique tests.",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "typecheck",
+      "result": "passed; final build also validates types",
+      "log": "artifacts/ux/espresso/commerce-final-typecheck.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "lint",
+      "result": "passed; final build also runs lint",
+      "log": "artifacts/ux/espresso/commerce-final-lint.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "i18n",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/commerce-final-i18n.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "productionBuild",
+      "result": "passed with final application sources, types/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-commerce-checkpoint-final.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "databaseReadback",
+      "result": "passed; sale/refunds, stock/cost recovery, balanced cash movements, closed shift, original register and warehouse count preserved",
+      "evidence": "artifacts/ux/espresso/commerce-final-assertions.json"
+    },
+    {
+      "name": "sourceAudit",
+      "result": "Recursive AST classification and explicit server-source allowlist; not a claim of CSS layout acceptance",
+      "evidence": "artifacts/ux/espresso/commerce-source-audit-final.json"
+    },
+    {
+      "name": "unit",
+      "files": 262,
+      "tests": 1926,
+      "result": "passed after all runtime changes",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/reports-all-unit-complete-final.log",
+      "note": "Final copy-only English Sales source label was subsequently validated by i18n and final production build.",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "recovery",
+      "files": 1,
+      "tests": 14,
+      "result": "passed within the full suite; real report pages and shared controls rendered in jsdom with deterministic query failures",
+      "evidence": "tests/unit/report-recovery.test.tsx",
+      "before": [
+        "artifacts/ux/espresso/reports-recovery-before.log",
+        "artifacts/ux/espresso/reports-role-feedback-before.log",
+        "artifacts/ux/espresso/reports-filter-recovery-before.log"
+      ],
+      "beforeResults": [
+        "Initial store/analytics recovery: 7 failed, 1 passed",
+        "Existing export/period-close role feedback: 3 failed, 1 passed, 8 skipped",
+        "Customer and auxiliary filters: 2 failed, 12 skipped"
+      ]
+    },
+    {
+      "name": "database",
+      "files": 10,
+      "tests": 41,
+      "result": "passed on separate bazaar_hardening_ci database",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
+      "log": "artifacts/ux/espresso/reports-db-timestamp-final.log",
+      "scope": "Sales, operational and online populations, customer reports, historical cost evidence, roles/store/organization access, all export types, duplicate period closing and timestamp transport.",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "typecheck",
+      "result": "passed; final build also validates types",
+      "log": "artifacts/ux/espresso/reports-typecheck-complete-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "lint",
+      "result": "passed; final build also runs lint",
+      "log": "artifacts/ux/espresso/reports-lint-complete-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "i18n",
+      "result": "passed after final English label refinement",
+      "log": "artifacts/ux/espresso/reports-i18n-acceptance-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "productionBuild",
+      "result": "passed with final application/copy sources, type/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-reports-acceptance-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "businessReadback",
+      "result": "Selected 11 business models, 485 rows: all pre/post record hashes match. This is not a claim that authentication/session records were unchanged.",
+      "evidence": "artifacts/ux/espresso/reports-business-after.json"
+    },
+    {
+      "name": "sourceAudit",
+      "result": "Four customer operational sources exactly match c276f30; server diff since this checkpoint baseline is limited to operational timestamp transport.",
+      "evidence": "artifacts/ux/espresso/reports-source-audit-final.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "passed after final runtime changes",
+      "log": "artifacts/ux/espresso/integrations-unit-final.log",
+      "evidence": "docs/espresso/integrations-verification.json",
+      "files": 264,
+      "tests": 1988
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts integrations",
+      "result": "passed on separate bazaar_hardening_ci; provider requests mocked or disabled",
+      "log": "artifacts/ux/espresso/integrations-database.log",
+      "evidence": "docs/espresso/integrations-verification.json",
+      "files": 14,
+      "tests": 94
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "result": "passed on separate resettable DB/Redis; real credentials, claims and role destinations",
+      "log": "artifacts/ux/espresso/integrations-auth-database.log",
+      "evidence": "docs/espresso/integrations-verification.json",
+      "files": 1,
+      "tests": 9
+    },
+    {
+      "command": "typecheck",
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/integrations-types.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "lint",
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/integrations-lint.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "i18n",
+      "result": "passed; no new user-facing translation keys introduced",
+      "log": "artifacts/ux/espresso/integrations-i18n.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with final sources, type/lint and 125 generated static pages",
+      "log": "artifacts/ux/espresso/build-integrations-final.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "CUA production UI integration review",
+      "result": "32 base captures over 9 sources; final fresh role logins, assigned-store selection, local HEIC conversion, named email draft/save/preview and documentation contrast/keyboard pan. Full provider/state acceptance remains pending.",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "265 files / 2028 passed",
+      "log": "artifacts/ux/espresso/admin-all-unit-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts administration",
+      "result": "8 files / 58 passed on isolated regression DB",
+      "log": "artifacts/ux/espresso/admin-database-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
+      "result": "11 files / 44 passed; three date cases overlap administration",
+      "log": "artifacts/ux/espresso/admin-reports-regression-final.log"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/admin-types-acceptance.log"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings; final production build includes the last label-only change",
+      "log": "artifacts/ux/espresso/admin-lint-acceptance.log"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed; existing RU/KG/EN keys reused",
+      "log": "artifacts/ux/espresso/admin-i18n-acceptance.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with all final application sources, types/lint and 125 generated static pages",
+      "log": "artifacts/ux/espresso/build-admin-recovered-final.log"
+    },
+    {
+      "command": "CUA production administrative matrix and isolated dev scanner",
+      "result": "26 production captures, 21 role checks and actual dev keyboard input; limitations retained",
+      "evidence": "docs/espresso/administration-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "passed with final TS/TSX; the subsequent CSS selector-specificity refinement is verified by final production build and actual browser focus checks;268files/2066tests",
+      "log": "artifacts/ux/espresso/public-help-inputs-unit-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "result": "1file/9passed on isolated CI database",
+      "log": "artifacts/ux/espresso/public-help-auth-database-final.log"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/public-fields-types-final.log"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/public-fields-lint-final.log"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed; no new displayed strings or translation keys; search aliases retain the existing multilingual content contract",
+      "log": "artifacts/ux/espresso/public-fields-i18n-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with final source, types/lint and 125 generated static pages",
+      "log": "artifacts/ux/espresso/build-public-fields-acceptance-final.log"
+    },
+    {
+      "command": "CUA final public and field-focus checks",
+      "result": "48 base captures,99 localized guide/category renders,16 focus cases and selected workflows",
+      "evidence": "docs/espresso/public-guide-verification.json"
+    },
+    {
+      "command": "Public-consumer checkpoint: full unit, isolated DB, types/lint/i18n/build and browser",
+      "result": "2091unit/35DB passed;48selected UI captures and real network recovery; data preservation verified",
+      "evidence": "docs/espresso/public-consumer-verification.json"
+    },
+    {
+      "command": "Marketing checkpoint: full unit, isolated authentication DB, types/lint/i18n/build and actual production browser",
+      "result": "2113unit/9DB passed;60matrix section captures across12states plus4supplemental; locale network recovery, keyboard/focus and485business-row preservation verified",
+      "evidence": "docs/espresso/marketing-verification.json"
+    },
+    {
+      "command": "Shared-control checkpoint: full unit/isolated DB/types/lint/i18n/production build and actual browser",
+      "result": "2131unit/47DB passed;30selected fixture captures plus actual production profile validation/save/focus;485business rows unchanged",
+      "evidence": "docs/espresso/shared-controls-verification.json"
+    }
+  ],
+  "environment": {
+    "database": "bazaar_espresso_ui",
+    "postgresPort": 55440,
+    "redisDatabase": 4,
+    "redisPrefix": "espresso-ui-test",
+    "externalProviders": "disabled",
+    "startCommand": "UX_SUITE=espresso node --import tsx scripts/espresso/start.ts"
+  },
+  "limits": [
+    "97 is the number of page source files, including redirects, dynamic templates and diagnostic pages; it is not a count of distinct URLs or all possible business states. 32 is the shared-control inventory. Final acceptance combines their recorded family reviews with shared-style verification and selected cross-screen tests.",
+    "The source of visual truth is pinned MIT Frappe Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362. The original CSS was rendered in a clearly labelled component probe, not in a running ERPNext instance. No whole-screen pixel-identity claim is made for different Bazaar and ERPNext modules.",
+    "Intentional differences: Bazaar blue and one brand mark; customer-confirmed operational columns; existing POS, print and merchant-brand workflows; mobile touch targets; permanent module dock behavior. Product document/navigation composition changes remain explicitly disclosed in redesign-change-audit.json and were checked through the recorded workflows; test success does not constitute human preference approval.",
+    "Selected RU/KG/EN, desktop/mobile and light/dark states were checked by family and for shared controls. This does not assert a Cartesian product of all routes, roles, stores, plans, themes, languages and states, or full editorial translation of pre-existing public API documentation, email-editor copy and technical provider identifiers.",
+    "No live AI/voice model-quality, real marketplace publication, acquiring, email delivery, physical printer, camera/USB scanner, native mobile or every-browser certification is claimed by this visual redesign. Their configured-provider/device acceptance is independent of the preserved UI and isolated domain regressions.",
+    "Historical family reports are point-in-time evidence. Old pending counts and initial role claims are superseded only where explicitly reconciled below. Local screenshot/log evidence stays in ignored artifacts; tracked reports link to it."
+  ],
+  "delivery": "Implementation and bounded local acceptance complete on codex/playground; no main merge,push or deployment.",
+  "infrastructureNotes": [
+    "Do not run the prebuild Prisma client generator concurrently with tests or a running server that loads the same generated library. One overlapping run passed its test assertions but failed with an unhandled partial-library load; the sequential rerun completed 254 files / 1854 tests without that error.",
+    "The browser fixture database was not reset; destructive integration checks used a separately created allowlisted local database, with external providers disabled.",
+    "Local PostgreSQL C locale was reproduced as the cause of two Cyrillic-search test failures. Both isolated QA databases were preserved into ICU und databases with all-table row-hash equality and retained backups; regression runner checks the Unicode contract. See warehouse checkpoint.",
+    "The first custom dev-server attempt shared root .next because Next 14 custom-server preparation reloads configuration and ignores the passed conf. It removed local QA production manifests and caused local 500s. Stopped the owned dev/production processes, moved dev into a disposable source+messages snapshot with the standard CLI and separate localhost cookie host, rebuilt production, then replayed final browser captures and scanner checks. Initial snapshot omission of messages was fixed before successful sign-in. Root Next/TypeScript configuration is unchanged. Final evidence: artifacts/ux/espresso/scanner-dev-isolation.json and build-admin-recovered-final.log."
+  ],
+  "correction": "Warehouse column and interaction rearrangements from 5a1e7ac were rejected by the human and restored. Historical checks do not validate customer workflow suitability.",
+  "currentAudit": "docs/espresso/redesign-change-audit.json",
+  "currentDirectoryCheckpoint": "docs/espresso/directory-verification.json",
+  "currentAuthenticationCheckpoint": "docs/espresso/auth-verification.json",
+  "currentSettingsCheckpoint": "docs/espresso/settings-verification.json",
+  "currentWarehouseCheckpoint": "docs/espresso/warehouse-documents-verification.json",
+  "currentCommerceCheckpoint": "docs/espresso/commerce-verification.json",
+  "currentReportsCheckpoint": "docs/espresso/reports-verification.json",
+  "currentIntegrationsCheckpoint": "docs/espresso/integrations-verification.json",
+  "currentAdministrationCheckpoint": "docs/espresso/administration-verification.json",
+  "currentPublicGuideCheckpoint": "docs/espresso/public-guide-verification.json",
+  "currentPublicConsumerCheckpoint": "docs/espresso/public-consumer-verification.json",
+  "currentMarketingCheckpoint": "docs/espresso/marketing-verification.json",
+  "currentSharedControlsCheckpoint": "docs/espresso/shared-controls-verification.json",
+  "historicalLimitsBeforeFinalAcceptance": [
+    "Review and adapt all remaining route families and page-specific controls",
+    "Current ERPNext reference comparison for analogous full screen layouts",
+    "Dark theme and RU/KG/EN visual matrix",
+    "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
+    "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
+    "Broader database integration regression and final production smoke on the isolated app",
+    "93/97 page sources in_review is partial checkpoint coverage; four public sources, shared components and final acceptance remain. See public-guide-verification.json."
+  ],
+  "currentFinalAcceptance": "docs/espresso/final-acceptance.json",
+  "finalChecks": {
+    "unit": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "files": 276,
+      "tests": 2148,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-release-unit.log"
+    },
+    "database": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts acceptance",
+      "files": 65,
+      "tests": 520,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-acceptance-database.log",
+      "scope": "All twelve existing regression families, deduplicated. Separate resettable bazaar_hardening_ci / Redis DB5; real database, disabled or mocked providers. Ran before final presentation-only Support/O! Market changes; database/server/schema sources unchanged afterwards. Counts are not added to overlapping historical family runs."
+    },
+    "focused": {
+      "files": 2,
+      "tests": 100,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-gate-copy-focused.log",
+      "scope": "Final support lock/recovery and integration workspace checks; also included in full unit total."
+    },
+    "types": {
+      "command": "pnpm typecheck",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-release-types.log"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/final-release-lint.log"
+    },
+    "translations": {
+      "command": "pnpm i18n:check",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-release-i18n.log"
+    },
+    "productionBuild": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
+      "result": "passed after final application changes",
+      "buildId": "PuC7wSf9BuqUMiZzKJX7y",
+      "log": "artifacts/ux/espresso/build-final-release.log",
+      "runtimeLog": "artifacts/ux/espresso/server-final-release.log"
+    },
+    "diff": {
+      "command": "git diff --check; git diff --cached --check",
+      "result": "passed"
+    }
+  },
+  "finalCorrections": [
+    {
+      "area": "Counts",
+      "finding": "Previous messages mixed initial page-source review and final product acceptance. 71/97,87/97,93/97,97/97 were primary inventory checkpoints, never a count of fully tested route permutations.",
+      "resolution": "Final source review97/97, controls32/32; final product gate recorded separately here. No completion percentage inferred from screenshot counts."
+    },
+    {
+      "area": "Real role routes",
+      "finding": "Early product/count reports described STAFF component controls as if the role could reach those routes. That is not valid fresh-session route evidence.",
+      "resolution": "Existing roleAccess/middleware denies STAFF products and inventory; CASHIER may view products but cannot manage them and has no inventory route. MANAGER sees its two granted stores and cannot open billing. Component-level read-only/count states are defense in depth, not route grants. Policies unchanged.",
+      "evidence": "artifacts/ux/espresso/final-production-browser.json"
+    },
+    {
+      "area": "Redirect screenshots",
+      "finding": "Two denied-route checks redirect to the canonical localhost host, which already has a separate QA admin session.",
+      "resolution": "Their records contain requestedRole and redirect marker only; destination screenshots are not labelled as the denied role accessing the page."
+    },
+    {
+      "area": "Studio on Starter",
+      "finding": "ImageStudio was reachable with an unconfigured provider; it was not a verified plan gate.",
+      "resolution": "Evidence renamed to provider-state. The demonstrated Starter gate is supportToolkit, checked before and after the new presentation."
+    },
+    {
+      "area": "Native dates and file chooser",
+      "finding": "DOM date fill alone did not establish React state; earlier file-chooser tool calls also stalled. Those attempts are not accepted as passed tests.",
+      "resolution": "Native arrow events establish both date attributes and URL filters; page-size10 yields10+7 actual rows. Real product CSV selection/preview was later established in copied-source dev QA; no Apply Import/customer-file claim.",
+      "evidence": "artifacts/ux/espresso/final-warehouse-date-pagination.json"
+    }
+  ]
+}

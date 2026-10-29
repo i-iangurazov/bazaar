@@ -11,6 +11,43 @@ describeDb("jobs reliability", () => {
   beforeEach(async () => {
     await resetDatabase();
   });
+  it.each(["product-image-studio-process", "product-description-generation"])(
+    "dispatches independent %s tasks while fencing duplicates",
+    async (name) => {
+      let release!: () => void, started!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const entered = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      registerJobForTests(name, async (payload) => {
+        if (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          "jobId" in payload &&
+          payload.jobId === "first-image"
+        ) {
+          started();
+          await gate;
+        }
+        return { job: name, status: "ok" };
+      });
+      const first = runJob(name, { jobId: "first-image" });
+      await entered;
+      try {
+        expect((await runJob(name, { jobId: "second-image" })).status).toBe("ok");
+        expect(await runJob(name, { jobId: "first-image" })).toMatchObject({
+          status: "skipped",
+          details: { reason: "locked" },
+        });
+      } finally {
+        release();
+        await first;
+      }
+    },
+  );
 
   it("creates dead letters after retries", async () => {
     const { org } = await seedBase();

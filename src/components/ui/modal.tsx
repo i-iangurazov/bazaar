@@ -20,6 +20,7 @@ export const Modal = ({
   usePortal = true,
   mobileSheet = false,
   animated = false,
+  returnFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,15 +33,17 @@ export const Modal = ({
   usePortal?: boolean;
   mobileSheet?: boolean;
   animated?: boolean;
+  returnFocusRef?: React.RefObject<HTMLElement>;
 }) => {
   const tCommon = useTranslations("common");
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const parentDialogRef = useRef<HTMLElement | null>(null);
 
   const content = (
     <>
       <DialogPrimitive.Overlay
         className={cn(
-          "fixed inset-0 z-[1000] bg-black/40 backdrop-blur-[1px]",
+          "fixed inset-0 z-[1000] bg-black/40",
           animated &&
             "transition-opacity duration-200 data-[state=closed]:opacity-0 data-[state=open]:opacity-100",
         )}
@@ -50,14 +53,22 @@ export const Modal = ({
         onOpenAutoFocus={() => {
           previouslyFocusedRef.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          parentDialogRef.current = previouslyFocusedRef.current?.closest('[role="dialog"]') ?? null;
         }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          const previouslyFocused = previouslyFocusedRef.current;
+          const previouslyFocused = returnFocusRef?.current ?? previouslyFocusedRef.current;
+          const parentDialog = parentDialogRef.current;
           previouslyFocusedRef.current = null;
+          parentDialogRef.current = null;
           queueMicrotask(() => {
             if (previouslyFocused?.isConnected) {
               previouslyFocused.focus();
+            }
+            // Responsive views can remove or hide the original trigger while
+            // a child dialog is open. Keep keyboard focus in its open parent.
+            if (document.activeElement !== previouslyFocused && parentDialog?.isConnected) {
+              parentDialog.focus();
             }
           });
         }}
@@ -81,7 +92,7 @@ export const Modal = ({
           )}
         >
           <div>
-            <DialogPrimitive.Title className="text-lg font-semibold text-foreground">
+            <DialogPrimitive.Title className="text-lg font-semibold tracking-tight text-foreground">
               {title}
             </DialogPrimitive.Title>
             {subtitle ? (
@@ -93,7 +104,7 @@ export const Modal = ({
           <DialogPrimitive.Close asChild>
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="icon"
               aria-label={tCommon("close")}
               title={tCommon("close")}

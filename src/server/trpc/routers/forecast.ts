@@ -4,6 +4,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "@/server/trpc/trpc";
 import { buildDailySeries, forecastDemand } from "@/server/services/forecasting";
 import { subDays } from "@/server/services/time";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import { toTRPCError } from "@/server/trpc/errors";
 
 export const forecastRouter = router({
   explain: protectedProcedure
@@ -16,13 +18,17 @@ export const forecastRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const [store, product] = await Promise.all([
-        ctx.prisma.store.findUnique({ where: { id: input.storeId } }),
-        ctx.prisma.product.findUnique({ where: { id: input.productId } }),
-      ]);
-      if (!store || store.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+      // Membership in the organization does not grant access to every store.
+      // Authorize before reading either the product or its sales movements.
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
       }
+      const product = await ctx.prisma.product.findFirst({
+        where: { id: input.productId, organizationId: ctx.user.organizationId },
+        select: { id: true, organizationId: true },
+      });
       if (!product || product.organizationId !== ctx.user.organizationId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "productAccessDenied" });
       }

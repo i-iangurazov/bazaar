@@ -39,11 +39,11 @@ export const PageHeader = ({
     <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
       <div className="min-w-0 flex-1 basis-56">
         <PageBreadcrumbs />
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[1.875rem] md:leading-tight">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground md:text-[22px] md:leading-8">
           {title}
         </h1>
         {subtitle ? (
-          <p className="mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">{subtitle}</p>
+          <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
       {action ? <PageHeaderActions className={actionClassName}>{action}</PageHeaderActions> : null}

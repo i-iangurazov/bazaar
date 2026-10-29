@@ -55,12 +55,20 @@ const useFormField = () => {
     formItemId: `${id}-form-item`,
     formDescriptionId: `${id}-form-item-description`,
     formMessageId: `${id}-form-item-message`,
+    descriptionId: itemContext?.descriptionId,
+    messageId: itemContext?.messageId,
+    setDescriptionId: itemContext?.setDescriptionId,
+    setMessageId: itemContext?.setMessageId,
     ...fieldState,
   };
 };
 
 type FormItemContextValue = {
   id: string;
+  descriptionId?: string;
+  messageId?: string;
+  setDescriptionId: React.Dispatch<React.SetStateAction<string | undefined>>;
+  setMessageId: React.Dispatch<React.SetStateAction<string | undefined>>;
 };
 
 const FormItemContext = React.createContext<FormItemContextValue | null>(null);
@@ -68,8 +76,12 @@ const FormItemContext = React.createContext<FormItemContextValue | null>(null);
 const FormItem = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<"div">>(
   ({ className, ...props }, ref) => {
     const id = React.useId();
+    const [descriptionId, setDescriptionId] = React.useState<string>();
+    const [messageId, setMessageId] = React.useState<string>();
     return (
-      <FormItemContext.Provider value={{ id }}>
+      <FormItemContext.Provider
+        value={{ id, descriptionId, messageId, setDescriptionId, setMessageId }}
+      >
         <div ref={ref} className={cn("space-y-1", className)} {...props} />
       </FormItemContext.Provider>
     );
@@ -106,12 +118,12 @@ const FormControl = React.forwardRef<
   React.ElementRef<typeof Slot>,
   React.ComponentPropsWithoutRef<typeof Slot>
 >(({ ...props }, ref) => {
-  const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
+  const { error, formItemId, descriptionId, messageId } = useFormField();
   return (
     <Slot
       ref={ref}
       id={formItemId}
-      aria-describedby={error ? `${formDescriptionId} ${formMessageId}` : formDescriptionId}
+      aria-describedby={[descriptionId, messageId].filter(Boolean).join(" ") || undefined}
       aria-invalid={Boolean(error)}
       {...props}
     />
@@ -122,17 +134,18 @@ FormControl.displayName = "FormControl";
 
 const FormDescription = React.forwardRef<HTMLParagraphElement, React.ComponentPropsWithoutRef<"p">>(
   ({ className, ...props }, ref) => {
-    const { formDescriptionId } = useFormField();
-    if (!props.children) {
+    const { formDescriptionId, setDescriptionId } = useFormField();
+    const id = props.id ?? formDescriptionId;
+    const hasContent = Boolean(props.children);
+    React.useEffect(() => {
+      setDescriptionId?.(hasContent ? id : undefined);
+      return () => setDescriptionId?.(undefined);
+    }, [hasContent, id, setDescriptionId]);
+    if (!hasContent) {
       return null;
     }
     return (
-      <p
-        ref={ref}
-        id={formDescriptionId}
-        className={cn("text-xs text-muted-foreground", className)}
-        {...props}
-      />
+      <p ref={ref} className={cn("text-xs text-muted-foreground", className)} {...props} id={id} />
     );
   },
 );
@@ -141,19 +154,20 @@ FormDescription.displayName = "FormDescription";
 
 const FormMessage = React.forwardRef<HTMLParagraphElement, React.ComponentPropsWithoutRef<"p">>(
   ({ className, children, ...props }, ref) => {
-    const { error, formMessageId } = useFormField();
+    const { error, formMessageId, setMessageId } = useFormField();
     const body = error ? String(error.message) : children;
+    const id = props.id ?? formMessageId;
+    const hasContent = Boolean(body);
+    React.useEffect(() => {
+      setMessageId?.(hasContent ? id : undefined);
+      return () => setMessageId?.(undefined);
+    }, [hasContent, id, setMessageId]);
     if (!body) {
       return null;
     }
 
     return (
-      <p
-        ref={ref}
-        id={formMessageId}
-        className={cn("text-xs font-medium text-danger", className)}
-        {...props}
-      >
+      <p ref={ref} className={cn("text-xs font-medium text-danger", className)} {...props} id={id}>
         {body}
       </p>
     );

@@ -1,12 +1,16 @@
+@import "../styles/espresso/tokens.css";
+@import "../styles/espresso/components.css";
+@import "../styles/espresso/elevation.css";
+@import "../styles/espresso/overlays.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-sans:
-    "Jost", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-jost: "Jost";
-  --font-inter: "Inter";
+  --font-inter: "Inter Variable", "Inter";
   --font-roboto: "Roboto";
   --font-open-sans: "Open Sans";
   --font-montserrat: "Montserrat";
@@ -14,72 +18,51 @@
   --font-pt-sans: "PT Sans";
   --font-source-sans-3: "Source Sans 3";
   --font-manrope: "Manrope";
-  --background: 220 24% 97%;
-  --foreground: 222 47% 11%; /* slate-900-ish */
-
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-
-  /* Bazaar brand blue */
-  --primary: 221 83% 45%;
-  --primary-foreground: 0 0% 100%;
-
-  /* make secondary distinct: subtle tinted surface */
-  --secondary: 220 22% 94%;
-  --secondary-foreground: 222 47% 11%;
-
-  /* muted = quieter text + surfaces */
-  --muted: 220 24% 95%;
-  --muted-foreground: 215 16% 47%;
-
-  --accent: 220 22% 95%;
-  --accent-foreground: 222 47% 11%;
-
-  /* borders & inputs: clearer separation on white */
-  --border: 220 18% 87%;
-  --input: 220 18% 82%;
-
-  /* ring: match primary but slightly softer */
-  --ring: 221 83% 45%;
-
-  /* semantics: balanced for white backgrounds */
-  --success: 142 71% 35%;
-  --success-foreground: 0 0% 100%;
-
-  --warning: 38 92% 50%;
-  --warning-foreground: 222 47% 11%;
-
-  --danger: 0 74% 50%;
-  --danger-foreground: 0 0% 100%;
-
-  --destructive: 0 74% 50%;
-  --destructive-foreground: 0 0% 100%;
-
-  --radius: 8px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-control: 8px;
   --control-height: 2.5rem;
-  --table-row-height: 3rem;
-  --sidebar-background: 0 0% 100%;
-  --sidebar-foreground: 222 47% 11%;
-  --sidebar-primary: 221 83% 45%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 18% 96%;
-  --sidebar-accent-foreground: 222 47% 11%;
-  --sidebar-border: 220 16% 88%;
-  --sidebar-ring: 221 83% 45%;
+  --table-row-height: 2.75rem;
+  --radius-control: var(--radius);
+  --focus-default: 0 0 0 2px hsl(var(--ring) / 0.35);
+  --focus-outline-default: 2px solid hsl(var(--ring) / 0.5);
   --mobile-top-safe-area: env(safe-area-inset-top, 0px);
   --mobile-bottom-safe-area: env(safe-area-inset-bottom, 0px);
-  --mobile-bottom-nav-height: calc(4.5rem + var(--mobile-bottom-safe-area));
+  --mobile-bottom-nav-height: calc(4.25rem + var(--mobile-bottom-safe-area));
   --native-keyboard-height: 0px;
+  --background: 0.000 0.000% 100.000%;
+  --foreground: 0.000 0.000% 9.020%;
+  --card: 0.000 0.000% 100.000%;
+  --card-foreground: 0.000 0.000% 9.020%;
+  --popover: 0.000 0.000% 100.000%;
+  --popover-foreground: 0.000 0.000% 9.020%;
+  --primary: 221 83% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0.000 0.000% 95.294%;
+  --secondary-foreground: 0.000 0.000% 21.961%;
+  --muted: 0.000 0.000% 97.255%;
+  --muted-foreground: 0.000 0.000% 48.627%;
+  --accent: 0.000 0.000% 92.941%;
+  --accent-foreground: 0.000 0.000% 9.020%;
+  --border: 0.000 0.000% 92.941%;
+  --input: 0.000 0.000% 88.627%;
+  --ring: 221 83% 45%;
+  --success: 151.667 72.973% 29.020%;
+  --success-foreground: 0.000 0.000% 100.000%;
+  --warning: 34.286 100.000% 31.569%;
+  --warning-foreground: 0.000 0.000% 100.000%;
+  --danger: 0.000 64.800% 49.020%;
+  --danger-foreground: 0.000 0.000% 100.000%;
+  --destructive: 0.000 64.800% 49.020%;
+  --destructive-foreground: 0.000 0.000% 100.000%;
+  --sidebar-background: 0.000 0.000% 97.255%;
+  --sidebar-foreground: 0.000 0.000% 21.961%;
+  --sidebar-primary: 221 83% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0.000 0.000% 92.941%;
+  --sidebar-accent-foreground: 0.000 0.000% 9.020%;
+  --sidebar-border: 0.000 0.000% 92.941%;
+  --sidebar-ring: 221 83% 45%;
+  --info: 207.115 97.196% 41.961%;
   color-scheme: light;
 }
-
 html.native-app,
 html.native-app body {
   min-height: 100dvh;
@@ -101,61 +84,56 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
 }
 
 .dark {
-  --background: 222 47% 6%;
-  --foreground: 210 40% 98%;
-
-  --card: 222 36% 11%;
-  --card-foreground: 210 40% 98%;
-
-  --popover: 222 47% 9%;
-  --popover-foreground: 210 40% 98%;
-
-  /* Bazaar brand blue, tuned for dark */
+  --background: 0.000 0.000% 5.882%;
+  --foreground: 0.000 0.000% 97.255%;
+  --card: 0.000 0.000% 9.020%;
+  --card-foreground: 0.000 0.000% 97.255%;
+  --popover: 0.000 0.000% 10.980%;
+  --popover-foreground: 0.000 0.000% 97.255%;
   --primary: 217 91% 65%;
   --primary-foreground: 222 47% 11%;
-
-  --secondary: 223 28% 16%;
-  --secondary-foreground: 210 40% 98%;
-
-  --muted: 223 28% 16%;
-  --muted-foreground: 215 20% 70%;
-
-  --accent: 223 25% 17%;
-  --accent-foreground: 210 40% 98%;
-
-  --border: 223 22% 24%;
-  --input: 223 22% 30%;
-
+  --secondary: 0.000 0.000% 14.510%;
+  --secondary-foreground: 0.000 0.000% 92.941%;
+  --muted: 0.000 0.000% 12.549%;
+  --muted-foreground: 0.000 0.000% 63.922%;
+  --accent: 0.000 0.000% 18.824%;
+  --accent-foreground: 0.000 0.000% 97.255%;
+  --border: 0.000 0.000% 18.824%;
+  --input: 0.000 0.000% 21.961%;
   --ring: 217 91% 65%;
-
-  --success: 142 60% 45%;
-  --success-foreground: 222 47% 11%;
-
-  --warning: 38 92% 60%;
-  --warning-foreground: 222 47% 11%;
-
-  --danger: 0 84% 64%;
-  --danger-foreground: 222 47% 11%;
-
-  --destructive: 0 84% 64%;
-  --destructive-foreground: 222 47% 11%;
-
-  --radius: 8px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-control: 8px;
-  --control-height: 2.5rem;
-  --table-row-height: 3rem;
-  --sidebar-background: 222 47% 7%;
-  --sidebar-foreground: 210 40% 98%;
+  --success: 142.826 55.422% 67.451%;
+  --success-foreground: 154.737 65.517% 11.373%;
+  --warning: 26.087 100.000% 81.961%;
+  --warning-foreground: 15.000 87.179% 15.294%;
+  --danger: 0.000 100.000% 86.275%;
+  --danger-foreground: 0.000 63.107% 20.196%;
+  --destructive: 0.000 100.000% 86.275%;
+  --destructive-foreground: 0.000 63.107% 20.196%;
+  --sidebar-background: 0.000 0.000% 9.020%;
+  --sidebar-foreground: 0.000 0.000% 88.627%;
   --sidebar-primary: 217 91% 65%;
   --sidebar-primary-foreground: 222 47% 11%;
-  --sidebar-accent: 223 30% 15%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-border: 223 20% 22%;
+  --sidebar-accent: 0.000 0.000% 18.824%;
+  --sidebar-accent-foreground: 0.000 0.000% 97.255%;
+  --sidebar-border: 0.000 0.000% 18.824%;
   --sidebar-ring: 217 91% 65%;
+  --info: 207.042 81.609% 65.882%;
   color-scheme: dark;
+}
+
+@font-face {
+  font-family: "Inter Variable";
+  src: url("/fonts/inter/InterVariable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --control-height: 2rem;
+    --table-row-height: 2.5rem;
+  }
 }
 
 @layer base {
@@ -172,11 +150,9 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
 
   body {
     @apply bg-background text-foreground antialiased;
-    background-image:
-      radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.11), transparent 25rem),
-      radial-gradient(circle at 85% 4%, hsl(var(--primary) / 0.055), transparent 28rem),
-      linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.42));
-    background-attachment: fixed;
+    background-image: none;
+    font-size: 14px;
+    line-height: 1.5;
     font-feature-settings:
       "liga" 1,
       "kern" 1;
@@ -205,7 +181,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   input,
   select,
   textarea {
-    @apply w-full rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm sm:text-sm;
+    @apply w-full rounded-md border border-transparent bg-secondary px-2.5 py-2 text-base text-foreground shadow-none transition-colors placeholder:text-muted-foreground hover:bg-accent focus:border-primary focus:bg-card focus:outline-none focus:shadow-none sm:text-sm;
     touch-action: manipulation;
   }
 
@@ -225,12 +201,24 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   th {
-    @apply text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+    @apply text-left text-xs font-medium text-muted-foreground;
   }
 
   td {
     @apply text-sm text-foreground;
   }
+}
+
+/* Text fields use one focus border. Native outlines and nested Tailwind rings
+   must not add another frame around a field or a composite search/editor. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"], [type="hidden"]), textarea, select, [data-bazaar-field]):focus {
+  outline: none;
+  box-shadow: none;
+  border-color: hsl(var(--ring));
+}
+
+:is(input, textarea, select, [data-bazaar-field])[aria-invalid="true"]:focus {
+  border-color: hsl(var(--danger));
 }
 
 @layer components {
@@ -248,11 +236,11 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
 
 @layer utilities {
   .bazaar-mobile-card-surface {
-    background-color: rgb(255 255 255 / 0.95);
+    background-color: hsl(var(--card));
   }
 
   .bazaar-mobile-action-surface {
-    background-color: rgb(255 255 255);
+    background-color: hsl(var(--card));
   }
 
   .bazaar-mobile-icon-surface {
@@ -260,41 +248,34 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-mobile-header-button {
-    @apply h-11 w-11 rounded-xl border border-primary/25 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/10 transition hover:border-primary/45 hover:bg-primary/15 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+    @apply h-11 w-11 rounded-[var(--radius)] border border-transparent bg-transparent text-muted-foreground shadow-none transition hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 
   html.dark .bazaar-mobile-card-surface,
   html.dark a.bazaar-mobile-card-surface,
   .dark .bazaar-mobile-card-surface {
-    background: rgb(15 23 42 / 0.95) !important;
-    color: rgb(248 250 252) !important;
+    background: hsl(var(--card)) !important;
+    color: hsl(var(--foreground)) !important;
   }
 
   html.dark .bazaar-mobile-action-surface,
   html.dark a.bazaar-mobile-action-surface,
   .dark .bazaar-mobile-action-surface {
-    background: rgb(15 23 42) !important;
-    color: rgb(248 250 252) !important;
+    background: hsl(var(--card)) !important;
+    color: hsl(var(--foreground)) !important;
   }
 
   html.dark .bazaar-mobile-icon-surface,
   .dark .bazaar-mobile-icon-surface {
-    background-color: rgb(30 41 59) !important;
-  }
-
-  html.dark .bazaar-mobile-header-button,
-  .dark .bazaar-mobile-header-button {
-    background-color: hsl(var(--primary) / 0.16) !important;
-    border-color: hsl(var(--primary) / 0.34) !important;
-    color: hsl(var(--primary)) !important;
+    background-color: hsl(var(--secondary)) !important;
   }
 
   .bazaar-doc-surface {
-    @apply rounded-xl border border-border bg-card shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-card shadow-none;
   }
 
   .bazaar-doc-toolbar {
-    @apply rounded-xl border border-border bg-card p-3 shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-3 shadow-none;
   }
 
   .bazaar-doc-search-list {
@@ -331,7 +312,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-line-row {
-    @apply rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-3 shadow-none transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
   }
 
   .bazaar-doc-line-index {
@@ -347,7 +328,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-summary {
-    @apply rounded-xl border border-border bg-card p-4 shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-4 shadow-none dark:shadow-none;
   }
 
   .bazaar-doc-validation {
@@ -359,15 +340,15 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-surface {
-    @apply rounded-xl border border-border bg-card shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-card shadow-none;
   }
 
   .bazaar-admin-toolbar {
-    @apply rounded-xl border border-border bg-card p-3 shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-3 shadow-none;
   }
 
   .bazaar-admin-table-shell {
-    @apply overflow-hidden rounded-xl border border-border bg-card shadow-sm dark:shadow-none;
+    @apply overflow-hidden rounded-lg border border-border bg-card shadow-none;
   }
 
   .bazaar-admin-table-scroll {
@@ -396,7 +377,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-mobile-card {
-    @apply rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-3 shadow-none transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
   }
 
   .bazaar-admin-info-tile {
@@ -408,23 +389,23 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-status-tile {
-    @apply rounded-xl border border-border bg-muted/30 p-3 text-sm shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-muted/30 p-3 text-sm shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-status-tile-success {
-    @apply rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success shadow-sm ring-1 ring-success/10 dark:shadow-none;
+    @apply rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-status-tile-warning {
-    @apply rounded-xl border border-warning/35 bg-warning/10 p-3 text-sm text-warning shadow-sm ring-1 ring-warning/10 dark:shadow-none;
+    @apply rounded-lg border border-warning/35 bg-warning/10 p-3 text-sm text-warning shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-status-tile-danger {
-    @apply rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm text-danger shadow-sm ring-1 ring-danger/10 dark:shadow-none;
+    @apply rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-choice-card {
-    @apply rounded-xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/35 hover:bg-primary/[0.035] dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-4 text-left shadow-none transition hover:border-primary/35 hover:bg-primary/[0.035] dark:shadow-none;
   }
 
   .bazaar-admin-choice-card-active {
@@ -432,23 +413,23 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-preview-frame {
-    @apply overflow-auto rounded-xl border border-border bg-muted/25 p-3 shadow-inner;
+    @apply overflow-auto rounded-lg border border-border bg-muted/25 p-3 shadow-none;
   }
 
   .bazaar-admin-empty {
-    @apply flex min-h-[12rem] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/25 p-6 text-center text-sm text-muted-foreground;
+    @apply flex min-h-[12rem] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/25 p-6 text-center text-sm text-muted-foreground;
   }
 
   .bazaar-admin-notice {
-    @apply rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground;
+    @apply rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground;
   }
 
   .bazaar-admin-error {
-    @apply rounded-xl border border-danger/30 bg-danger/5 p-3 text-sm text-danger;
+    @apply rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger;
   }
 
   .bazaar-admin-modal-card {
-    @apply rounded-xl border border-border bg-card p-3 shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-3 shadow-none;
   }
 
   html.dark .bazaar-admin-surface,
@@ -815,4 +796,21 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   .workspace-dashboard-grid > .workspace-dashboard-attention {
     grid-column: span 4;
   }
+}
+
+/* Application-only readable desktop sizing. Browser zoom and mobile sizing stay native. */
+@media screen and (min-width: 1024px) {
+  html[data-bazaar-scale="100"] { font-size: 16px; }
+  html[data-bazaar-scale="110"] { font-size: 17.6px; }
+  html[data-bazaar-scale="125"] { font-size: 20px; }
+  html[data-bazaar-scale] body { font-size: 0.875rem; }
+}
+@media screen and (min-width: 1600px) {
+  html[data-bazaar-scale="auto"] { font-size: 17px; }
+}
+@media screen and (min-width: 1920px) {
+  html[data-bazaar-scale="auto"] { font-size: 18px; }
+}
+@media screen and (min-width: 2560px) {
+  html[data-bazaar-scale="auto"] { font-size: 20px; }
 }

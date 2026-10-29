@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useLocaleChange } from "@/hooks/use-locale-change";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
+import { AuthBrand } from "@/components/auth-brand";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,6 +51,9 @@ const ResetTokenPage = () => {
     resolver: zodResolver(schema),
     defaultValues: { password: "" },
   });
+  useLocaleChange(() => {
+    if (form.formState.errors.password) void form.trigger("password");
+  });
 
   const resetMutation = trpc.publicAuth.resetPassword.useMutation({
     onSuccess: () => {
@@ -62,6 +67,7 @@ const ResetTokenPage = () => {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-center"><AuthBrand /></div>
       <div className="flex justify-end">
         <LanguageSwitcher />
       </div>

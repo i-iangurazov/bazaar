@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,7 +35,7 @@ const AdminJobsPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = status === "authenticated" && session?.user?.role === "ADMIN";
   const isForbidden = status === "authenticated" && !isAdmin;
   const { toast } = useToast();
 
@@ -75,11 +76,11 @@ const AdminJobsPage = () => {
   });
   const actionsBusy = retryMutation.isLoading || resolveMutation.isLoading || jobsQuery.isFetching;
 
-  if (isForbidden) {
+  if (status !== "authenticated" || isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">{isForbidden ? tErrors("forbidden") : tCommon("loading")}</p>
       </div>
     );
   }
@@ -99,7 +100,7 @@ const AdminJobsPage = () => {
               {tCommon("loading")}
             </div>
           ) : jobsQuery.isError ? (
-            <QueryErrorState onRetry={() => void jobsQuery.refetch()} />
+            <QueryErrorState error={jobsQuery.error} onRetry={() => void jobsQuery.refetch()} />
           ) : !(jobsQuery.data ?? []).length ? (
             <p className="text-sm text-muted-foreground">{t("empty")}</p>
           ) : (
@@ -146,24 +147,22 @@ const AdminJobsPage = () => {
                               <span className="text-xs text-muted-foreground/80">{t("resolved")}</span>
                             ) : (
                               <div className="flex justify-end gap-2">
-                                <Button
+                                <IconButton
                                   type="button"
                                   variant="ghost"
-                                  size="sm"
                                   onClick={() => retryMutation.mutate({ jobId: job.id })}
                                   disabled={actionsBusy || Boolean(job.retryAttemptId)}
-                                >
-                                  {t("retry")}
-                                </Button>
-                                <Button
+                                  icon={RestoreIcon}
+                                  label={t("retry")}
+                                />
+                                <IconButton
                                   type="button"
                                   variant="secondary"
-                                  size="sm"
                                   onClick={() => openResolve(job)}
                                   disabled={actionsBusy}
-                                >
-                                  {t("resolve")}
-                                </Button>
+                                  icon={CheckIcon}
+                                  label={t("resolve")}
+                                />
                               </div>
                             )}
                           </TableCell>

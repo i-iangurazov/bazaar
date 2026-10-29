@@ -29,6 +29,28 @@ const copy = {
   receive: ["Оприходовать товары", "Receive stock", "Товарларды кириштөө"],
   sell: ["Подготовить продажу", "Prepare a sale", "Сатууну даярдоо"],
   sales: ["Как идут продажи за неделю?", "How are sales this week?", "Бул аптада сатуулар кандай?"],
+  topProducts: [
+    "Покажи топ-7 товаров за месяц",
+    "Show top 7 products this month",
+    "Бул айдагы эң көп сатылган 7 товарды көрсөт",
+  ],
+  dataSource: [
+    "Источник и правила расчёта",
+    "Source and calculation rules",
+    "Булак жана эсептөө эрежелери",
+  ],
+  listen: ["Озвучить ответ", "Read answer aloud", "Жоопту үн менен окуу"],
+  stopSpeaking: ["Остановить озвучивание", "Stop reading", "Үн менен окууну токтотуу"],
+  ready: [
+    "Готов к вопросам и задачам",
+    "Ready for questions and tasks",
+    "Суроолорго жана тапшырмаларга даяр",
+  ],
+  localMode: [
+    "Доступны базовые команды; подключение ИИ не настроено",
+    "Basic commands available; AI connection is not configured",
+    "Негизги буйруктар жеткиликтүү; ИИ туташуусу жөндөлгөн эмес",
+  ],
   help: [
     "Помоги разобраться с этой страницей",
     "Help me with this page",
@@ -52,6 +74,11 @@ const copy = {
     "Дүкөн өзгөрдү. Бүтө элек иштерди жаңы дүкөн үчүн тактаңыз.",
   ],
   execute: ["Выполнить", "Execute", "Аткаруу"],
+  voiceConfirmHint: [
+    "Заполненную форму можно подтвердить фразой «Подтверждаю выполнение».",
+    "To confirm the completed form, say “Confirm execution”.",
+    "Толтурулган форманы ырастоо үчүн «Аткарууну ырастайм» деп айтыңыз.",
+  ],
   running: ["Выполняется…", "Executing…", "Аткарылууда…"],
   completed: ["Выполнено", "Completed", "Аткарылды"],
   proposed: ["Проверьте параметры", "Review details", "Маалыматтарды текшериңиз"],
@@ -74,10 +101,16 @@ const copy = {
     "Check names, quantities and amounts. Edit the text before sending.",
     "Аттарды, сандарды жана суммаларды текшериңиз. Жөнөтүүдөн мурун текстти оңдосоңуз болот.",
   ],
+  editVoice: ["Исправить запрос", "Edit request", "Суроону оңдоо"],
+  voiceScopeChanged: [
+    "Магазин изменился во время распознавания. Проверьте запрос и отправьте его в выбранный магазин.",
+    "The store changed during transcription. Review the request before sending it to the selected store.",
+    "Үн таанылып жатканда дүкөн өзгөрдү. Тандалган дүкөнгө жөнөтүүдөн мурун суроону текшериңиз.",
+  ],
   voiceSupport: [
-    "Голос: русский, English, кыргызча · до 90 секунд",
-    "Voice: русский, English, кыргызча · up to 90 seconds",
-    "Үн: русский, English, кыргызча · 90 секундга чейин",
+    "Голос: русский, English, кыргызча · после записи запрос отправится автоматически",
+    "Voice: русский, English, кыргызча · sent automatically after recording",
+    "Үн: русский, English, кыргызча · жаздыргандан кийин автоматтык жөнөтүлөт",
   ],
   micDenied: [
     "Доступ к микрофону закрыт. Разрешите его в настройках браузера или напишите сообщение.",

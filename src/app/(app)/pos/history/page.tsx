@@ -90,7 +90,8 @@ const PosHistoryPage = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
   const [resumeConflictOpen, setResumeConflictOpen] = useState(false);
-  const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(searchParams.get("saleId"));
+  useEffect(() => { setDetailSaleId(searchParams.get("saleId")); }, [searchParams]);
   const [returnSaleId, setReturnSaleId] = useState<string | null>(null);
   const [returnQtyByLine, setReturnQtyByLine] = useState<Record<string, string>>({});
   const [refundMethod, setRefundMethod] = useState<PosPaymentMethod>(PosPaymentMethod.CASH);
@@ -519,19 +520,24 @@ const PosHistoryPage = () => {
     );
   }, [selectedSaleIdForReturn, selectedSaleLinesForReturn]);
 
-  const returnTotal = useMemo(() => {
+  const returnQuoteLines = useMemo(() => {
     if (!selectedSale) {
-      return 0;
+      return [];
     }
-    return selectedSale.lines.reduce((total, line) => {
+    return selectedSale.lines.flatMap((line) => {
       const availableQty = Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0));
       const qty = Math.trunc(Number(returnQtyByLine[line.id] ?? 0));
       if (!Number.isFinite(qty) || qty <= 0 || availableQty <= 0) {
-        return total;
+        return [];
       }
-      return total + line.unitPriceKgs * Math.min(qty, availableQty);
-    }, 0);
+      return [{ customerOrderLineId: line.id, qty: Math.min(qty, availableQty) }];
+    });
   }, [alreadyReturnedByLine, selectedSale, returnQtyByLine]);
+  const returnQuote = trpc.pos.returns.preview.useQuery({
+    originalSaleId: selectedSaleIdForReturn ?? "", lines: returnQuoteLines,
+  }, { enabled: Boolean(selectedSaleIdForReturn && returnQuoteLines.length), staleTime: 0 });
+  const returnQuoteReady = returnQuoteLines.length > 0 && returnQuote.isSuccess && !returnQuote.isFetching;
+  const returnTotal = returnQuote.data?.totalKgs ?? 0;
 
   const handleStartReturn = async () => {
     const shift = currentShiftQuery.data;
@@ -553,7 +559,7 @@ const PosHistoryPage = () => {
         qty: Math.min(line.qty, line.maxQty),
       }));
 
-    if (!selectedLines.length || returnTotal <= 0) {
+    if (!selectedLines.length || !returnQuoteReady) {
       toast({ variant: "error", description: t("history.returnQtyRequired") });
       return;
     }
@@ -573,15 +579,17 @@ const PosHistoryPage = () => {
         });
       }
 
+      const serverReturn = await trpcUtils.pos.returns.get.fetch({ saleReturnId: draft.id }, { staleTime: 0 });
+      if (!serverReturn) throw new Error("posReturnNotFound");
       const completion = await completeReturnMutation.mutateAsync({
         saleReturnId: draft.id,
         idempotencyKey: createIdempotencyKey(),
-        payments: [
+        payments: serverReturn.totalKgs > 0 ? [
           {
             method: refundMethod,
-            amountKgs: Math.round(returnTotal * 100) / 100,
+            amountKgs: serverReturn.totalKgs,
           },
-        ],
+        ] : [],
       });
 
       if (completion.manualRequired) {
@@ -702,7 +710,7 @@ const PosHistoryPage = () => {
           <p className="text-sm text-muted-foreground">{t("history.subtitle")}</p>
         </section>
 
-        <section className="space-y-3 border border-border bg-card p-3 shadow-sm">
+        <section className="space-y-3 border border-border bg-card p-3 shadow-none">
           <Select value={registerId} onValueChange={handleRegisterChange}>
             <SelectTrigger aria-label={t("entry.register")} className="h-11">
               <SelectValue placeholder={t("entry.selectRegister")} />
@@ -788,7 +796,7 @@ const PosHistoryPage = () => {
                 return (
                   <article
                     key={sale.id}
-                    className="rounded-md border border-border bg-card p-3 shadow-sm"
+                    className="rounded-md border border-border bg-card p-3 shadow-none"
                   >
                     <button
                       type="button"
@@ -1201,7 +1209,7 @@ const PosHistoryPage = () => {
             role="dialog"
             aria-modal="true"
             aria-label={t("history.mobileFiltersTitle")}
-            className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto border-t border-border bg-background p-4 shadow-2xl"
+            className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto border-t border-border bg-background p-4 shadow-lg"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           >
             <div className="flex items-start justify-between gap-3">
@@ -1351,7 +1359,7 @@ const PosHistoryPage = () => {
             role="dialog"
             aria-modal="true"
             aria-label={t("history.detailsTitle")}
-            className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col overflow-hidden border-t border-border bg-background shadow-2xl"
+            className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col overflow-hidden border-t border-border bg-background shadow-lg"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
           >
             <div className="flex items-start justify-between gap-3 border-b border-border p-4">
@@ -1653,6 +1661,7 @@ const PosHistoryPage = () => {
                 {Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0))}
               </p>
               <Input
+                aria-label={`${line.product.name}: ${t("history.availableQty")} ${Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0))}`}
                 value={returnQtyByLine[line.id] ?? "0"}
                 onChange={(event) => {
                   const raw = event.target.value.replace(/[^\d]/g, "");
@@ -1687,9 +1696,16 @@ const PosHistoryPage = () => {
             </Select>
           </div>
 
-          <p className="text-sm font-semibold text-foreground">
+          {returnQuoteLines.length > 0 && returnQuote.error ? (
+            <QueryErrorState error={returnQuote.error} onRetry={() => void returnQuote.refetch()} />
+          ) : null}
+          <p className="text-sm font-semibold text-foreground" aria-live="polite">
             {t("history.returnTotal")}:{" "}
-            {formatKgsMoney(returnTotal, locale, selectedSaleCurrencySource)}
+            {returnQuote.error && returnQuoteLines.length > 0
+              ? tCommon("notAvailable")
+              : returnQuoteLines.length > 0 && !returnQuoteReady
+              ? tCommon("loading")
+              : formatKgsMoney(returnTotal, locale, selectedSaleCurrencySource)}
           </p>
 
           <ModalFooter>
@@ -1702,7 +1718,7 @@ const PosHistoryPage = () => {
             </Button>
             <Button
               onClick={handleStartReturn}
-              disabled={!canOperateRegister || !selectedSale || isReturnMutationBusy}
+              disabled={!canOperateRegister || !selectedSale || isReturnMutationBusy || !returnQuoteReady}
             >
               {isReturnMutationBusy ? <Spinner className="h-4 w-4" /> : null}
               {t("history.completeReturn")}

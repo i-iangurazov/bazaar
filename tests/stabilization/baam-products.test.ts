@@ -76,13 +76,22 @@ describe("BAAM products on a temporary read-only reporting projection", () => {
   }
   const field = (card: { displayFields: Array<{ label: string; value: string }> }, label: string) => card.displayFields.find(value => value.label === label)?.value;
 
-  it("ranks product-level net line revenue with returns, stable ties, zeroes and no assignment duplication", async () => {
+  it("ranks sold products by net revenue without padding a larger requested limit with unsold or return-only products", async () => {
     await projection();
     const result = await executeBaamProductPlan({ ...request(), actorId: fixture.tenants.a.users.ADMIN.id });
-    expect(result.cards.map(card => card.id)).toEqual(["a", "b", "hidden", "zero", "return-only"]);
+    expect(result.cards.map(card => card.id)).toEqual(["a", "b"]);
+    expect(result.cards).toHaveLength(2);
+    expect(result.total).toBe(2);
     expect(field(result.cards[0], "Net line revenue")).toBe("200 KGS");
     expect(field(result.cards[0], "Net quantity")).toBe("4 pcs");
     expect(result.evidence.details.join(" ")).toContain("Products in this population: 5");
+  });
+  it("retains return-only products in the returns ranking without including products that have no returns", async () => {
+    await projection();
+    const result = await executeBaamProductPlan(request({ metric: "return_units" }));
+    expect(result.cards.map(card => card.id)).toEqual(["return-only", "a"]);
+    expect(field(result.cards[0], "Returned quantity")).toBe("2 pcs");
+    expect(field(result.cards[0], "Sold quantity")).toBe("0 pcs");
   });
   it("uses actual manager assignments and supports ascending net units including return-only negatives", async () => {
     await projection();

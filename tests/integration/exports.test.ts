@@ -262,15 +262,17 @@ describeDb("exports", () => {
     );
   });
 
-  it("enforces RBAC on export generation", async () => {
-    const { org, store, staffUser } = await seedBase({ plan: "BUSINESS" });
+  it.each(["STAFF", "CASHIER"])("enforces existing export access for %s", async (role) => {
+    const { org, store, staffUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const user = role === "STAFF" ? staffUser : cashierUser;
     const caller = createTestCaller({
-      id: staffUser.id,
-      email: staffUser.email,
-      role: staffUser.role,
+      id: user.id,
+      email: user.email,
+      role: user.role,
       organizationId: org.id,
     });
 
+    await expect(caller.exports.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
       caller.exports.create({
         storeId: store.id,
@@ -279,6 +281,7 @@ describeDb("exports", () => {
         periodEnd: new Date("2025-01-31T23:59:59Z"),
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await prisma.exportJob.count()).toBe(0);
   });
 
   it("marks completed exports unavailable when the generated file is missing", async () => {

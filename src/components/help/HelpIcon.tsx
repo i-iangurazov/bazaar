@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { IconProps } from "@phosphor-icons/react";
+import type { LucideProps } from "lucide-react";
 
 import {
   DashboardIcon,
@@ -20,7 +20,7 @@ import {
   OnboardingIcon,
 } from "@/components/icons";
 
-const icons: Record<string, ComponentType<IconProps>> = {
+const icons: Record<string, ComponentType<LucideProps>> = {
   rocket: OnboardingIcon,
   register: PosIcon,
   products: ProductsIcon,

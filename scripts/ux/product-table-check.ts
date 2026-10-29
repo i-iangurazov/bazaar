@@ -29,7 +29,8 @@ export async function verifyProductTable(
       const surface = table.locator(":scope > div");
       const contour = await surface.evaluate((el) => {
         const style = getComputedStyle(el);
-        const card = el.closest(".rounded-xl.border")!;
+        const card = el.closest(".rounded-lg.border");
+        if (!card) throw new Error("Product table must retain its enclosing card contour");
         const outer = getComputedStyle(card);
         return {
           radius: style.borderRadius,
