@@ -1,13 +1,24 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const base = process.env.QA_BASE_URL ?? "http://localhost:3120";
-assert(["http://localhost:3120", "https://www.bazaar.kg"].includes(base));
+assert(["http://localhost:3120", "http://localhost:3124", "https://www.bazaar.kg"].includes(base));
 const production = base.startsWith("https:");
 const sha = process.env.QA_EXPECTED_SHA;
 if (production) assert(sha && /^[a-f0-9]{40}$/.test(sha), "Production requires QA_EXPECTED_SHA");
-const output = `artifacts/bazaar-landing-restoration/${production ? "production" : "local"}`;
+const output =
+  process.env.QA_ARTIFACT_DIR ??
+  `artifacts/bazaar-landing-restoration/${production ? "production" : "local"}`;
+const copies = Object.fromEntries(
+  await Promise.all(
+    ["ru", "kg", "en"].map(async (locale) => [
+      locale,
+      JSON.parse(await readFile(`src/content/marketing/${locale}.json`, "utf8")),
+    ]),
+  ),
+);
+const htmlLocales = { ru: "ru", kg: "ky-KG", en: "en-US" };
 await mkdir(output, { recursive: true });
 const report = {
   base,
@@ -75,11 +86,11 @@ async function contextFor(locale, width, theme = "dark") {
   });
   return context;
 }
-async function verifyMenu(page, label, scroll) {
+async function verifyMenu(page, label, scroll, nav = copies.ru.nav) {
   await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), scroll);
   const previous = await page.evaluate(() => scrollY);
-  await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Мобильная навигация", exact: true });
+  await page.getByRole("button", { name: nav.open, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: nav.mobile, exact: true });
   await dialog.waitFor();
   const panel = page.locator("#marketing-mobile-navigation");
   // Regression: before restoration fix, the filtered header shrinks this panel to 56 px.
@@ -96,7 +107,7 @@ async function verifyMenu(page, label, scroll) {
       nestedInHeader: !!el.closest("header"),
     };
   });
-  assert.equal(surface.background, "rgb(7, 11, 19)", "The menu panel must be fully opaque");
+  assert(/^rgb\([^)]+\)$/.test(surface.background), "The menu panel must be fully opaque");
   assert.equal(surface.nestedInHeader, false, "A filtered header must not contain the fixed panel");
   assert(Math.abs(surface.top - surface.headerBottom) <= 1);
   assert(
@@ -105,7 +116,7 @@ async function verifyMenu(page, label, scroll) {
   );
   assert.equal(
     await page.locator("header").evaluate((el) => getComputedStyle(el).backgroundColor),
-    "rgb(7, 11, 19)",
+    surface.background,
   );
   assert.equal(await page.evaluate(() => document.body.style.position), "fixed");
   await page.screenshot({ path: `${output}/${label}-menu-${scroll ? "scrolled" : "top"}.png` });
@@ -137,11 +148,11 @@ async function verifyMenu(page, label, scroll) {
   assert.equal(await page.locator("#platform").evaluate((el) => el.inert), false);
   assert(
     await page
-      .getByRole("button", { name: "Открыть меню", exact: true })
+      .getByRole("button", { name: nav.open, exact: true })
       .evaluate((el) => el === document.activeElement),
   );
-  await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
-  await page.getByRole("button", { name: "Закрыть меню", exact: true }).click();
+  await page.getByRole("button", { name: nav.open, exact: true }).click();
+  await page.getByRole("button", { name: nav.close, exact: true }).click();
   await panel.waitFor({ state: "hidden" });
   assert(
     Math.abs((await page.evaluate(() => scrollY)) - previous) < 2,
@@ -152,6 +163,7 @@ try {
   for (const locale of ["ru", "kg", "en"])
     for (const width of [360, 390, 768, 1440]) {
       const label = `${locale}-${width}`;
+      const copy = copies[locale];
       const context = await contextFor(locale, width);
       const page = await context.newPage();
       page.setDefaultTimeout(20_000);
@@ -161,18 +173,14 @@ try {
         200,
       );
       await settle(page);
-      // The requested pre-redesign landing has Russian copy and no language selector.
-      // Keep app locale cookies intact and test the localized auth entry points below.
-      assert.equal(await page.title(), "Bazaar — Retail OS для современного магазина");
-      assert.equal(await page.locator("html").getAttribute("lang"), locale);
+      // The current Espresso landing localizes the story and follows the user's theme.
+      assert.equal(await page.title(), copy.meta.title);
+      assert.equal(await page.locator("html").getAttribute("lang"), htmlLocales[locale]);
       assert.equal(await page.locator("h1").count(), 1);
-      assert.equal(
-        (await page.locator("h1").innerText()).replace(/\s+/g, " "),
-        "Весь ваш магазин. В одной системе.",
-      );
+      assert.equal((await page.locator("h1").innerText()).replace(/\s+/g, " "), copy.hero.title);
       assert.equal(
         await page.locator("html").evaluate((el) => el.classList.contains("dark")),
-        false,
+        true,
       );
       assert.equal(
         new URL(await page.locator('link[rel="canonical"]').getAttribute("href")).href,
@@ -249,10 +257,10 @@ try {
         assert.equal(await page.locator(href).count(), 1, `Existing anchor ${href}`);
       }
       if (width < 1000) {
-        await verifyMenu(page, label, 0);
-        await verifyMenu(page, label, 700);
+        await verifyMenu(page, label, 0, copy.nav);
+        await verifyMenu(page, label, 700, copy.nav);
         for (const anchor of ["platform", "pos", "commerce", "pricing"]) {
-          await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
+          await page.getByRole("button", { name: copy.nav.open, exact: true }).click();
           await page.locator(`#marketing-mobile-navigation a[href="#${anchor}"]`).click();
           await page.getByRole("dialog").waitFor({ state: "hidden" });
           assert.equal(new URL(page.url()).hash, `#${anchor}`);
@@ -291,12 +299,12 @@ try {
       assert.equal(await comparison.getAttribute("open"), null);
       if (width === 1440 || width === 390) {
         if (width === 390) {
-          await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
+          await page.getByRole("button", { name: copy.nav.open, exact: true }).click();
           await page.locator('#marketing-mobile-navigation a[href="/signup"]').click();
         } else await page.locator('main a[href="/signup"]').first().click();
         await page.waitForURL("**/signup");
         await settle(page);
-        assert.equal(await page.locator("html").getAttribute("lang"), locale);
+        assert.equal(await page.locator("html").getAttribute("lang"), htmlLocales[locale]);
         await page.locator("input").first().waitFor();
         assert((await page.locator("input").count()) > 0);
         const preferred = page.locator("#signup-preferred-locale");
@@ -305,12 +313,12 @@ try {
         assert.equal(await page.evaluate(() => document.body.style.position), "");
         await page.goto(base, { waitUntil: "networkidle" });
         if (width === 390) {
-          await page.getByRole("button", { name: "Открыть меню", exact: true }).click();
+          await page.getByRole("button", { name: copy.nav.open, exact: true }).click();
           await page.locator('#marketing-mobile-navigation a[href="/login"]').click();
         } else await page.locator('header a[href="/login"]').click();
         await page.waitForURL("**/login");
         await settle(page);
-        assert.equal(await page.locator("html").getAttribute("lang"), locale);
+        assert.equal(await page.locator("html").getAttribute("lang"), htmlLocales[locale]);
         await page.locator('input[type="password"]').waitFor();
         assert((await page.locator('input[type="password"]').count()) > 0);
         for (const next of ["en", "kg", "ru"]) {
@@ -320,7 +328,7 @@ try {
             .click();
           await page.waitForFunction(
             (expected) => document.documentElement.lang === expected,
-            next,
+            htmlLocales[next],
           );
         }
         record(
@@ -337,7 +345,10 @@ try {
     const page = await context.newPage();
     page.on("pageerror", (error) => report.errors.push(`theme-${theme}: ${error.message}`));
     await page.goto(base, { waitUntil: "networkidle" });
-    assert.equal(await page.locator("html").evaluate((el) => el.classList.contains("dark")), false);
+    assert.equal(
+      await page.locator("html").evaluate((el) => el.classList.contains("dark")),
+      theme === "dark",
+    );
     await verifyMenu(page, `theme-${theme}`, 700);
     for (const width of [899, 900, 999, 1000, 1199, 1200]) {
       await page.setViewportSize({ width, height: 900 });

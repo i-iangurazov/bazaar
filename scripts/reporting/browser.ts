@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page } from "playwright";
+import { toIntlLocale } from "../../src/lib/locales";
 const base = "https://localhost:3123";
 const f = JSON.parse(await readFile("artifacts/reporting/fixture.json", "utf8"));
 const output = "artifacts/reporting/after";
@@ -310,7 +311,8 @@ try {
         .first()
         .click();
       await until(
-        async () => (await page.evaluate(() => document.documentElement.lang)) === locale,
+        async () =>
+          (await page.evaluate(() => document.documentElement.lang)) === toIntlLocale(locale),
         "Language did not switch",
       );
       for (const width of [360, 390, 768, 1440])
