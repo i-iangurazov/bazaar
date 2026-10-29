@@ -2,6 +2,7 @@
 import { useTranslations } from "next-intl";
 import { EditIcon } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
+import { Checkbox } from "@/components/ui/checkbox";
 export type PriceBookPositionRow = {
   productId: string;
   variantId: string | null;
@@ -21,8 +22,6 @@ type Props = {
   onSelect: (id: string, value: boolean) => void;
   onEdit: (r: PriceBookPositionRow) => void;
 };
-const checkboxClass =
-  "h-4 w-4 shrink-0 p-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 export function PriceBookPositionList({
   rows,
   allSelected,
@@ -42,21 +41,17 @@ export function PriceBookPositionList({
   );
   const select = (r: PriceBookPositionRow) =>
     r.variantId === null && (
-      <input
-        className={checkboxClass}
-        type="checkbox"
+      <Checkbox
         aria-label={`${t("select")} ${r.label}`}
         checked={r.selected}
-        onChange={(e) => onSelect(r.productId, e.target.checked)}
+        onCheckedChange={(checked) => onSelect(r.productId, checked === true)}
       />
     );
   const selectPage = (
-    <input
-      className={checkboxClass}
-      type="checkbox"
+    <Checkbox
       aria-label={t("selectPage")}
       checked={allSelected}
-      onChange={(e) => onSelectPage(e.target.checked)}
+      onCheckedChange={(checked) => onSelectPage(checked === true)}
     />
   );
   return (

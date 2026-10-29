@@ -176,6 +176,9 @@ try {
   await waitClosed();
   assert.equal(await currentPrice(stores[0].id), 325);
   assert.equal(await currentPrice(stores[1].id), 153.45);
+  // Publication closes its dialog before the list/history refetch finishes.
+  // Wait for the new version's actual table value before choosing its rollback.
+  await page.getByRole("cell", { name: "153,45", exact: true }).waitFor();
   const rollbackButton = page.locator(
     'button[aria-label="Проверить откат"]:visible:not([disabled])',
   );
@@ -189,9 +192,8 @@ try {
 
   await api.storePrices.upsert({ storeId: stores[1].id, productId: product.id, priceKgs: 0 });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page
-    .getByRole("combobox", { name: "Показать источник цен магазина", exact: true })
-    .selectOption(stores[1].id);
+  await page.getByRole("combobox", { name: "Показать источник цен магазина", exact: true }).click();
+  await page.getByRole("option", { name: stores[1].name, exact: true }).click();
   await page.locator(`button[aria-label="Настроить цену ${product.name}"]:visible`).click();
   assert(
     !(await dialog()
@@ -315,12 +317,10 @@ try {
     await prisma.storePrice.findMany({ where: { organizationId: org.id }, orderBy: { id: "asc" } }),
   );
   await button("Сверка магазинов").click();
-  await page
-    .getByRole("combobox", { name: "Магазин-источник", exact: true })
-    .selectOption(stores[0].id);
-  await page
-    .getByRole("combobox", { name: "Магазин для сверки", exact: true })
-    .selectOption(stores[1].id);
+  await page.getByRole("combobox", { name: "Магазин-источник", exact: true }).click();
+  await page.getByRole("option", { name: stores[0].name, exact: true }).click();
+  await page.getByRole("combobox", { name: "Магазин для сверки", exact: true }).click();
+  await page.getByRole("option", { name: stores[1].name, exact: true }).click();
   await page.getByRole("cell", { name: product.name, exact: false }).first().waitFor();
   assert.equal(
     JSON.stringify(
@@ -332,6 +332,28 @@ try {
     pricesBefore,
   );
   checks.push("Source/target comparison shows real store differences without writing prices");
+  const sourceSelect = page.getByRole("combobox", { name: "Магазин-источник", exact: true });
+  assert.equal(await sourceSelect.getAttribute("data-bazaar-field"), "select");
+  assert(
+    await sourceSelect.evaluate(
+      (element) => Number.parseFloat(getComputedStyle(element).paddingRight) >= 8,
+    ),
+  );
+  await sourceSelect.click();
+  await page.getByRole("option", { name: stores[1].name, exact: true }).click();
+  assert.equal(
+    (
+      await page.getByRole("combobox", { name: "Магазин для сверки", exact: true }).innerText()
+    ).trim(),
+    "Выберите магазин",
+  );
+  await sourceSelect.click();
+  await page.getByRole("option", { name: stores[0].name, exact: true }).click();
+  await page.getByRole("combobox", { name: "Магазин для сверки", exact: true }).click();
+  await page.getByRole("option", { name: stores[1].name, exact: true }).click();
+  checks.push(
+    "Comparison uses the shared padded select and clears a target that becomes the source",
+  );
   await button("Прайсы").click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator(`button[aria-label="Настроить цену ${product.name}"]:visible`).waitFor();
@@ -346,6 +368,30 @@ try {
   await page.locator(`button[aria-label="Настроить цену ${product.name}"]:visible`).click();
   await page.screenshot({ path: `${directory}/price-books-mobile-editor.png`, fullPage: true });
   await dialog().getByRole("button", { name: "Закрыть", exact: true }).click();
+  await button("Массовая правка").click();
+  const modeSelect = dialog().getByRole("combobox", { name: "Способ изменения", exact: true });
+  await modeSelect.press("Enter");
+  await page.getByRole("listbox").waitFor();
+  await page.keyboard.press("Escape");
+  assert(await dialog().isVisible());
+  await page.waitForFunction(
+    () => document.activeElement?.getAttribute("aria-label") === "Способ изменения",
+  );
+  assert(await modeSelect.evaluate((element) => element === document.activeElement));
+  await modeSelect.click();
+  await page.getByRole("option", { name: "Установить значение", exact: true }).click();
+  assert(
+    await dialog().getByRole("button", { name: "Проверить изменения", exact: true }).isDisabled(),
+  );
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await page.screenshot({
+    path: `${directory}/price-books-mobile-bulk-select.png`,
+    fullPage: true,
+  });
+  await dialog().getByRole("button", { name: "Закрыть", exact: true }).click();
+  checks.push(
+    "Mobile shared selects work inside the bulk dialog; Escape closes only the menu and no price is published",
+  );
   checks.push(
     "Desktop/mobile use icon-only row actions, readable price cards, named fields and no horizontal page overflow",
   );

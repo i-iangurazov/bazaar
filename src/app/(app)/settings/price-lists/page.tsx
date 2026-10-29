@@ -13,9 +13,12 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useSse } from "@/lib/useSse";
 import { PriceBookPositionList } from "@/components/products/price-book-position-list";
+import { PriceBookSelect } from "@/components/products/price-book-select";
+import { SearchInput } from "@/components/search-input";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Modal } from "@/components/ui/modal";
 import { IconButton } from "@/components/ui/icon-button";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -31,8 +34,6 @@ type Approval = {
   idempotencyKey: string;
 };
 type Entry = Extract<PriceBookChangeInput, { kind: "PRICES" }>["entries"][number];
-const selectClass =
-  "h-[var(--control-height)] min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-sm";
 const ek = (p: string, v?: string | null) => `${p}:${v ?? "BASE"}`;
 const parse = (s: string) => Number(s.trim().replace(",", "."));
 
@@ -336,64 +337,50 @@ export default function PriceListsPage() {
           {error}
         </p>
       )}
-      <Input
-        aria-label={common("search")}
-        placeholder={common("search")}
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-lg"
-      />
+      <div className="max-w-lg">
+        <SearchInput
+          aria-label={common("search")}
+          placeholder={common("search")}
+          value={search}
+          onValueChange={setSearch}
+        />
+      </div>
       {compareOpen ? (
         <section className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("comparisonHelp")}</p>
-          <div className="flex flex-wrap gap-3">
-            <label className="grid gap-1 text-sm">
+          <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <label className="grid min-w-0 gap-1 text-sm">
               {t("source")}
-              <select
-                className={selectClass}
-                aria-label={t("source")}
+              <PriceBookSelect
+                label={t("source")}
                 value={source}
-                onChange={(e) => {
-                  setSource(e.target.value);
+                onValueChange={(value) => {
+                  setSource(value);
+                  if (target === value) setTarget("");
                   setComparePage(1);
                 }}
-              >
-                <option value="">{t("chooseStore")}</option>
-                {storeOptions.map((s) => (
-                  <option value={s.id} key={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                emptyLabel={t("chooseStore")}
+                options={storeOptions}
+              />
             </label>
-            <label className="grid gap-1 text-sm">
+            <label className="grid min-w-0 gap-1 text-sm">
               {t("target")}
-              <select
-                className={selectClass}
-                aria-label={t("target")}
+              <PriceBookSelect
+                label={t("target")}
                 value={target}
-                onChange={(e) => {
-                  setTarget(e.target.value);
+                onValueChange={(value) => {
+                  setTarget(value);
                   setComparePage(1);
                 }}
-              >
-                <option value="">{t("chooseStore")}</option>
-                {storeOptions
-                  .filter((s) => s.id !== source)
-                  .map((s) => (
-                    <option value={s.id} key={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </select>
+                emptyLabel={t("chooseStore")}
+                options={storeOptions.filter((s) => s.id !== source)}
+              />
             </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="h-4 w-4 shrink-0 p-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            <label className="flex min-h-[var(--control-height)] items-center gap-2 text-sm">
+              <Checkbox
                 checked={onlyDifferences}
-                onChange={(e) => {
-                  setOnlyDifferences(e.target.checked);
+                onCheckedChange={(checked) => {
+                  setOnlyDifferences(checked === true);
                   setComparePage(1);
                 }}
               />
@@ -480,32 +467,24 @@ export default function PriceListsPage() {
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-3">
-            <label className="grid min-w-0 gap-1 text-sm">
+            <label className="grid w-full min-w-0 gap-1 text-sm sm:w-64">
               {t("list")}
-              <select
-                className={selectClass}
-                aria-label={t("list")}
+              <PriceBookSelect
+                label={t("list")}
                 value={activeBook}
-                onChange={(e) => {
+                onValueChange={(value) => {
                   if (draft.length) {
                     setNotice(t("discardFirst"));
                     return;
                   }
-                  setBookId(e.target.value);
+                  setBookId(value);
                   setPage(1);
                   setStoreId("");
                   setSelected([]);
                 }}
-              >
-                <option value="" disabled>
-                  {t("chooseList")}
-                </option>
-                {overview.data?.books.map((b) => (
-                  <option value={b.id} key={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+                placeholder={t("chooseList")}
+                options={overview.data?.books ?? []}
+              />
             </label>
             <Button
               variant="secondary"
@@ -587,21 +566,18 @@ export default function PriceListsPage() {
                     <span className="text-sm text-muted-foreground">{t("noStores")}</span>
                   )}
                 </div>
-                <label className="grid max-w-sm gap-1 text-sm">
+                <label className="grid min-w-0 max-w-sm gap-1 text-sm">
                   {t("inspectStore")}
-                  <select
-                    className={selectClass}
-                    aria-label={t("inspectStore")}
+                  <PriceBookSelect
+                    label={t("inspectStore")}
                     value={storeId}
-                    onChange={(e) => setStoreId(e.target.value)}
-                  >
-                    <option value="">{t("listOnly")}</option>
-                    {connected.map((b) => (
-                      <option key={b.storeId} value={b.storeId}>
-                        {storeOptions.find((s) => s.id === b.storeId)?.name}
-                      </option>
-                    ))}
-                  </select>
+                    onValueChange={setStoreId}
+                    emptyLabel={t("listOnly")}
+                    options={connected.flatMap((binding) => {
+                      const store = storeOptions.find((s) => s.id === binding.storeId);
+                      return store ? [store] : [];
+                    })}
+                  />
                 </label>
               </div>
               {draft.length > 0 && (
@@ -783,13 +759,11 @@ export default function PriceListsPage() {
             .filter((s) => !overview.data?.bindings.some((b) => b.storeId === s.id))
             .map((s) => (
               <label key={s.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 shrink-0 p-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                <Checkbox
                   checked={stores.includes(s.id)}
-                  onChange={(e) =>
+                  onCheckedChange={(checked) =>
                     setStores((old) =>
-                      e.target.checked ? [...old, s.id] : old.filter((id) => id !== s.id),
+                      checked === true ? [...old, s.id] : old.filter((id) => id !== s.id),
                     )
                   }
                 />
@@ -797,11 +771,9 @@ export default function PriceListsPage() {
               </label>
             ))}
           <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="h-4 w-4 shrink-0 p-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            <Checkbox
               checked={preserve}
-              onChange={(e) => setPreserve(e.target.checked)}
+              onCheckedChange={(checked) => setPreserve(checked === true)}
             />
             {t("preserveLocal")}
           </label>
@@ -826,26 +798,18 @@ export default function PriceListsPage() {
           <p className="text-sm text-muted-foreground">{t("prepareHelp")}</p>
           <label className="grid gap-1 text-sm">
             {t("source")}
-            <select
-              className={selectClass}
-              aria-label={t("source")}
+            <PriceBookSelect
+              label={t("source")}
               value={source}
-              onChange={(e) => setSource(e.target.value)}
-            >
-              <option value="">{t("chooseStore")}</option>
-              {storeOptions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={setSource}
+              emptyLabel={t("chooseStore")}
+              options={storeOptions}
+            />
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="h-4 w-4 shrink-0 p-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            <Checkbox
               checked={replace}
-              onChange={(e) => setReplace(e.target.checked)}
+              onCheckedChange={(checked) => setReplace(checked === true)}
             />
             {t("replaceExisting")}
           </label>
@@ -876,26 +840,28 @@ export default function PriceListsPage() {
           </p>
           <label className="grid gap-1 text-sm">
             {t("priceKind")}
-            <select
-              className={selectClass}
+            <PriceBookSelect
+              label={t("priceKind")}
               value={bulkKind}
-              onChange={(e) => setBulkKind(e.target.value as typeof bulkKind)}
-            >
-              <option value="RETAIL">{t("retail")}</option>
-              <option value="WHOLESALE">{t("wholesale")}</option>
-            </select>
+              onValueChange={(value) => setBulkKind(value as typeof bulkKind)}
+              options={[
+                { id: "RETAIL", name: t("retail") },
+                { id: "WHOLESALE", name: t("wholesale") },
+              ]}
+            />
           </label>
           <label className="grid gap-1 text-sm">
             {t("method")}
-            <select
-              className={selectClass}
+            <PriceBookSelect
+              label={t("method")}
               value={bulkMode}
-              onChange={(e) => setBulkMode(e.target.value as typeof bulkMode)}
-            >
-              <option value="PERCENT">{t("percent")}</option>
-              <option value="AMOUNT">{t("amount")}</option>
-              <option value="SET">{t("set")}</option>
-            </select>
+              onValueChange={(value) => setBulkMode(value as typeof bulkMode)}
+              options={[
+                { id: "PERCENT", name: t("percent") },
+                { id: "AMOUNT", name: t("amount") },
+                { id: "SET", name: t("set") },
+              ]}
+            />
           </label>
           <label className="grid gap-1 text-sm">
             {t("value")}
@@ -975,23 +941,19 @@ export default function PriceListsPage() {
             <div className="space-y-3 border-t pt-4">
               <p className="text-sm">{t("storeSourceHelp")}</p>
               <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 shrink-0 p-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                <Checkbox
                   checked={edit?.retailShared ?? false}
-                  onChange={(e) =>
-                    setEdit((old) => old && { ...old, retailShared: e.target.checked })
+                  onCheckedChange={(checked) =>
+                    setEdit((old) => old && { ...old, retailShared: checked === true })
                   }
                 />
                 {t("inheritRetail")}
               </label>
               <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 shrink-0 p-0 accent-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                <Checkbox
                   checked={edit?.wholesaleShared ?? false}
-                  onChange={(e) =>
-                    setEdit((old) => old && { ...old, wholesaleShared: e.target.checked })
+                  onCheckedChange={(checked) =>
+                    setEdit((old) => old && { ...old, wholesaleShared: checked === true })
                   }
                 />
                 {t("inheritWholesale")}
