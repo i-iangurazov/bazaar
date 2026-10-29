@@ -5085,7 +5085,7 @@ export const ProductForm = ({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t("barcodes")}</FormLabel>
-                      <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+                      <FormRow className="flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-end">
                         <FormControl>
                           <Input
                             value={barcodeInput}
@@ -6424,7 +6424,7 @@ export const ProductForm = ({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>{t("barcodes")}</FormLabel>
-                            <FormRow className="flex-col items-stretch sm:flex-row sm:items-end">
+                            <FormRow className="flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-end">
                               <FormControl>
                                 <Input
                                   value={barcodeInput}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { encode } from "next-auth/jwt";
 import superjson from "superjson";
@@ -397,6 +397,47 @@ try {
     await page.getByRole("heading", { name: title, exact: true }).waitFor();
   }
   checks.push("Shared product, archive and barcode guide is available in RU/KG/EN");
+  for (const locale of ["ru", "kg", "en"]) {
+    const copy = JSON.parse(await readFile(`messages/${locale}.json`, "utf8"));
+    await context.addCookies([
+      { name: "NEXT_LOCALE", value: locale, url: "http://localhost:3124" },
+    ]);
+    for (const width of [390, 767, 768, 1023, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`http://localhost:3124/products/new?storeId=${stores[0].id}`, {
+        waitUntil: "networkidle",
+      });
+      const generate = page
+        .getByRole("button", { name: copy.products.generateBarcode, exact: true })
+        .filter({ visible: true });
+      await generate.waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      const box = await generate.boundingBox();
+      assert(
+        box && box.x >= 0 && box.x + box.width <= width + 1,
+        `${locale}/${width}: barcode generation outside viewport`,
+      );
+      assert(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+        `${locale}/${width}: form overflow`,
+      );
+      if (width >= 768) {
+        const scan = await page
+          .locator('[data-app-header] input[data-tour="scan-input"]')
+          .boundingBox();
+        const launcher = await page.locator("[data-baam-launcher]:visible").boundingBox();
+        assert(
+          scan && launcher && scan.x + scan.width <= launcher.x,
+          `${locale}/${width}: search overlaps BAAM`,
+        );
+      }
+      if (locale === "ru" && width === 768)
+        await page.screenshot({ path: `${directory}/product-form-768-after.png`, fullPage: true });
+    }
+  }
+  checks.push(
+    "Product barcode actions reflow within the form and header search stays clear of BAAM across RU/KG/EN at 390/767/768/1023/1024/1440px",
+  );
   assert.deepEqual(errors, []);
   await writeFile(
     `${directory}/browser-checks.json`,

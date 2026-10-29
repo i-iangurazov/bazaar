@@ -88,6 +88,15 @@ async function noOverflow(page: Page) {
     box && box.x >= 0 && box.x + box.width <= page.viewportSize()!.width + 1,
     "Header launcher outside viewport",
   );
+  if (page.viewportSize()!.width >= 768) {
+    const scan = await page
+      .locator('[data-app-header] input[data-tour="scan-input"]')
+      .boundingBox();
+    assert(
+      scan && box && scan.x + scan.width <= box.x,
+      "Global search must not overlap the BAAM action at tablet/desktop widths",
+    );
+  }
 }
 async function shot(page: Page, name: string) {
   await noOverflow(page);

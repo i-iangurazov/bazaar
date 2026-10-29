@@ -71,7 +71,8 @@ export function BaamLauncher({
       data-baam-launcher
       data-baam-docked="header"
       aria-label={baamCopy(locale, "open")}
-      className="h-11 w-11 shrink-0 gap-1.5 p-0 md:h-9 md:w-full md:px-3"
+      title={baamCopy(locale, "open")}
+      className="h-11 w-11 shrink-0 gap-1.5 p-0 md:h-9 md:w-full md:px-0 lg:px-3"
       onClick={
         pathname === "/baam"
           ? () => {
@@ -86,7 +87,7 @@ export function BaamLauncher({
       }
     >
       <BaamIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
-      <span className="hidden text-sm font-medium md:inline">
+      <span className="hidden text-sm font-medium lg:inline">
         {baamCopy(locale, "name")}
       </span>
     </Button>

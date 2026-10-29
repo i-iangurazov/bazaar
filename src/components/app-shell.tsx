@@ -1285,7 +1285,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   </div>
                   <div className="flex shrink-0 items-center gap-2 justify-self-end">
                     {hasPermission(access, "viewReports") ? (
-                      <div data-baam-desktop-slot className="h-9 w-[6.25rem] shrink-0" />
+                      <div data-baam-desktop-slot className="h-9 w-9 shrink-0 lg:w-[6.25rem]" />
                     ) : null}
                     <PageTipsButton className="h-9 w-9" />
                     <PwaInstallButton className="h-9 w-9" />
