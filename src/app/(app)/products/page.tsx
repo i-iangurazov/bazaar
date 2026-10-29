@@ -1,5 +1,7 @@
 "use client";
 
+import { liveQueryRefreshOptions } from "@/lib/live-query";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table";
 import Link from "next/link";
@@ -1408,10 +1410,12 @@ const ProductsPage = () => {
   );
 
   useSse({
-    "assortment.updated": () => { void trpcUtils.products.invalidate(); },
-    "pricing.updated": () => { void trpcUtils.products.invalidate(); },
+    // A live event must not cancel the refresh awaited by an inline save.
+    // Otherwise that save can finish with the previous stock revision cached.
+    "assortment.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
+    "pricing.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
     "inventory.updated": () => {
-      void trpcUtils.products.bootstrap.invalidate();
+      void trpcUtils.products.bootstrap.invalidate(undefined, undefined, liveQueryRefreshOptions);
     },
   });
 

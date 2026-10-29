@@ -1,5 +1,7 @@
 "use client";
 
+import { liveQueryRefreshOptions } from "@/lib/live-query";
+
 import {
   Fragment,
   forwardRef,
@@ -2038,9 +2040,9 @@ const InventoryPage = () => {
   });
 
   useSse({
-    "inventory.updated": () => inventoryQuery.refetch(),
-    "assortment.updated": () => inventoryQuery.refetch(),
-    "lowStock.triggered": () => inventoryQuery.refetch(),
+    "inventory.updated": () => inventoryQuery.refetch(liveQueryRefreshOptions),
+    "assortment.updated": () => inventoryQuery.refetch(liveQueryRefreshOptions),
+    "lowStock.triggered": () => inventoryQuery.refetch(liveQueryRefreshOptions),
   });
 
   useEffect(() => {

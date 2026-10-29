@@ -349,11 +349,18 @@ try {
   );
   assert.equal((await stock(admin)).onHand, 3);
   assert.equal(await stockEditor(dashboard).inputValue(), String(initial.onHand + 2));
+  // Leave time for the stock SSE event to overlap the post-save refresh.
+  // The next edit must use the newly confirmed revision, not the previous one.
+  await dashboard.route("**/api/trpc/products.bootstrap*", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
   await commitStock(dashboard);
   assert.equal((await stock(admin)).onHand, initial.onHand + 2);
   await editStock(dashboard, String(initial.onHand));
   await commitStock(dashboard);
   assert.equal((await stock(admin)).onHand, initial.onHand);
+  await dashboard.unroute("**/api/trpc/products.bootstrap*");
   record(
     "Network failure retains input; retry uses normal inventory service and restores fixture quantity",
   );
