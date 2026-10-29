@@ -101,11 +101,14 @@ try {
       : route.continue();
   await page.route("**/api/trpc/**", reject);
   await page.reload();
-  await page
+  const reportFailures = page
     .locator("main")
     .getByRole("alert")
-    .filter({ hasText: messages.errors.genericMessage })
-    .waitFor();
+    .filter({ hasText: messages.errors.genericMessage });
+  // A failed HTTP batch can include the independent filter-options query.
+  // Verify every error panel and recover each query, rather than picking one.
+  await reportFailures.first().waitFor();
+  for (const alert of await reportFailures.all()) assert(await alert.isVisible());
   await capture("error");
   assert.equal(
     await page.getByText(messages.reporting.netSales, { exact: true }).count(),
@@ -113,8 +116,22 @@ try {
     "Failed data must not appear as successful totals",
   );
   await page.unroute("**/api/trpc/**", reject);
-  await page.getByRole("button", { name: messages.common.tryAgain, exact: true }).click();
+  for (let attempt = 0; attempt < 3 && (await reportFailures.count()); attempt++) {
+    const previous = await reportFailures.count();
+    await reportFailures
+      .first()
+      .getByRole("button", { name: messages.common.tryAgain, exact: true })
+      .click();
+    await page.waitForFunction(
+      ({ message, previous }) =>
+        [...document.querySelectorAll('main [role="alert"]')].filter((el) =>
+          el.textContent?.includes(message),
+        ).length < previous,
+      { message: messages.errors.genericMessage, previous },
+    );
+  }
   await ready();
+  assert.equal(await reportFailures.count(), 0, "Every failed query must recover");
   checks.push("Network failure hides stale totals; retry restores data");
   let releaseOld!: () => void;
   let oldHeld = false;
