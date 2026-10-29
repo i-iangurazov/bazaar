@@ -8,7 +8,9 @@ const base =
   (process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122");
 assert.equal(new URL(base).hostname, "localhost", "UI fixtures require the isolated localhost app");
 const output = process.env.UI_CONTROLS_OUTPUT ?? "artifacts/ux/controls";
-const browser = await chromium.launch();
+const browser = await chromium.launch({
+  ...(process.env.UI_BROWSER_CHANNEL ? { channel: process.env.UI_BROWSER_CHANNEL } : {}),
+});
 const fixture = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const checks: string[] = [];
 const errors: string[] = [];
@@ -111,7 +113,7 @@ try {
   const first = await geometry(page);
   assert.equal(first[0].y, first[1].y);
   assert.equal(first[1].y, first[2].y);
-  for (const field of first.slice(0, 3)) assert.equal(field.height, 40);
+  for (const field of first.slice(0, 3)) assert.equal(field.height, 32);
   const store = page.getByRole("combobox", { name: "Магазин", exact: true });
   await store.focus();
   await page.keyboard.press("Enter");
@@ -161,7 +163,7 @@ try {
   await page.waitForURL((url) => !url.searchParams.has("storeId"));
   await ready(page);
   record(
-    "Metrics fields: aligned 40px controls, keyboard, delayed options, search/checkbox/URL/reload/all-stores reset",
+    "Metrics fields: aligned Espresso controls, keyboard, delayed options, search/checkbox/URL/reload/all-stores reset",
   );
   for (const locale of process.env.UI_CONTROLS_FAST ? ["ru"] : ["ru", "kg", "en"]) {
     await context.addCookies([{ name: "NEXT_LOCALE", value: locale, url: base }]);
@@ -177,6 +179,7 @@ try {
         await page.evaluate(() => window.scrollTo(0, 0));
         await shot(page, `metrics-${locale}-${theme}-${width}`);
         const bounds = await geometry(page);
+        for (const field of bounds.slice(0, 3)) assert.equal(field.height, width < 640 ? 40 : 32);
         observations.push({ locale, theme, width, bounds });
         const select = page.getByRole("combobox", {
           name: messages[locale].reporting.store,

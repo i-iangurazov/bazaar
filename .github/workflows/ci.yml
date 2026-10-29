@@ -50,6 +50,11 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [checks, catalog-scale]
     services:
       postgres:
         image: postgres:16-alpine
@@ -101,10 +106,19 @@ jobs:
       - name: Verify public smoke transport offline
         run: node --test scripts/deployment/public-smoke.test.mjs
       - name: Run checks
+        if: matrix.suite == 'checks'
         run: pnpm test:ci
+      - name: Verify 10,000 products and 100,000 prices in an isolated fresh database
+        if: matrix.suite == 'catalog-scale'
+        env:
+          RUN_CATALOG_SCALE_TESTS: "1"
+          NODE_OPTIONS: --max-old-space-size=512
+        run: pnpm exec vitest run tests/integration/price-book-scale.test.ts
       - name: Verify database connection pooling and business transactions
+        if: matrix.suite == 'checks'
         run: pnpm test:pooling
       - name: Verify movement A4 printing
+        if: matrix.suite == 'checks'
         run: |
           pnpm exec playwright install --with-deps chromium
           pnpm exec tailwindcss -i src/app/globals.css -o /tmp/bazaar-print.css
@@ -112,7 +126,7 @@ jobs:
           python3 -m pip install PyMuPDF==1.26.5
           python3 scripts/qa/verify-movement-pdfs.py artifacts/movement-print-command/latest
       - name: Upload movement print evidence
-        if: always()
+        if: always() && matrix.suite == 'checks'
         uses: actions/upload-artifact@v4
         with:
           name: movement-print-regression

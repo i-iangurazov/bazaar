@@ -22,6 +22,10 @@ export default defineConfig({
       "tmp/**",
       ".next/**",
       ".local/**",
+      // The heavy regression owns a fresh database in a separate CI matrix leg.
+      ...(process.env.RUN_CATALOG_SCALE_TESTS === "1"
+        ? []
+        : ["tests/integration/price-book-scale.test.ts"]),
     ],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],

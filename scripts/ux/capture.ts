@@ -258,7 +258,7 @@ try {
               await capture(path, width, `-${theme}-${locale}`);
               const observation = report.at(-1)!;
               assert.equal(observation.theme, theme);
-              assert.equal(observation.locale, locale);
+              assert.equal(observation.locale, toIntlLocale(locale));
             }
         }
       }

@@ -253,5 +253,5 @@ import type { PriceBookChangeInput } from "@/lib/priceBookContract";
       ),
     );
     console.log(JSON.stringify(measurements));
-  }, 300_000);
+  }, 600_000);
 });

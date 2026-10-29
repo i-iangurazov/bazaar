@@ -323,7 +323,7 @@ try {
           const name = `${path.split("?")[0].slice(1).replaceAll("/", "-")}-${theme}-${locale}-${width}`;
           await capture(page, name);
           const observation = observations.at(-1)!;
-          assert.equal(observation.locale, locale);
+          assert.equal(observation.locale, toIntlLocale(locale));
           assert.equal(observation.theme, theme);
           const table = page
             .getByRole("region", { name: messages[locale].reporting.tableScroll })
