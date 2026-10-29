@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-30",
+  "baselineMain": "5c62c41979cd612b1097da1413db83f0cd3ad764",
+  "authorization": "The human explicitly requested delegation, implementation directly in main, publication and a green final CI.",
+  "scope": {
+    "priceLists": "Seven native selects, checkboxes and search now reuse the existing shared controls. Optional filters remain clearable; comparison clears a target that becomes its source. Financial rules and permissions are preserved.",
+    "imageStudio": "DeepSeek photo analysis followed by direct image editing with the supported image executor. Retired-model overrides are upgraded; errors are localized and legacy raw provider errors are hidden. Original images and explicit review before attachment remain.",
+    "landing": "Localized redesign of the hero, six module tabs, POS, stock, integrations, analytics, mobile preview, onboarding, FAQ, pricing and social cards. Illustrations are labelled as demonstration data. No app.bazaar.kg references remain in application source."
+  },
+  "providerReality": {
+    "analysis": "deepseek-flash",
+    "imageExecutor": "gpt-image-2.5-sunburst via Images edits API",
+    "quality": "medium by default, explicit high-quality option retained",
+    "rootCause": "Production forced gpt-image-1, officially shut down on 2026-10-23. Production override was updated after a successful real synthetic edit.",
+    "manualServiceProof": {
+      "actualExternalCalls": true,
+      "customerDataUsed": false,
+      "databaseTransactions": false,
+      "flow": "DeepSeek analysis completed -> direct image edit -> actual isolated local-file persistence",
+      "elapsedMs": 17515,
+      "outputBytes": 47098,
+      "dimensions": "1024x1024",
+      "mimeType": "image/jpeg"
+    },
+    "sources": [
+      "https://api-docs.deepseek.com/api/create-response/",
+      "https://developers.openai.com/api/docs/models/gpt-image-1",
+      "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst",
+      "https://developers.openai.com/api/reference/resources/images/methods/edit"
+    ],
+    "limitations": [
+      "DeepSeek supports image analysis but does not expose image generation. Image editing therefore uses the separate existing OpenAI connection; this is stated in the interface.",
+      "17.5 seconds is the observed synthetic medium-quality service run, not a universal latency guarantee.",
+      "Generated product images must be reviewed before saving; generative retouching cannot guarantee exact identity on every input."
+    ]
+  },
+  "verification": [
+    { "command": "pnpm typecheck", "result": "passed after final source changes" },
+    { "command": "pnpm lint", "result": "passed, no warnings or errors" },
+    { "command": "pnpm i18n:check", "result": "passed, RU/KG/EN" },
+    {
+      "command": "pnpm exec vitest run tests/unit",
+      "result": "2222 tests across 288 files passed before the final Kyrgyz hydration fix"
+    },
+    {
+      "command": "Final affected marketing unit suites",
+      "result": "31 tests across 4 files passed after the Kyrgyz hydration fix; existing capture-cache regression also passed"
+    },
+    {
+      "command": "tests/integration/product-image-studio.test.ts",
+      "result": "11 tests passed in disposable PostgreSQL 55448, separate agent3_commerce database; external calls mocked"
+    },
+    {
+      "command": "scripts/catalog-pricing/price-book-browser.ts",
+      "result": "15 real DB/browser scenarios passed, zero errors; separate synthetic organization in disposable agent4_platform database"
+    },
+    {
+      "command": "Studio UI proof",
+      "result": "Six RU/KG/EN desktop/mobile contexts passed: empty, unavailable, legacy errors, localized errors, retry, source preservation and failed-job save protection; Studio endpoints explicitly mocked, no provider calls"
+    },
+    {
+      "command": "scripts/marketing/browser.mjs",
+      "result": "21 groups passed, zero page errors; RU/KG/EN at 360/390/768/1440, both themes, keyboard/menu/focus, anchors, tabs, FAQ, prices, real login/signup navigation and no-JavaScript rendering"
+    },
+    {
+      "command": "pnpm build with isolated catalog QA environment",
+      "result": "passed, 128 static-page generation steps completed; production migrations not executed"
+    },
+    {
+      "command": "Manual visual inspection",
+      "result": "Desktop/mobile price controls, Studio states, landing hero/sections/pricing and localized social PNGs inspected"
+    }
+  ],
+  "additionalDefectsFound": [
+    "The price-list browser harness selected an obsolete history row during refetch; it now waits for the actual new table price before selecting rollback, without sleep, reload or forced clicks.",
+    "Kyrgyz numeric formatting differed between server ICU and Chrome, causing hydration errors in new client previews. Preview values are now formatted on the server and passed as strings; no hydration-warning suppression was used.",
+    "The existing local image-provider key returned HTTP 401. The ignored local configuration was restored from the already configured, successfully validated Bazaar image-provider credential without logging its value."
+  ],
+  "dataSafety": "No customer records were reset, seeded or used in automated tests. Production diagnostics were read-only aggregates. Real AI checks used only a synthetic bottle image and an isolated local output directory. No schema changes were introduced.",
+  "evidence": [
+    "artifacts/catalog-pricing-20261029/price-book-browser-checks.json",
+    "artifacts/ui-provider-20261029/studio-integration.log",
+    "artifacts/ui-provider-20261029/studio-ui-proof.json",
+    "artifacts/ui-provider-20261029/service/report.json",
+    "artifacts/ui-provider-20261029/landing-final/report.json",
+    "artifacts/ui-provider-20261029/build.log"
+  ],
+  "releaseAcceptance": "After publication, verify CI for the exact pushed SHA, the actual canonical production alias, public route smoke and private DB/migration/Redis health. Release evidence is recorded separately to avoid a self-referential CI commit."
+}
