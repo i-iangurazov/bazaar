@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-30",
+  "baseCommit": "79c8686b0e3efe305bdf76f776535dcd4500c985",
+  "scope": "Recovery from stalled application reads and realtime connection lifecycle; no financial or inventory write changes.",
+  "productionEvidence": {
+    "windowUtc": [
+      "2026-10-30T08:15:00Z",
+      "2026-10-30T08:45:00Z"
+    ],
+    "sameDeploymentForBothHosts": "dpl_Dmx3fduXhQqDrCBaXBkL7wHEeBaQ",
+    "trpcP95Ms": {
+      "www.bazaar.kg": 408,
+      "bazaar-five.vercel.app": 382
+    },
+    "sseFunctionTimeouts": 67,
+    "sseFirstByteMsBeforeFix": 15000,
+    "externalCatalogApiP95Ms": 3674,
+    "interpretation": "SSE failures and unbounded response-body waits are confirmed defects. These measurements do not establish a single cause for every customer-reported freeze; external catalog API latency remains a separate investigation."
+  },
+  "changes": [
+    "Bound the entire response including its body: 12 seconds for interactive POS/catalog queries and 30 seconds for other tRPC GET reads.",
+    "Isolate products.list from unrelated batched requests. Cancel superseded POS catalog searches.",
+    "Show the shared localized error/retry component on all three POS catalog layouts; avoid misleading empty results on errors.",
+    "Prevent an automatic repeat of a full timeout while retaining the existing retry for other transient reads.",
+    "Send SSE initial bytes immediately and rotate cleanly after 240 seconds, before the platform 300-second deadline.",
+    "Release SSE timers, listeners and subscriptions on every close path. Catch asynchronous delivery failures.",
+    "Reject events from other organizations before querying current user permissions. Revalidate permissions for every event eligible for delivery."
+  ],
+  "verification": {
+    "typecheck": "pnpm exec tsc --noEmit: passed",
+    "lint": "pnpm lint: passed",
+    "translations": "pnpm i18n:check: passed",
+    "focusedUnitTests": {
+      "passed": 21,
+      "files": [
+        "tests/unit/pos-read-transport.test.ts",
+        "tests/unit/read-query-recovery.test.ts",
+        "tests/unit/sse-lifecycle.test.ts",
+        "tests/unit/use-sse.test.tsx"
+      ]
+    },
+    "broadUnitRun": {
+      "passed": 2241,
+      "failed": 1,
+      "failure": "local-runtime busy-port test exceeded 5 seconds during concurrent compilation and disk pressure. The complete file was rerun separately: all 20 tests passed."
+    },
+    "isolatedDatabaseTests": {
+      "passed": 75,
+      "files": [
+        "tests/integration/b0-platform-sse-p0-verification.test.ts",
+        "tests/integration/catalog-sources.test.ts",
+        "tests/integration/product-search-consistency.test.ts",
+        "tests/integration/pos.test.ts",
+        "tests/integration/pos-idempotent-events.test.ts",
+        "tests/integration/pos-session-recovery.test.ts",
+        "tests/integration/bazaar-api.test.ts"
+      ],
+      "infrastructure": "Disposable PostgreSQL on 127.0.0.1:55459, Redis on 127.0.0.1:56409. No customer database writes."
+    },
+    "receiptSession": "24 sequential receipts with search and barcode lookup before each, repeated confirmation on every fifth receipt: 24 unique completed orders and stock 100 → 76.",
+    "productionBuild": "Passed in an isolated application copy: 128 pages. Temporary compiler settings: one CPU, no webpack disk cache, inline lint/typecheck disabled because both ran separately. Shipping next.config.mjs unchanged; standard CI remains mandatory.",
+    "browser": "Desktop 1280×720 and mobile 390×844: deliberately stalled products.list response body. Error/retry appeared after deadline; after restoring the connection, explicit retry displayed the matching product. Both stalled connections were cancelled. A superseded stalled search was also cancelled, and a subsequent different search displayed its matching product; no console errors.",
+    "longSseCycle": [
+      {
+        "attempt": 1,
+        "status": 200,
+        "firstByteMs": 19,
+        "durationMs": 240023,
+        "bytes": 220
+      },
+      {
+        "attempt": 2,
+        "status": 200,
+        "firstByteMs": 10,
+        "durationMs": 11,
+        "bytes": 25
+      }
+    ],
+    "evidenceDirectory": "/private/tmp/bazaar-speed-20261030",
+    "releaseStatus": "Local verification record. Production deployment and standard CI must be checked for the resulting commit."
+  },
+  "rollback": "No schema migration. Previous application deployment remains compatible with the database."
+}

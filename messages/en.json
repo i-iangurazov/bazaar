@@ -5315,6 +5315,7 @@
     "baamScopeChanged": "Your store access changed while BAAM was checking. Refresh your access and try again.",
     "genericTitle": "Something went wrong",
     "genericMessage": "Reload the page or try again later.",
+    "readRequestTimeout": "The data took too long to load. Check your connection and try again.",
     "serviceUnavailable": "Service unavailable",
     "nativeOffline": "No connection. The operation was not completed; reconnect and try again.",
     "tryAgain": "Try again.",

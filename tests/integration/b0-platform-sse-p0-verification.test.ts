@@ -72,6 +72,7 @@ describeDb("B1 Agent 4 SSE store-isolation contract", () => {
     }
 
     try {
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain(": connected");
       eventBus.publish({
         type: "inventory.updated",
         payload: {
@@ -155,6 +156,7 @@ describeDb("B1 Agent 4 SSE store-isolation contract", () => {
     }
 
     try {
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain(": connected");
       eventBus.publish({
         type: "shift.opened",
         payload: {

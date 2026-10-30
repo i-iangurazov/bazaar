@@ -8,7 +8,7 @@ import { SessionProvider, useSession } from "next-auth/react";
 import { NextIntlClientProvider } from "next-intl";
 import { z } from "zod";
 
-import { fetchPosRead, isInteractivePosRead } from "@/lib/pos-read-transport";
+import { fetchAppRead, fetchPosRead, isInteractivePosRead } from "@/lib/pos-read-transport";
 import { trpc, getBaseUrl } from "@/lib/trpc";
 import { createAppQueryClient } from "@/lib/query-client";
 import { createMessageFallback } from "@/lib/i18nFallback";
@@ -89,6 +89,9 @@ export const Providers = ({
                 String(options?.method ?? "GET").toUpperCase() !== "GET"
               ) {
                 return Promise.reject(new Error("nativeOffline"));
+              }
+              if (String(options?.method ?? "GET").toUpperCase() === "GET") {
+                return fetchAppRead(url, options);
               }
               return fetch(url, { ...options, credentials: "include" });
             },

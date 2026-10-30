@@ -857,6 +857,8 @@ const PosSellPage = () => {
       keepPreviousData: !useImmediateCatalogSearch,
       refetchOnWindowFocus: false,
       staleTime: 30_000,
+      retry: false,
+      trpc: { abortOnUnmount: true },
     },
   );
 
@@ -1834,15 +1836,20 @@ const PosSellPage = () => {
     hasCartLines && payments.length === 1
       ? cartTotalKgs
       : roundMoney(displayMoneyToKgs(totalPayment, currencySource));
-  const catalogSearchPending = lineSearch.trim() !== searchTerm || catalogProductsQuery.isPreviousData;
-  const productResults: PosCatalogProduct[] = activeStoreId && !catalogSearchPending
-    ? (catalogProductsQuery.data?.items ?? [])
-    : [];
+  const catalogSearchPending =
+    !catalogProductsQuery.error &&
+    (lineSearch.trim() !== searchTerm || catalogProductsQuery.isPreviousData);
+  const productResults: PosCatalogProduct[] =
+    activeStoreId && !catalogSearchPending && !catalogProductsQuery.error
+      ? (catalogProductsQuery.data?.items ?? [])
+      : [];
   const visibleProducts = productResults;
   const catalogTotal = catalogProductsQuery.data?.total ?? 0;
   const catalogTotalPages = Math.max(1, Math.ceil(catalogTotal / catalogPageSize));
   const productGridLoading = Boolean(
-    activeStoreId && (catalogSearchPending || (catalogProductsQuery.isLoading && !catalogProductsQuery.data)),
+    activeStoreId &&
+      !catalogProductsQuery.error &&
+      (catalogSearchPending || (catalogProductsQuery.isLoading && !catalogProductsQuery.data)),
   );
   const productCategories = productCategoriesQuery.data ?? [];
 
@@ -5561,9 +5568,11 @@ const PosSellPage = () => {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
               {catalogProductsQuery.error ? (
-                <div className="bazaar-admin-error mb-4">
-                  {translateError(tErrors, catalogProductsQuery.error)}
-                </div>
+                <QueryErrorState
+                  className="mb-4"
+                  error={catalogProductsQuery.error}
+                  onRetry={() => void catalogProductsQuery.refetch()}
+                />
               ) : null}
 
               {productGridLoading ? (
@@ -5573,7 +5582,7 @@ const PosSellPage = () => {
                 </div>
               ) : null}
 
-              {!productGridLoading && !visibleProducts.length ? (
+              {!catalogProductsQuery.error && !productGridLoading && !visibleProducts.length ? (
                 <div className="bazaar-admin-empty min-h-[260px]">
                   <div>
                     <SearchIcon className="mx-auto h-7 w-7 text-muted-foreground" aria-hidden />
@@ -7259,9 +7268,11 @@ const PosSellPage = () => {
             ) : null}
 
             {catalogProductsQuery.error ? (
-              <div className="m-4 border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-                {translateError(tErrors, catalogProductsQuery.error)}
-              </div>
+              <QueryErrorState
+                className="m-4"
+                error={catalogProductsQuery.error}
+                onRetry={() => void catalogProductsQuery.refetch()}
+              />
             ) : null}
 
             {productGridLoading ? (
@@ -7270,7 +7281,7 @@ const PosSellPage = () => {
               </div>
             ) : null}
 
-            {!productGridLoading && !visibleProducts.length ? (
+            {!catalogProductsQuery.error && !productGridLoading && !visibleProducts.length ? (
               <div className="grid min-h-56 place-items-center text-center text-muted-foreground">
                 <div>
                   <EmptyIcon className="mx-auto h-8 w-8" aria-hidden />
@@ -7885,9 +7896,10 @@ const PosSellPage = () => {
             </div>
 
             {catalogProductsQuery.error ? (
-              <div className="bazaar-admin-error">
-                {translateError(tErrors, catalogProductsQuery.error)}
-              </div>
+              <QueryErrorState
+                error={catalogProductsQuery.error}
+                onRetry={() => void catalogProductsQuery.refetch()}
+              />
             ) : null}
 
             {productGridLoading ? (
@@ -7897,7 +7909,7 @@ const PosSellPage = () => {
               </div>
             ) : null}
 
-            {!productGridLoading && !visibleProducts.length ? (
+            {!catalogProductsQuery.error && !productGridLoading && !visibleProducts.length ? (
               <div className="grid min-h-44 place-items-center border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
                 <div>
                   <SearchIcon className="mx-auto h-6 w-6" aria-hidden />

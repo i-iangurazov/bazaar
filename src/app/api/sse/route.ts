@@ -2,6 +2,7 @@ import { getServerAuthToken } from "@/server/auth/token";
 import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
+import { getLogger } from "@/server/logging";
 import {
   resolveAccessibleStoreIds,
   type StoreAccessUser,
@@ -124,7 +125,7 @@ const canReceiveStoreScope = (access: EventAccess, scope: StoreScope | null) =>
     (!access.allowedStoreIds || access.allowedStoreIds.has(scope.storeId)),
   );
 
-const canReceiveEvent = async (access: EventAccess, event: { type: string; payload: unknown }) => {
+const resolveEventScope = async (event: { type: string; payload: unknown }) => {
   if (
     event.type === "assortment.updated" ||
     event.type === "pricing.updated" ||
@@ -140,20 +141,20 @@ const canReceiveEvent = async (access: EventAccess, event: { type: string; paylo
   ) {
     const payload = event.payload as { storeId?: string };
     if (!payload.storeId) {
-      return false;
+      return null;
     }
-    return canReceiveStoreScope(access, await resolveStoreScope(payload.storeId));
+    return resolveStoreScope(payload.storeId);
   }
 
   if (event.type === "purchaseOrder.updated") {
     const payload = event.payload as { poId?: string };
     if (!payload.poId) {
-      return false;
+      return null;
     }
-    return canReceiveStoreScope(access, await resolvePoScope(payload.poId));
+    return resolvePoScope(payload.poId);
   }
 
-  return false;
+  return null;
 };
 
 export const GET = async (request: Request) => {
@@ -187,14 +188,46 @@ export const GET = async (request: Request) => {
   incrementCounter(httpRequestsTotal, { path: "/api/sse" });
 
   const encoder = new TextEncoder();
+  let cancelStream: (() => void) | undefined;
 
   const stream = new ReadableStream({
     start(controller) {
       let closed = false;
+      const timers: {
+        keepAlive?: ReturnType<typeof setInterval>;
+        lifetime?: ReturnType<typeof setTimeout>;
+      } = {};
+      let unsubscribe = () => {};
       incrementGauge(sseConnectionsActive);
+      const stop = (closeController: boolean) => {
+        if (closed) return;
+        closed = true;
+        clearInterval(timers.keepAlive);
+        clearTimeout(timers.lifetime);
+        request.signal.removeEventListener("abort", close);
+        unsubscribe();
+        decrementGauge(sseConnectionsActive);
+        if (closeController) controller.close();
+      };
+      const close = () => stop(true);
+      cancelStream = () => stop(false);
+      request.signal.addEventListener("abort", close, { once: true });
+      if (request.signal.aborted) {
+        close();
+        return;
+      }
       const send = async (event: { type: string; payload: unknown }) => {
+        // Redis distributes events across organizations. Reject unrelated events
+        // before reloading this user's permissions, keeping authorization fresh
+        // for every event that could actually be delivered.
+        const scope = await resolveEventScope(event);
+        if (closed || scope?.organizationId !== accessUser.organizationId) return;
         const access = await resolveCurrentEventAccess(accessUser);
-        const allowed = access ? await canReceiveEvent(access, event) : false;
+        if (!access) {
+          close();
+          return;
+        }
+        const allowed = canReceiveStoreScope(access, scope);
         if (!allowed || closed) {
           return;
         }
@@ -203,19 +236,26 @@ export const GET = async (request: Request) => {
         controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
       };
 
-      const unsubscribe = eventBus.subscribe((event) => {
-        void send(event);
+      unsubscribe = eventBus.subscribe((event) => {
+        void send(event).catch((error: unknown) => {
+          if (closed) return;
+          getLogger().warn({ err: error }, "realtime event delivery failed");
+          close();
+        });
       });
       const reportHealth = new URL(request.url).searchParams.get("health") === "1";
       const sendHealth = () => {
         if (reportHealth && !closed) {
-          controller.enqueue(encoder.encode(
-            `event: connection.health\ndata: ${JSON.stringify({ healthy: eventBus.isRealtimeHealthy() })}\n\n`,
-          ));
+          controller.enqueue(
+            encoder.encode(
+              `event: connection.health\ndata: ${JSON.stringify({ healthy: eventBus.isRealtimeHealthy() })}\n\n`,
+            ),
+          );
         }
       };
       sendHealth();
-      const keepAlive = setInterval(() => {
+      if (!reportHealth) controller.enqueue(encoder.encode(": connected\nretry: 1500\n\n"));
+      timers.keepAlive = setInterval(() => {
         if (closed) {
           return;
         }
@@ -223,13 +263,12 @@ export const GET = async (request: Request) => {
         sendHealth();
       }, 15000);
 
-      request.signal.addEventListener("abort", () => {
-        closed = true;
-        clearInterval(keepAlive);
-        unsubscribe();
-        decrementGauge(sseConnectionsActive);
-        controller.close();
-      });
+      // End cleanly before Vercel's 300-second limit. EventSource reconnects;
+      // cancellation, disconnects and rotation all release the same resources.
+      timers.lifetime = setTimeout(close, 240_000);
+    },
+    cancel() {
+      cancelStream?.();
     },
   });
 

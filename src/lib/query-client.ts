@@ -69,7 +69,8 @@ export const createAppQueryClient = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        retry: 1,
+        retry: (failureCount, error) =>
+          failureCount < 1 && !(error instanceof Error && error.message === "readRequestTimeout"),
         refetchOnWindowFocus: false,
         staleTime: 15_000,
       },
