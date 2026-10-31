@@ -37,6 +37,11 @@ async function until(condition: () => Promise<boolean>, message: string) {
     await page.waitForTimeout(100);
   }
 }
+async function selectAssortmentStore(name: string) {
+  const label = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await page.getByRole("combobox", { name: m.catalogSources.store, exact: true }).click();
+  await page.getByRole("option", { name: new RegExp(`^${label}\\s*·`) }).click();
+}
 async function capture(name: string) {
   assert.ok(
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
@@ -200,9 +205,7 @@ try {
     );
   await page.goto(base + "/settings/store-groups");
   await page.getByRole("heading", { name: m.catalogSources.title, exact: true }).waitFor();
-  await page
-    .getByRole("combobox", { name: m.catalogSources.store, exact: true })
-    .selectOption(target.id);
+  await selectAssortmentStore(target.name);
   const source = (await api("stores.catalogSettings", { storeId: target.id })).sources.find(
     (s: { key: string }) => s.key === `store:${f.storeId}`,
   );
@@ -222,19 +225,17 @@ try {
     ),
     false,
   );
-  await page
-    .getByRole("combobox", { name: m.catalogSources.store, exact: true })
-    .selectOption(f.storeId);
+  await selectAssortmentStore(
+    stores.find((store: { id: string; name: string }) => store.id === f.storeId).name,
+  );
   const unsaved = page.getByRole("dialog", { name: m.catalogSources.unsavedTitle });
   await unsaved.waitFor();
   await unsaved.getByRole("button", { name: m.catalogSources.stay }).click();
   await save.click();
   await page.getByText(m.catalogSources.saved, { exact: true }).waitFor();
   await page.reload();
-  // Store choice uses the native selector on mobile; it remains explicit after reload.
-  await page
-    .getByRole("combobox", { name: m.catalogSources.store, exact: true })
-    .selectOption(target.id);
+  // Use the shared Select through its accessible trigger and options after reload.
+  await selectAssortmentStore(target.name);
   const sourceSwitch = page.getByRole("switch", {
     name: m.catalogSources.accessLabel.replace("{name}", source.name),
     exact: true,
@@ -298,9 +299,7 @@ try {
   await save.press("Enter");
   await page.getByText(m.catalogSources.saved, { exact: true }).waitFor();
   await page.reload();
-  await page
-    .getByRole("combobox", { name: m.catalogSources.store, exact: true })
-    .selectOption(target.id);
+  await selectAssortmentStore(target.name);
   await until(
     async () => (await sourceSwitch.getAttribute("aria-checked")) === "false",
     "Disabled source did not persist",

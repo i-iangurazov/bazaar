@@ -197,5 +197,10 @@
     "The local 50-store/300-price-position check is not a production load benchmark.",
     "Reverting this code commit does not reverse later, explicitly applied customer price or assortment changes; these have audit records.",
     "GitHub CI and deployment outcomes are verified after publication and reported in the delivery."
-  ]
+  ],
+  "ciFollowup": {
+    "initialRun": "https://github.com/i-iangurazov/bazaar/actions/runs/41234324594",
+    "finding": "The mobile assortment selector now uses the shared Select. The reporting browser harness still called native selectOption and failed before interacting with it. Updated the harness to click the accessible combobox and real option; kept all business assertions.",
+    "applicationCodeUnchangedByFollowup": true
+  }
 }
