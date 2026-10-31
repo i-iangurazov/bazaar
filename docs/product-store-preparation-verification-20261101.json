@@ -1,0 +1,201 @@
+{
+  "date": "2026-11-01",
+  "baseCommit": "b4eaf197feeae4159dccf2435d2d6662d9448e56",
+  "targetBranch": "main",
+  "authorization": "Human explicitly requested implementation and publication directly in main.",
+  "scope": [
+    "Reuse existing product identity from barcode, SKU and name diagnostics, including quick creation without a barcode.",
+    "Explicit confirmation before creating a distinct card with a matching name.",
+    "Directed assortment explanations, source/available counts and recipient visibility.",
+    "Reviewed multi-store setup with NONE/MISSING/REPLACE prices, variants, currency display and preserved explicit zeros.",
+    "Recipient setup from transfer lines using existing icon actions; established two-column layout retained.",
+    "Scoped committed metadata notifications, catalog cache invalidation and optimistic edit protection.",
+    "Read-only duplicate-candidate review and updated RU/KG/EN help."
+  ],
+  "dataSafety": {
+    "schemaMigrations": 0,
+    "customerDataWritesDuringVerification": 0,
+    "customerConfigurationChanges": 0,
+    "automaticDuplicateMerges": 0,
+    "isolatedServices": "New disposable PostgreSQL and Redis; dedicated databases for regression and browser fixtures. External provider calls disabled or mocked.",
+    "preview": "Read-only; signed 10-minute snapshot bound to actor, organization and exact selection.",
+    "apply": "Serializable transaction; fresh authorization and snapshot checks; idempotency; atomic audit; recovery receipt closes late requests.",
+    "historicalRecords": "Price preparation does not rewrite stock, stock movements, costs, discounts or posted documents. Explicit inventory transfers still create their normal movements."
+  },
+  "checks": {
+    "fullRegression": {
+      "command": "node <isolated-harness> test --reporter=json --outputFile=<local-report>",
+      "passed": 3103,
+      "failed": 0,
+      "skipped": 3,
+      "files": 412,
+      "unitPassed": 2247,
+      "databaseIntegrationPassed": 856,
+      "skippedReason": "Three database-pooling tests require the dedicated pooler harness and run in their separate CI job."
+    },
+    "typecheck": "passed: pnpm typecheck",
+    "lint": "passed: pnpm lint",
+    "translations": "passed: pnpm i18n:check",
+    "productionBuild": "passed with type/lint validation; isolated production environment and separate dependencies",
+    "diffWhitespace": "passed: git diff --check",
+    "focusedDatabaseScenarios": [
+      {
+        "name": "previews without creating cards, prices, assignments, inventory or operation records",
+        "status": "passed",
+        "durationMs": 232.36
+      },
+      {
+        "name": "keeps price preparation behind the existing tariff gate without blocking ordinary card reuse",
+        "status": "passed",
+        "durationMs": 236.59
+      },
+      {
+        "name": "uses one identity in several stores, copies variants and preserves explicit zero and unselected stores",
+        "status": "passed",
+        "durationMs": 251.32
+      },
+      {
+        "name": "prepares a bounded fifty-store selection with variants without multiplying product identities",
+        "status": "passed",
+        "durationMs": 787.39
+      },
+      {
+        "name": "replaces only reviewed store prices, keeps discounts and never clears a value missing at source",
+        "status": "passed",
+        "durationMs": 552.17
+      },
+      {
+        "name": "does not bypass hidden products or disabled catalog sources",
+        "status": "passed",
+        "durationMs": 216.05
+      },
+      {
+        "name": "rejects a stale preview atomically after a source price changes",
+        "status": "passed",
+        "durationMs": 213.66
+      },
+      {
+        "name": "recovers a lost response even after source prices change and closes a late original safely",
+        "status": "passed",
+        "durationMs": 393.57
+      },
+      {
+        "name": "serializes reconciliation racing with the original request without a late double application",
+        "status": "passed",
+        "durationMs": 240.98
+      },
+      {
+        "name": "rolls back all stores and prices when audit persistence fails",
+        "status": "passed",
+        "durationMs": 268.42
+      },
+      {
+        "name": "rechecks roles, store access and organization scope; a signed token cannot change targets",
+        "status": "passed",
+        "durationMs": 212.62
+      },
+      {
+        "name": "preserves correct shared-price inheritance for untouched kinds",
+        "status": "passed",
+        "durationMs": 261.67
+      },
+      {
+        "name": "revalidates a manager's destination access between preview and apply",
+        "status": "passed",
+        "durationMs": 232.49
+      },
+      {
+        "name": "copies canonical KGS values without multiplying a recipient's currency conversion rate",
+        "status": "passed",
+        "durationMs": 222.8
+      },
+      {
+        "name": "prevents replay into another organization or modified payload and rejects expired previews",
+        "status": "passed",
+        "durationMs": 214.58
+      },
+      {
+        "name": "protects concurrent card edits and sends only scoped committed metadata notifications",
+        "status": "passed",
+        "durationMs": 220.02
+      },
+      {
+        "name": "does not overwrite newer store prices when an older product form is saved",
+        "status": "passed",
+        "durationMs": 224.35
+      },
+      {
+        "name": "retains a committed save when notifications fail and protects stale photo-only edits",
+        "status": "passed",
+        "durationMs": 263.31
+      },
+      {
+        "name": "lists candidates only for this organization and leaves every business record intact",
+        "status": "passed",
+        "durationMs": 212.53
+      }
+    ]
+  },
+  "browserVerification": {
+    "fixtures": "Synthetic products and stores only.",
+    "viewports": [
+      "1280x720 desktop",
+      "390x844 mobile"
+    ],
+    "checked": [
+      "Quick creation detects a name match without any barcode.",
+      "Cancel separate-card confirmation; no duplicate created.",
+      "Barcode conflict offers existing product reuse.",
+      "Reuse an already assigned card without a redundant write.",
+      "Preview and apply new-store assignment with 120/90 KGS prices and zero stock.",
+      "Disabled catalog source remains blocked with an actionable settings link.",
+      "Explicit zero retail/wholesale prices remain unchanged in MISSING mode.",
+      "Two-workstation metadata refresh; dirty description survives; stale save rejected; confirmed discard reloads latest card.",
+      "Transfer preparation and posting preserve identity and barcode; source stock 100 to 99, recipient 0 to 1; other store prices remain zero.",
+      "Duplicate review populated and empty states; mobile cards and desktop comparison.",
+      "Assortment direction and own-source/available counts on mobile.",
+      "Production build login, product menu, preparation preview and RU/KG/EN review page.",
+      "Fresh production-QA browser console contained no errors."
+    ],
+    "localRuntime": "Existing localhost:3122 remained ready with DB, Redis and jobs healthy.",
+    "screenshots": "Local QA screenshots retained outside version control."
+  },
+  "additionalRegressionFix": "Discount price ordering now compares UTC-stored discount timestamps independently of PostgreSQL session timezone; verified on an Asia/Bishkek test database.",
+  "referencePatterns": [
+    {
+      "url": "https://docs.frappe.io/erpnext/item",
+      "pattern": "One item identity with separate warehouse inventory."
+    },
+    {
+      "url": "https://docs.frappe.io/erpnext/stock-entry",
+      "pattern": "Stock movements transfer the same item."
+    },
+    {
+      "url": "https://docs.frappe.io/erpnext/price-lists",
+      "pattern": "Explicit price lists separate from inventory."
+    },
+    {
+      "url": "https://docs.frappe.io/erpnext/item-price",
+      "pattern": "Item/price-list prices maintained explicitly."
+    },
+    {
+      "url": "https://www.odoo.com/documentation/19.0/applications/sales/sales/products_prices/prices/pricing.html",
+      "pattern": "Explicit pricing rules and pricelist selection."
+    },
+    {
+      "url": "https://help.shopify.com/en/manual/inventory-and-locations/inventory-transfers/creating-and-processing-transfers",
+      "pattern": "Location-aware transfers without duplicating product identity."
+    },
+    {
+      "url": "https://help.shopify.com/en/manual/fulfillment/setup/locations/assigning-inventory-to-locations",
+      "pattern": "Explicit location availability."
+    }
+  ],
+  "limitations": [
+    "Existing duplicate cards and customer assortment directions are preserved; an administrator must review any intended data cleanup.",
+    "Ongoing shared selling prices use the existing Common price lists flow; preparing stores is an explicit one-time operation.",
+    "The local 50-store/300-price-position check is not a production load benchmark.",
+    "Reverting this code commit does not reverse later, explicitly applied customer price or assortment changes; these have audit records.",
+    "GitHub CI and deployment outcomes are verified after publication and reported in the delivery."
+  ]
+}

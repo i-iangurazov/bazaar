@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 
-import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { adminProcedure, adminOrOrgOwnerProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { z } from "zod";
+import { reviewDuplicateProducts } from "@/server/services/products/duplicateReview";
 import { toTRPCError } from "@/server/trpc/errors";
 import { setProductStoreVisibility } from "@/server/services/productStoreVisibility";
 import {
@@ -85,6 +87,8 @@ import {
 import { isProductDescriptionGenerationConfigured } from "@/server/services/productDescriptions";
 import { isAiDescriptionGenerationEnabled } from "@/lib/featureFlags";
 import { updateProductImages } from "@/server/services/products";
+import { productStorePreparationSchema, productStorePreparationApplySchema } from "@/lib/productStorePreparation";
+import { previewProductStorePreparation, applyProductStorePreparation, reconcileProductStorePreparation } from "@/server/services/productStorePreparation";
 
 const assertProductAccess = async (
   ...args: Parameters<typeof assertUserCanAccessProducts>
@@ -115,6 +119,33 @@ const assertProductStoreAccess = async (...args: Parameters<typeof assertUserCan
 };
 
 export const productsRouter = router({
+  reconcileStorePreparation: managerProcedure
+    .input(productStorePreparationApplySchema)
+    .mutation(async ({ ctx, input }) => {
+      try { return await reconcileProductStorePreparation({ ...input, user: ctx.user }); }
+      catch (error) { throw toTRPCError(error); }
+    }),
+  duplicateReview: adminOrOrgOwnerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "product-duplicate-review" }))
+    .input(z.object({ page: z.number().int().min(1).max(10000).default(1), search: z.string().max(120).optional() }))
+    .query(async ({ ctx, input }) => {
+      try { return await reviewDuplicateProducts(ctx.prisma, { ...input, organizationId: ctx.user.organizationId }); }
+      catch (error) { throw toTRPCError(error); }
+    }),
+  previewStorePreparation: managerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "product-store-preview" }))
+    .input(productStorePreparationSchema)
+    .mutation(async ({ ctx, input }) => {
+      try { return await previewProductStorePreparation({ user: ctx.user, change: input }); }
+      catch (error) { throw toTRPCError(error); }
+    }),
+  applyStorePreparation: managerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "product-store-apply" }))
+    .input(productStorePreparationApplySchema)
+    .mutation(async ({ ctx, input }) => {
+      try { return await applyProductStorePreparation({ ...input, user: ctx.user, requestId: ctx.requestId }); }
+      catch (error) { throw toTRPCError(error); }
+    }),
   descriptionGenerationAvailability: protectedProcedure.query(() => ({
     enabled: isAiDescriptionGenerationEnabled(),
     configured: isProductDescriptionGenerationConfigured(),
@@ -286,6 +317,7 @@ export const productsRouter = router({
         await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
         try {
           return await updateProductImages({
+            expectedUpdatedAt: input.expectedUpdatedAt,
             organizationId: ctx.user.organizationId,
             actorId: ctx.user.id,
             requestId: ctx.requestId,

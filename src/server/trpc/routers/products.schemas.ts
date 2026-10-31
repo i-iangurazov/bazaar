@@ -218,6 +218,8 @@ export const createProductInputSchema = z.object({
 });
 
 export const updateProductInputSchema = z.object({
+  expectedUpdatedAt: z.string().datetime().optional(),
+  expectedStorePriceVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   imagesOnly: z.boolean().optional(),
   productId: z.string(),
   storeId: z.string().optional(),

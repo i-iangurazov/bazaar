@@ -97,6 +97,7 @@ describeDb("B1 Agent 4 SSE store-isolation contract", () => {
         },
       });
       for (const storeId of [unassignedStore.id, otherStore.id]) {
+        eventBus.publish({ type: "products.updated", payload: { storeId, productId: "denied-product" } });
         eventBus.publish({
           type: "shift.updated",
           payload: { storeId, registerId: "denied-register", shiftId: "denied-shift" },

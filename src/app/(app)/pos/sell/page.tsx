@@ -1597,6 +1597,9 @@ const PosSellPage = () => {
   ]);
 
   useSse({
+    "products.updated": () => {
+      void trpcUtils.products.invalidate(undefined, undefined, { cancelRefetch: false });
+    },
     "assortment.updated": () => { void trpcUtils.products.invalidate(); },
     "pricing.updated": () => { void trpcUtils.products.invalidate(); },
     "inventory.updated": () => {

@@ -124,21 +124,21 @@ it("does not subscribe or retain timers for a request already disconnected", asy
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it("ignores unrelated organizations before reading user permissions again", async () => {
+it.each(["sale.completed", "products.updated"])("ignores unrelated organizations for %s before reading user permissions again", async type => {
   const response = await GET(request());
-  mocks.subscribe.mock.calls[0][0]({ type: "sale.completed", payload: { storeId: "other-store" } });
+  mocks.subscribe.mock.calls[0][0]({ type, payload: { storeId: "other-store", productId: "foreign-product" } });
   await flush();
   expect(mocks.user).toHaveBeenCalledOnce();
   await response.body!.cancel();
 });
 
-it("refreshes same-organization authorization and closes on revoked user access", async () => {
+it.each(["sale.completed", "products.updated"])("refreshes %s authorization and closes on revoked user access", async type => {
   const response = await GET(request());
   const reader = response.body!.getReader();
   await reader.read();
   mocks.user.mockResolvedValueOnce(null);
   mocks.subscribe.mock.calls[0][0]({
-    type: "sale.completed",
+    type,
     payload: { storeId: "revoked-store" },
   });
   await flush();

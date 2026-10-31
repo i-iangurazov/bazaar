@@ -1,5 +1,6 @@
 "use client";
 import { StoreExtraPrices } from "@/components/products/store-extra-prices";
+import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
 
 import { StockQuantityCell } from "@/components/inventory/stock-quantity-cell";
 import { useSse } from "@/lib/useSse";
@@ -203,6 +204,12 @@ const ProductDetailPage = () => {
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
   const [variantPriceDrafts, setVariantPriceDrafts] = useState<Record<string, string>>({});
   const [productFormDirty, setProductFormDirty] = useState(false);
+  const [storePreparationOpen, setStorePreparationOpen] = useState(false);
+  const [externalProductChange, setExternalProductChange] = useState(false);
+  const [cardVersion, setCardVersion] = useState<string | undefined>();
+  const [priceEditVersion, setPriceEditVersion] = useState<{ storeId: string; version: string } | null>(null);
+  const [editorReloadRevision, setEditorReloadRevision] = useState(0);
+  const updateMutationPendingRef = useRef(false);
   const [productFormSavedRevision, setProductFormSavedRevision] = useState(0);
   const [selectedComponent, setSelectedComponent] = useState<{
     id: string;
@@ -231,6 +238,13 @@ const ProductDetailPage = () => {
     { productId },
     { enabled: Boolean(productId) },
   );
+  useEffect(() => {
+    const version = productQuery.data?.updatedAt.toISOString();
+    if (!version || updateMutationPendingRef.current) return;
+    if (productFormDirty) {
+      if (cardVersion && version !== cardVersion) setExternalProductChange(true);
+    } else setCardVersion(version);
+  }, [productQuery.data?.updatedAt, productFormDirty, cardVersion]);
   const bundleComponentsQuery = trpc.bundles.listComponents.useQuery(
     { bundleProductId: productId },
     { enabled: Boolean(productId) },
@@ -276,6 +290,11 @@ const ProductDetailPage = () => {
   );
   const requestedStoreName = requestedStore?.name ?? returnStoreId;
   const selectedSettingsStore = selectedPricingStore ?? assignedStoreRows[0] ?? null;
+  useEffect(() => {
+    if (productFormDirty || updateMutationPendingRef.current || !selectedSettingsStore) return;
+    setPriceEditVersion(old => old?.storeId === selectedSettingsStore.storeId && old.version === selectedSettingsStore.priceVersion ? old
+      : { storeId: selectedSettingsStore.storeId, version: selectedSettingsStore.priceVersion });
+  }, [productFormDirty, selectedSettingsStore]);
   const productSettingsLoaded = storePricingQuery.isSuccess;
   const enableSku = productSettingsLoaded ? (selectedSettingsStore?.enableSku ?? true) : false;
   const enableBarcode = productSettingsLoaded
@@ -390,13 +409,16 @@ const ProductDetailPage = () => {
       await Promise.all(refreshes);
       setProductFormSavedRevision((revision) => revision + 1);
       setProductFormDirty(false);
+      setExternalProductChange(false);
       toast({ variant: "success", description: t("saveSuccess") });
       router.push(productEditReturnPath);
     },
     onError: (error) => {
+      if (error.message === "productChangedElsewhere") setExternalProductChange(true);
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  updateMutationPendingRef.current = updateMutation.isLoading;
   const storePriceMutation = trpc.storePrices.upsert.useMutation({
     onSuccess: async () => {
       await Promise.all([
@@ -442,9 +464,15 @@ const ProductDetailPage = () => {
     },
   });
   useSse({
-    "pricing.updated": () => { void storePricingQuery.refetch(); },
+    "products.updated": (payload) => {
+      if (!payload || typeof payload !== "object" || !("productId" in payload) || payload.productId !== productId) return;
+      if (updateMutation.isLoading) return;
+      if (productFormDirty) setExternalProductChange(true);
+      else void Promise.all([productQuery.refetch({ cancelRefetch: false }), storePricingQuery.refetch({ cancelRefetch: false }), pricingQuery.refetch({ cancelRefetch: false })]);
+    },
+    "pricing.updated": () => { void storePricingQuery.refetch({ cancelRefetch: false }); },
     "inventory.updated": () => {
-      void Promise.all([storePricingQuery.refetch(), productQuery.refetch()]);
+      void Promise.all([storePricingQuery.refetch({ cancelRefetch: false }), productQuery.refetch({ cancelRefetch: false })]);
     },
   });
   const storeVisibilityMutation = trpc.products.setStoreVisibility.useMutation({
@@ -1015,6 +1043,9 @@ const ProductDetailPage = () => {
             <CopyIcon className="h-4 w-4" aria-hidden />
             {t("selectiveDuplicate")}
           </DropdownMenuItem>
+          <DropdownMenuItem disabled={productFormDirty || updateMutation.isLoading} onSelect={() => {
+            actionAfterMenuCloseRef.current = () => setStorePreparationOpen(true);
+          }}><CopyIcon className="h-4 w-4" aria-hidden />{t("prepareInStores")}</DropdownMenuItem>
           {selectedSettingsStore ? <DropdownMenuItem disabled={storeVisibilityMutation.isLoading}
             onSelect={() => {
               const store = selectedSettingsStore;
@@ -1200,12 +1231,36 @@ const ProductDetailPage = () => {
       <ProductEditorGrid
         main={
           <>
+            {externalProductChange ? <div role="status" className="space-y-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+              <p>{t("externalProductChange")}</p>
+              <Button variant="secondary" size="sm" disabled={updateMutation.isLoading} onClick={() => {
+                void (async () => {
+                  if (productFormDirty && !(await confirm({ description: t("discardAndRefreshConfirm") }))) return;
+                  try {
+                    const results = await Promise.all([productQuery.refetch(), storePricingQuery.refetch(), pricingQuery.refetch()]);
+                    const failed = results.find(result => result.error)?.error;
+                    if (failed) throw failed;
+                    if (!results[0].data) return;
+                    updateMutation.reset();
+                    setCardVersion(results[0].data.updatedAt.toISOString());
+                    setEditorReloadRevision(v => v + 1);
+                    setProductFormDirty(false);
+                    setExternalProductChange(false);
+                  } catch (error) {
+                    toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+                  }
+                })();
+              }}>{t("discardAndRefresh")}</Button>
+            </div> : null}
+            <p className="px-4 pt-3 text-xs text-muted-foreground">{t("sharedProductFieldsHint")}</p>
             <ProductForm
-              key={`${productId}:${selectedSettingsStore?.storeId ?? "store"}`}
+              key={`${productId}:${selectedSettingsStore?.storeId ?? "store"}:${cardVersion ?? productQuery.data.updatedAt.toISOString()}:${editorReloadRevision}`}
               initialValues={formValues}
               onSubmit={(values) =>
                 updateMutation.mutate({
                   productId,
+                  expectedUpdatedAt: cardVersion ?? productQuery.data?.updatedAt.toISOString(),
+                  expectedStorePriceVersion: priceEditVersion?.storeId === selectedSettingsStore?.storeId ? priceEditVersion?.version : selectedSettingsStore?.priceVersion,
                   storeId: selectedSettingsStore?.storeId ?? undefined,
                   ...values,
                 })
@@ -2165,6 +2220,9 @@ const ProductDetailPage = () => {
           </FormActions>
         </div>
       </Modal>
+      <ProductStorePreparationDialog open={storePreparationOpen} onOpenChange={setStorePreparationOpen}
+        productId={productId} productName={productQuery.data?.name ?? ""} productSku={productQuery.data?.sku} sourceStoreId={selectedSettingsStore?.storeId}
+        onPrepared={() => { void Promise.all([productQuery.refetch(), storePricingQuery.refetch(), pricingQuery.refetch()]); }} />
       <ProductDuplicateDialog
         open={duplicateDialogOpen}
         onOpenChange={setDuplicateDialogOpen}

@@ -76,7 +76,16 @@
     "history": "Change history",
     "historyImpact": "Added: {added}. Hidden: {hidden}.",
     "unknownActor": "User",
-    "emptyHistory": "No source changes yet."
+    "emptyHistory": "No source changes yet.",
+    "direction": "{source} → {target}",
+    "ownCountHint": "Own products available to connected stores",
+    "containsRequestedProduct": "This source contains the requested product",
+    "receiverSubtitle": "Assortment sources received by {store}",
+    "modelHint": "Connections work in the displayed direction. They expose existing cards without moving stock or synchronizing prices. A store name does not make it a master store.",
+    "ownVsAvailable": "Own source: {own}. Total available including connected sources: {available}.",
+    "receivers": "Stores receiving this store’s own products: {stores}.",
+    "noReceivers": "none yet",
+    "requestedProductHint": "Sources containing the requested product are marked below. Changes require review and an explicit save."
   },
   "common": {
     "language": "Language",
@@ -1079,6 +1088,7 @@
     }
   },
   "breadcrumbs": {
+    "productReview": "Card review",
     "ariaLabel": "Breadcrumbs",
     "home": "Home",
     "orders": "Orders",
@@ -3804,7 +3814,8 @@
     "movementNoteStockCount": "Movement note stock count {code}",
     "movementNoteBundleAssemble": "Movement note bundle assemble {sku}",
     "movementNoteWriteOff": "Write-off: {reason}",
-    "printAction": "Print action"
+    "printAction": "Print action",
+    "transferPrepareProduct": "Set up destination product and prices"
   },
   "products": {
     "duplicateAssortmentHint": "This product may already exist in another store. Connect it through “Store assortment” to avoid creating a duplicate.",
@@ -4494,7 +4505,17 @@
     "printAction": "Print action",
     "variantPriceStoreRequired": "Select a product store to edit variant prices. Prices are saved separately for each store.",
     "salePriceStoreHint": "Selling price in {store}.",
-    "unitLabel": "Unit of measure"
+    "unitLabel": "Unit of measure",
+    "useExistingProduct": "Use this product",
+    "prepareInStores": "Use in stores",
+    "sharedProductFieldsHint": "Photos, name, details and barcodes belong to this shared card. Prices and stock are tracked per store.",
+    "externalProductChange": "This card changed at another workstation. Your unsaved edits remain on screen. Refresh the card and reapply your edits before saving.",
+    "reviewDuplicates": "Review duplicate candidates",
+    "discardAndRefresh": "Discard my edits and refresh",
+    "discardAndRefreshConfirm": "Unsaved edits to this card will be discarded. Load the latest data?",
+    "separateProductTitle": "Create a separate product?",
+    "separateProductConfirm": "A product with this name already exists. Reuse its card for another store. Continue only for a genuinely different product: a new card has separate prices, stock and history.",
+    "createSeparateProduct": "Create separate product"
   },
   "storeGroups": {
     "title": "Store assortments",
@@ -5271,7 +5292,8 @@
       "REORDER_POLICY_UPDATE": "Reorder policy update",
       "USER_CREATE": "User create",
       "USER_LOCALE_UPDATE": "User locale update",
-      "SEED": "Seed"
+      "SEED": "Seed",
+      "PRODUCT_STORE_PREPARE": "Product prepared for stores"
     },
     "entities": {
       "InventorySnapshot": "Inventory snapshot",
@@ -5689,7 +5711,11 @@
     "priceBookProductInUse": "The product belongs to a shared price list. Remove its list entries first; history and prices will be preserved.",
     "priceBookAttemptClosed": "This attempt was closed without applying. Review the changes again.",
     "priceBookStorageUnavailable": "The operation state could not be saved in this tab. Enable browser storage and retry.",
-    "priceBookSnapshotUnavailable": "The rollback snapshot is damaged or unavailable. Prices were not changed; check history and contact an administrator."
+    "priceBookSnapshotUnavailable": "The rollback snapshot is damaged or unavailable. Prices were not changed; check history and contact an administrator.",
+    "productPreparationStale": "Data changed or the preview expired. Review the changes again.",
+    "productChangedElsewhere": "This card changed at another workstation. Your save did not overwrite those changes. Refresh and reapply your edits.",
+    "productPreparationStorageUnavailable": "The browser could not save the operation key. Allow storage for Bazaar and review again. No changes were sent.",
+    "productPreparationAttemptClosed": "This attempt was closed without applying changes. Review a new attempt."
   },
   "adminJobs": {
     "title": "Admin jobs",
@@ -8097,5 +8123,64 @@
     "commonSampleTitle": "Shared list changes · KGS",
     "checkResult": "Check result",
     "attemptCanceled": "The attempt was closed without applying. Staged rows are preserved; review the changes again before retrying."
+  },
+  "productPreparation": {
+    "title": "Use product in stores",
+    "identityHint": "Uses the existing card with the same photos, details and barcodes. No new product is created.",
+    "source": "Price source store",
+    "targets": "Destination stores",
+    "noTargets": "No other accessible stores.",
+    "add": "Add the product where absent",
+    "addHint": "Adds the product to the destination’s own assortment and may make it available to its connected recipients. Hidden products and revoked sources are not overridden.",
+    "prices": "Destination prices",
+    "none": "Keep prices unchanged",
+    "missing": "Fill missing prices only",
+    "replace": "Replace prices from source",
+    "pricesHint": "Zero is an existing price. Copies available retail and wholesale prices for the product and its variants.",
+    "replaceHint": "Replaces existing destination prices after review. Changed prices become individual price-list exceptions. Missing source prices never clear destination values.",
+    "chooseSource": "Choose a price source",
+    "sharedPrices": "Set up an ongoing shared price list",
+    "preview": "Review changes",
+    "summary": "Store additions: {additions}. Price positions changing: {prices}.",
+    "blocked": "access setup required",
+    "willAdd": "will be added",
+    "available": "already available",
+    "hiddenHint": "This product is hidden here. Explicitly restore its visibility in the store assortment first.",
+    "catalogHint": "This product is not in the assortment. Configure an allowed source or deselect this store.",
+    "configure": "Open assortment",
+    "absent": "not set",
+    "retail": "Retail",
+    "wholesale": "Wholesale",
+    "preserved": "Stock, movements, cost, discounts and posted documents remain unchanged.",
+    "apply": "Apply reviewed changes",
+    "use": "Open existing product",
+    "refresh": "Refresh preview",
+    "success": "Changes saved using the same product card.",
+    "uncertain": "No confirmation received. Check the result to find the completed operation or safely close an attempt that did not run.",
+    "retry": "Check result",
+    "addRequiredHint": "This product is absent here. Enable adding it to the assortment or deselect this store.",
+    "hiddenProducts": "Show hidden product",
+    "canceled": "Changes were not applied. The unresolved attempt is closed; review a new attempt when ready.",
+    "noChanges": "The product and selected prices are already ready. No changes need applying.",
+    "noPriceSources": "No accessible stores have this product. First add it to a store without changing prices."
+  },
+  "productReview": {
+    "title": "Duplicate candidate review",
+    "hint": "Cards with matching names for an administrator to review.",
+    "safety": "Matching names do not prove the products are identical. Compare units, variants, barcodes and history. This page never merges, deletes or moves records.",
+    "search": "Find a group by name",
+    "empty": "No matching groups found.",
+    "total": "Candidate groups: {count}",
+    "cards": "cards: {count}",
+    "unit": "Unit",
+    "variants": "variants: {count}",
+    "barcodes": "Barcodes",
+    "ownStores": "Directly added to",
+    "visibleStores": "Available stores",
+    "stockStores": "Stores with stock or stock on order",
+    "history": "Movements: {movements}. Purchase lines: {purchases}. Customer order lines: {orders}.",
+    "limited": "Part of this large group is shown. Narrow the search and review cards separately.",
+    "previous": "Previous",
+    "next": "Next"
   }
 }

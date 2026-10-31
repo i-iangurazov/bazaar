@@ -10,6 +10,7 @@ import { toCsv } from "@/server/services/csv";
 import { lookupScanProducts } from "@/server/services/scanLookup";
 import { suggestNextProductSku } from "@/server/services/products";
 import { getProductDuplicateDiagnostics } from "@/server/services/products/diagnostics";
+import { productPriceVersion } from "@/server/services/productPriceVersion";
 import {
   tokenizeProductSearchText,
   escapeProductSearchPattern,
@@ -375,8 +376,8 @@ const buildStoreSellingPriceSql = (
   const effective = pricingTime ? Prisma.sql`CASE
     WHEN price."discountType" = 'PERCENTAGE'
       AND price."discountPercentage" > 0 AND price."discountPercentage" < 100
-      AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= ${pricingTime})
-      AND (price."discountEndsAt" IS NULL OR ${pricingTime} < price."discountEndsAt")
+      AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= (${pricingTime}::timestamptz AT TIME ZONE 'UTC'))
+      AND (price."discountEndsAt" IS NULL OR (${pricingTime}::timestamptz AT TIME ZONE 'UTC') < price."discountEndsAt")
     THEN ROUND((${amount}) * (100 - price."discountPercentage") / 100, 2)
     ELSE ${amount} END` : amount;
   return Prisma.sql`(
@@ -1728,6 +1729,8 @@ export const getProductStorePricing = async ({
         },
         select: {
           storeId: true,
+          variantKey: true,
+          updatedAt: true,
           priceKgs: true,
           retailPriceKgs: true,
           wholesalePriceKgs: true,
@@ -1745,6 +1748,7 @@ export const getProductStorePricing = async ({
           variantId: true,
           variantKey: true,
           priceKgs: true,
+          updatedAt: true,
           retailPriceKgs: true,
           wholesalePriceKgs: true,
         },
@@ -1849,6 +1853,7 @@ export const getProductStorePricing = async ({
       return {
         storeId: store.id,
         storeName: store.name,
+        priceVersion: productPriceVersion([...overrides, ...variantOverrides].filter(p => p.storeId === store.id), extraPrices.filter(p => p.storeId === store.id)),
         retailWholesaleEnabled: organization.retailWholesaleEnabled,
         retailPriceKgs: decimalToNumber(extraByKey.get(`${store.id}:BASE`)?.retailPriceKgs),
         wholesalePriceKgs: decimalToNumber(extraByKey.get(`${store.id}:BASE`)?.wholesalePriceKgs),

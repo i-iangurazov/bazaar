@@ -30,15 +30,11 @@ export const sharedCatalogGuides: HelpGuide[] = [
     ),
     steps: [
       {
-        title: t(
-          "Сначала найдите существующую карточку",
-          "Адегенде бар карточканы табыңыз",
-          "Find the existing product first",
-        ),
+        title: t("Используйте найденный товар вместо новой карточки", "Жаңы карточканын ордуна табылган товарды колдонуңуз", "Reuse a matching product"),
         body: t(
-          "Проверьте товар по артикулу, штрихкоду и варианту. В списке товаров выберите магазин и действие «Добавить существующие товары». Подключается та же карточка организации, остатки других магазинов не копируются. Если источник ассортимента был явно отключён, измените его через редактор ассортимента.",
-          "Товарды артикулу, штрихкоду жана варианты боюнча текшериңиз. Товарлар тизмесинен дүкөндү жана «Бар товарларды кошуу» аракетин тандаңыз. Уюмдун ошол эле карточкасы туташат, башка дүкөндөрдүн калдыктары көчүрүлбөйт. Ассортимент булагы өчүрүлгөн болсо, аны ассортимент редакторунан өзгөртүңүз.",
-          "Check SKU, barcode and variant. Select the store in Products and use Add existing products. This connects the same organization product without copying other stores' stock. If an assortment source was explicitly disabled, change it in the assortment editor.",
+          "При создании, в том числе в быстрой форме, проверьте подсказки по названию и штрихкоду. У подходящей карточки нажмите «Использовать этот товар». Сравните название, единицу и вариант, выберите магазины и проверьте предпросмотр. Подключается существующий товар; введённые данные новой карточки на него не переносятся. Недоступный по правам товар подключает администратор.",
+          "Түзүүдө, анын ичинде тез формада, аталыш жана штрихкод боюнча сунуштарды текшериңиз. Ылайыктуу карточкадан «Бул товарды колдонуу» баскычын басыңыз. Аталышын, өлчөмүн жана вариантын салыштырып, дүкөндөрдү тандап, алдын ала көрүүнү текшериңиз. Учурдагы товар туташат; жаңы карточкага киргизилген маалымат ага көчүрүлбөйт. Укук жетишсиз болсо, администратор туташтырат.",
+          "Review name and barcode matches, including in quick creation. Choose Use this product on the matching card, compare its unit and variant, select stores and review the preview. This connects the existing product; draft fields from the new card are not copied onto it. Ask an administrator when your access does not permit reuse.",
         ),
       },
       {
@@ -78,6 +74,22 @@ export const sharedCatalogGuides: HelpGuide[] = [
         ),
       },
       {
+        title: t("Подготовьте цены выбранных магазинов", "Тандалган дүкөндөрдүн бааларын даярдаңыз", "Prepare destination prices"),
+        body: t(
+          "В действиях карточки выберите «Использовать в магазинах» или нажмите иконку подготовки у строки перемещения. Выберите получателей и источник цен. По умолчанию цены не меняются; режим заполнения пропусков сохраняет заданные значения, включая ноль. Замена цен требует проверки значений до/после и делает изменённые виды цен индивидуальными. Фото и характеристики у одной карточки уже общие. Для постоянного следования ценам используйте общий прайс. Остатки и документы подготовка не меняет.",
+          "Карточканын аракеттеринен «Дүкөндөрдө колдонуу» тандаңыз же которуу сабындагы даярдоо белгисин басыңыз. Алуучуларды жана баа булагын тандаңыз. Демейки боюнча баалар өзгөрбөйт; боштуктарды толтуруу режими коюлган маанилерди, анын ичинде нөлдү сактайт. Алмаштыруу мурунку/жаңы маанилерди текшерүүнү талап кылып, өзгөргөн баа түрлөрүн жеке кылат. Бир карточканын сүрөттөрү жана мүнөздөмөлөрү жалпы. Туруктуу баа шайкештиги үчүн жалпы тизмени колдонуңуз. Даярдоо калдыктарды жана документтерди өзгөртпөйт.",
+          "Choose Use in stores from the product actions, or the preparation icon on a transfer line. Select destinations and a price source. Prices stay unchanged by default; fill-missing preserves existing values including zero. Replacement requires reviewing before/after values and makes changed price kinds individual. Photos and details already belong to the shared card. Use a shared price list for ongoing price inheritance. Preparation does not change stock or documents.",
+        ),
+      },
+      {
+        title: t("Проверьте направление и прежние повторы", "Багытты жана мурунку кайталанууларды текшериңиз", "Review direction and existing candidates"),
+        body: t(
+          "В ассортименте выбран получатель: стрелка показывает, откуда приходят товары. Общая доступность включает подключённые источники, а собственный источник показывает товары, которые можно передавать дальше. Название «Склад» не делает точку главной. Перед изменением связей проверьте добавления и скрытия. В разделе товаров администратор может открыть «Проверить повторяющиеся карточки» и сравнить штрихкоды, варианты, магазины с остатками и связанную историю. Совпадение названий не является основанием для автоматического объединения.",
+          "Ассортиментте алуучу тандалат: жебе товарлар кайдан келерин көрсөтөт. Жалпы жеткиликтүүлүк туташкан булактарды камтыйт, өз булагы андан ары берилүүчү товарларды көрсөтөт. «Кампа» аталышы чекитти башкы кылбайт. Байланыштарды өзгөртүүдөн мурда кошууларды жана жашырууларды текшериңиз. Товарлардан администратор «Кайталанган карточкаларды текшерүү» ачып, штрихкоддорду, варианттарды, калдыгы бар дүкөндөрдү жана тарыхты салыштыра алат. Аталыштардын дал келиши автоматтык бириктирүүгө негиз болбойт.",
+          "The assortment editor selects a recipient; arrows show incoming sources. Total availability includes connected sources, while the own source contains products eligible for onward sharing. A warehouse name does not assign master status. Review additions and exclusions before changing connections. In Products, administrators can open Duplicate candidate review to compare barcodes, variants, stores with stock and related history. Matching names never authorize automatic merging.",
+        ),
+      },
+      {
         title: t(
           "Переносите штрихкод только при необходимости",
           "Штрихкодду зарыл болгондо гана көчүрүңүз",
@@ -95,6 +107,6 @@ export const sharedCatalogGuides: HelpGuide[] = [
       "Дүкөндөрдө бир карточка колдонулуп, калдыктар өзүнчө эсептелет.",
       "Stores use the same product identity while physical stock stays separate.",
     ),
-    relatedGuides: ["products/add-product", "products/import-products", "inventory/transfer"],
+    relatedGuides: ["products/add-product", "products/import-products", "products/shared-prices", "inventory/transfer"],
   },
 ];

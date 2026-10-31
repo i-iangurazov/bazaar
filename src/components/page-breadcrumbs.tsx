@@ -82,6 +82,8 @@ const segmentLabel = (
       return tBreadcrumbs("counts");
     case "products":
       return tNav("products");
+    case "review":
+      return tBreadcrumbs("productReview");
     case "purchase-orders":
       return tNav("purchaseOrders");
     case "sales":

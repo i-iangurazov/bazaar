@@ -23,7 +23,8 @@ describe("product barcode capture source", () => {
     const source = await readSource("src/components/product-form.tsx");
 
     expect(source).toContain("compactCreate");
-    expect(source).toContain("? deferredDuplicateDiagnosticsInput.barcodes.length > 0");
+    expect(source).toContain("deferredDuplicateDiagnosticsInput.barcodes.length > 0");
+    expect(source).not.toMatch(/compactCreate\s*\?\s*deferredDuplicateDiagnosticsInput\.barcodes/);
     expect(source).toContain("duplicateExactBarcodesTitle");
     expect(source).toContain("href={`/products/${match.id}`}");
   });

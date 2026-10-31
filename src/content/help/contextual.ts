@@ -2,6 +2,7 @@ export const contextualHelpRoutes = [
   { match: /^\/settings\/price-lists(?:\/|$)/, guideId: "products/shared-prices" },
   { match: /^\/settings\/store-groups(?:\/|$)/, guideId: "products/shared-catalog" },
   { match: /^\/settings\/loyalty(?:\/|$)/, guideId: "loyalty/get-started" },
+  { match: /^\/products\/review(?:\/|$)/, guideId: "products/shared-catalog" },
   { match: /^\/products(?:\/|$)/, guideId: "products/add-product" },
   { match: /^\/settings\/import(?:\/|$)/, guideId: "products/import-products" },
   { match: /^\/inventory\/receiving(?:\/|$)/, guideId: "inventory/receiving" },

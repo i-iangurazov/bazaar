@@ -280,7 +280,7 @@ const metadata = (s: Source, selectedIds: string[] = []) => {
     unavailableSelectedIds: selectedIds.filter((id) => !available.has(id)),
   };
 };
-export async function getCatalogSettings(organizationId: string, storeId?: string) {
+export async function getCatalogSettings(organizationId: string, storeId?: string, productId?: string) {
   return prisma.$transaction(
     async (tx) => {
       const g = await graph(tx, organizationId);
@@ -307,7 +307,12 @@ export async function getCatalogSettings(organizationId: string, storeId?: strin
       return {
         stores,
         store,
-        sources: [...g.sources.values()].map((s) => metadata(s, selectedBySource.get(s.key) ?? [])),
+        sources: [...g.sources.values()].map((s) => ({ ...metadata(s, selectedBySource.get(s.key) ?? []),
+          containsRequestedProduct: Boolean(productId && s.productIds.includes(productId)),
+        })),
+        receivingStores: g.stores.filter(s => s.id !== store.id && g.settings(s.id).connections.some(c =>
+          c.key === `store:${store.id}` && c.enabled && (c.scope === "ALL" || c.productIds.length > 0),
+        )).map(s => ({ id: s.id, name: s.name })),
         settings,
         total: g.assignments.filter((a) => a.storeId === store.id && a.isActive).length,
         ownCount: g.sources.get(`store:${store.id}`)!.productIds.length,

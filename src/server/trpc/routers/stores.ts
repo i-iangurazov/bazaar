@@ -49,10 +49,10 @@ import { assertUserCanAccessStore, userHasAllStoreAccess } from "@/server/servic
 
 export const storesRouter = router({
   catalogSettings: adminOrOrgOwnerProcedure
-    .input(z.object({ storeId: z.string().min(1).optional() }))
+    .input(z.object({ storeId: z.string().min(1).optional(), productId: z.string().min(1).optional() }))
     .query(async ({ ctx, input }) => {
       try {
-        return await getCatalogSettings(ctx.user.organizationId, input.storeId);
+        return await getCatalogSettings(ctx.user.organizationId, input.storeId, input.productId);
       } catch (error) {
         throw toTRPCError(error);
       }

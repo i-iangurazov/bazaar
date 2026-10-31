@@ -17,11 +17,13 @@ import {
   type TransferDraftLine,
 } from "./transfer-draft-storage";
 import { useTransferLineContext } from "./use-transfer-line-context";
+import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
 
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import {
   BackIcon,
+  CopyIcon,
   DeleteIcon,
   EmptyIcon,
   StatusDangerIcon,
@@ -30,6 +32,7 @@ import {
 } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/search-input";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
@@ -132,6 +135,7 @@ export const InventoryTransfersPage = ({
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
+  const [preparingProduct, setPreparingProduct] = useState<{ id: string; name: string } | null>(null);
   const [postingError, setPostingError] = useState<string | null>(null);
   const transferInputRefs = useRef(new Map<string, HTMLInputElement>());
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -302,7 +306,7 @@ export const InventoryTransfersPage = ({
     }, 150);
   }, [trpcUtils, refetchLineContext]);
   useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
-  useSse({ "assortment.updated": refreshTransferData, "inventory.updated": refreshTransferData });
+  useSse({ "products.updated": refreshTransferData, "assortment.updated": refreshTransferData, "inventory.updated": refreshTransferData });
 
   useEffect(() => {
     if (!stores.length || isEditMode || !draftReady) {
@@ -1004,6 +1008,10 @@ export const InventoryTransfersPage = ({
           </Button>
         </div>
       ) : null}
+      {preparingProduct && fromStoreId && toStoreId ? <ProductStorePreparationDialog open
+        onOpenChange={open => { if (!open) setPreparingProduct(null); }} productId={preparingProduct.id}
+        productName={preparingProduct.name} sourceStoreId={fromStoreId} targetStoreIds={[toStoreId]}
+        onPrepared={() => { refreshTransferData(); }} /> : null}
       <Modal open={clearRequested} onOpenChange={setClearRequested} title={t("transferClearDraft")}>
         <p className="text-sm text-muted-foreground">{t("transferClearDraftConfirm")}</p>
         <div className="mt-4 flex justify-end gap-2">
@@ -1310,6 +1318,15 @@ export const InventoryTransfersPage = ({
                           {formatOptionalMoney(metric?.lineTotal ?? null)}
                         </p>
                       </div>
+                      <div className="flex gap-1 lg:flex-col lg:items-end">
+                        <IconButton
+                          type="button"
+                          variant="ghost"
+                          icon={CopyIcon}
+                          label={t("transferPrepareProduct")}
+                          disabled={fieldsLocked}
+                          onClick={() => setPreparingProduct({ id: line.productId, name: line.productName })}
+                        />
                       <Button
                         type="button"
                         variant="ghost"
@@ -1321,6 +1338,7 @@ export const InventoryTransfersPage = ({
                       >
                         <DeleteIcon className="h-4 w-4" aria-hidden />
                       </Button>
+                      </div>
                     </div>
                   );
                 })}

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QueryErrorState } from "@/components/query-error-state";
 import { trpc } from "@/lib/trpc";
 import { useSse } from "@/lib/useSse";
@@ -33,9 +34,10 @@ export default function StoreGroupsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selected = searchParams.get("storeId") || undefined;
+  const requestedProductId = searchParams.get("productId") || undefined;
   const setSelected = (id: string) =>
     router.replace(`/settings/store-groups?storeId=${encodeURIComponent(id)}`, { scroll: false });
-  const overview = trpc.stores.catalogSettings.useQuery({ storeId: selected });
+  const overview = trpc.stores.catalogSettings.useQuery({ storeId: selected, productId: requestedProductId });
   useSse({ "assortment.updated": () => overview.refetch() });
   const data = overview.data,
     store = data?.store;
@@ -256,6 +258,8 @@ export default function StoreGroupsPage() {
       >
         <div className="min-w-0">
           <p className="break-words font-medium">{c ? displayName(source) : store?.name}</p>
+          {c ? <p className="text-xs text-muted-foreground">{t("direction", { source: displayName(source), target: store?.name ?? "" })}</p> : <p className="text-xs text-muted-foreground">{t("ownCountHint")}</p>}
+          {source.containsRequestedProduct ? <p className="text-xs text-primary">{t("containsRequestedProduct")}</p> : null}
           {c?.scope === "SELECTED" ? (
             <p className="text-xs text-muted-foreground">
               {t("partial", {
@@ -322,19 +326,10 @@ export default function StoreGroupsPage() {
             >
               {t("store")}
             </label>
-            <select
-              id="assortment-store-mobile"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 lg:hidden"
-              value={store.id}
-              disabled={saveMutation.isLoading}
-              onChange={(e) => selectStore(e.target.value)}
-            >
-              {data!.stores.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} · {s.hasBaseline ? s.baseCount : s.availableCount}
-                </option>
-              ))}
-            </select>
+            <div className="lg:hidden"><Select value={store.id} disabled={saveMutation.isLoading} onValueChange={selectStore}>
+              <SelectTrigger id="assortment-store-mobile"><SelectValue /></SelectTrigger>
+              <SelectContent>{data!.stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name} · {s.availableCount}</SelectItem>)}</SelectContent>
+            </Select></div>
             <div className="hidden lg:block">
               {data!.stores.length > 12 ? (
                 <Input
@@ -367,12 +362,10 @@ export default function StoreGroupsPage() {
                       <span
                         className="shrink-0 text-xs tabular-nums text-muted-foreground"
                         aria-label={
-                          s.hasBaseline
-                            ? `${t("ownCatalog")}: ${s.baseCount}`
-                            : t("storeCount", { count: s.availableCount })
+                          t("storeCount", { count: s.availableCount })
                         }
                       >
-                        {(s.hasBaseline ? s.baseCount : s.availableCount).toLocaleString(locale)}
+                        {s.availableCount.toLocaleString(locale)}
                       </span>
                     </button>
                   ))}
@@ -384,7 +377,7 @@ export default function StoreGroupsPage() {
               <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-semibold">{store.name}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("receiverSubtitle", { store: store.name })}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -396,6 +389,12 @@ export default function StoreGroupsPage() {
                 >
                   {t("history")}
                 </Button>
+              </div>
+              <div className="mb-5 space-y-2 rounded-md bg-muted/50 p-3 text-sm">
+                <p>{t("modelHint")}</p>
+                <p>{t("ownVsAvailable", { own: data!.ownCount, available: data!.total })}</p>
+                <p>{t("receivers", { stores: data?.receivingStores?.map(s => s.name).join(", ") || t("noReceivers") })}</p>
+                {requestedProductId ? <p className="text-primary">{t("requestedProductHint")}</p> : null}
               </div>
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>

@@ -11,6 +11,7 @@ export function ProductBarcodeConflict({
   disabled,
   showSku,
   onToggle,
+  onReuse,
 }: {
   match: {
     id: string;
@@ -26,6 +27,7 @@ export function ProductBarcodeConflict({
   disabled: boolean;
   showSku: boolean;
   onToggle: () => void;
+  onReuse?: () => void;
 }) {
   const t = useTranslations("products");
   const archiveParams = new URLSearchParams({
@@ -68,6 +70,7 @@ export function ProductBarcodeConflict({
         )}
       </p>
       <div className="flex flex-wrap items-center gap-3">
+        {onReuse ? <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={onReuse}>{t("useExistingProduct")}</Button> : null}
         {match.canAccess && (!match.isDeleted || match.stores.length > 0) ? (
           <Link
             href={match.isDeleted ? `/products?${archiveParams}` : `/products/${match.id}`}

@@ -98,6 +98,10 @@ import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { isAiDescriptionGenerationEnabled, isProductPacksEnabled } from "@/lib/featureFlags";
 import { ProductBarcodeConflict } from "@/components/products/product-barcode-conflict";
+import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
+import { useRouter } from "next/navigation";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 
 const showProductPacksSection = isProductPacksEnabled();
 const aiDescriptionGenerationDisabled = !isAiDescriptionGenerationEnabled();
@@ -670,7 +674,18 @@ export const ProductForm = ({
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { toast } = useToast();
+  const productUtils = trpc.useUtils();
+  const { confirm: confirmSeparateProduct, confirmDialog: separateProductDialog } = useConfirmDialog();
+  const duplicateCheckInFlight = useRef(false);
   const compactCreate = quickCreateMode && !productId && !readOnly;
+  const reuseRouter = useRouter();
+  const [reuseProduct, setReuseProduct] = useState<{ id: string; name: string; sku?: string } | null>(null);
+  const [reuseNavigation, setReuseNavigation] = useState<string | null>(null);
+  useEffect(() => {
+    if (reuseProduct || !reuseNavigation) return;
+    const frame = requestAnimationFrame(() => { reuseRouter.push(reuseNavigation); setReuseNavigation(null); });
+    return () => cancelAnimationFrame(frame);
+  }, [reuseProduct, reuseNavigation, reuseRouter]);
   const shopifyEditor = shopifyEditorLayout || compactCreate;
   const canEditVariantPrice = Boolean(categoryStoreId);
   const moneyCurrencyCode = normalizeCurrencyCode(currencyCode);
@@ -1450,13 +1465,14 @@ export const ProductForm = ({
     }),
     [enableBarcode, enableSku, enableSimilarProductCheck, productId, watchedBarcodes, watchedName, watchedSku],
   );
-  const deferredDuplicateDiagnosticsInput = useDeferredValue(duplicateDiagnosticsInput);
+  const diagnosticsKey = JSON.stringify(duplicateDiagnosticsInput);
+  const debouncedDiagnosticsKey = useDebouncedValue(diagnosticsKey, 250);
+  const deferredDuplicateDiagnosticsInput = useMemo(() => JSON.parse(debouncedDiagnosticsKey) as typeof duplicateDiagnosticsInput, [debouncedDiagnosticsKey]);
+  const diagnosticsPending = diagnosticsKey !== debouncedDiagnosticsKey;
   const duplicateDiagnosticsEnabled =
     !readOnly &&
     (enableSimilarProductCheck || deferredDuplicateDiagnosticsInput.barcodes.length > 0) &&
-    (compactCreate
-      ? deferredDuplicateDiagnosticsInput.barcodes.length > 0
-      : Boolean(
+    (Boolean(
           deferredDuplicateDiagnosticsInput.sku &&
           deferredDuplicateDiagnosticsInput.sku.length >= 2,
         ) ||
@@ -1476,7 +1492,8 @@ export const ProductForm = ({
   const barcodeTransfers = useWatch({ control: form.control, name: "barcodeTransfers" }) ?? [];
   const renderBarcodeConflict = (match: NonNullable<typeof duplicateDiagnosticsQuery.data>["exactBarcodeMatches"][number]) => (
     <ProductBarcodeConflict key={`${match.barcode}-${match.id}`} match={match}
-      showSku={enableSku} disabled={readOnly || isSubmitting || duplicateDiagnosticsQuery.isFetching}
+      showSku={enableSku} disabled={readOnly || isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching}
+      onReuse={!productId && categoryStoreId && match.canReuse ? () => setReuseProduct({ id: match.id, name: match.name, sku: match.sku }) : undefined}
       selected={barcodeTransfers.some(t => t.sourceProductId === match.id && t.barcode === match.barcode)}
       onToggle={() => {
         const current = form.getValues("barcodeTransfers") ?? [];
@@ -3061,7 +3078,7 @@ export const ProductForm = ({
     });
   };
 
-  const handleSubmit = (values: z.infer<typeof schema>) => {
+  const handleSubmit = async (values: z.infer<typeof schema>) => {
     if (readOnly) {
       return;
     }
@@ -3216,6 +3233,22 @@ export const ProductForm = ({
           ...(draftBarcode ? [draftBarcode] : []),
         ])
       : normalizeProductBarcodes(values.barcodes ?? []);
+
+    if (!productId && enableSimilarProductCheck) {
+      if (duplicateCheckInFlight.current) return;
+      duplicateCheckInFlight.current = true;
+      try {
+        const matches = await productUtils.products.duplicateDiagnostics.fetch({ name: values.name.trim() });
+        if (matches.likelyNameMatches.length && !(await confirmSeparateProduct({
+          title: t("separateProductTitle"), description: t("separateProductConfirm"), confirmLabel: t("createSeparateProduct"),
+        }))) return;
+      } catch (error) {
+        toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+        return;
+      } finally {
+        duplicateCheckInFlight.current = false;
+      }
+    }
 
     onSubmit({
       imagesOnly: Boolean(productId) && isProductImageOnlyChange(formDirtyFields),
@@ -4274,6 +4307,7 @@ export const ProductForm = ({
               >
                 {t("duplicateOpenProduct")}
               </Link>
+              {!productId && categoryStoreId && duplicateDiagnosticsQuery.data.exactSkuMatch.canReuse ? <Button type="button" size="sm" variant="secondary" disabled={isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching} onClick={() => setReuseProduct(duplicateDiagnosticsQuery.data!.exactSkuMatch!)}>{t("useExistingProduct")}</Button> : null}
             </div>
           </div>
         ) : null}
@@ -4289,6 +4323,7 @@ export const ProductForm = ({
                   {enableSku ? <Badge variant="muted">{match.sku}</Badge> : null}
                   {match.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
                 </div>
+                {match.unit || match.stores?.length ? <p className="mt-1 text-xs text-muted-foreground">{[match.unit, match.stores?.map(s => s.name).join(", ")].filter(Boolean).join(" · ")}</p> : null}
                 <Link
                   href={`/products/${match.id}`}
                   target="_blank"
@@ -4296,6 +4331,7 @@ export const ProductForm = ({
                 >
                   {t("duplicateOpenProduct")}
                 </Link>
+                {!productId && categoryStoreId && match.canReuse ? <Button type="button" size="sm" variant="secondary" disabled={isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching} onClick={() => setReuseProduct(match)}>{t("useExistingProduct")}</Button> : null}
               </div>
             ))}
           </div>
@@ -4810,9 +4846,20 @@ export const ProductForm = ({
     </div>
   );
 
+  const reuseDialog = reuseProduct && categoryStoreId ? <ProductStorePreparationDialog
+    open onOpenChange={open => { if (!open) setReuseProduct(null); }} productId={reuseProduct.id}
+    productName={reuseProduct.name} productSku={reuseProduct.sku} targetStoreIds={[categoryStoreId]} addToAssortment useExisting
+    onPrepared={ids => {
+      onDirtyChange?.(false);
+      setReuseNavigation(`/products/${encodeURIComponent(reuseProduct.id)}?storeId=${encodeURIComponent(ids[0] ?? categoryStoreId)}`);
+      setReuseProduct(null);
+    }} /> : null;
+
   if (shopifyEditor) {
     return (
       <Form {...form}>
+        {reuseDialog}
+        {separateProductDialog}
         <form
           id={formId}
           className="min-w-0"
@@ -6003,6 +6050,8 @@ export const ProductForm = ({
 
   return (
     <Form {...form}>
+      {reuseDialog}
+      {separateProductDialog}
       <form
         id={formId}
         className="space-y-6 pb-28 md:pb-0"
@@ -6528,85 +6577,7 @@ export const ProductForm = ({
                       />
                     ) : null}
                   </FormGrid>
-                  {enableSimilarProductCheck && duplicateDiagnosticsEnabled && (duplicateDiagnosticsQuery.isFetching || duplicateDiagnosticsQuery.data?.exactSkuMatch || duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
-                    <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-foreground">
-                          {t("duplicateDiagnosticsTitle")}
-                        </p>
-                        {duplicateDiagnosticsQuery.isFetching ? (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Spinner className="h-4 w-4" />
-                            {t("duplicateDiagnosticsLoading")}
-                          </div>
-                        ) : null}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{t("duplicateAssortmentHint")}</p>
-                      {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
-                        <div className="mt-3 rounded-md border border-danger/30 bg-background p-3">
-                          <p className="text-xs font-medium text-danger">
-                            {t("duplicateExactSkuTitle")}
-                          </p>
-                          <p className="mt-1 text-sm text-foreground">
-                            {duplicateDiagnosticsQuery.data.exactSkuMatch.name}
-                          </p>
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <Badge variant="muted">
-                              {duplicateDiagnosticsQuery.data.exactSkuMatch.sku}
-                            </Badge>
-                            {duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? (
-                              <Badge variant="muted">{t("archived")}</Badge>
-                            ) : null}
-                            <Link
-                              href={`/products/${duplicateDiagnosticsQuery.data.exactSkuMatch.id}`}
-                              target="_blank"
-                              className="text-primary underline-offset-4 hover:underline"
-                            >
-                              {t("duplicateOpenProduct")}
-                            </Link>
-                          </div>
-                        </div>
-                      ) : null}
-                      {duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
-                        <div className="mt-3 space-y-2">
-                          <p className="text-xs font-medium text-foreground">
-                            {t("duplicateLikelyMatchesTitle")}
-                          </p>
-                          {duplicateDiagnosticsQuery.data.likelyNameMatches.map((match) => (
-                            <div
-                              key={match.id}
-                              className="rounded-md border border-warning/30 bg-background p-3"
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm text-foreground">{match.name}</span>
-                                {enableSku ? <Badge variant="muted">{match.sku}</Badge> : null}
-                                {match.isDeleted ? (
-                                  <Badge variant="muted">{t("archived")}</Badge>
-                                ) : null}
-                              </div>
-                              <Link
-                                href={`/products/${match.id}`}
-                                target="_blank"
-                                className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
-                              >
-                                {t("duplicateOpenProduct")}
-                              </Link>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                      {!duplicateDiagnosticsQuery.isFetching &&
-                      !(enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch) &&
-                      !(
-                        enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length
-                      ) &&
-                      !duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
-                        <p className="mt-3 text-xs text-muted-foreground">
-                          {t("duplicateDiagnosticsEmpty")}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
+                  {duplicateDiagnosticsPanel}
                   {!compactCreate ? (
                     <FormField
                       control={form.control}

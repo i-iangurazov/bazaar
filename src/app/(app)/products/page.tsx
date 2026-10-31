@@ -1410,6 +1410,7 @@ const ProductsPage = () => {
   );
 
   useSse({
+    "products.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
     // A live event must not cancel the refresh awaited by an inline save.
     // Otherwise that save can finish with the previous stock revision cached.
     "assortment.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
@@ -3395,6 +3396,7 @@ const ProductsPage = () => {
                         {t("configureStoreAssortment")}
                       </Link>
                     </DropdownMenuItem> : null}
+                    {isAdmin ? <DropdownMenuItem asChild><Link href="/products/review"><ViewIcon className="h-4 w-4" aria-hidden />{t("reviewDuplicates")}</Link></DropdownMenuItem> : null}
                     <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
                       <CopyIcon className="h-4 w-4" aria-hidden />
                       {t("addExistingProducts")}

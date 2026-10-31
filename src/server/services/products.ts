@@ -7,7 +7,7 @@ import {
   OperationRequestPrincipalType,
   StockMovementType,
   type AttributeType,
-  type Prisma,
+  Prisma,
   type PrismaClient,
 } from "@prisma/client";
 
@@ -40,6 +40,8 @@ import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { assignProductToStore } from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
 import { publishAssortmentChange } from "@/server/services/assortmentPolicy";
+import { publishProductChange } from "@/server/services/productChangeEvents";
+import { readProductPriceVersion } from "@/server/services/productPriceVersion";
 import { getLogger } from "@/server/logging";
 import { lockStockSnapshot } from "@/server/services/inventoryLock";
 import { applyStockMovement } from "@/server/services/inventory";
@@ -2236,6 +2238,8 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
 };
 
 export type UpdateProductInput = ProductPriceTypeValues & {
+  expectedUpdatedAt?: string;
+  expectedStorePriceVersion?: string;
   requireRetailPrice?: boolean;
   productId: string;
   organizationId: string;
@@ -2294,6 +2298,9 @@ export const updateProduct = async (input: UpdateProductInput) => {
 
   return prisma.$transaction(async (tx) => {
     await assertBaamReviewedVersion(tx, "Product", input.productId);
+    if (input.expectedUpdatedAt) {
+      await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id"=${input.productId} AND "organizationId"=${input.organizationId} FOR UPDATE`;
+    }
     // Serialize a unit correction with inventory movements, then read the current unit.
     await tx.$queryRaw`
       SELECT "id" FROM "Product"
@@ -2305,6 +2312,10 @@ export const updateProduct = async (input: UpdateProductInput) => {
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
+    if (input.expectedUpdatedAt && before.updatedAt.toISOString() !== input.expectedUpdatedAt)
+      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+    if (input.expectedStorePriceVersion && (!input.storeId || input.expectedStorePriceVersion !== await readProductPriceVersion(tx, input.organizationId, input.storeId, input.productId)))
+      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
 
     const validatedRetailPriceKgs = input.requireRetailPrice
       ? await resolveProductFormRetailPrice(tx, input)
@@ -2585,11 +2596,20 @@ export const updateProduct = async (input: UpdateProductInput) => {
     });
 
     return product;
+  }, input.expectedUpdatedAt || input.expectedStorePriceVersion ? { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 } : undefined).catch(error => {
+    if ((input.expectedUpdatedAt || input.expectedStorePriceVersion) && error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code)))))
+      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+    throw error;
+  }).then(async product => {
+    await publishProductChange(input.organizationId, product.id);
+    return product;
   });
 };
 
 // Shared assortment managers may maintain photos without editing source prices or details.
 export const updateProductImages = async (input: {
+  expectedUpdatedAt?: string;
   organizationId: string;
   actorId: string;
   requestId: string;
@@ -2600,11 +2620,15 @@ export const updateProductImages = async (input: {
   const media = await resolveIncomingProductImages(input);
   return prisma.$transaction(async (tx) => {
     await assertBaamReviewedVersion(tx, "Product", input.productId);
+    if (input.expectedUpdatedAt)
+      await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id"=${input.productId} AND "organizationId"=${input.organizationId} FOR UPDATE`;
     const before = await tx.product.findFirst({
       where: { id: input.productId, organizationId: input.organizationId, isDeleted: false },
       include: { images: true, variants: { where: { isActive: true } } },
     });
     if (!before) throw new AppError("productNotFound", "NOT_FOUND", 404);
+    if (input.expectedUpdatedAt && before.updatedAt.toISOString() !== input.expectedUpdatedAt)
+      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
     const images = withStableProductImageIds(media.images, {
       preserveIds: new Set(before.images.map((image) => image.id)),
     });
@@ -2630,6 +2654,14 @@ export const updateProductImages = async (input: {
       before: toJson({ photoUrl: before.photoUrl, images: before.images }),
       after: toJson({ photoUrl: product.photoUrl, images }),
     });
+    return product;
+  }, input.expectedUpdatedAt ? { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 } : undefined).catch(error => {
+    if (input.expectedUpdatedAt && error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code)))))
+      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+    throw error;
+  }).then(async product => {
+    await publishProductChange(input.organizationId, product.id);
     return product;
   });
 };

@@ -145,15 +145,21 @@ export const getProductDuplicateDiagnostics = async ({
   const canManage = user && (user.role === "ADMIN" || user.role === "MANAGER");
   const storeIds = canManage && !userHasAllStoreAccess(user)
     ? await resolveAccessibleStoreIds(prisma, user) : null;
-  const matchingIds = barcodeMatches.map(m => m.product.id);
-  const accessibleIds = new Set(canManage && matchingIds.length
-    ? (await prisma.product.findMany({ where: {
+  const matchingIds = [...new Set([...barcodeMatches.map(m => m.product.id), ...filteredNameMatches.map(m => m.id), ...(exactSkuMatch ? [exactSkuMatch.id] : [])])];
+  const accessible = canManage && matchingIds.length
+    ? await prisma.product.findMany({ where: {
         organizationId, id: { in: matchingIds },
         ...(storeIds === null ? {} : productStoreAssignmentInWhere(storeIds)),
-      }, select: { id: true } })).map(p => p.id)
-    : []);
+      }, select: { id: true, unit: true, storeProducts: { where: { isActive: true, ...(storeIds === null ? {} : { storeId: { in: storeIds } }) }, select: { isDirect: true, isHistorical: true, store: { select: { id: true, name: true } } } } } })
+    : [];
+  const accessibleIds = new Set(accessible.map(p => p.id));
+  const reusableIds = new Set(accessible.filter(p => storeIds === null || p.storeProducts.some(a => a.isDirect || a.isHistorical)).map(p => p.id));
+  const withAccess = <T extends ProductDuplicateMatch>(match: T) => ({ ...match, canAccess: accessibleIds.has(match.id), canReuse: !match.isDeleted && reusableIds.has(match.id),
+    unit: accessible.find(p => p.id === match.id)?.unit ?? null,
+    stores: accessible.find(p => p.id === match.id)?.storeProducts.map(a => a.store) ?? [],
+  });
   return {
-    exactSkuMatch,
+    exactSkuMatch: exactSkuMatch ? withAccess(exactSkuMatch) : null,
     exactBarcodeMatches: barcodeMatches.map((match) => ({
       barcode: match.value,
       id: match.product.id,
@@ -161,9 +167,10 @@ export const getProductDuplicateDiagnostics = async ({
       name: match.product.name,
       isDeleted: match.product.isDeleted,
       canAccess: accessibleIds.has(match.product.id),
+      canReuse: !match.product.isDeleted && reusableIds.has(match.product.id),
       canTransfer: match.product.isDeleted && accessibleIds.has(match.product.id),
       stores: match.product.storeProducts.map(a => a.store).filter(s => storeIds === null || storeIds.includes(s.id)),
     })),
-    likelyNameMatches: filteredNameMatches.map(({ normalizedName: _normalizedName, ...match }) => match),
+    likelyNameMatches: filteredNameMatches.filter(match => accessibleIds.has(match.id)).map(({ normalizedName: _normalizedName, ...match }) => withAccess(match)),
   };
 };

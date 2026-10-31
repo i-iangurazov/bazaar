@@ -127,6 +127,7 @@ const canReceiveStoreScope = (access: EventAccess, scope: StoreScope | null) =>
 
 const resolveEventScope = async (event: { type: string; payload: unknown }) => {
   if (
+    event.type === "products.updated" ||
     event.type === "assortment.updated" ||
     event.type === "pricing.updated" ||
     event.type === "inventory.updated" ||

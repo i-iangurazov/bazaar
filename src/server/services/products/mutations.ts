@@ -90,6 +90,8 @@ export const updateProductMutation = async ({
 }: ProductMutationContext & { input: UpdateProductInput }) => {
   try {
     return await updateProduct({
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      expectedStorePriceVersion: input.expectedStorePriceVersion,
       requireRetailPrice: true,
       productId: input.productId,
       organizationId: ctx.organizationId,
