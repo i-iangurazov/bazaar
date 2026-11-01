@@ -36,6 +36,7 @@ import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { getStockMovementLabel } from "@/lib/i18n/status";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { trpc } from "@/lib/trpc";
+import { TransferOutcome } from "@/components/inventory/transfer-outcome";
 
 const ProductMovementDocumentPage = () => {
   const params = useParams<{ id?: string }>();
@@ -269,6 +270,16 @@ const ProductMovementDocumentPage = () => {
             </CardContent>
           </Card>
 
+          {document.documentType === "TRANSFER" &&
+          document.sourceStoreId &&
+          document.destinationStoreId ? (
+            <TransferOutcome
+              fromStoreId={document.sourceStoreId}
+              toStoreId={document.destinationStoreId}
+              recipientName={document.recipientName}
+              lines={document.lines}
+            />
+          ) : null}
           <Card className="overflow-hidden">
             <CardHeader>
               <CardTitle>{t("documentLines")}</CardTitle>

@@ -49,6 +49,8 @@ import { findRankedProductIds } from "@/server/services/products/searchSql";
 import { normalizeProductSearchText } from "@/server/services/products/searchRelevance";
 import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
 import { getTransferLineContext } from "@/server/services/transferLineContext";
+import { AppError } from "@/server/services/errors";
+import { getProductStockCandidates } from "@/server/services/productStockIdentity";
 import { reconcileTransferAttempt } from "@/server/services/transferRecovery";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
@@ -1428,6 +1430,35 @@ export const inventoryRouter = router({
       } catch (error) { throw toTRPCError(error); }
     }),
 
+  productStockIdentity: managerProcedure
+    .input(z.object({ storeId: z.string().min(1), productId: z.string().min(1) }).strict())
+    .query(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        const product = await ctx.prisma.product.findFirst({
+          where: {
+            id: input.productId,
+            organizationId: ctx.user.organizationId,
+            isDeleted: false,
+            ...inventoryProductAccessWhere(input.storeId),
+          },
+          select: { id: true, name: true },
+        });
+        if (!product) throw new AppError("productAccessDenied", "FORBIDDEN", 403);
+        return (
+          (
+            await getProductStockCandidates(ctx.prisma, {
+              organizationId: ctx.user.organizationId,
+              storeId: input.storeId,
+              products: [product],
+            })
+          ).get(product.id) ?? []
+        );
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   transferLineContext: managerProcedure
     .input(z.object({ fromStoreId: z.string().min(1), toStoreId: z.string().min(1),
       lines: z.array(z.object({ productId: z.string().min(1), variantId: z.string().nullable().optional() })).min(1).max(500) }))
@@ -1447,6 +1478,7 @@ export const inventoryRouter = router({
       z.object({
         fromStoreId: z.string(),
         toStoreId: z.string(),
+        destinationAssortment: z.enum(["REQUIRE_SALE", "INVENTORY_ONLY"]).optional(),
         lines: z
           .array(
             z.object({
@@ -1480,6 +1512,7 @@ export const inventoryRouter = router({
         return await transferStock({
           fromStoreId: input.fromStoreId,
           toStoreId: input.toStoreId,
+          destinationAssortment: input.destinationAssortment,
           lines: input.lines?.map((line) => ({
             productId: line.productId,
             variantId: line.variantId,

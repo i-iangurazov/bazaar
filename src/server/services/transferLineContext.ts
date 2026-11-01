@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { inventoryProductAccessWhere } from "./storeAccess";
+import { getProductStockCandidates } from "./productStockIdentity";
 
 /** Read-only batched validation; never grants assortment or creates snapshots. */
 export async function getTransferLineContext(
@@ -44,6 +45,11 @@ export async function getTransferLineContext(
       },
     }),
   ]);
+  const candidates = await getProductStockCandidates(db, {
+    organizationId: input.organizationId,
+    storeId: input.toStoreId,
+    products,
+  });
   const byId = new Map(products.map((p) => [p.id, p]));
   return input.lines.map((line) => {
     const key = `${line.productId}:${line.variantId ?? "BASE"}`;
@@ -57,6 +63,7 @@ export async function getTransferLineContext(
     return {
       key,
       available: true as const,
+      productId: product.id,
       productName: product.name,
       variantName: variant?.name ?? null,
       sku: product.sku,
@@ -71,9 +78,12 @@ export async function getTransferLineContext(
         )?.onHand ?? 0,
       destinationInAssortment: product.storeProducts.some((s) => s.isActive && !s.isHidden),
       destinationRequiresAssortment: Boolean(
-        destinationStore?.catalogSourcesConfigured &&
+        (destinationStore?.catalogSourcesConfigured ||
+          product.storeProducts.some((s) => s.isHidden)) &&
         !product.storeProducts.some((s) => s.isActive && !s.isHidden),
       ),
+      destinationHidden: product.storeProducts.some((s) => s.isHidden),
+      destinationCandidates: candidates.get(product.id) ?? [],
       unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
     };
   });

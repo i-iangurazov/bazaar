@@ -7,6 +7,8 @@ import {
   previewCatalogSettings,
   saveCatalogSettings,
   catalogSettingsHistory,
+  getCatalogProductOptions,
+  previewSelectedCatalogProducts,
 } from "@/server/services/catalogSources";
 import { LegalEntityType, PrinterPrintMode } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
@@ -48,6 +50,53 @@ import {
 import { assertUserCanAccessStore, userHasAllStoreAccess } from "@/server/services/storeAccess";
 
 export const storesRouter = router({
+  catalogProductOptions: adminOrOrgOwnerProcedure
+    .input(
+      z
+        .object({
+          storeId: z.string().min(1),
+          productIds: z.array(z.string().min(1)).min(1).max(500),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await getCatalogProductOptions(
+          ctx.user.organizationId,
+          input.storeId,
+          input.productIds,
+        );
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  previewSelectedCatalogProducts: adminOrOrgOwnerProcedure
+    .input(
+      z
+        .object({
+          storeId: z.string().min(1),
+          selections: z
+            .array(
+              z
+                .object({ productId: z.string().min(1), sourceKey: z.string().min(1).max(200) })
+                .strict(),
+            )
+            .min(1)
+            .max(500),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await previewSelectedCatalogProducts({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   catalogSettings: adminOrOrgOwnerProcedure
     .input(z.object({ storeId: z.string().min(1).optional(), productId: z.string().min(1).optional() }))
     .query(async ({ ctx, input }) => {

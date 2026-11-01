@@ -2659,6 +2659,7 @@ const ProductsPage = () => {
                 row={product}
                 value={product.onHandQty}
                 definition={inlineEditRegistry.products.onHand}
+                stockIdentity={storeId ? {storeId,productId:product.id} : undefined}
                 context={inlineProductsContext}
                 role={role}
                 locale={locale}
@@ -2870,6 +2871,7 @@ const ProductsPage = () => {
     resolveStoreSortValue,
     role,
     selectedIds,
+    storeId,
     showEffectivePrice,
     t,
     tCommon,
@@ -4214,6 +4216,7 @@ const ProductsPage = () => {
                                   row={product}
                                   value={product.onHandQty}
                                   definition={inlineEditRegistry.products.onHand}
+                                  stockIdentity={storeId ? {storeId,productId:product.id} : undefined}
                                   context={inlineProductsContext}
                                   role={role}
                                   locale={locale}
@@ -4375,6 +4378,7 @@ const ProductsPage = () => {
                             row={product}
                             value={product.onHandQty}
                             definition={inlineEditRegistry.products.onHand}
+                            stockIdentity={storeId ? {storeId,productId:product.id} : undefined}
                             context={inlineProductsContext}
                             role={role}
                             locale={locale}
@@ -4513,6 +4517,7 @@ const ProductsPage = () => {
                           row={product}
                           value={product.onHandQty}
                           definition={inlineEditRegistry.products.onHand}
+                          stockIdentity={storeId ? {storeId,productId:product.id} : undefined}
                           context={inlineProductsContext}
                           role={role}
                           locale={locale}

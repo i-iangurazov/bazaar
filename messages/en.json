@@ -3815,7 +3815,37 @@
     "movementNoteBundleAssemble": "Movement note bundle assemble {sku}",
     "movementNoteWriteOff": "Write-off: {reason}",
     "printAction": "Print action",
-    "transferPrepareProduct": "Set up destination product and prices"
+    "transferPrepareProduct": "Set up destination product and prices",
+    "transferSafety": {
+      "connectTitle": "Connect products to assortment",
+      "connectHint": "Choose products and their original catalog. This opens the same cards at the destination. Stock, documents and prices stay unchanged.",
+      "available": "In assortment",
+      "unavailable": "Outside assortment",
+      "hiddenHint": "This product is deliberately hidden at this store. Review its assortment restrictions first.",
+      "noSource": "No eligible source was found. Review the product and assortment settings.",
+      "sourceFor": "Source for “{name}”",
+      "source": "Original catalog",
+      "connectPreview": "Products to make available: {count}. Other products, stock, documents and prices stay unchanged.",
+      "uncertain": "The save response was lost. Check availability or retry the same request.",
+      "connected": "Assortment connected. Existing received stock is available without another transfer.",
+      "check": "Check",
+      "connect": "Connect selected",
+      "preview": "Review changes",
+      "settings": "Assortment settings",
+      "candidatesHint": "This store has other cards with similar names. Each balance below covers the entire card.",
+      "candidatesNoMerge": "Stock is recorded separately for each card. Similar names do not merge products; do not add already recorded stock again manually.",
+      "checkingCandidates": "Checking product cards and stock…",
+      "candidatesCheckFailed": "Could not check similar cards. Review stock before correcting it.",
+      "approvalRequired": "Connect assortment or explicitly choose inventory-only receipt.",
+      "restrictedSummary": "Items outside the assortment at {store}: {count}. Stock will arrive, but these cards will not be available for sale.",
+      "outcomeRestricted": "Items outside the assortment at {store}: {count}. Stock is recorded, but these cards are unavailable for sale.",
+      "adminRequired": "An administrator or owner must connect assortment.",
+      "inventoryOnly": "Post to inventory only; these products will not yet be available for sale",
+      "unavailableHint": "Stock will arrive on this card; connect assortment to sell it at the destination.",
+      "outcomeTitle": "Destination stock · {store}",
+      "outcomeHint": "Current balances of the exact transferred cards. Subsequent sales and other operations are already included.",
+      "historicalUnavailable": "The card is archived or no longer accessible. Transfer history is preserved."
+    }
   },
   "products": {
     "duplicateAssortmentHint": "This product may already exist in another store. Connect it through “Store assortment” to avoid creating a duplicate.",
@@ -5715,7 +5745,8 @@
     "productPreparationStale": "Data changed or the preview expired. Review the changes again.",
     "productChangedElsewhere": "This card changed at another workstation. Your save did not overwrite those changes. Refresh and reapply your edits.",
     "productPreparationStorageUnavailable": "The browser could not save the operation key. Allow storage for Bazaar and review again. No changes were sent.",
-    "productPreparationAttemptClosed": "This attempt was closed without applying changes. Review a new attempt."
+    "productPreparationAttemptClosed": "This attempt was closed without applying changes. Review a new attempt.",
+    "transferDestinationNotSellable": "Destination assortment changed. Connect the products or confirm inventory-only receipt. The transfer was not posted."
   },
   "adminJobs": {
     "title": "Admin jobs",

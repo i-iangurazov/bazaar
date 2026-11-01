@@ -1,0 +1,112 @@
+{
+  "scope": "Transfer assortment, exact product identity, recipient outcome and duplicate-stock prevention after the two client videos from 2026-11-01.",
+  "baseline": "e3c50062a6e695934d76dbbbe9325047678155cd",
+  "branch": "main",
+  "authorization": "Human explicitly requested implementation and publication directly in main. Physical counts are unavailable; human explicitly requested a reconciliation sheet and no customer stock changes.",
+  "domainDecisions": [
+    "A transfer credits the exact source product and variant; a matching name never establishes product identity.",
+    "Physical stock and sale assortment are separate. New application forms require sale availability, or an explicit inventory-only acknowledgement bound to the reviewed destination, lines and quantities.",
+    "Checked posting validates actual recipient availability inside the stock transaction. A conflict rolls back both legs, stock lots and assignments.",
+    "Existing integrations and document corrections retain their previous contract when no destinationAssortment mode is supplied.",
+    "Selected assortment preparation uses the actual original catalog, existing signed previews, authorization, serializable apply and idempotency. A disabled ALL source is reopened only for explicitly selected goods.",
+    "Explicit local hiding, unrelated connections, other stores, local prices, zero prices and financial history are preserved.",
+    "Checked transfers share the assortment policy read lock with sales; independent readers do not serialize. Configuration writers retain their existing exclusive lock."
+  ],
+  "delivered": [
+    "Actionable assortment warning before a new transfer; authorized selected-product connection with preview and retry.",
+    "Explicit inventory-only posting when recipient goods must remain unavailable for sale.",
+    "Posted movement detail shows exact recipient cards, current balances, availability and scoped inventory links.",
+    "Batched, store-scoped same-name candidate balances in transfers and posted outcome; warning in inline and individual adjustment editors. No automatic merging or stock changes.",
+    "Original-source guidance and duplicate reconciliation instructions in Russian, Kyrgyz and English help content.",
+    "Existing two-column workflow, order, proportions, product picker and action positions retained. Desktop line content has a readable minimum width and scrolls within the right column. Mobile retains its existing stacked workflow."
+  ],
+  "referencePlatforms": [
+    {
+      "url": "https://help.shopify.com/en/manual/inventory-and-locations/inventory-transfers/creating-and-processing-transfers",
+      "applied": "Separate receipt, product activation and location-specific inventory impacts."
+    },
+    {
+      "url": "https://docs.frappe.io/erpnext/stock-entry",
+      "applied": "Preserve item identity and paired source/destination stock movement."
+    },
+    {
+      "url": "https://www.postgresql.org/docs/16/collation.html",
+      "applied": "Explicit ICU collation for Unicode candidate normalization; verified on the disposable PostgreSQL and by a scoped production read-only check."
+    }
+  ],
+  "dataSafety": {
+    "customerMutations": 0,
+    "schemaMigrationsAdded": 0,
+    "physicalStockCorrection": "Deferred by explicit human instruction until confirmed physical counts and review of sales/movements.",
+    "reconciliation": "Private local tmp/client-video-audit-20261101/reconciliation.html and reconciliation.json; not committed or uploaded. Snapshot 2026-11-01T11:01:11.032Z: 12 relevant cards in Dordoy-1 and Dordoy-2, plus 20 scoped movements. READ ONLY transaction, no writes.",
+    "externalProvidersInTests": "Disabled. No payment, AI, email or customer transaction calls."
+  },
+  "verification": {
+    "databaseIsolation": "Private PostgreSQL 127.0.0.1:55464; bazaar_hardening_ci for test resets, bazaar_hardening_agent4_platform for browser fixtures. Private Redis 127.0.0.1:56414, separate DBs/prefixes. Cluster directory explicitly checked before database recreation.",
+    "newIntegrationCases": 13,
+    "integrationCoverage": [
+      "Atomic REQUIRE_SALE rollback of both legs, lots and assignments",
+      "Inventory-only exact-once replay and payload-mode mismatch",
+      "Ordinary recipient assignment without a duplicate product",
+      "Independent policy-reader concurrency",
+      "Variant identity and fractional pack conversion",
+      "Disabled ALL source reopened as SELECTED; unrelated products and zero prices preserved",
+      "Received stock made available without another movement or history rewrite",
+      "Local hidden goods remain hidden",
+      "Stale reviewed catalog token rejected",
+      "Inherited warehouse goods connected from the real original source",
+      "Cyrillic names and independent same-name card balances",
+      "Organization/store isolation and manager configuration denial",
+      "Availability change after preview rejected during posting"
+    ],
+    "typecheck": "passed",
+    "lint": "passed without warnings",
+    "translations": "passed",
+    "productionBuild": "passed: optimized Next.js production build, type validation and 129 generated pages; application source hashes checked against the temporary build",
+    "fullRegression": {
+      "fullRun": {
+        "files": 413,
+        "passedTests": 3115,
+        "failedTests": 1,
+        "skippedTests": 3,
+        "durationSeconds": 431.26
+      },
+      "resolvedFailure": "Guide exceeded the existing seven-step limit. Consolidated duplicate-stock advice into the existing review step; all 14 help-guide tests passed on rerun. No unresolved test failures.",
+      "passedDistinctTestsAfterCorrection": 3116,
+      "skipped": "Three database-pooling cases require the dedicated pooling environment; CI runs that profile separately. Catalog scale is also verified by a separate CI job."
+    },
+    "browser": {
+      "environment": "Temporary production build on 127.0.0.1:3134 with synthetic records only.",
+      "checked": [
+        "Posted inactive original has 15 while the separate visible copy has 0",
+        "Selected catalog preview adds only one original from Kurulush Grand, not the intermediate warehouse",
+        "Successful apply survives assortment SSE refresh; original becomes visible at 15 with no second transfer",
+        "Inventory-only checkbox enables posting and resets after quantity changes",
+        "Exact SKU links open the recipient inventory and locate the correct card",
+        "Individual adjustment of the zero copy warns about the original's 15 units; cancelled without a stock write",
+        "RU/KG/EN outcome rendering; desktop and 390x844 mobile views",
+        "Existing two-column transfer layout and icon-only line actions"
+      ],
+      "evidenceDirectory": "tmp/transfer-assortment-20261101",
+      "finalReadableWidthCheck": {
+        "desktopViewport": 1280,
+        "pageScrollWidth": 1280,
+        "lineWidth": 704,
+        "rightColumnWidth": 527,
+        "mobileViewport": 390,
+        "mobilePageScrollWidth": 390,
+        "result": "Passed on final production build: readable desktop rows scroll inside the existing right column; mobile page has no horizontal overflow. Multiline mobile status has 40px content/client height and is not clipped."
+      },
+      "reconciliationPreview": "Local HTML preview through file:// is unsupported by the browser tool. Reconciliation content and scope validated from the source data; no alternate browser workaround attempted."
+    },
+    "localEnvironmentRecovery": "Initial full run: 3108 passed, 6 failed, 3 skipped. Five failures were caused by C-locale Unicode search in the disposable database; re-created only that test database with ICU and all affected tests passed. One source-format expectation was restored by removing unrelated formatting. Later rebuilds exposed a shared-node_modules symlink problem in temporary standalone output: project dependencies restored offline with the same lockfile, temporary output removed, and build dependencies cloned into an independent directory. No production/customer changes.",
+    "ci": {
+      "requirement": "Accept only CI and public smoke for the exact published revision; no earlier green run counts.",
+      "workflows": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/production-smoke.yml"
+      ],
+      "finalResults": "GitHub commit checks and private local tmp/transfer-assortment-20261101/release.json"
+    }
+  }
+}

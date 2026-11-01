@@ -616,9 +616,9 @@ export const helpGuides: HelpGuide[] = [
       step(
         t("Проведите перемещение", "Которууну өткөрүңүз", "Post the transfer"),
         t(
-          "Система одновременно уменьшит один остаток и увеличит другой.",
-          "Система бир убакта бир калдыкты азайтып, экинчисин көбөйтөт.",
-          "The system decreases one location and increases the other atomically.",
+          "Если получатель ограничивает ассортимент, сначала подключите выбранные товары из исходного каталога или явно выберите поступление только в складской учёт. Система одновременно уменьшит остаток источника и увеличит остаток той же карточки у получателя. Одноимённые карточки не объединяются. В проведённом документе проверьте блок текущих остатков получателя; не повторяйте поступление вручную.",
+          "Алуучунун ассортименти чектелсе, тандалган товарларды баштапкы каталогдон туташтырыңыз же кампа эсебине гана кабыл алууну так тандаңыз. Система булактын калдыгын азайтып, алуучуда ошол эле карточканын калдыгын көбөйтөт. Окшош аталыштагы карточкалар бириктирилбейт. Өткөрүлгөн документтен алуучунун учурдагы калдыктарын текшериңиз; кол менен кайра кошпоңуз.",
+          "If destination assortment is restricted, connect the selected products from their original catalog or explicitly choose inventory-only receipt. The system atomically decreases source stock and increases the same card at the destination. Similar names never merge cards. Review current destination stock in the posted document; do not add the receipt again manually.",
         ),
       ),
     ],
@@ -627,7 +627,7 @@ export const helpGuides: HelpGuide[] = [
       "Эки дүкөндүн журналында жуп кыймылдар пайда болду.",
       "Paired movements appear in both stores.",
     ),
-    relatedGuides: ["inventory/receiving", "inventory/write-off", "inventory/inventory-count"],
+    relatedGuides: ["products/shared-catalog", "inventory/receiving", "inventory/write-off", "inventory/inventory-count"],
   }),
   guide({
     slug: "write-off",

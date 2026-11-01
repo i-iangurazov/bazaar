@@ -59,15 +59,24 @@ async function graph(tx: Tx, organizationId: string) {
     }),
     // One join avoids hydrating the same nested Product up to once per store.
     // Preserve archived assignments in the compatibility fingerprint.
-    tx.$queryRaw<Array<{
-      storeId: string; productId: string; isDeleted: boolean; isActive: boolean;
-      isHidden: boolean; isDirect: boolean; isHistorical: boolean; updatedAt: Date;
-    }>>`SELECT a."storeId", a."productId", p."isDeleted", a."isActive", a."isHidden",
+    tx.$queryRaw<
+      Array<{
+        storeId: string;
+        productId: string;
+        isDeleted: boolean;
+        isActive: boolean;
+        isHidden: boolean;
+        isDirect: boolean;
+        isHistorical: boolean;
+        updatedAt: Date;
+      }>
+    >`SELECT a."storeId", a."productId", p."isDeleted", a."isActive", a."isHidden",
         a."isDirect", a."isHistorical", a."updatedAt"
       FROM "StoreProduct" a JOIN "Product" p ON p.id=a."productId" AND p."organizationId"=a."organizationId"
       WHERE a."organizationId"=${organizationId}
-      ORDER BY a."storeId", a."productId"`
-      .then(rows => rows.map(({ isDeleted, ...a }) => ({ ...a, product: { isDeleted } }))),
+      ORDER BY a."storeId", a."productId"`.then((rows) =>
+      rows.map(({ isDeleted, ...a }) => ({ ...a, product: { isDeleted } })),
+    ),
     tx.productCatalog.findMany({
       where: { organizationId },
       include: {
@@ -280,7 +289,11 @@ const metadata = (s: Source, selectedIds: string[] = []) => {
     unavailableSelectedIds: selectedIds.filter((id) => !available.has(id)),
   };
 };
-export async function getCatalogSettings(organizationId: string, storeId?: string, productId?: string) {
+export async function getCatalogSettings(
+  organizationId: string,
+  storeId?: string,
+  productId?: string,
+) {
   return prisma.$transaction(
     async (tx) => {
       const g = await graph(tx, organizationId);
@@ -307,18 +320,34 @@ export async function getCatalogSettings(organizationId: string, storeId?: strin
       return {
         stores,
         store,
-        sources: [...g.sources.values()].map((s) => ({ ...metadata(s, selectedBySource.get(s.key) ?? []),
+        sources: [...g.sources.values()].map((s) => ({
+          ...metadata(s, selectedBySource.get(s.key) ?? []),
           containsRequestedProduct: Boolean(productId && s.productIds.includes(productId)),
         })),
-        receivingStores: g.stores.filter(s => s.id !== store.id && g.settings(s.id).connections.some(c =>
-          c.key === `store:${store.id}` && c.enabled && (c.scope === "ALL" || c.productIds.length > 0),
-        )).map(s => ({ id: s.id, name: s.name })),
+        receivingStores: g.stores
+          .filter(
+            (s) =>
+              s.id !== store.id &&
+              g
+                .settings(s.id)
+                .connections.some(
+                  (c) =>
+                    c.key === `store:${store.id}` &&
+                    c.enabled &&
+                    (c.scope === "ALL" || c.productIds.length > 0),
+                ),
+          )
+          .map((s) => ({ id: s.id, name: s.name })),
         settings,
         total: g.assignments.filter((a) => a.storeId === store.id && a.isActive).length,
         ownCount: g.sources.get(`store:${store.id}`)!.productIds.length,
       };
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, maxWait: 10_000, timeout: 30_000 },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
   );
 }
 export async function getCatalogProducts(input: {
@@ -388,13 +417,22 @@ export async function getCatalogProducts(input: {
         })),
       };
     },
-    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, maxWait: 10_000, timeout: 30_000 },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      maxWait: 10_000,
+      timeout: 30_000,
+    },
   );
 }
 
-async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
+async function impact(
+  tx: Tx,
+  organizationId: string,
+  raw: CatalogSettings,
+  existingGraph?: Awaited<ReturnType<typeof graph>>,
+) {
   const change = catalogSettingsSchema.parse(raw),
-    g = await graph(tx, organizationId);
+    g = existingGraph ?? (await graph(tx, organizationId));
   const before = g.settings(change.storeId),
     store = g.stores.find((s) => s.id === change.storeId)!;
   // A reviewed pre-sharing snapshot is the store's base assortment. It is not
@@ -437,7 +475,8 @@ async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
   }
   // A local exclusion does not change the shared source's membership.
   for (const assignment of g.assignments)
-    if (assignment.storeId === store.id && assignment.isHidden) desired.delete(assignment.productId);
+    if (assignment.storeId === store.id && assignment.isHidden)
+      desired.delete(assignment.productId);
   const removed = [...current].filter((id) => !desired.has(id)),
     added = [...desired].filter((id) => !current.has(id));
   const [stock, documents, products] = await Promise.all([
@@ -513,7 +552,10 @@ async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
         for (const id of confirmed) ids.add(id);
       }
       const fresh = [...ids].filter(
-        (id) => !g.assignments.some((a) => a.storeId === s.id && a.productId === id && (a.isActive || a.isHidden)),
+        (id) =>
+          !g.assignments.some(
+            (a) => a.storeId === s.id && a.productId === id && (a.isActive || a.isHidden),
+          ),
       );
       return fresh.length ? [{ storeId: s.id, name: s.name, added: fresh.length }] : [];
     });
@@ -554,6 +596,7 @@ async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
     desired: [...materializedIds],
     visibleIds: [...desired],
     removed,
+    added,
     fingerprint,
     summary: {
       current: current.size,
@@ -578,6 +621,108 @@ const sign = (body: string) => {
     throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
   return createHmac("sha256", process.env.NEXTAUTH_SECRET).update(body).digest("hex");
 };
+function catalogPreview(
+  organizationId: string,
+  actorId: string,
+  r: Awaited<ReturnType<typeof impact>>,
+) {
+  const expires = Date.now() + 15 * 60_000;
+  return {
+    ...r.summary,
+    token: `${expires}.${r.fingerprint}.${sign(`${organizationId}:${actorId}:${expires}:${r.fingerprint}`)}`,
+  };
+}
+
+/** Explicit selections extend one recipient only; inherited goods retain their real source. */
+export async function getCatalogProductOptions(
+  organizationId: string,
+  storeId: string,
+  productIds: string[],
+) {
+  return prisma.$transaction(
+    async (tx) => {
+      const g = await graph(tx, organizationId);
+      g.settings(storeId); // validates tenant/store
+      const products = await tx.product.findMany({
+        where: { organizationId, id: { in: unique(productIds) }, isDeleted: false },
+        select: { id: true, name: true, sku: true },
+      });
+      if (products.length !== unique(productIds).length)
+        throw new AppError("productAccessDenied", "FORBIDDEN", 403);
+      return products.map((p) => ({
+        ...p,
+        available: g.assignments.some(
+          (a) => a.storeId === storeId && a.productId === p.id && a.isActive,
+        ),
+        hidden: g.assignments.some(
+          (a) => a.storeId === storeId && a.productId === p.id && a.isHidden,
+        ),
+        sources: [...g.sources.values()]
+          .filter((s) => s.key !== `store:${storeId}` && s.productIds.includes(p.id))
+          .sort(
+            (a, b) =>
+              Number(b.key.startsWith("store:")) - Number(a.key.startsWith("store:")) ||
+              a.name.localeCompare(b.name),
+          )
+          .map((s) => ({ key: s.key, name: s.name })),
+      }));
+    },
+    { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 30_000 },
+  );
+}
+
+export async function previewSelectedCatalogProducts(input: {
+  organizationId: string;
+  actorId: string;
+  storeId: string;
+  selections: Array<{ productId: string; sourceKey: string }>;
+}) {
+  return prisma.$transaction(
+    async (tx) => {
+      const g = await graph(tx, input.organizationId);
+      const change = catalogSettingsSchema.parse(g.settings(input.storeId));
+      const selected = new Set(input.selections.map((s) => s.productId));
+      if (selected.size !== input.selections.length)
+        throw new AppError("invalidInput", "BAD_REQUEST", 400);
+      for (const item of input.selections) {
+        if (
+          g.assignments.some(
+            (a) => a.storeId === input.storeId && a.productId === item.productId && a.isHidden,
+          )
+        )
+          throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
+        const source = g.sources.get(item.sourceKey);
+        if (
+          !source ||
+          source.key === `store:${input.storeId}` ||
+          !source.productIds.includes(item.productId)
+        )
+          throw new AppError("productAccessDenied", "FORBIDDEN", 403);
+        let connection = change.connections.find((c) => c.key === source.key);
+        if (!connection) {
+          connection = { key: source.key, enabled: true, scope: "SELECTED", productIds: [] };
+          change.connections.push(connection);
+        } else if (!connection.enabled) {
+          // Re-enabling a disabled ALL source must never reopen its whole catalog.
+          connection.enabled = true;
+          connection.scope = "SELECTED";
+          connection.productIds = [];
+        }
+        if (connection.scope === "SELECTED")
+          connection.productIds = unique([...connection.productIds, item.productId]);
+      }
+      const r = await impact(tx, input.organizationId, change, g);
+      if (
+        r.removed.length ||
+        r.added.some((id) => !selected.has(id)) ||
+        r.summary.otherImpacts.length
+      )
+        throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
+      return { change, ...catalogPreview(input.organizationId, input.actorId, r) };
+    },
+    { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 30_000 },
+  );
+}
 export async function previewCatalogSettings(input: {
   organizationId: string;
   actorId: string;
@@ -587,11 +732,7 @@ export async function previewCatalogSettings(input: {
     isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
     timeout: 30_000,
   });
-  const expires = Date.now() + 15 * 60_000;
-  return {
-    ...r.summary,
-    token: `${expires}.${r.fingerprint}.${sign(`${input.organizationId}:${input.actorId}:${expires}:${r.fingerprint}`)}`,
-  };
+  return catalogPreview(input.organizationId, input.actorId, r);
 }
 async function materialize(tx: Tx, organizationId: string, source: Source) {
   const catalog = source.catalogId

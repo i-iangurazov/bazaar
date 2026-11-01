@@ -27,6 +27,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { EditIcon } from "@/components/icons";
+import { StockIdentityNotice } from "@/components/inventory/product-stock-candidates";
 import { cn } from "@/lib/utils";
 import { translateError } from "@/lib/translateError";
 import {
@@ -131,6 +132,7 @@ type InlineEditableCellProps<TRow, TValue, TContext> = {
   executeMutation: (operation: InlineMutationOperation) => Promise<void>;
   onMutationSuccess?: () => void;
   className?: string;
+  stockIdentity?: {storeId: string; productId: string};
 };
 
 export const InlineEditableCell = <
@@ -152,6 +154,7 @@ export const InlineEditableCell = <
   executeMutation,
   onMutationSuccess,
   className,
+  stockIdentity,
 }: InlineEditableCellProps<TRow, TValue, TContext>) => {
   const tableState = useContext(InlineEditTableContext);
   const { toast } = useToast();
@@ -460,37 +463,40 @@ export const InlineEditableCell = <
     }
 
     return (
-      <div
-        className={cn("flex items-center gap-2", className)}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-      >
-        <Input
-          autoFocus
-          readOnly={isSaving}
-          value={draftValue}
-          type={editorType}
-          inputMode={
-            definition.inputType === "number" || definition.inputType === "money"
-              ? "decimal"
-              : undefined
-          }
-          onFocus={(event) => event.currentTarget.select()}
-          onChange={(event) => {
-            if (sessionRef.current) {
-              sessionRef.current.draft = event.target.value;
-              sessionRef.current.operation = undefined;
+      <div className="space-y-2">
+        <div
+          className={cn("flex items-center gap-2", className)}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <Input
+            autoFocus
+            readOnly={isSaving}
+            value={draftValue}
+            type={editorType}
+            inputMode={
+              definition.inputType === "number" || definition.inputType === "money"
+                ? "decimal"
+                : undefined
             }
-            setDraftValue(event.target.value);
-          }}
-          onKeyDown={onInputKeyDown}
-          onBlur={(event) => {
-            void commitFromRawValue(event.currentTarget.value, "blur");
-          }}
-          className="h-8 min-w-[120px]"
-          aria-label={tInline("editorAria", { field: columnLabel })}
-        />
-        {isSaving ? <Spinner className="h-3.5 w-3.5" aria-label={tInline("savingAria")} /> : null}
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => {
+              if (sessionRef.current) {
+                sessionRef.current.draft = event.target.value;
+                sessionRef.current.operation = undefined;
+              }
+              setDraftValue(event.target.value);
+            }}
+            onKeyDown={onInputKeyDown}
+            onBlur={(event) => {
+              void commitFromRawValue(event.currentTarget.value, "blur");
+            }}
+            className="h-8 min-w-[120px]"
+            aria-label={tInline("editorAria", { field: columnLabel })}
+          />
+          {isSaving ? <Spinner className="h-3.5 w-3.5" aria-label={tInline("savingAria")} /> : null}
+        </div>
+        {definition.columnKey === "onHand" && stockIdentity ? <StockIdentityNotice {...stockIdentity}/> : null}
       </div>
     );
   }

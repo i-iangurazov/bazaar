@@ -18,6 +18,9 @@ import {
 } from "./transfer-draft-storage";
 import { useTransferLineContext } from "./use-transfer-line-context";
 import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
+import { TransferAssortmentDialog } from "./transfer-assortment-dialog";
+import { ProductStockCandidates } from "./product-stock-candidates";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
@@ -58,6 +61,14 @@ type TransferLine = TransferDraftLine & {
   unavailable?: boolean;
   destinationInAssortment?: boolean;
   destinationRequiresAssortment?: boolean;
+  destinationHidden?: boolean;
+  destinationCandidates?: Array<{
+    id: string;
+    sku: string;
+    unit: string;
+    onHand: number;
+    inAssortment: boolean;
+  }>;
 };
 
 type TransferInputViewport = "desktop" | "mobile";
@@ -106,6 +117,7 @@ export const InventoryTransfersPage = ({
   const t = useTranslations("inventory");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tSafety = useTranslations("inventory.transferSafety");
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -135,7 +147,11 @@ export const InventoryTransfersPage = ({
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
-  const [preparingProduct, setPreparingProduct] = useState<{ id: string; name: string } | null>(null);
+  const [preparingProduct, setPreparingProduct] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const [connectingAssortment, setConnectingAssortment] = useState<string[] | null>(null);
+  const [inventoryOnlyApproval, setInventoryOnlyApproval] = useState("");
   const [postingError, setPostingError] = useState<string | null>(null);
   const transferInputRefs = useRef(new Map<string, HTMLInputElement>());
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -290,6 +306,8 @@ export const InventoryTransfersPage = ({
           quantityPrecision: context.quantityPrecision,
           destinationInAssortment: context.destinationInAssortment,
           destinationRequiresAssortment: context.destinationRequiresAssortment,
+          destinationHidden: context.destinationHidden,
+          destinationCandidates: context.destinationCandidates,
           unitCostKgs: context.unitCostKgs,
         };
       });
@@ -306,7 +324,11 @@ export const InventoryTransfersPage = ({
     }, 150);
   }, [trpcUtils, refetchLineContext]);
   useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
-  useSse({ "products.updated": refreshTransferData, "assortment.updated": refreshTransferData, "inventory.updated": refreshTransferData });
+  useSse({
+    "products.updated": refreshTransferData,
+    "assortment.updated": refreshTransferData,
+    "inventory.updated": refreshTransferData,
+  });
 
   useEffect(() => {
     if (!stores.length || isEditMode || !draftReady) {
@@ -694,6 +716,24 @@ export const InventoryTransfersPage = ({
     [lineMetrics],
   );
   const invalidQuantity = lineMetrics.some((metric) => !metric.quantityValid);
+  const restrictedProductIds = [
+    ...new Set(lines.filter((l) => l.destinationRequiresAssortment).map((l) => l.productId)),
+  ];
+  // Approval is tied to the actual destination, lines, quantities and reviewed availability.
+  const availabilitySignature = JSON.stringify([
+    fromStoreId,
+    toStoreId,
+    lines.map((l) => [
+      l.key,
+      l.quantityInput,
+      l.destinationRequiresAssortment,
+      l.destinationHidden,
+    ]),
+  ]);
+  const inventoryOnlyApproved = inventoryOnlyApproval === availabilitySignature;
+  const canConfigureAssortment = Boolean(
+    session?.user?.role === "ADMIN" || session?.user?.isOrgOwner,
+  );
   const hasTotalCost = lines.some((line) => typeof line.unitCostKgs === "number");
   const summary = useMemo(
     () => ({
@@ -724,7 +764,9 @@ export const InventoryTransfersPage = ({
                 ? t("transferUnavailableLine")
                 : invalidQuantity
                   ? t("transferValidationInvalidQuantity")
-                  : "";
+                  : !isEditMode && restrictedProductIds.length > 0 && !inventoryOnlyApproved
+                    ? tSafety("approvalRequired")
+                    : "";
 
   const finishPostedTransfer = async (transferId: string) => {
     postingInFlightRef.current = false;
@@ -752,6 +794,10 @@ export const InventoryTransfersPage = ({
       if (postingOperationRef.current) postingOperationRef.current.pending = unknown;
       persistDraft();
       setPostingError(unknown ? t("transferPostFailed") : translateError(tErrors, error));
+      if (error.message === "transferDestinationNotSellable") {
+        setInventoryOnlyApproval("");
+        refetchLineContext();
+      }
     },
   });
   const reconcileMutation = trpc.inventory.reconcileTransferAttempt.useMutation({
@@ -815,6 +861,9 @@ export const InventoryTransfersPage = ({
       fromStoreId,
       toStoreId,
       note: note.trim() || null,
+      ...(!isEditMode
+        ? { destinationAssortment: inventoryOnlyApproved ? "INVENTORY_ONLY" : "REQUIRE_SALE" }
+        : {}),
       lines: isEditMode
         ? normalizedLines
         : normalizedLines.map((line) => ({
@@ -848,6 +897,7 @@ export const InventoryTransfersPage = ({
       fromStoreId,
       toStoreId,
       note: note.trim() || undefined,
+      destinationAssortment: inventoryOnlyApproved ? "INVENTORY_ONLY" : "REQUIRE_SALE",
       lines: normalizedLines.map((line) => ({
         productId: line.productId,
         variantId: line.variantId,
@@ -1008,10 +1058,72 @@ export const InventoryTransfersPage = ({
           </Button>
         </div>
       ) : null}
-      {preparingProduct && fromStoreId && toStoreId ? <ProductStorePreparationDialog open
-        onOpenChange={open => { if (!open) setPreparingProduct(null); }} productId={preparingProduct.id}
-        productName={preparingProduct.name} sourceStoreId={fromStoreId} targetStoreIds={[toStoreId]}
-        onPrepared={() => { refreshTransferData(); }} /> : null}
+      {!isEditMode && restrictedProductIds.length > 0 ? (
+        <div
+          className="mb-4 space-y-3 rounded-md border border-warning/30 bg-warning/5 p-3 text-sm"
+          data-transfer-assortment-warning
+        >
+          <p>
+            {tSafety("restrictedSummary", {
+              count: restrictedProductIds.length,
+              store: toStore?.name ?? "",
+            })}
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {canConfigureAssortment ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={fieldsLocked || lineContextQuery.isFetching}
+                onClick={() => setConnectingAssortment([...restrictedProductIds])}
+              >
+                {tSafety("connectTitle")}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">{tSafety("adminRequired")}</p>
+            )}
+            <Label className="flex items-start gap-2">
+              <Checkbox
+                checked={inventoryOnlyApproved}
+                disabled={fieldsLocked || lineContextQuery.isFetching}
+                onCheckedChange={(checked) =>
+                  setInventoryOnlyApproval(checked ? availabilitySignature : "")
+                }
+              />
+              <span>{tSafety("inventoryOnly")}</span>
+            </Label>
+          </div>
+        </div>
+      ) : null}
+      {connectingAssortment && toStoreId ? (
+        <TransferAssortmentDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConnectingAssortment(null);
+          }}
+          storeId={toStoreId}
+          productIds={connectingAssortment}
+          onApplied={() => {
+            setInventoryOnlyApproval("");
+            refreshTransferData();
+          }}
+        />
+      ) : null}
+      {preparingProduct && fromStoreId && toStoreId ? (
+        <ProductStorePreparationDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPreparingProduct(null);
+          }}
+          productId={preparingProduct.id}
+          productName={preparingProduct.name}
+          sourceStoreId={fromStoreId}
+          targetStoreIds={[toStoreId]}
+          onPrepared={() => {
+            refreshTransferData();
+          }}
+        />
+      ) : null}
       <Modal open={clearRequested} onOpenChange={setClearRequested} title={t("transferClearDraft")}>
         <p className="text-sm text-muted-foreground">{t("transferClearDraftConfirm")}</p>
         <div className="mt-4 flex justify-end gap-2">
@@ -1186,14 +1298,17 @@ export const InventoryTransfersPage = ({
           <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">{t("transferTableTitle")}</h3>
-              <Badge variant={validationMessage ? "warning" : "success"}>
+              <Badge
+                variant={validationMessage ? "warning" : "success"}
+                className="h-auto max-w-full whitespace-normal break-words py-1 text-left leading-4"
+              >
                 {validationMessage || t("transferValidationReady")}
               </Badge>
             </div>
 
             {lines.length ? (
-              <div className="space-y-3">
-                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
+              <div className="space-y-3 overflow-x-auto">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:min-w-[44rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
                   <span>{tCommon("product")}</span>
                   <span>{t("transferQty")}</span>
                   <span>{t("transferSourceAfter")}</span>
@@ -1209,7 +1324,7 @@ export const InventoryTransfersPage = ({
                     <div
                       key={line.key}
                       data-transfer-line-row
-                      className="bazaar-doc-line-row grid gap-3 lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
+                      className="bazaar-doc-line-row grid gap-3 lg:min-w-[44rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">{lineNumber}</span>
@@ -1247,8 +1362,14 @@ export const InventoryTransfersPage = ({
                           ) : null}
                           {line.destinationRequiresAssortment ? (
                             <p className="text-xs text-warning">
-                              {t("transferDestinationAssortmentHint")}
+                              {tSafety(line.destinationHidden ? "hiddenHint" : "unavailableHint")}
                             </p>
+                          ) : null}
+                          {line.destinationCandidates?.length ? (
+                            <ProductStockCandidates
+                              storeId={toStoreId}
+                              candidates={line.destinationCandidates}
+                            />
                           ) : null}
                           {line.duplicateHint ? (
                             <p className="whitespace-normal break-words text-xs leading-snug text-warning">
@@ -1325,19 +1446,21 @@ export const InventoryTransfersPage = ({
                           icon={CopyIcon}
                           label={t("transferPrepareProduct")}
                           disabled={fieldsLocked}
-                          onClick={() => setPreparingProduct({ id: line.productId, name: line.productName })}
+                          onClick={() =>
+                            setPreparingProduct({ id: line.productId, name: line.productName })
+                          }
                         />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="self-start lg:h-8 lg:w-8 lg:self-center lg:justify-self-end"
-                        aria-label={t("transferRemoveLine")}
-                        disabled={fieldsLocked}
-                        onClick={() => removeLine(line.key)}
-                      >
-                        <DeleteIcon className="h-4 w-4" aria-hidden />
-                      </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="self-start lg:h-8 lg:w-8 lg:self-center lg:justify-self-end"
+                          aria-label={t("transferRemoveLine")}
+                          disabled={fieldsLocked}
+                          onClick={() => removeLine(line.key)}
+                        >
+                          <DeleteIcon className="h-4 w-4" aria-hidden />
+                        </Button>
                       </div>
                     </div>
                   );

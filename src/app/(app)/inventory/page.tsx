@@ -131,6 +131,7 @@ import { useSse } from "@/lib/useSse";
 import { useToast } from "@/components/ui/toast";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
+import { StockIdentityNotice } from "@/components/inventory/product-stock-candidates";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
@@ -2662,6 +2663,7 @@ const InventoryPage = () => {
                                         row={item}
                                         value={item.snapshot.onHand}
                                         definition={inlineEditRegistry.inventory.onHand}
+                                        stockIdentity={{storeId:item.snapshot.storeId,productId:item.product.id}}
                                         context={{ stockAdjustReason: t("stockAdjustment") }}
                                         role={role}
                                         locale={locale}
@@ -3910,6 +3912,9 @@ const InventoryPage = () => {
                 )}
               />
             </FormGrid>
+            {storeId && adjustProductId ? (
+              <StockIdentityNotice storeId={storeId} productId={adjustProductId} />
+            ) : null}
             <FormActions>
               <Button
                 type="button"

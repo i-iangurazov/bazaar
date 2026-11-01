@@ -21,6 +21,7 @@ import { runOperationRequest } from "@/server/services/operationRequests";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { lockStockSnapshot } from "@/server/services/inventoryLock";
+import { lockAssortmentForSale } from "@/server/services/assortmentPolicy";
 import {
   assertUserCanAccessStore,
   assignProductToStore,
@@ -1198,6 +1199,8 @@ export type TransferStockLineInput = {
 };
 
 export type TransferStockInput = {
+  /** New forms opt into checked sale availability; legacy integrations retain their contract. */
+  destinationAssortment?: "REQUIRE_SALE" | "INVENTORY_ONLY";
   respectNegativeStockPolicy?: boolean;
   fromStoreId: string;
   toStoreId: string;
@@ -1270,10 +1273,12 @@ export const transferStock = async (input: TransferStockInput) => {
       {
         key: input.idempotencyKey,
         route: "inventory.transfer",
-        ...(input.respectNegativeStockPolicy ? { request: toJson({ fromStoreId: input.fromStoreId, toStoreId: input.toStoreId, lines: normalizedInputLines }) } : {}),
+        ...(input.respectNegativeStockPolicy || input.destinationAssortment ? { request: toJson({ fromStoreId: input.fromStoreId, toStoreId: input.toStoreId, lines: normalizedInputLines, ...(input.destinationAssortment ? { destinationAssortment: input.destinationAssortment } : {}) }) } : {}),
         userId: input.actorId,
       },
       async () => {
+        // Share the policy read lock with sales; independent transfers need not serialize.
+        if (input.destinationAssortment) await lockAssortmentForSale(tx, input.organizationId);
         const productIds = Array.from(new Set(normalizedInputLines.map((line) => line.productId)));
         const products = await tx.product.findMany({
           where: {
@@ -1460,6 +1465,14 @@ export const transferStock = async (input: TransferStockInput) => {
           });
         }
 
+        if (input.destinationAssortment === "REQUIRE_SALE") {
+          const available = await tx.storeProduct.count({
+            where: { organizationId: input.organizationId, storeId: input.toStoreId,
+              productId: { in: productIds }, isActive: true, isHidden: false },
+          });
+          if (available !== productIds.length)
+            throw new AppError("transferDestinationNotSellable", "CONFLICT", 409);
+        }
         return {
           transferId,
           fromStoreId: input.fromStoreId,
