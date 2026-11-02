@@ -1,6 +1,7 @@
 "use client";
 import { StoreExtraPrices } from "@/components/products/store-extra-prices";
 import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
+import { ProductDeletionDialog } from "@/components/products/product-deletion-dialog";
 
 import { StockQuantityCell } from "@/components/inventory/stock-quantity-cell";
 import { useSse } from "@/lib/useSse";
@@ -205,6 +206,7 @@ const ProductDetailPage = () => {
   const [variantPriceDrafts, setVariantPriceDrafts] = useState<Record<string, string>>({});
   const [productFormDirty, setProductFormDirty] = useState(false);
   const [storePreparationOpen, setStorePreparationOpen] = useState(false);
+  const [deletionOpen, setDeletionOpen] = useState(false);
   const [externalProductChange, setExternalProductChange] = useState(false);
   const [cardVersion, setCardVersion] = useState<string | undefined>();
   const [priceEditVersion, setPriceEditVersion] = useState<{ storeId: string; version: string } | null>(null);
@@ -1080,6 +1082,7 @@ const ProductDetailPage = () => {
             )}
             {archiveMutation.isLoading ? tCommon("loading") : t("archiveEverywhere")}
           </DropdownMenuItem>
+          {role === "ADMIN" ? <DropdownMenuItem className="text-danger focus:text-danger" disabled={productFormDirty || updateMutation.isLoading} onSelect={() => { actionAfterMenuCloseRef.current = () => setDeletionOpen(true); }}><DeleteIcon className="h-4 w-4" aria-hidden />{t("deletePermanent")}</DropdownMenuItem> : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </>
@@ -2221,6 +2224,7 @@ const ProductDetailPage = () => {
         </div>
       </Modal>
       <ProductStorePreparationDialog open={storePreparationOpen} onOpenChange={setStorePreparationOpen}
+        addToAssortment
         productId={productId} productName={productQuery.data?.name ?? ""} productSku={productQuery.data?.sku} sourceStoreId={selectedSettingsStore?.storeId}
         onPrepared={() => { void Promise.all([productQuery.refetch(), storePricingQuery.refetch(), pricingQuery.refetch()]); }} />
       <ProductDuplicateDialog
@@ -2230,6 +2234,7 @@ const ProductDetailPage = () => {
         productName={productQuery.data.name}
         storeId={returnStoreId || selectedSettingsStore?.storeId}
       />
+      <ProductDeletionDialog open={deletionOpen} onOpenChange={setDeletionOpen} productId={productId} onDeleted={() => router.push("/products")} />
       {confirmDialog}
     </ProductEditorPage>
   );

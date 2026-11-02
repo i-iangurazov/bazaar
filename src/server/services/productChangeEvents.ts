@@ -3,12 +3,18 @@ import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
 
 /** Call after commit. A failed notification must never turn a saved card into a failed save. */
-export async function publishProductChange(organizationId: string, productId: string) {
+export async function publishProductChange(
+  organizationId: string,
+  productId: string,
+  previousStoreIds?: string[],
+) {
   try {
-    const assignments = await prisma.storeProduct.findMany({
-      where: { organizationId, productId, isActive: true, isHidden: false },
-      select: { storeId: true },
-    });
+    const assignments = previousStoreIds
+      ? [...new Set(previousStoreIds)].map((storeId) => ({ storeId }))
+      : await prisma.storeProduct.findMany({
+          where: { organizationId, productId, isActive: true, isHidden: false },
+          select: { storeId: true },
+        });
     const [{ invalidateBazaarCatalogCacheForStore }, { invalidateBazaarApiProductsCacheForStore }] =
       await Promise.all([import("./bazaarCatalog"), import("./bazaarApi")]);
     await Promise.all(

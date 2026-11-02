@@ -39,7 +39,7 @@ import { generateProductDescriptionFromImages, prepareProductAiImage } from "@/s
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { assignProductToStore } from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
-import { publishAssortmentChange } from "@/server/services/assortmentPolicy";
+import { lockAssortment, publishAssortmentChange } from "@/server/services/assortmentPolicy";
 import { publishProductChange } from "@/server/services/productChangeEvents";
 import { readProductPriceVersion } from "@/server/services/productPriceVersion";
 import { getLogger } from "@/server/logging";
@@ -52,6 +52,8 @@ import {
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { applyArchivedBarcodeTransfers, type ProductBarcodeTransfer } from "./products/barcodeTransfers";
 import { assertProductUnitPrecision } from "./products/unitChange";
+import { assertProductDeletionReview } from "./productDeletion";
+import { withIdempotency } from "./idempotency";
 import {
   canConnectProductImportMatch,
   productImportMatchIsBlocking,
@@ -4846,16 +4848,34 @@ export type DeleteProductInput = {
   organizationId: string;
   actorId: string;
   requestId: string;
+  reviewToken?: string;
+  idempotencyKey?: string;
 };
 
-export const deleteProduct = async (input: DeleteProductInput) =>
-  prisma.$transaction(async (tx) => {
-    const before = await tx.product.findUnique({ where: { id: input.productId } });
+export const deleteProduct = async (input: DeleteProductInput) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const run = () => deleteProductRecords(tx, input);
+    if (!input.idempotencyKey) return run();
+    const actor = await tx.user.findFirst({ where: { id: input.actorId, organizationId: input.organizationId, isActive: true, role: "ADMIN" }, select: { id: true } });
+    if (!actor) throw new AppError("forbidden", "FORBIDDEN", 403);
+    return (await withIdempotency(tx, { key: input.idempotencyKey, route: "products.deletePermanent", userId: input.actorId, request: toJson({ organizationId: input.organizationId, productId: input.productId, reviewToken: input.reviewToken }) }, run)).result;
+  }, { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 });
+  await publishProductChange(input.organizationId, input.productId, result.storeIds);
+  return { id: result.id };
+};
+
+const deleteProductRecords = async (tx: Prisma.TransactionClient, input: DeleteProductInput) => {
+    await lockAssortment(tx, input.organizationId);
+    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "organizationId" = ${input.organizationId} FOR UPDATE`;
+    if (input.reviewToken) await assertProductDeletionReview(tx, input, input.reviewToken);
+    const before = await tx.product.findUnique({ where: { id: input.productId }, include: { storeProducts: true, catalogMemberships: true, assortmentGrants: true } });
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
 
-    if (await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) {
+    const affectedStores = await tx.storeProduct.findMany({ where: { organizationId: input.organizationId, productId: input.productId }, select: { storeId: true } });
+
+    if ((await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) || (await tx.priceBookStoreItem.count({ where: { organizationId: input.organizationId, productId: input.productId } }))) {
       throw new AppError("priceBookProductInUse", "CONFLICT", 409);
     }
 
@@ -4902,6 +4922,16 @@ export const deleteProduct = async (input: DeleteProductInput) =>
       throw new AppError("productDeleteBlockedByHistory", "CONFLICT", 409);
     }
 
+    const [catalogSelections, ruleSelections] = await Promise.all([
+      tx.storeCatalog.findMany({ where: { store: { organizationId: input.organizationId }, selectedProductIds: { has: input.productId } }, select: { storeId: true, catalogId: true, selectedProductIds: true } }),
+      tx.assortmentRule.findMany({ where: { organizationId: input.organizationId, selectedProductIds: { has: input.productId } }, select: { id: true, selectedProductIds: true } }),
+    ]);
+    // Only unused-card metadata is removed. Operational references were checked
+    // above, and the assortment/product locks keep concurrent writers serialized.
+    await tx.$executeRaw`UPDATE "StoreCatalog" sc SET "selectedProductIds" = array_remove(sc."selectedProductIds", ${input.productId}), "updatedAt" = NOW() FROM "Store" s WHERE sc."storeId" = s.id AND s."organizationId" = ${input.organizationId} AND ${input.productId} = ANY(sc."selectedProductIds")`;
+    await tx.$executeRaw`UPDATE "AssortmentRule" SET "selectedProductIds" = array_remove("selectedProductIds", ${input.productId}), "updatedAt" = NOW() WHERE "organizationId" = ${input.organizationId} AND ${input.productId} = ANY("selectedProductIds")`;
+    await tx.assortmentGrant.deleteMany({ where: { productId: input.productId, rule: { organizationId: input.organizationId } } });
+    await tx.productCatalogProduct.deleteMany({ where: { productId: input.productId, catalog: { organizationId: input.organizationId } } });
     await tx.productImageStudioJob.updateMany({
       where: { organizationId: input.organizationId, productId: input.productId },
       data: { productId: null },
@@ -4963,10 +4993,10 @@ export const deleteProduct = async (input: DeleteProductInput) =>
       action: "PRODUCT_DELETE",
       entity: "Product",
       entityId: input.productId,
-      before: toJson(before),
+      before: toJson({ ...before, catalogSelections, ruleSelections }),
       after: null,
       requestId: input.requestId,
     });
 
-    return { id: input.productId };
-  });
+    return { id: input.productId, storeIds: affectedStores.map((s) => s.storeId) };
+};

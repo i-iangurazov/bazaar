@@ -14,13 +14,17 @@ import { writeAuditLog } from "./audit";
 import { toJson } from "./json";
 
 type Request = { user: StoreAccessUser; change: ProductStorePreparation };
-type Receipt = { productId: string; additions: number; priceChanges: number } | { canceled: true };
+type Receipt =
+  | { productId: string; additions: number; restorations?: number; priceChanges: number }
+  | { canceled: true };
 type Tx = Prisma.TransactionClient;
 const stale = () => new AppError("productPreparationStale", "CONFLICT", 409);
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const normalize = (c: ProductStorePreparation): ProductStorePreparation => ({
   ...c,
   targetStoreIds: [...new Set(c.targetStoreIds)].sort(),
+  // Omit empty choices so pending requests signed before this addition still reconcile.
+  restoreStoreIds: c.restoreStoreIds?.length ? [...new Set(c.restoreStoreIds)].sort() : undefined,
 });
 const secret = () => {
   if (!process.env.NEXTAUTH_SECRET)
@@ -70,10 +74,28 @@ async function authorize(tx: Tx, input: Request) {
     ...(input.change.sourceStoreId ? [input.change.sourceStoreId] : []),
   ]))
     await assertUserCanAccessStore(tx, user, storeId);
-  await assertUserCanAccessProducts(tx, user, [input.change.productId], {
-    writable: input.change.addToAssortment,
-    allowShared: !input.change.addToAssortment,
+  const assignments = await tx.storeProduct.findMany({
+    where: {
+      organizationId: input.user.organizationId,
+      productId: input.change.productId,
+      storeId: { in: input.change.targetStoreIds },
+    },
+    select: { storeId: true, isActive: true, isHidden: true },
   });
+  const needsOwnership =
+    input.change.addToAssortment &&
+    input.change.targetStoreIds.some((id) => {
+      const a = assignments.find((row) => row.storeId === id);
+      return !a?.isActive && !a?.isHidden;
+    });
+  // A manager may restore a received card hidden in their own accessible store,
+  // just as through setStoreVisibility, without gaining source ownership.
+  const hasAccessibleHiddenCard = !needsOwnership && assignments.some((a) => a.isHidden);
+  if (!hasAccessibleHiddenCard)
+    await assertUserCanAccessProducts(tx, user, [input.change.productId], {
+      writable: needsOwnership,
+      allowShared: !needsOwnership,
+    });
 }
 
 async function plan(tx: Tx, input: Request) {
@@ -83,7 +105,7 @@ async function plan(tx: Tx, input: Request) {
   const storeIds = [
     ...new Set([...c.targetStoreIds, ...(c.sourceStoreId ? [c.sourceStoreId] : [])]),
   ].sort();
-  const [product, stores, organization, standards, extras, memberships, sources] =
+  const [product, stores, organization, standards, extras, memberships, sources, snapshots] =
     await Promise.all([
       tx.product.findFirst({
         where: { id: c.productId, organizationId: org, isDeleted: false },
@@ -91,6 +113,7 @@ async function plan(tx: Tx, input: Request) {
           id: true,
           name: true,
           sku: true,
+          unit: true,
           basePriceKgs: true,
           updatedAt: true,
           variants: {
@@ -137,6 +160,14 @@ async function plan(tx: Tx, input: Request) {
         },
         orderBy: [{ storeId: "asc" }, { catalogId: "asc" }],
       }),
+      tx.inventorySnapshot.findMany({
+        where: {
+          productId: c.productId,
+          storeId: { in: c.targetStoreIds },
+          store: { organizationId: org },
+        },
+        select: { storeId: true, onHand: true },
+      }),
     ]);
   if (!product) throw new AppError("productNotFound", "NOT_FOUND", 404);
   if (stores.length !== storeIds.length) throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -157,18 +188,41 @@ async function plan(tx: Tx, input: Request) {
         : null,
     };
   };
+  const hiddenStoreIds = product.storeProducts
+    .filter((a) => a.isHidden && c.targetStoreIds.includes(a.storeId))
+    .map((a) => a.storeId);
+  const restoreAccess = hiddenStoreIds.length
+    ? await tx.$queryRaw<Array<{ storeId: string; available: boolean }>>(Prisma.sql`
+    SELECT id AS "storeId", catalog_product_available(id, ${c.productId}) AS available
+    FROM "Store" WHERE "organizationId" = ${org} AND id IN (${Prisma.join(hiddenStoreIds)})
+  `)
+    : [];
   const rows = c.targetStoreIds.map((storeId) => {
     const store = stores.find((s) => s.id === storeId)!;
     const assignment = product.storeProducts.find((a) => a.storeId === storeId);
     const available = Boolean(assignment?.isActive && !assignment.isHidden);
-    // Match the existing assignment policy. Never unhide or bypass a revoked source.
+    // Restoration is a separate, explicit choice; it must not promote a received
+    // card to an owned source or bypass a disconnected catalog.
     const revoked = sources.some(
       (s) =>
         s.storeId === storeId &&
         (!s.enabled || (s.scope === "SELECTED" && !s.selectedProductIds.includes(c.productId))),
     );
-    const blocked = assignment?.isHidden
-      ? ("hidden" as const)
+    const hidden = Boolean(assignment?.isHidden);
+    const canRestore =
+      hidden &&
+      Boolean(
+        assignment?.isDirect ||
+        !store.catalogSourcesConfigured ||
+        restoreAccess.find((a) => a.storeId === storeId)?.available,
+      );
+    const restore = canRestore && Boolean(c.restoreStoreIds?.includes(storeId));
+    const blocked = hidden
+      ? !canRestore
+        ? ("catalog" as const)
+        : !restore
+          ? ("hidden" as const)
+          : null
       : !available &&
           store.catalogSourcesConfigured &&
           (revoked || (assignment && !assignment.isDirect))
@@ -207,18 +261,34 @@ async function plan(tx: Tx, input: Request) {
       storeId,
       storeName: store.name,
       available,
-      add: !available && !blocked && c.addToAssortment,
+      hidden,
+      canRestore,
+      restore,
+      onHand: snapshots.filter((s) => s.storeId === storeId).reduce((sum, s) => sum + s.onHand, 0),
+      add: !available && !hidden && !blocked && c.addToAssortment,
       blocked,
       prices,
     };
   });
   return {
     productName: product.name,
+    productSku: product.sku,
+    unit: product.unit,
     retailWholesaleEnabled: organization.retailWholesaleEnabled,
     rows,
-    state: hash({ product, stores, organization, standards, extras, memberships, sources }),
+    state: hash({
+      product,
+      stores,
+      organization,
+      standards,
+      extras,
+      memberships,
+      sources,
+      restoreAccess,
+    }),
     canApply: rows.every((r) => !r.blocked),
     additions: rows.filter((r) => r.add).length,
+    restorations: rows.filter((r) => r.restore).length,
     priceChanges: rows.reduce(
       (n, r) =>
         n +
@@ -251,9 +321,12 @@ export async function previewProductStorePreparation(input: Request) {
       ).toString("base64url");
       return {
         productName: p.productName,
+        productSku: p.productSku,
+        unit: p.unit,
         rows: p.rows,
         canApply: p.canApply,
         additions: p.additions,
+        restorations: p.restorations,
         priceChanges: p.priceChanges,
         token: `${body}.${signature(body)}`,
       };
@@ -269,7 +342,7 @@ export async function applyProductStorePreparation(
   const token = readToken(input.token);
   if (token.authority !== authority(input)) throw stale();
   const c = normalize(input.change);
-  let result: { productId: string; additions: number; priceChanges: number };
+  let result: { productId: string; additions: number; restorations?: number; priceChanges: number };
   try {
     const committed = await prisma.$transaction(
       async (tx) => {
@@ -292,6 +365,14 @@ export async function applyProductStorePreparation(
             if (token.expires < Date.now() || token.state !== p.state) throw stale();
             if (!p.canApply) throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
             for (const row of p.rows) {
+              if (row.restore) {
+                const restored = await tx.storeProduct.update({
+                  where: { storeId_productId: { storeId: row.storeId, productId: c.productId } },
+                  data: { isHidden: false, isActive: true, assignedById: input.user.id },
+                });
+                if (!restored.isActive)
+                  throw new AppError("productNotAvailableInStore", "CONFLICT", 409);
+              }
               if (row.add)
                 await tx.storeProduct.upsert({
                   where: { storeId_productId: { storeId: row.storeId, productId: c.productId } },
@@ -368,6 +449,7 @@ export async function applyProductStorePreparation(
                 p.rows.map((r) => ({
                   storeId: r.storeId,
                   available: r.available,
+                  hidden: r.hidden,
                   prices: r.prices.map((p) => ({ variantId: p.variantId, ...p.before })),
                 })),
               ),
@@ -375,10 +457,16 @@ export async function applyProductStorePreparation(
                 change: c,
                 rows: p.rows,
                 additions: p.additions,
+                restorations: p.restorations,
                 priceChanges: p.priceChanges,
               }),
             });
-            return { productId: c.productId, additions: p.additions, priceChanges: p.priceChanges };
+            return {
+              productId: c.productId,
+              additions: p.additions,
+              restorations: p.restorations,
+              priceChanges: p.priceChanges,
+            };
           },
         );
       },
@@ -392,7 +480,8 @@ export async function applyProductStorePreparation(
       throw stale();
     throw e;
   }
-  if (result.additions) await publishAssortmentChange(input.user.organizationId);
+  if (result.additions || result.restorations)
+    await publishAssortmentChange(input.user.organizationId);
   await publishProductChange(input.user.organizationId, c.productId);
   return result;
 }

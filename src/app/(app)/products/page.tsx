@@ -26,6 +26,7 @@ import {
   ProductDescriptionGenerationProgress,
 } from "@/components/product-description-generation-progress";
 import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";
+import { ProductDeletionDialog } from "@/components/products/product-deletion-dialog";
 import { useQuickProductDuplicate } from "@/components/products/use-quick-product-duplicate";
 import { CatalogDiscountDialog } from "@/components/products/catalog-discount-dialog";
 import { SavedTableViews } from "@/components/saved-table-views";
@@ -349,6 +350,7 @@ const ProductsPage = () => {
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
   const canManageProducts = role === "ADMIN" || role === "MANAGER";
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const canSelectProducts = canManageProducts;
   const canManagePrices = canManageProducts;
   const { toast } = useToast();
@@ -2350,7 +2352,7 @@ const ProductsPage = () => {
           key: "show-in-store", label: t("showInStore"), icon: RestoreIcon,
           disabled: storeVisibilityMutation.isLoading,
           onSelect: () => changeStoreVisibility([product.id], false),
-        }];
+        }, ...(role === "ADMIN" ? [{ key: "delete-permanent", label: t("deletePermanent"), icon: DeleteIcon, variant: "danger" as const, onSelect: () => setDeleteTarget(product.id) }] : [])];
       }
       const managementActions = product.isDeleted
         ? [
@@ -2435,7 +2437,7 @@ const ProductsPage = () => {
             },
           ];
 
-      return managementActions;
+      return role === "ADMIN" ? [...managementActions, { key: "delete-permanent", label: t("deletePermanent"), icon: DeleteIcon, variant: "danger" as const, onSelect: () => setDeleteTarget(product.id) }] : managementActions;
     },
     [
       archiveMutation,
@@ -2443,6 +2445,7 @@ const ProductsPage = () => {
       storeVisibilityMutation.isLoading,
       buildProductListLaunchedHref,
       canManageProducts,
+      role,
       confirm,
       enableBarcode,
       openPrintForProducts,
@@ -6006,6 +6009,7 @@ const ProductsPage = () => {
         productName={duplicateTarget?.name ?? ""}
         storeId={storeId}
       />
+      {deleteTarget ? <ProductDeletionDialog open onOpenChange={(open) => { if (!open) setDeleteTarget(null); }} productId={deleteTarget} onDeleted={() => { setSelectedIds(new Set()); void productsBootstrapQuery.refetch(); }} /> : null}
       {confirmDialog}
     </div>
   );

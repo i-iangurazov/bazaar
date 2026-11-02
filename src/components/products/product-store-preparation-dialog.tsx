@@ -15,6 +15,7 @@ import {
 } from "@/lib/productPreparationPending";
 import { trpc } from "@/lib/trpc";
 import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatNumber } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ export function ProductStorePreparationDialog(props: {
     },
   );
   const [add, setAdd] = useState(false);
+  const [restoreStores, setRestoreStores] = useState<string[]>([]);
   const [approval, setApproval] = useState<{
     preview: Preview;
     change: ProductStorePreparation;
@@ -74,6 +76,10 @@ export function ProductStorePreparationDialog(props: {
       ? productPreparationPendingKey(session.user.organizationId, session.user.id, props.productId)
       : "";
   const generation = useRef(0);
+  const reviewRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (approval) reviewRef.current?.scrollIntoView({ block: "nearest" });
+  }, [approval]);
   const previewMutation = trpc.products.previewStorePreparation.useMutation();
   const applyMutation = trpc.products.applyStorePreparation.useMutation();
   const reconcileMutation = trpc.products.reconcileStorePreparation.useMutation();
@@ -85,6 +91,7 @@ export function ProductStorePreparationDialog(props: {
     setSource(props.sourceStoreId ?? "");
     setPrices("NONE");
     setAdd(props.addToAssortment ?? false);
+    setRestoreStores([]);
     setApproval(null);
     setError(null);
     setDone(false);
@@ -101,6 +108,7 @@ export function ProductStorePreparationDialog(props: {
         setTargets(restored.change.targetStoreIds);
         setSource(restored.change.sourceStoreId ?? "");
         setAdd(restored.change.addToAssortment);
+        setRestoreStores(restored.change.restoreStoreIds ?? []);
         setPrices(restored.change.prices);
       }
     } catch {
@@ -114,7 +122,7 @@ export function ProductStorePreparationDialog(props: {
     setApproval(null);
     setError(null);
   }
-  async function preview() {
+  async function preview(restorations = restoreStores) {
     const id = ++generation.current;
     setError(null);
     setApproval(null);
@@ -123,6 +131,9 @@ export function ProductStorePreparationDialog(props: {
       sourceStoreId: source || undefined,
       targetStoreIds: targets,
       addToAssortment: add,
+      restoreStoreIds: restorations.length
+        ? restorations.filter((id) => targets.includes(id))
+        : undefined,
       prices,
     };
     try {
@@ -360,6 +371,7 @@ export function ProductStorePreparationDialog(props: {
             </fieldset>
             {approval ? (
               <section
+                ref={reviewRef}
                 className="space-y-3 rounded-lg border border-border p-3"
                 aria-label={t("preview")}
               >
@@ -369,13 +381,58 @@ export function ProductStorePreparationDialog(props: {
                     prices: approval.preview.priceChanges,
                   })}
                 </p>
+                {(approval.preview.restorations ?? 0) > 0 ? (
+                  <p className="text-sm">
+                    {t("restorationSummary", { count: approval.preview.restorations })}
+                  </p>
+                ) : null}
                 <div className="max-h-64 space-y-3 overflow-y-auto">
                   {approval.preview.rows.map((row) => (
                     <div key={row.storeId} className="space-y-1 text-sm">
                       <p className="font-medium">
                         {row.storeName} ·{" "}
-                        {t(row.blocked ? "blocked" : row.add ? "willAdd" : "available")}
+                        {t(
+                          row.restore
+                            ? "willRestore"
+                            : row.hidden
+                              ? "hiddenState"
+                              : row.blocked === "catalog"
+                                ? "outsideState"
+                                : row.blocked
+                                  ? "blocked"
+                                  : row.add
+                                    ? "willAdd"
+                                    : "available",
+                        )}
                       </p>
+                      <p className="text-xs text-muted-foreground">
+                        {approval.preview.productSku} ·{" "}
+                        {t("currentStock", {
+                          quantity: formatNumber(row.onHand, locale),
+                          unit: approval.preview.unit,
+                        })}
+                      </p>
+                      {row.canRestore ? (
+                        <label className="flex items-start gap-2 rounded-md border border-border p-2 text-sm">
+                          <Checkbox
+                            checked={restoreStores.includes(row.storeId)}
+                            disabled={busy || uncertain}
+                            onCheckedChange={(checked) => {
+                              const next = checked
+                                ? [...restoreStores, row.storeId]
+                                : restoreStores.filter((id) => id !== row.storeId);
+                              setRestoreStores(next);
+                              void preview(next);
+                            }}
+                          />
+                          <span>
+                            {t("restoreChoice", { store: row.storeName })}
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {t("restoreHint")}
+                            </span>
+                          </span>
+                        </label>
+                      ) : null}
                       {row.blocked ? (
                         <p className="text-xs text-warning">
                           {t(
@@ -388,7 +445,7 @@ export function ProductStorePreparationDialog(props: {
                           {row.blocked === "hidden" ? (
                             <Link
                               target="_blank"
-                              href={`/products?storeId=${encodeURIComponent(row.storeId)}&archived=true&q=${encodeURIComponent(props.productName)}`}
+                              href={`/products?storeId=${encodeURIComponent(row.storeId)}&archived=true&q=${encodeURIComponent(approval.preview.productSku)}`}
                               className="text-primary underline"
                             >
                               {t("hiddenProducts")}
@@ -456,14 +513,20 @@ export function ProductStorePreparationDialog(props: {
               </p>
             ) : null}
             {approval?.preview.canApply &&
-            approval.preview.additions + approval.preview.priceChanges === 0 ? (
+            approval.preview.additions +
+              approval.preview.priceChanges +
+              (approval.preview.restorations ?? 0) ===
+              0 ? (
               <p role="status" className="text-sm text-muted-foreground">
                 {t("noChanges")}
               </p>
             ) : null}
             <div className="sticky -bottom-4 -mx-4 grid grid-cols-2 gap-2 border-t border-border bg-card px-4 py-3 sm:-bottom-5 sm:-mx-5 sm:flex sm:flex-wrap sm:justify-end sm:px-5">
               {approval?.preview.canApply &&
-              approval.preview.additions + approval.preview.priceChanges === 0 &&
+              approval.preview.additions +
+                approval.preview.priceChanges +
+                (approval.preview.restorations ?? 0) ===
+                0 &&
               props.useExisting &&
               props.onPrepared ? (
                 <Button
@@ -492,14 +555,20 @@ export function ProductStorePreparationDialog(props: {
                   {t("retry")}
                 </Button>
               ) : approval ? (
-                approval.preview.additions + approval.preview.priceChanges > 0 ? (
+                approval.preview.additions +
+                  approval.preview.priceChanges +
+                  (approval.preview.restorations ?? 0) >
+                0 ? (
                   <Button
                     className="order-1 col-span-2 sm:order-none"
                     disabled={
                       busy ||
                       !pendingKey ||
                       !approval.preview.canApply ||
-                      approval.preview.additions + approval.preview.priceChanges === 0
+                      approval.preview.additions +
+                        approval.preview.priceChanges +
+                        (approval.preview.restorations ?? 0) ===
+                        0
                     }
                     onClick={() => void apply()}
                   >

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { productRecoveryHref } from "@/lib/productRecoveryHref";
 
 export function ProductBarcodeConflict({
   match,
@@ -30,16 +31,6 @@ export function ProductBarcodeConflict({
   onReuse?: () => void;
 }) {
   const t = useTranslations("products");
-  const archiveParams = new URLSearchParams({
-    list: "1",
-    archived: "true",
-    q: match.barcode,
-    category: "",
-    type: "all",
-    readiness: "all",
-    page: "1",
-  });
-  if (match.stores[0]) archiveParams.set("storeId", match.stores[0].id);
   return (
     <div
       className="space-y-2 rounded-md border border-warning/30 bg-warning/10 p-3"
@@ -70,10 +61,18 @@ export function ProductBarcodeConflict({
         )}
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        {onReuse ? <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={onReuse}>{t("useExistingProduct")}</Button> : null}
-        {match.canAccess && (!match.isDeleted || match.stores.length > 0) ? (
+        {onReuse ? (
+          <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={onReuse}>
+            {t("useExistingProduct")}
+          </Button>
+        ) : null}
+        {match.canAccess ? (
           <Link
-            href={match.isDeleted ? `/products?${archiveParams}` : `/products/${match.id}`}
+            href={
+              match.isDeleted
+                ? productRecoveryHref(match.sku, match.stores[0]?.id)
+                : `/products/${match.id}`
+            }
             target="_blank"
             className="text-xs text-primary underline-offset-4 hover:underline"
           >

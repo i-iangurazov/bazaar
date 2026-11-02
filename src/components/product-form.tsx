@@ -1,4 +1,5 @@
 "use client";
+import { productRecoveryHref } from "@/lib/productRecoveryHref";
 
 import {
   useCallback,
@@ -4300,13 +4301,13 @@ export const ProductForm = ({
               {duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? (
                 <Badge variant="muted">{t("archived")}</Badge>
               ) : null}
-              <Link
-                href={`/products/${duplicateDiagnosticsQuery.data.exactSkuMatch.id}`}
+              {duplicateDiagnosticsQuery.data.exactSkuMatch.canAccess ? <Link
+                href={duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? productRecoveryHref(duplicateDiagnosticsQuery.data.exactSkuMatch.sku, duplicateDiagnosticsQuery.data.exactSkuMatch.stores[0]?.id) : `/products/${duplicateDiagnosticsQuery.data.exactSkuMatch.id}`}
                 target="_blank"
                 className="text-primary underline-offset-4 hover:underline"
               >
-                {t("duplicateOpenProduct")}
-              </Link>
+                {t(duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? "barcodeShowArchived" : "duplicateOpenProduct")}
+              </Link> : <span>{t("duplicateAccessHint")}</span>}
               {!productId && categoryStoreId && duplicateDiagnosticsQuery.data.exactSkuMatch.canReuse ? <Button type="button" size="sm" variant="secondary" disabled={isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching} onClick={() => setReuseProduct(duplicateDiagnosticsQuery.data!.exactSkuMatch!)}>{t("useExistingProduct")}</Button> : null}
             </div>
           </div>

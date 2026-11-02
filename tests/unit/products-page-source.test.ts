@@ -144,7 +144,7 @@ describe("index page source layout", () => {
     expect(detailSource).toContain("readOnly={!canManageProducts}");
   });
 
-  it("defaults products to latest changes first and keeps permanent delete out of product screens", async () => {
+  it("defaults products to latest changes first and delegates permanent deletion to its reviewed dialog", async () => {
     const listSource = await readSource("src/app/(app)/products/page.tsx");
     const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
     const readServiceSource = await readSource("src/server/services/products/read.ts");
@@ -155,7 +155,8 @@ describe("index page source layout", () => {
     expect(listSource).toContain('direction: "desc"');
     expect(listSource).toContain("const createdAtResult =");
     expect(listSource).not.toContain("trpc.products.deletePermanent.useMutation");
-    expect(listSource).not.toContain('key: "delete-permanent"');
+    expect(listSource).toContain("ProductDeletionDialog");
+    expect(detailSource).toContain("ProductDeletionDialog");
     expect(detailSource).not.toContain("trpc.products.deletePermanent.useMutation");
     expect(detailSource).not.toContain("confirmDeletePermanent");
     expect(readServiceSource).toContain('const sortKey = input?.sortKey ?? "updatedAt";');

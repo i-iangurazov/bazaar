@@ -90,6 +90,229 @@ import type { ProductStorePreparation } from "@/lib/productStorePreparation";
     ).toEqual(before);
   });
 
+  it("explicitly restores the exact hidden card and adds another store atomically without changing stock or prices", async () => {
+    const f = await fixture(),
+      [hidden, absent] = f.stores;
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: f.org.id,
+        productId: f.product.id,
+        storeId: hidden.id,
+        isDirect: true,
+        isActive: false,
+        isHidden: true,
+      },
+    });
+    await prisma.inventorySnapshot.create({
+      data: { productId: f.product.id, storeId: hidden.id, onHand: 43 },
+    });
+    const before = await Promise.all([
+      prisma.inventorySnapshot.findMany(),
+      prisma.stockMovement.findMany(),
+      prisma.storePrice.findMany(),
+      prisma.product.findMany(),
+      prisma.productBarcode.findMany(),
+    ]);
+    const blocked = await f.review({ ...f.change, prices: "NONE" });
+    expect(blocked).toMatchObject({ canApply: false, restorations: 0 });
+    expect(blocked.rows.find((r) => r.storeId === hidden.id)).toMatchObject({
+      blocked: "hidden",
+      canRestore: true,
+      onHand: 43,
+    });
+    const { request, result } = await f.apply({
+      ...f.change,
+      prices: "NONE",
+      restoreStoreIds: [hidden.id],
+    });
+    expect(result).toMatchObject({ additions: 1, restorations: 1, priceChanges: 0 });
+    expect(await f.caller.products.applyStorePreparation(request)).toEqual(result);
+    expect(await f.caller.products.reconcileStorePreparation(request)).toMatchObject({
+      status: "APPLIED",
+      restorations: 1,
+    });
+    for (const store of [hidden, absent])
+      expect(
+        await prisma.storeProduct.findUniqueOrThrow({
+          where: { storeId_productId: { storeId: store.id, productId: f.product.id } },
+        }),
+      ).toMatchObject({ isActive: true, isHidden: false });
+    expect(
+      await Promise.all([
+        prisma.inventorySnapshot.findMany(),
+        prisma.stockMovement.findMany(),
+        prisma.storePrice.findMany(),
+        prisma.product.findMany(),
+        prisma.productBarcode.findMany(),
+      ]),
+    ).toEqual(before);
+    expect(await prisma.auditLog.count({ where: { action: "PRODUCT_STORE_PREPARE" } })).toBe(1);
+  });
+
+  it("lets a restricted manager restore a received card without turning it into a local source", async () => {
+    const f = await fixture(),
+      target = f.stores[0];
+    const config = (await f.caller.stores.catalogSettings({ storeId: target.id })).settings!;
+    config.connections.push({
+      key: `store:${f.store.id}`,
+      enabled: true,
+      scope: "ALL",
+      productIds: [],
+    });
+    const p = await f.caller.stores.previewCatalogSettings(config);
+    await f.caller.stores.saveCatalogSettings({
+      change: config,
+      token: p.token,
+      idempotencyKey: randomUUID(),
+    });
+    await f.caller.products.setStoreVisibility({
+      storeId: target.id,
+      productIds: [f.product.id],
+      hidden: true,
+    });
+    await prisma.userStoreAccess.deleteMany({ where: { userId: f.managerUser.id } });
+    await prisma.userStoreAccess.create({
+      data: { organizationId: f.org.id, userId: f.managerUser.id, storeId: target.id },
+    });
+    const manager = createTestCaller({ ...f.managerUser, organizationId: f.org.id });
+    const change = {
+      productId: f.product.id,
+      targetStoreIds: [target.id],
+      restoreStoreIds: [target.id],
+      addToAssortment: true,
+      prices: "NONE" as const,
+    };
+    const preview = await manager.products.previewStorePreparation(change);
+    const initial = await manager.products.previewStorePreparation({
+      ...change,
+      restoreStoreIds: [],
+    });
+    expect(initial).toMatchObject({ canApply: false, restorations: 0 });
+    expect(initial.rows[0]).toMatchObject({ canRestore: true, blocked: "hidden" });
+    expect(preview).toMatchObject({ canApply: true, restorations: 1, additions: 0 });
+    await manager.products.applyStorePreparation({
+      change,
+      token: preview.token,
+      idempotencyKey: randomUUID(),
+    });
+    expect(
+      await prisma.storeProduct.findUniqueOrThrow({
+        where: { storeId_productId: { storeId: target.id, productId: f.product.id } },
+      }),
+    ).toMatchObject({ isActive: true, isHidden: false, isDirect: false });
+    expect(
+      await prisma.productCatalogProduct.count({
+        where: { productId: f.product.id, catalog: { sourceStoreId: target.id } },
+      }),
+    ).toBe(0);
+  });
+
+  it("keeps a hidden card blocked when its underlying source has been disconnected", async () => {
+    const f = await fixture(),
+      target = f.stores[0];
+    const config = (await f.caller.stores.catalogSettings({ storeId: target.id })).settings!;
+    config.connections.push({
+      key: `store:${f.store.id}`,
+      enabled: true,
+      scope: "ALL",
+      productIds: [],
+    });
+    const save = async () => {
+      const p = await f.caller.stores.previewCatalogSettings(config);
+      await f.caller.stores.saveCatalogSettings({
+        change: config,
+        token: p.token,
+        idempotencyKey: randomUUID(),
+      });
+    };
+    await save();
+    await f.caller.products.setStoreVisibility({
+      storeId: target.id,
+      productIds: [f.product.id],
+      hidden: true,
+    });
+    const change = {
+      ...f.change,
+      targetStoreIds: [target.id],
+      restoreStoreIds: [target.id],
+      prices: "NONE" as const,
+    };
+    const old = await f.review(change);
+    config.connections[0].enabled = false;
+    await save();
+    await expect(
+      f.caller.products.applyStorePreparation({
+        change,
+        token: old.token,
+        idempotencyKey: randomUUID(),
+      }),
+    ).rejects.toThrow("productPreparationStale");
+    const next = await f.review(change);
+    expect(next).toMatchObject({ canApply: false, restorations: 0 });
+    expect(next.rows[0]).toMatchObject({ blocked: "catalog", canRestore: false });
+    await expect(
+      f.caller.products.applyStorePreparation({
+        change,
+        token: next.token,
+        idempotencyKey: randomUUID(),
+      }),
+    ).rejects.toThrow("assortmentUseSourceEditor");
+    expect(
+      await prisma.storeProduct.findUniqueOrThrow({
+        where: { storeId_productId: { storeId: target.id, productId: f.product.id } },
+      }),
+    ).toMatchObject({ isHidden: true, isActive: false });
+  });
+
+  it("binds restoration choices to the reviewed stores and rolls them back if audit fails", async () => {
+    const f = await fixture(),
+      target = f.stores[0];
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: f.org.id,
+        productId: f.product.id,
+        storeId: target.id,
+        isDirect: true,
+        isActive: false,
+        isHidden: true,
+      },
+    });
+    const change = {
+      ...f.change,
+      targetStoreIds: [target.id],
+      restoreStoreIds: [target.id],
+      prices: "NONE" as const,
+    };
+    const p = await f.review(change);
+    await expect(
+      f.caller.products.applyStorePreparation({
+        change: { ...change, restoreStoreIds: [] },
+        token: p.token,
+        idempotencyKey: randomUUID(),
+      }),
+    ).rejects.toThrow("productPreparationStale");
+    await expect(f.review({ ...change, restoreStoreIds: [f.stores[2].id] })).rejects.toThrow();
+    const fail = vi
+      .spyOn(audit, "writeAuditLog")
+      .mockRejectedValueOnce(new Error("audit unavailable"));
+    try {
+      await expect(
+        f.caller.products.applyStorePreparation({
+          change,
+          token: p.token,
+          idempotencyKey: randomUUID(),
+        }),
+      ).rejects.toThrow();
+    } finally {
+      fail.mockRestore();
+    }
+    expect(
+      await prisma.storeProduct.findUniqueOrThrow({
+        where: { storeId_productId: { storeId: target.id, productId: f.product.id } },
+      }),
+    ).toMatchObject({ isHidden: true, isActive: false });
+  });
+
   it("keeps price preparation behind the existing tariff gate without blocking ordinary card reuse", async () => {
     const f = await fixture();
     await prisma.organization.update({ where: { id: f.org.id }, data: { plan: "STARTER" } });

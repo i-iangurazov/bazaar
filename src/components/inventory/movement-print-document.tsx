@@ -73,8 +73,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
     (document.totalAmount !== null ||
       lines.some((line) => line.unitCostKgs !== null || line.lineTotalKgs !== null));
   const totalAmount = showMoneyColumns
-    ? (document.totalAmount ??
-      lines.reduce((sum, line) => sum + (line.lineTotalKgs ?? 0), 0))
+    ? (document.totalAmount ?? lines.reduce((sum, line) => sum + (line.lineTotalKgs ?? 0), 0))
     : null;
   const totalQuantity = lines.reduce((sum, line) => sum + Math.abs(line.qtyDelta), 0);
   const isAdjustment = document.documentType === "ADJUSTMENT";
@@ -292,18 +291,22 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         }
 
         .movement-print-total-box {
-          width: 68mm;
+          width: 48mm;
           border: 1px solid #d1d5db;
           border-bottom: 0;
           font-size: 11px;
         }
 
+        .movement-print-total-box--money {
+          width: 68mm;
+        }
+
         .movement-print-total-row {
           display: flex;
           justify-content: space-between;
-          gap: 6mm;
+          gap: 4mm;
           border-bottom: 1px solid #d1d5db;
-          padding: 2mm 2.5mm;
+          padding: 1.5mm 2mm;
         }
 
         .movement-print-total-row strong {
@@ -312,9 +315,10 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
 
         .movement-print-signatures {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8mm 12mm;
-          margin-top: 14mm;
+          grid-template-columns: repeat(2, minmax(0, 68mm));
+          justify-content: space-between;
+          gap: 4mm 8mm;
+          margin-top: 9mm;
           page-break-inside: avoid;
           break-inside: avoid;
         }
@@ -323,9 +327,9 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         .movement-print-signature-date {
           display: grid;
           grid-template-columns: max-content 1fr;
-          gap: 4mm;
+          gap: 3mm;
           align-items: end;
-          min-height: 11mm;
+          min-height: 9mm;
           font-size: 11px;
         }
 
@@ -537,7 +541,9 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
       </table>
 
       <div className="movement-print-totals">
-        <div className="movement-print-total-box">
+        <div
+          className={`movement-print-total-box${showMoneyColumns ? "movement-print-total-box--money" : ""}`}
+        >
           <div className="movement-print-total-row">
             <span>{labels.positions}</span>
             <strong>{formatNumber(lines.length, locale)}</strong>

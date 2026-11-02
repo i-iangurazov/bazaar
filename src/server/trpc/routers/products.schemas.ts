@@ -169,10 +169,17 @@ export const productStoreVisibilityInputSchema = z.object({
   hidden: z.boolean(),
 });
 
-export const exportProductsInputSchema = productListIdsInputSchema.unwrap().extend({
-  columns: z.array(productExportColumnKeyEnum).min(1).max(productExportColumnKeys.length).optional(),
-  ids: z.array(z.string().min(1)).max(10000).optional(),
-}).optional();
+export const exportProductsInputSchema = productListIdsInputSchema
+  .unwrap()
+  .extend({
+    columns: z
+      .array(productExportColumnKeyEnum)
+      .min(1)
+      .max(productExportColumnKeys.length)
+      .optional(),
+    ids: z.array(z.string().min(1)).max(10000).optional(),
+  })
+  .optional();
 
 export const productDetailInputSchema = z.object({
   productId: z.string(),
@@ -219,7 +226,10 @@ export const createProductInputSchema = z.object({
 
 export const updateProductInputSchema = z.object({
   expectedUpdatedAt: z.string().datetime().optional(),
-  expectedStorePriceVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  expectedStorePriceVersion: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   imagesOnly: z.boolean().optional(),
   productId: z.string(),
   storeId: z.string().optional(),
@@ -414,9 +424,15 @@ export const archiveProductInputSchema = z.object({
   productId: z.string(),
 });
 
-export const deleteProductInputSchema = z.object({
-  productId: z.string(),
-});
+export const deleteProductInputSchema = z
+  .object({
+    productId: z.string(),
+    reviewToken: z.string().min(1).max(256).optional(),
+    idempotencyKey: z.string().min(8).max(128).optional(),
+  })
+  .refine((input) => Boolean(input.reviewToken) === Boolean(input.idempotencyKey), {
+    message: "invalidInput",
+  });
 
 export type ProductSortKey = z.infer<typeof productSortKeyEnum>;
 export type ProductSortDirection = z.infer<typeof productSortDirectionEnum>;

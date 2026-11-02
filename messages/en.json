@@ -4112,7 +4112,7 @@
     "deletePermanently": "Delete product",
     "confirmDeletePermanent": "Delete this product permanently? This is allowed only when the product has no sales, purchases, stock movements, stock counts, bundle usage, or active stock.",
     "deletePermanentSuccess": "Product deleted.",
-    "archived": "Archived",
+    "archived": "Archived in all stores",
     "showArchived": "Show archived and hidden",
     "restore": "Restore",
     "confirmRestore": "Restore this product in all stores?",
@@ -4545,7 +4545,9 @@
     "discardAndRefreshConfirm": "Unsaved edits to this card will be discarded. Load the latest data?",
     "separateProductTitle": "Create a separate product?",
     "separateProductConfirm": "A product with this name already exists. Reuse its card for another store. Continue only for a genuinely different product: a new card has separate prices, stock and history.",
-    "createSeparateProduct": "Create separate product"
+    "createSeparateProduct": "Create separate product",
+    "deletePermanent": "Delete permanently",
+    "duplicateAccessHint": "A matching card exists, but you do not have access to it. Contact an administrator."
   },
   "storeGroups": {
     "title": "Store assortments",
@@ -5746,7 +5748,8 @@
     "productChangedElsewhere": "This card changed at another workstation. Your save did not overwrite those changes. Refresh and reapply your edits.",
     "productPreparationStorageUnavailable": "The browser could not save the operation key. Allow storage for Bazaar and review again. No changes were sent.",
     "productPreparationAttemptClosed": "This attempt was closed without applying changes. Review a new attempt.",
-    "transferDestinationNotSellable": "Destination assortment changed. Connect the products or confirm inventory-only receipt. The transfer was not posted."
+    "transferDestinationNotSellable": "Destination assortment changed. Connect the products or confirm inventory-only receipt. The transfer was not posted.",
+    "productDeletionStale": "The product changed or the review expired. Review deletion again."
   },
   "adminJobs": {
     "title": "Admin jobs",
@@ -8162,7 +8165,7 @@
     "targets": "Destination stores",
     "noTargets": "No other accessible stores.",
     "add": "Add the product where absent",
-    "addHint": "Adds the product to the destination’s own assortment and may make it available to its connected recipients. Hidden products and revoked sources are not overridden.",
+    "addHint": "The product becomes part of the selected store’s own assortment and may appear at its connected recipients. A hidden card requires separate confirmation to restore. Disconnected sources are not connected here.",
     "prices": "Destination prices",
     "none": "Keep prices unchanged",
     "missing": "Fill missing prices only",
@@ -8176,7 +8179,7 @@
     "blocked": "access setup required",
     "willAdd": "will be added",
     "available": "already available",
-    "hiddenHint": "This product is hidden here. Explicitly restore its visibility in the store assortment first.",
+    "hiddenHint": "This product is hidden in this store. Select Restore this card to assortment and review the changes.",
     "catalogHint": "This product is not in the assortment. Configure an allowed source or deselect this store.",
     "configure": "Open assortment",
     "absent": "not set",
@@ -8193,7 +8196,14 @@
     "hiddenProducts": "Show hidden product",
     "canceled": "Changes were not applied. The unresolved attempt is closed; review a new attempt when ready.",
     "noChanges": "The product and selected prices are already ready. No changes need applying.",
-    "noPriceSources": "No accessible stores have this product. First add it to a store without changing prices."
+    "noPriceSources": "No accessible stores have this product. First add it to a store without changing prices.",
+    "restorationSummary": "Restored to assortment: {count}.",
+    "willRestore": "will be restored to assortment",
+    "hiddenState": "hidden in this store",
+    "outsideState": "source not connected",
+    "currentStock": "Recorded stock: {quantity} {unit}",
+    "restoreChoice": "Restore this card to the assortment of {store}",
+    "restoreHint": "Only the local exclusion is removed. The card, stock, history and prices are preserved."
   },
   "productReview": {
     "title": "Duplicate candidate review",
@@ -8213,5 +8223,28 @@
     "limited": "Part of this large group is shown. Narrow the search and review cards separately.",
     "previous": "Previous",
     "next": "Next"
+  },
+  "productDeletion": {
+    "title": "Permanently delete product",
+    "globalHint": "This deletes the shared card from every store. Use the local assortment action to remove a product from one store only.",
+    "stores": "Linked stores",
+    "noStores": "No linked stores",
+    "blocked": "Permanent deletion is unavailable",
+    "blockedHint": "This product has inventory or related records. Remove it from the relevant store assortment or archive the shared card. Reconcile recorded stock with physical counts first.",
+    "confirm": "I confirm permanent deletion of this card from every store. It cannot be restored from the archive.",
+    "action": "Delete permanently",
+    "retry": "Retry the same attempt",
+    "reason": {
+      "stockMovements": "Stock movements",
+      "purchaseOrderLines": "Purchase order lines",
+      "customerOrderLines": "Customer order lines",
+      "saleReturnLines": "Returns",
+      "stockCounts": "Stock count lines",
+      "stockLots": "Stock lots",
+      "bundleParents": "Bundles using this product",
+      "priceBookEntries": "Shared price list entries",
+      "balances": "Stores with stock or incoming quantities",
+      "priceBookItems": "Shared price list bindings"
+    }
   }
 }

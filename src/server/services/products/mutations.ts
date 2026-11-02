@@ -520,11 +520,19 @@ export const restoreProductMutation = async ({
 
 export const deleteProductMutation = async ({
   productId,
+  reviewToken,
+  idempotencyKey,
   ...ctx
-}: ProductMutationContext & { productId: string }) => {
+}: ProductMutationContext & {
+  productId: string;
+  reviewToken?: string;
+  idempotencyKey?: string;
+}) => {
   try {
     return await deleteProduct({
       productId,
+      reviewToken,
+      idempotencyKey,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,
       requestId: ctx.requestId,

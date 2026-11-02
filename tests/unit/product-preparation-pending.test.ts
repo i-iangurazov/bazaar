@@ -29,6 +29,19 @@ const request = {
   idempotencyKey: "saved-original-key",
 };
 describe("product preparation recovery", () => {
+  it("retains explicit restoration choices and rejects restoring an unselected store", () => {
+    const storage = memory(),
+      key = productPreparationPendingKey("org", "user", "p");
+    const restore = { ...request, change: { ...request.change, restoreStoreIds: ["target"] } };
+    saveProductPreparationPending(storage, key, restore);
+    expect(readProductPreparationPending(storage, key, "p")).toEqual(restore);
+    expect(() =>
+      saveProductPreparationPending(storage, key, {
+        ...restore,
+        change: { ...restore.change, restoreStoreIds: ["another-store"] },
+      }),
+    ).toThrow();
+  });
   it("restores the exact operation after remount and isolates user, organization and card", () => {
     const storage = memory(),
       key = productPreparationPendingKey("org", "user", "p");

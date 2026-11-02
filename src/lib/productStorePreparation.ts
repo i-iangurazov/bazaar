@@ -6,9 +6,12 @@ export const productStorePreparationSchema = z
     sourceStoreId: z.string().min(1).optional(),
     targetStoreIds: z.array(z.string().min(1)).min(1).max(50),
     addToAssortment: z.boolean().default(false),
+    restoreStoreIds: z.array(z.string().min(1)).max(50).optional(),
     prices: z.enum(["NONE", "MISSING", "REPLACE"]).default("NONE"),
   })
   .superRefine((input, ctx) => {
+    if (input.restoreStoreIds?.some((id) => !input.targetStoreIds.includes(id)))
+      ctx.addIssue({ code: "custom", path: ["restoreStoreIds"], message: "invalidInput" });
     if (input.prices !== "NONE" && !input.sourceStoreId)
       ctx.addIssue({ code: "custom", path: ["sourceStoreId"], message: "storeRequired" });
     if (input.sourceStoreId && input.targetStoreIds.includes(input.sourceStoreId))

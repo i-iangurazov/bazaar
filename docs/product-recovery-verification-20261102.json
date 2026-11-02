@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-02",
+  "base": "df8cc53c996ced21d8d863c0b6993477c4b05557",
+  "scope": "Implemented directly on main at the human request. No customer data cleanup or migration.",
+  "changes": [
+    "Use in stores enables missing-product addition from the product-card action; price changes remain opt-in.",
+    "Explicit per-store restoration is included in the signed preview and atomic apply; existing product ID, source ownership, stock, history, local prices and disabled-source rules are retained.",
+    "Authorized managers can restore received cards in their stores without turning them into local source products.",
+    "The review shows SKU, recorded stock, hidden/disconnected/available states and explicit restoration count; mobile review scrolls into view.",
+    "Archive conflicts use a SKU-based recovery link that clears unrelated filters; access-denied matches show an explanation.",
+    "Administrator-only global deletion has a read-only dependency review, all linked stores, separate confirmation, expiring scope-bound signature and idempotent retries.",
+    "Deletion rechecks history and balances under transaction locks; safely removes unused catalog memberships, grants and fixed selections, retaining unrelated products and audit evidence.",
+    "Committed deletion invalidates catalog/API caches and notifies affected stores; notification failure cannot undo a committed operation.",
+    "Movement print signatures and nonmonetary totals are compact. Monetary totals retain their prior width.",
+    "Russian, Kyrgyz and English strings and the existing shared-catalog guide are updated."
+  ],
+  "preserved": [
+    "Two-column receiving/transfer/write-off/stock-count workflows",
+    "No product row/name navigation added",
+    "Existing icon-only row actions and mobile equivalents",
+    "Permissions, plan gates, zero/local prices, currency handling",
+    "No automatic duplicate merge, stock correction, price synchronization or removal of recorded history",
+    "Existing pending preparation requests and API callers retain safe compatibility"
+  ],
+  "verification": {
+    "fullRegression": {
+      "passed": 3128,
+      "failed": 0,
+      "skipped": 3,
+      "note": "The three database-pooling tests have a separate dedicated CI job."
+    },
+    "focusedRegression": {
+      "passed": 112,
+      "failed": 0,
+      "files": 8
+    },
+    "browser": {
+      "authentication": "Real credentials over isolated local HTTPS with production Secure cookies",
+      "locales": [
+        "ru",
+        "kg",
+        "en"
+      ],
+      "desktop": "1440x1000",
+      "mobile": "390x844 including fresh touch-mode restoration",
+      "newStockAfterRestore": 43,
+      "javascriptErrors": 0,
+      "deletionAndArchive": "Real UI; unused synthetic card deleted, stocked card retained"
+    },
+    "print": {
+      "documents": 20,
+      "pages": 60,
+      "checks": "A4 margins, repeated headers, all row markers, page breaks, black text, white canvas and theme/background consistency; rerun for final monetary-width guard"
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "i18n": "passed",
+    "productionBuild": "passed; final publish copy rebuilt after guide wording and print-width guard",
+    "isolation": "Fresh PostgreSQL 127.0.0.1:55466 (separate ci and browser databases, ICU Unicode locale) and Redis 127.0.0.1:56416; external providers disabled",
+    "userLocalRuntime": "http://localhost:3122 remains ready, database/Redis up, migrations ok, restarts 0",
+    "ci": "Required on the final main commit; final run and production evidence are recorded in the delivery summary."
+  },
+  "remaining": [
+    "Old duplicate balances still require physical counts; no customer balances were changed.",
+    "The separate existing help-media validator reports dimension issues in three pre-existing images. Those media were not changed; guide catalog/search unit checks pass."
+  ],
+  "references": [
+    {
+      "url": "https://help.shopify.com/en/manual/products/product-status",
+      "applied": "Separate global lifecycle from store/channel availability; reversible archive."
+    },
+    {
+      "url": "https://docs.frappe.io/erpnext/item",
+      "applied": "Keep product identity while controlling availability in new operations."
+    },
+    {
+      "url": "https://docs.frappe.io/erpnext/immutable-ledger-in-erpnext",
+      "applied": "Preserve operational history and use reviewed corrections instead of destructive cleanup."
+    }
+  ]
+}

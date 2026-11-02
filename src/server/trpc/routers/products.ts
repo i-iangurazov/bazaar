@@ -5,6 +5,7 @@ import { z } from "zod";
 import { reviewDuplicateProducts } from "@/server/services/products/duplicateReview";
 import { toTRPCError } from "@/server/trpc/errors";
 import { setProductStoreVisibility } from "@/server/services/productStoreVisibility";
+import { previewProductDeletion } from "@/server/services/productDeletion";
 import {
   archiveProductMutation,
   arrangeClothingCategoriesMutation,
@@ -119,6 +120,19 @@ const assertProductStoreAccess = async (...args: Parameters<typeof assertUserCan
 };
 
 export const productsRouter = router({
+  deletionPreview: adminProcedure
+    .input(z.object({ productId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await previewProductDeletion({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   reconcileStorePreparation: managerProcedure
     .input(productStorePreparationApplySchema)
     .mutation(async ({ ctx, input }) => {
@@ -628,6 +642,8 @@ export const productsRouter = router({
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         productId: input.productId,
+        reviewToken: input.reviewToken,
+        idempotencyKey: input.idempotencyKey,
       }),
     ),
 });
