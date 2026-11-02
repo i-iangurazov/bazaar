@@ -582,6 +582,7 @@ export const posRouter = router({
       .input(
         z.object({
           saleId: z.string().min(1),
+          customerId: z.string().min(1).optional().nullable(),
           customerName: z.string().max(160).optional().nullable(),
           customerEmail: z.string().max(254).optional().nullable(),
           customerPhone: z.string().max(64).optional().nullable(),
@@ -599,6 +600,7 @@ export const posRouter = router({
           return await editCompletedPosSale({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
+            customerId: input.customerId,
             customerName: input.customerName,
             customerEmail: input.customerEmail,
             customerPhone: input.customerPhone,

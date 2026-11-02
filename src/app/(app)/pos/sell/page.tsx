@@ -3049,6 +3049,7 @@ const PosSellPage = () => {
         completedSaleEditIdempotencyKeyRef.current = idempotencyKey;
         const result = await editCompletedSaleMutation.mutateAsync({
           saleId: targetSaleId,
+          customerId: selectedCustomer ? selectedCustomer.id || undefined : null,
           customerName: selectedCustomer?.name ?? null,
           customerEmail: selectedCustomer?.email ?? null,
           customerPhone: selectedCustomer?.phone ?? null,

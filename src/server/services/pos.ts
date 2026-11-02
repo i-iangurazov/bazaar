@@ -3644,6 +3644,7 @@ export const editCompletedPosSale = async (input: {
   organizationId: string;
   saleId: string;
   lines: PosReceiptEditLineInput[];
+  customerId?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
@@ -3734,14 +3735,23 @@ export const editCompletedPosSale = async (input: {
         if (!sale.shiftId || !sale.registerId) {
           throw new AppError("posSaleMissingShift", "CONFLICT", 409);
         }
-        const customerPhone = normalizeUpdatedCustomerPhone(
-          input.customerPhone,
-          sale.customerPhone,
-        );
-        const customerAddress = normalizeUpdatedCustomerAddress(
-          input.customerAddress,
-          sale.customerAddress,
-        );
+        // A selection references an existing organization contact, including legacy
+        // local-format numbers. Read its details on the server just as draft sales do;
+        // raw contact edits still undergo validation against the receipt snapshot.
+        const selectedCustomer = input.customerId
+          ? await resolvePosCustomerSelectionTx(tx, {
+              organizationId: input.organizationId,
+              storeId: sale.storeId,
+              customerId: input.customerId,
+            })
+          : null;
+        const customerMetadata = selectedCustomer ?? {
+          customerId: input.customerId === undefined ? sale.customerId : null,
+          customerName: input.customerName?.trim() || null,
+          customerEmail: input.customerEmail?.trim().toLowerCase() || null,
+          customerPhone: normalizeUpdatedCustomerPhone(input.customerPhone, sale.customerPhone),
+          customerAddress: normalizeUpdatedCustomerAddress(input.customerAddress, sale.customerAddress),
+        };
 
         const loyaltyApplication = await tx.loyaltyOrderApplication.findUnique({ where: { customerOrderId: sale.id } });
         if (loyaltyApplication && loyaltyApplication.status !== "RELEASED") {
@@ -3753,9 +3763,9 @@ export const editCompletedPosSale = async (input: {
           const previousPayments = sale.payments.filter((payment) => !payment.isRefund && !payment.saleReturnId).map(paymentKey).sort();
           const samePayments = requestedPayments === undefined || JSON.stringify(requestedPayments.map(paymentKey).sort()) === JSON.stringify(previousPayments);
           if (!sameLines || !samePayments || (requestedDiscountKgs !== undefined && !sale.discountKgs.eq(requestedDiscountKgs))) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
-          const metadata = { customerName: input.customerName?.trim() || null, customerEmail: input.customerEmail?.trim().toLowerCase() || null, customerPhone, customerAddress, notes: input.notes?.trim() || null, updatedById: input.actorId };
+          const metadata = { ...customerMetadata, notes: input.notes?.trim() || null, updatedById: input.actorId };
           await tx.customerOrder.update({ where: { id: sale.id }, data: metadata });
-          await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, action: "POS_SALE_METADATA_EDIT", entity: "CustomerOrder", entityId: sale.id, before: toJson({ customerName: sale.customerName, customerEmail: sale.customerEmail, customerPhone: sale.customerPhone, customerAddress: sale.customerAddress, notes: sale.notes }), after: toJson(metadata), requestId: input.requestId });
+          await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, action: "POS_SALE_METADATA_EDIT", entity: "CustomerOrder", entityId: sale.id, before: toJson({ customerId: sale.customerId, customerName: sale.customerName, customerEmail: sale.customerEmail, customerPhone: sale.customerPhone, customerAddress: sale.customerAddress, notes: sale.notes }), after: toJson(metadata), requestId: input.requestId });
           return { id: sale.id, number: sale.number, status: sale.status, storeId: sale.storeId, registerId: sale.registerId, shiftId: sale.shiftId, subtotalKgs: toMoney(sale.subtotalKgs), discountKgs: toMoney(sale.discountKgs), totalKgs: toMoney(sale.totalKgs), paymentDeltaKgs: 0, cashDeltaKgs: 0, changedItems: [] as Array<{ storeId: string; productId: string; variantId: string | null }> };
         }
 
@@ -3856,6 +3866,7 @@ export const editCompletedPosSale = async (input: {
           sale: {
             id: sale.id,
             number: sale.number,
+            customerId: sale.customerId,
             customerName: sale.customerName,
             customerEmail: sale.customerEmail,
             customerPhone: sale.customerPhone,
@@ -3996,10 +4007,7 @@ export const editCompletedPosSale = async (input: {
         await tx.customerOrder.update({
           where: { id: sale.id },
           data: {
-            customerName: input.customerName?.trim() || null,
-            customerEmail: input.customerEmail?.trim().toLowerCase() || null,
-            customerPhone,
-            customerAddress,
+            ...customerMetadata,
             notes: input.notes?.trim() || null,
             discountKgs: requestedDiscountKgs,
             updatedById: input.actorId,
@@ -4123,6 +4131,7 @@ export const editCompletedPosSale = async (input: {
           sale: {
             id: updatedSale.id,
             number: updatedSale.number,
+            customerId: updatedSale.customerId,
             customerName: updatedSale.customerName,
             customerEmail: updatedSale.customerEmail,
             customerPhone: updatedSale.customerPhone,

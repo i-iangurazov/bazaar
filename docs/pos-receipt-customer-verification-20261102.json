@@ -1,0 +1,102 @@
+{
+  "date": "2026-11-02",
+  "scope": "POS completed receipt: select an existing customer with a legacy local-format phone",
+  "rootCause": "The completed-receipt UI sent customer contact text but omitted the selected customer ID. The server consequently validated an existing local phone as newly entered contact data.",
+  "productionDiagnosis": {
+    "readOnly": true,
+    "customerlessCompletedReceiptConfirmed": true,
+    "existingSameStoreCustomerConfirmed": true,
+    "productionWrites": 0
+  },
+  "fix": [
+    "Pass the selected customer ID through the completed-receipt API.",
+    "Resolve saved contact details inside the authorized receipt transaction, scoped to the organization and excluding deleted customers.",
+    "Preserve unchanged historical receipt contacts and distinguish explicit customer clearing.",
+    "Retain strict validation for newly entered raw contact values; preserve idempotency and audit the customer link."
+  ],
+  "verification": {
+    "beforeFix": "The added database regression reproduced customerPhoneInvalid.",
+    "regression": {
+      "passed": 148,
+      "failed": 0,
+      "files": 11
+    },
+    "finalFocused": {
+      "passed": 3,
+      "failed": 0
+    },
+    "browser": {
+      "results": [
+        {
+          "viewport": "desktop",
+          "selectedExistingCustomer": true,
+          "submittedCustomerId": true,
+          "saved": true,
+          "phoneValidationErrors": 0,
+          "mutations": 1,
+          "errors": []
+        },
+        {
+          "viewport": "mobile",
+          "selectedExistingCustomer": true,
+          "submittedCustomerId": true,
+          "saved": true,
+          "phoneValidationErrors": 0,
+          "mutations": 1,
+          "errors": []
+        }
+      ]
+    },
+    "browserDatabase": {
+      "isolatedDatabase": "bazaar_hardening_agent4_platform",
+      "results": [
+        {
+          "viewport": "desktop",
+          "linked": true,
+          "legacyPhonePreserved": true,
+          "totalUnchanged": true,
+          "paymentCountUnchanged": true,
+          "stockMovementCountUnchanged": true
+        },
+        {
+          "viewport": "mobile",
+          "linked": true,
+          "legacyPhonePreserved": true,
+          "totalUnchanged": true,
+          "paymentCountUnchanged": true,
+          "stockMovementCountUnchanged": true
+        }
+      ],
+      "inventoryUnchanged": true
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "translations": "passed; no new strings",
+    "productionBuild": "passed",
+    "builtSourceIdentity": [
+      {
+        "file": "src/app/(app)/pos/sell/page.tsx",
+        "sha256": "116af5d4ec4caca4b34ffcab06451fbe1cb8b3267d130aeaafe8327d69a8f884",
+        "builtSourceMatches": true
+      },
+      {
+        "file": "src/server/services/pos.ts",
+        "sha256": "ab697a17be411840be961e2662821c74cadbd65a88e1309318c9a47c3193cf00",
+        "builtSourceMatches": true
+      },
+      {
+        "file": "src/server/trpc/routers/pos.ts",
+        "sha256": "e7188ef825a75e2b6250acb72a3682044f96b592737cd2f0767d55064ad017ba",
+        "builtSourceMatches": true
+      }
+    ]
+  },
+  "preserved": [
+    "Customer records and phone values",
+    "Receipt financial rules and loyalty restrictions",
+    "Stock movement and payment idempotency",
+    "Store and organization authorization",
+    "Established desktop/mobile layout"
+  ],
+  "publication": "CI and production deployment are checked separately after pushing; results saved in tmp/product-recovery-20261102."
+}
