@@ -242,6 +242,9 @@ export const router = t.router;
 export const publicProcedure = baseProcedure;
 export const protectedProcedure = baseProcedure.use(isAuthed).use(ensureActivePlan);
 export const managerProcedure = baseProcedure.use(hasRole([Role.ADMIN, Role.MANAGER])).use(ensureActivePlan);
+// Read-only POST endpoints keep large ID batches out of URLs and preserve the
+// same historical read access as queries. Never use this for business writes.
+export const managerReadProcedure = baseProcedure.use(hasRole([Role.ADMIN, Role.MANAGER]));
 export const adminProcedure = baseProcedure.use(hasRole([Role.ADMIN])).use(ensureActivePlan);
 export const cashierProcedure = baseProcedure
   .use(hasRole([Role.ADMIN, Role.MANAGER, Role.STAFF, Role.CASHIER]))

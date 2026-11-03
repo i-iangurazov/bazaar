@@ -1,6 +1,10 @@
 "use client";
 
 import { isValidQuantity } from "@/lib/quantity";
+import { useSse } from "@/lib/useSse";
+import { inventoryProductImageUrl } from "@/lib/inventoryProductPresentation";
+import { useInventoryLinePresentation } from "./use-inventory-line-presentation";
+import { InventoryLinePresentationNotice, InventoryProductThumbnail } from "./inventory-line-presentation";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -143,6 +147,21 @@ export const InventoryWriteOffsPage = ({
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
   const canSearch = Boolean(storeId && canManageStock);
+  const presentation = useInventoryLinePresentation(
+    { storeId, productIds: lines.map((line) => line.productId), documentKey: editDocumentKey },
+    Boolean(canManageStock && storeId && lines.length),
+  );
+  const { refetch: refetchPresentation } = presentation;
+  const productDetailsRefreshTimer = useRef<ReturnType<typeof setTimeout>>();
+  const refreshProductDetails = useCallback(() => {
+    clearTimeout(productDetailsRefreshTimer.current);
+    productDetailsRefreshTimer.current = setTimeout(() => {
+      refetchPresentation();
+      void trpcUtils.inventory.searchProducts.invalidate();
+    }, 150);
+  }, [refetchPresentation, trpcUtils]);
+  useEffect(() => () => clearTimeout(productDetailsRefreshTimer.current), []);
+  useSse({ "products.updated": refreshProductDetails });
   const authorLabel =
     session?.user?.name ||
     session?.user?.email ||
@@ -213,11 +232,7 @@ export const InventoryWriteOffsPage = ({
   }, [editDocumentKey, editableDocument, t]);
 
   const getPreviewUrl = useCallback((result: SearchResult) => {
-    const imageUrl = result.product.images?.[0]?.url ?? result.product.photoUrl ?? null;
-    if (!imageUrl || imageUrl.startsWith("data:image/")) {
-      return null;
-    }
-    return imageUrl;
+    return inventoryProductImageUrl(result.product);
   }, []);
 
   const getDisplayName = (result: SearchResult) =>
@@ -776,18 +791,7 @@ export const InventoryWriteOffsPage = ({
                         onClick={() => addSearchResult(result)}
                         disabled={!canSearch}
                       >
-                        <span className="bazaar-doc-thumb">
-                          {getPreviewUrl(result) ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={getPreviewUrl(result) ?? ""}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                          )}
-                        </span>
+                        <InventoryProductThumbnail imageUrl={getPreviewUrl(result)} className="bazaar-doc-thumb" />
                         <span className="min-w-0 flex-1">
                           <span className="block whitespace-normal break-words font-medium leading-snug text-foreground">
                             {getDisplayName(result)}
@@ -833,6 +837,7 @@ export const InventoryWriteOffsPage = ({
 
             {lines.length ? (
               <div className="space-y-3">
+                <InventoryLinePresentationNotice isError={presentation.isError} onRetry={presentation.refetch} />
                 <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
                   <span>{tCommon("product")}</span>
                   <span>{t("writeOffQty")}</span>
@@ -843,6 +848,7 @@ export const InventoryWriteOffsPage = ({
                   <span />
                 </div>
                 {lines.map((line, index) => {
+                  const details = presentation.getPresentation(line);
                   const metric = metricByKey.get(line.key);
                   const lineNumber = index + 1;
                   return (
@@ -853,18 +859,7 @@ export const InventoryWriteOffsPage = ({
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">{lineNumber}</span>
-                        <span className="bazaar-doc-line-thumb">
-                          {line.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={line.imageUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                          )}
-                        </span>
+                        <InventoryProductThumbnail imageUrl={details.imageUrl} className="bazaar-doc-line-thumb" />
                         <div className="min-w-0 flex-1">
                           <p className="whitespace-normal break-words text-sm font-semibold leading-snug text-foreground">
                             {line.variantName
@@ -872,7 +867,7 @@ export const InventoryWriteOffsPage = ({
                               : line.productName}
                           </p>
                           <p className="whitespace-normal break-words text-xs leading-snug text-muted-foreground">
-                            {[enableSku ? line.sku : "", enableBarcode ? line.barcode : ""]
+                            {[enableSku ? details.sku : "", enableBarcode ? details.barcode : ""]
                               .filter(Boolean)
                               .join(" • ") || tCommon("notAvailable")}
                           </p>

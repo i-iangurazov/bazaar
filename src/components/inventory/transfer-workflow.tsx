@@ -17,6 +17,9 @@ import {
   type TransferDraftLine,
 } from "./transfer-draft-storage";
 import { useTransferLineContext } from "./use-transfer-line-context";
+import { useInventoryLinePresentation } from "./use-inventory-line-presentation";
+import { InventoryLinePresentationNotice, InventoryProductThumbnail } from "./inventory-line-presentation";
+import { inventoryProductImageUrl } from "@/lib/inventoryProductPresentation";
 import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
 import { TransferAssortmentDialog } from "./transfer-assortment-dialog";
 import { ProductStockCandidates } from "./product-stock-candidates";
@@ -258,6 +261,11 @@ export const InventoryTransfersPage = ({
   const enableBarcode = fromStore?.enableBarcode ?? true;
   const storesAreSame = Boolean(fromStoreId && toStoreId && fromStoreId === toStoreId);
   const canSearch = Boolean(fromStoreId && toStoreId && !storesAreSame && canManageStock);
+  const presentation = useInventoryLinePresentation(
+    { storeId: fromStoreId, productIds: lines.map((line) => line.productId), documentKey: editDocumentKey },
+    Boolean(canManageStock && fromStoreId && lines.length),
+  );
+  const { refetch: refetchPresentation } = presentation;
   const formatMoney = useCallback(
     (value: number) => formatStoreMoney(value, locale, fromStore),
     [fromStore, locale],
@@ -321,8 +329,9 @@ export const InventoryTransfersPage = ({
     refreshTimerRef.current = setTimeout(() => {
       void trpcUtils.inventory.searchProducts.invalidate();
       refetchLineContext();
+      refetchPresentation();
     }, 150);
-  }, [trpcUtils, refetchLineContext]);
+  }, [trpcUtils, refetchLineContext, refetchPresentation]);
   useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
   useSse({
     "products.updated": refreshTransferData,
@@ -388,11 +397,7 @@ export const InventoryTransfersPage = ({
   }, [editDocumentKey, editableDocument, t]);
 
   const getPreviewUrl = useCallback((result: SearchResult) => {
-    const imageUrl = result.product.images?.[0]?.url ?? result.product.photoUrl ?? null;
-    if (!imageUrl || imageUrl.startsWith("data:image/")) {
-      return null;
-    }
-    return imageUrl;
+    return inventoryProductImageUrl(result.product);
   }, []);
 
   const getDisplayName = (result: SearchResult) =>
@@ -1248,18 +1253,7 @@ export const InventoryTransfersPage = ({
                         onClick={() => void addSearchResult(result, "manual")}
                         disabled={!canSearch || fieldsLocked}
                       >
-                        <span className="bazaar-doc-thumb">
-                          {getPreviewUrl(result) ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={getPreviewUrl(result) ?? ""}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                          )}
-                        </span>
+                        <InventoryProductThumbnail imageUrl={getPreviewUrl(result)} className="bazaar-doc-thumb" />
                         <span className="min-w-0 flex-1">
                           <span className="block whitespace-normal break-words font-medium leading-snug text-foreground">
                             {getDisplayName(result)}
@@ -1308,6 +1302,7 @@ export const InventoryTransfersPage = ({
 
             {lines.length ? (
               <div className="space-y-3 overflow-x-auto">
+                <InventoryLinePresentationNotice isError={presentation.isError} onRetry={presentation.refetch} />
                 <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:min-w-[44rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
                   <span>{tCommon("product")}</span>
                   <span>{t("transferQty")}</span>
@@ -1318,6 +1313,7 @@ export const InventoryTransfersPage = ({
                   <span />
                 </div>
                 {lines.map((line, index) => {
+                  const details = presentation.getPresentation(line);
                   const metric = metricByKey.get(line.key);
                   const lineNumber = index + 1;
                   return (
@@ -1328,18 +1324,7 @@ export const InventoryTransfersPage = ({
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">{lineNumber}</span>
-                        <span className="bazaar-doc-line-thumb">
-                          {line.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={line.imageUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                          )}
-                        </span>
+                        <InventoryProductThumbnail imageUrl={details.imageUrl} className="bazaar-doc-line-thumb" />
                         <div className="min-w-0 flex-1">
                           <p className="whitespace-normal break-words text-sm font-semibold leading-snug text-foreground">
                             {line.variantName
@@ -1347,7 +1332,7 @@ export const InventoryTransfersPage = ({
                               : line.productName}
                           </p>
                           <p className="whitespace-normal break-words text-xs leading-snug text-muted-foreground">
-                            {[enableSku ? line.sku : "", enableBarcode ? line.barcode : ""]
+                            {[enableSku ? details.sku : "", enableBarcode ? details.barcode : ""]
                               .filter(Boolean)
                               .join(" • ") || tCommon("notAvailable")}
                           </p>

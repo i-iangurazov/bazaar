@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-03",
+  "scope": "Photos, SKU and barcodes in stock transfers, receiving and write-off documents",
+  "releaseBase": "8c95e7430b73b18f796d0d08155765a5ce1bab02",
+  "branch": "main",
+  "authorization": "Human explicitly requested complete implementation and publication directly in main.",
+  "changes": [
+    "Load exact product IDs through a store- and organization-scoped read-only POST endpoint, with batches up to 500 products.",
+    "Read archived/disconnected product metadata only when the exact product belongs to an accessible historical stock document.",
+    "Overlay presentation at render time; never assign photo responses into document quantities, costs, notes or idempotency state.",
+    "Use one existing thumbnail presentation across source lists and selected rows; recover image failure state when URL changes.",
+    "Refresh selected photo/SKU/barcode after restored drafts, window focus and product SSE events; debounce event bursts.",
+    "Show localized read-error/retry notice without clearing inputs or blocking an otherwise valid document.",
+    "Preserve historical read access on expired subscriptions while stock writes retain their existing subscription gates."
+  ],
+  "preserved": [
+    "Customer-requested two-column operational layouts, proportions and product picker",
+    "Stock posting/correction logic, quantities, costs, local/zero prices, history and document IDs",
+    "Role/store/organization checks and icon-only row actions",
+    "Product list row/name click behavior",
+    "Four unrelated unpublished local marketing/mobile commits; excluded from this release"
+  ],
+  "dataSafety": {
+    "customerDatabaseWrites": 0,
+    "schemaMigrationsAdded": 0,
+    "externalProvidersInTests": "disabled",
+    "browserFixture": "Fresh synthetic PostgreSQL database; no customer records copied",
+    "businessVerification": {
+      "equal": true,
+      "beforeSha256": "4dbdf8ab1c8dc01d6a5073549e0f6d6fae2f1927c4a007cae0107b416b91c295",
+      "afterSha256": "4dbdf8ab1c8dc01d6a5073549e0f6d6fae2f1927c4a007cae0107b416b91c295",
+      "snapshots": 8,
+      "movements": 15,
+      "costs": 4,
+      "prices": 0,
+      "lots": 0,
+      "productCount": 3,
+      "assignments": 6
+    }
+  },
+  "verification": {
+    "focusedExactRelease": {
+      "files": 5,
+      "passed": 59,
+      "failed": 0
+    },
+    "browser": {
+      "scenarios": [
+        "transfer: burst of real SSE photo events coalesced; unsaved quantity and financial inputs preserved",
+        "transfer: existing document photos, legacy photo, no-photo placeholder, identifiers, unchanged inputs, desktop/mobile",
+        "receiving: burst of real SSE photo events coalesced; unsaved quantity and financial inputs preserved",
+        "receiving: existing document photos, legacy photo, no-photo placeholder, identifiers, unchanged inputs, desktop/mobile",
+        "writeoff: burst of real SSE photo events coalesced; unsaved quantity and financial inputs preserved",
+        "writeoff: existing document photos, legacy photo, no-photo placeholder, identifiers, unchanged inputs, desktop/mobile",
+        "receiving: new document shows source photo and identifiers after selection",
+        "writeoff: new document shows source photo and identifiers after selection",
+        "new transfer: source image copied for display, draft reload preserves 7.5 and photo",
+        "network failure: clear error + retry; quantity survives",
+        "kg: document renders photos and identifiers",
+        "en: document renders photos and identifiers",
+        "real authenticated HTTP POST returns all 500 metadata rows without URL-length limits"
+      ],
+      "locales": [
+        "ru",
+        "kg",
+        "en"
+      ],
+      "desktop": "1440x1000",
+      "mobile": "390x844, including scrolled document rows",
+      "javascriptErrors": [],
+      "passed": true
+    },
+    "typecheck": "passed, including release-only source",
+    "lint": "passed without warnings",
+    "translations": "passed",
+    "productionBuild": "passed; optimized Next.js production/standalone build with 129 generated routes. Disposable dependency copy, 4 GiB Node heap, one build CPU, webpack cache disabled; application source unchanged by these build settings.",
+    "broaderWorkingTreeRun": {
+      "passedTests": 3168,
+      "failedAssertions": 0,
+      "failedSuites": 1,
+      "skippedTests": 9,
+      "note": "The unpublished tests/marketing/acquisition.integration.test.ts requires its own hard-coded database. It is absent from the release based on origin/main. That separate work was not modified. Final release has its own focused database/browser checks and requires exact-commit CI."
+    },
+    "environmentRecovery": "An earlier build exhausted local disk and the disposable test PostgreSQL stopped; that run was discarded. Only inactive temporary build copies were removed. The isolated cluster recovered; all accepted checks were rerun. A 2 GiB build heap was insufficient; the accepted production build used 4 GiB.",
+    "evidenceDirectory": "/private/tmp/bazaar-document-photos-20261103",
+    "ci": "Require successful checks and production smoke on the exact published SHA; final run URLs are recorded in the delivery message."
+  },
+  "reference": {
+    "url": "https://github.com/frappe/erpnext/blob/develop/erpnext/stock/doctype/stock_entry/stock_entry.py",
+    "applied": "Fetch image metadata from the referenced item; presentation remains separate from authoritative stock/financial writes."
+  }
+}

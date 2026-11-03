@@ -3389,6 +3389,8 @@
     "transferProductUnavailableSource": "Товар тандалган булак дүкөндө жеткиликсиз.",
     "transferProductUnavailableDestination": "Товар которууда алуучу дүкөнгө дайындалат.",
     "transferAdded": "Кошулду",
+    "lineDetailsLoadError": "Товарлардын сүрөттөрүн жана реквизиттерин жаңыртуу мүмкүн болгон жок. Киргизилген маанилер өзгөргөн жок.",
+    "lineDetailsRetry": "Кайра жүктөө",
     "transferTableTitle": "Которула турган товарлар",
     "transferSourceStock": "Булак калдыгы",
     "transferDestinationStock": "Алуучу калдыгы",
