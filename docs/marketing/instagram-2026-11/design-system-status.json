@@ -9,7 +9,7 @@
     "logo": "public/brand/logo.png; original asset, no redraw",
     "artworkDomainFooter": false
   },
-  "workflow": "ImageGen → Canva → factual/visual review → approval → scheduling after publication authorization",
+  "workflow": "Specialist image tools for photographic assets → actual font selection and typesetting in Canva → visual/factual review → owner approval → publishing only after separate authorization",
   "publication": "disabled by user",
   "paidBudget": null,
   "oldVisuals": "rejected; local renderer and gallery stopped",
@@ -74,7 +74,7 @@
       "publication": false
     }
   },
-  "fullTwoWeekPack": "not completed; revised source layout saved and verified after owner approval; remaining packages not generated in this layout",
+  "fullTwoWeekPack": "not completed; layout multiplication paused while typography and composition are reworked from the owner reference",
   "promptSet": {
     "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
     "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
@@ -96,7 +96,7 @@
     "designId": "DAHZ2Hj1ljY",
     "transactionId": "6478949065009447064",
     "editUrl": "https://www.canva.com/design/DAHZ2Hj1ljY/siiGtUNt9oltBBPzsFFjdQ/edit",
-    "status": "saved after owner explicitly approved the revised preview; native Canva editor reloaded and visually verified",
+    "status": "historical saved proof; owner subsequently rejected the small type; not a final source for multiplying the series",
     "headline": "Почему товара стало меньше?",
     "body": "Продажи и списания — в журнале BAZAAR.",
     "cta": "Записаться на показ",
@@ -119,5 +119,25 @@
     "sha256": "22b450298ec397eca2a1e8eaf1825cd28938342aecac4fc20b1e89affa187e09",
     "source": "Native Canva PNG download after commit",
     "visualCheck": "Full-resolution PNG inspected: original logo, no domain footer, corrected copy and smaller typography."
+  },
+  "latestDirection": {
+    "reference": "artifacts/instagram-canva-20261103/reference-stock-owner-20261103.png",
+    "referenceSha256": "be06a36e0f87152c48dfba91ab733a40b1c4c6d2715d39ca8bd3425341e62762",
+    "source": "Owner supplied image and explicit feedback on 2026-11-03",
+    "keep": [
+      "photographic scene",
+      "blue and white palette",
+      "stronger headline scale of supplied image"
+    ],
+    "remove": [
+      "raster CTA button and its background",
+      "artwork domain footer",
+      "typeset top brand instead of original logo"
+    ],
+    "fontCandidates": ["Oswald + PT Sans", "Cormorant Garamond + PT Sans"],
+    "canvaFontSearch": "Oswald, Cormorant Garamond and PT Sans found; Golos not found. Search only, no font applied.",
+    "fontCoverage": "See font-coverage.json: exact Google Fonts files inspected for ҢңӨөҮү. Canva rendering is a separate check.",
+    "researchBrief": "DESIGN-RESEARCH.md",
+    "status": "research and next-version brief prepared; no new layout generated or approved"
   }
 }

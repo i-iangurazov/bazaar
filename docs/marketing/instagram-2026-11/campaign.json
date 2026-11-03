@@ -1327,11 +1327,14 @@
       "two diagonal symbols from old post",
       "literal reconstruction of old post"
     ],
-    "typography": "Canva selects contemporary stylish typography with verified Cyrillic and Kyrgyz glyph support; no inherited font assumed.",
+    "typography": "Research-backed candidates for comparison: Oswald Medium/Semibold + PT Sans Regular; alternative Cormorant Garamond Semibold + PT Sans Regular. All found in connected Canva. Verify actual Canva glyphs and mobile legibility before approval. Set real font families in Canva; an ImageGen font-name prompt is not font verification.",
     "rendering": "Specialised design application only. Local code-based post generator is stopped.",
     "logo": "Use the original public/brand/logo.png asset at the top instead of typeset BAZAAR. Never redraw or translate the logo.",
     "posterFooter": "No bazaar.kg footer on artwork. Tracking links stay in profile, Story links and ad destinations.",
     "copy": "Use concrete shop situations and plain language. No internal material IDs in public Direct keywords. Every slide must add information.",
-    "composition": "Calm type hierarchy; consistent optical side margins; keep photographs. Review one finished layout before multiplying variants."
+    "composition": "Use the owner-supplied larger-type reference, not the later undersized proof. Keep the successful photograph; balance headline, supporting copy and image together. Do not solve layout issues by shrinking all text.",
+    "artworkCta": "No simulated clickable buttons in PNGs. Organic cover may omit CTA; last slide/caption gives one Direct or profile instruction. Stories reserve room for a real link sticker or reply. Paid ads use native CTA only after budget approval.",
+    "referenceFile": "artifacts/instagram-canva-20261103/reference-stock-owner-20261103.png",
+    "researchBrief": "docs/marketing/instagram-2026-11/DESIGN-RESEARCH.md"
   }
 }
