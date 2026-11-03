@@ -1,6 +1,6 @@
 {
-  "date": "2026-11-03",
-  "stage": "revision_4_remaining_canva_drafts_reviewed_awaiting_owner_save_approval",
+  "date": "2026-11-04",
+  "stage": "revision_5_native_editable_drafts_ready_for_save_confirmation",
   "fullGoalComplete": false,
   "branch": "main",
   "primaryReleaseLanguage": "ru",
@@ -9,12 +9,16 @@
   "publicationEnabled": false,
   "paidBudget": null,
   "created": {
-    "savedCarousels": 4,
-    "savedNativeCarouselPNGs": 18,
-    "reelScenesInNativeCanvaDraft": 24,
-    "storyFramesInNativeCanvaDraft": 42,
-    "feedPagesInNativeCanvaDraft": 14,
-    "additionalAnalyticsProofDraft": 1,
+    "savedNativeMasters": 2,
+    "nativeDraftDesigns": 4,
+    "nativeDraftPages": 98,
+    "nativeTextObjects": 196,
+    "originalLogoInstances": 98,
+    "nativeCarouselPages": 18,
+    "reelScenes": 24,
+    "storyFrames": 42,
+    "feedPages": 14,
+    "analyticsProof": "Separate native feed page 14",
     "adConcepts": 4,
     "profileCovers": 10
   },
@@ -25,29 +29,36 @@
     "storyFrames": 42,
     "adConcepts": 4,
     "adFramesPerFormat": 3,
-    "adFormats": ["feed", "vertical"]
+    "adFormats": [
+      "feed",
+      "vertical"
+    ]
   },
   "completeFilePackages": [],
   "approvedPackages": 0,
-  "reviewGallery": "artifacts/instagram-canva-20261103/review-p04-v4/index.html",
-  "gridPreview": "artifacts/instagram-canva-20261103/production/qa/current-grid-v4-proof.jpg",
-  "generationEvidence": "revision4-image-prompts.json",
+  "reviewGallery": "artifacts/instagram-canva-20261103/review-native-v5/index.html",
+  "gridPreview": "artifacts/instagram-canva-20261103/production/qa/native-v5-grid-desktop.jpg",
+  "generationEvidence": "native-v5-photos.json",
   "remaining": [
-    "Obtain explicit save confirmation for the four remaining Canva draft designs after full preview.",
-    "Commit and export the revised Reels/Stories/feed/ad proof; inspect native files and fully decode videos.",
-    "Check repeatable copy-and-edit on a separate template copy without buying an upgrade.",
-    "Atomically replace campaign/media packages, preserve revision 3, verify complete packages and prepare a review archive.",
-    "Full-package publication approval, Instagram permissions and paid budget remain absent."
+    "Save the 4 reviewed native draft transactions after explicit confirmation required by the Canva integration.",
+    "Reopen saved designs and verify native text, fonts and independent logo/photo layers.",
+    "Export and verify full-size PNGs and MP4s; promote the native package atomically into the review/approval pipeline. Instagram publication and paid advertising remain disabled."
   ],
-  "canvaCapabilityNote": "Classic 1080×1920 page designs expose editable image fills. All 80 assembled pages checked against actual transaction element states; app frames contain one screenshot on a white page. Previous new-video-timeline limitation remains historical. Copy-and-edit is available; autofill previously required another Canva plan.",
+  "canvaCapabilityNote": "Actual native text replacement is available on copied page designs. All 98 pages contain two TEXT objects plus a separate original logo. Photos are text-free image layers; 32 actual application screens are on separate white pages. Canva image-to-design reached the current plan AI limit; no upgrade purchased. Remaining production uses native copy/edit and text-free photographic layers.",
   "profileAudit": "profile-grid.json",
   "figmaSourceBoard": {
     "fileKey": "AtLlLGuYtMYAtodNHuQcG7",
     "url": "https://www.figma.com/design/AtLlLGuYtMYAtodNHuQcG7",
     "imagesUploaded": 75,
     "exportFrameSizes": [
-      [1080, 1350],
-      [1080, 1920]
+      [
+        1080,
+        1350
+      ],
+      [
+        1080,
+        1920
+      ]
     ],
     "localPngExportsCompleted": 0,
     "limitation": "Starter MCP tool call limit reached; no upgrade or bypass. Returned references did not yield PNG downloads."
@@ -59,8 +70,8 @@
     "nextStep": "Continue in the same personal browser. Do not switch profile."
   },
   "nativePlacementVerification": "Not performed in Instagram; publication disabled.",
-  "visualEvidence": "Revision 3: illustrative AI photos and six Canva MP4s. Revision 4: real current-app screenshots are being added on separate clean frames, using an isolated synthetic business; not screen recordings.",
-  "activeEditorialRevision": "revision-plan.json",
+  "visualEvidence": "Revision 5: native editable marketing text and independent logo/photo layers; actual application screenshots on separate pages. The underlying illustrative photography remains raster. Reels are planned scene sequences, not screen recordings; v5 MP4 export remains pending.",
+  "activeEditorialRevision": "native-v5-plan.json",
   "releaseReady": false,
   "previousRevision": {
     "revision": 3,
@@ -156,94 +167,157 @@
         "designId": "DAHZ2tbDPeE",
         "editUrl": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
         "path": "artifacts/instagram-canva-20261103/production/r01_ru.mp4",
-        "size": [1080, 1920],
+        "size": [
+          1080,
+          1920
+        ],
         "seconds": 20,
         "fps": 30,
         "codec": "H264",
         "audio": "none",
         "fullDecode": "passed",
-        "visualFramesCheckedAtSeconds": [2, 7, 12, 17],
+        "visualFramesCheckedAtSeconds": [
+          2,
+          7,
+          12,
+          17
+        ],
         "sha256": "9b3666108ed6aba50efccb5f513e0f85ecef797d66a916b4c726d3be2671a133"
       },
       {
         "id": "r03_ru",
         "canvaDesignId": "DAHZ24dI8do",
-        "sourceTimelineSeconds": [0, 20],
+        "sourceTimelineSeconds": [
+          0,
+          20
+        ],
         "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
         "file": "artifacts/instagram-canva-20261103/production/r03_ru.mp4",
         "sha256": "131841d35fba5918eca4d95eb0b01913f8bd1a324e0b4e7a89fa1369161cf7a1",
-        "size": [1080, 1920],
+        "size": [
+          1080,
+          1920
+        ],
         "seconds": 20,
         "fps": 30,
         "audio": "none",
         "fullDecode": "passed",
         "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
         "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+        "visualFramesCheckedAtSeconds": [
+          2,
+          7,
+          12,
+          17
+        ]
       },
       {
         "id": "r05_ru",
         "canvaDesignId": "DAHZ24dI8do",
-        "sourceTimelineSeconds": [20, 40],
+        "sourceTimelineSeconds": [
+          20,
+          40
+        ],
         "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
         "file": "artifacts/instagram-canva-20261103/production/r05_ru.mp4",
         "sha256": "0fbab9d7af15690b56d6656a98ee18b73cf8a8d5f5b6e6a49d727a347a3760dd",
-        "size": [1080, 1920],
+        "size": [
+          1080,
+          1920
+        ],
         "seconds": 20,
         "fps": 30,
         "audio": "none",
         "fullDecode": "passed",
         "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
         "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+        "visualFramesCheckedAtSeconds": [
+          2,
+          7,
+          12,
+          17
+        ]
       },
       {
         "id": "r08_ru",
         "canvaDesignId": "DAHZ24dI8do",
-        "sourceTimelineSeconds": [40, 60],
+        "sourceTimelineSeconds": [
+          40,
+          60
+        ],
         "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
         "file": "artifacts/instagram-canva-20261103/production/r08_ru.mp4",
         "sha256": "82e33cebcf64afaed11a93fab6ae9d7c57e9962ae17217321172885faa58bcc2",
-        "size": [1080, 1920],
+        "size": [
+          1080,
+          1920
+        ],
         "seconds": 20,
         "fps": 30,
         "audio": "none",
         "fullDecode": "passed",
         "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
         "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+        "visualFramesCheckedAtSeconds": [
+          2,
+          7,
+          12,
+          17
+        ]
       },
       {
         "id": "r10_ru",
         "canvaDesignId": "DAHZ24dI8do",
-        "sourceTimelineSeconds": [60, 80],
+        "sourceTimelineSeconds": [
+          60,
+          80
+        ],
         "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
         "file": "artifacts/instagram-canva-20261103/production/r10_ru.mp4",
         "sha256": "be03ee766391fe8a9de846c0fa674d178aae9c194d7cc4f46d7781a9b17aba74",
-        "size": [1080, 1920],
+        "size": [
+          1080,
+          1920
+        ],
         "seconds": 20,
         "fps": 30,
         "audio": "none",
         "fullDecode": "passed",
         "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
         "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+        "visualFramesCheckedAtSeconds": [
+          2,
+          7,
+          12,
+          17
+        ]
       },
       {
         "id": "r12_ru",
         "canvaDesignId": "DAHZ24dI8do",
-        "sourceTimelineSeconds": [80, 100],
+        "sourceTimelineSeconds": [
+          80,
+          100
+        ],
         "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
         "file": "artifacts/instagram-canva-20261103/production/r12_ru.mp4",
         "sha256": "1024110929f376aedbc06337a481975bbe96307e883de47598fce54602ae3156",
-        "size": [1080, 1920],
+        "size": [
+          1080,
+          1920
+        ],
         "seconds": 20,
         "fps": 30,
         "audio": "none",
         "fullDecode": "passed",
         "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
         "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+        "visualFramesCheckedAtSeconds": [
+          2,
+          7,
+          12,
+          17
+        ]
       }
     ],
     "canvaProjects": [
@@ -303,6 +377,37 @@
       "scope": "Save carousel artwork only; not publication or approval of full day package."
     }
   ],
-  "pendingSaveDesigns": ["DAHZ4ZnGNaI", "DAHZ4c5HwEU", "DAHZ4WMUFFU", "DAHZ4c9kjZs"],
-  "studioDemoServer": "Dedicated 3125 server stopped after capture; files and isolated database retained."
+  "pendingSaveDesigns": [
+    "DAHZ4ZnGNaI",
+    "DAHZ4c5HwEU",
+    "DAHZ4WMUFFU",
+    "DAHZ4c9kjZs"
+  ],
+  "studioDemoServer": "Dedicated 3125 server stopped after capture; files and isolated database retained.",
+  "ownerCorrection": "Real editable text, separate original logo and photo/background layers are required. Revision-4 cover/body text was baked into images; exported files are visual sources, not a final editable package.",
+  "revision4SaveResult": "All four remaining transactions committed after explicit owner approval; native exports are not the final deliverable after the layer correction.",
+  "revision4CreatedArchive": {
+    "savedCarousels": 4,
+    "savedNativeCarouselPNGs": 18,
+    "reelScenesInNativeCanvaDraft": 24,
+    "storyFramesInNativeCanvaDraft": 42,
+    "feedPagesInNativeCanvaDraft": 14,
+    "additionalAnalyticsProofDraft": 1,
+    "adConcepts": 4,
+    "profileCovers": 10
+  },
+  "nativeEditableVerification": {
+    "report": "NATIVE-EDITABLE-STATUS.json",
+    "nativePreviewManifest": "native-v5-preview.json",
+    "nativeTextObjects": 196,
+    "pages": 98,
+    "logoInstances": 98,
+    "photoPages": 56,
+    "separateApplicationPages": 32,
+    "informationPages": 10,
+    "savedReleaseDesigns": 0,
+    "savedMasters": 2,
+    "fullReleaseSaveApproval": "pending after v5 preview",
+    "paidPlanPurchased": false
+  }
 }

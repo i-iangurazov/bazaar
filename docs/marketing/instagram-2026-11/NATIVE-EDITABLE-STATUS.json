@@ -1,0 +1,306 @@
+{
+  "revision": 5,
+  "status": "full_native_draft_verified_pending_save_confirmation",
+  "publicationEnabled": false,
+  "paidBudget": null,
+  "previousRasterExports": "Superseded. They do not satisfy native-text editing and are reference material only.",
+  "nativeMaster": {
+    "designId": "DAHZ4ucV4ig",
+    "nativeText": [
+      {
+        "id": "PBgClc6XFWlH9Wtw-LBd6LZSRYHHTMfgc",
+        "text": "Почему товара\nстало меньше?",
+        "type": "TEXT",
+        "position": {
+          "top": 208,
+          "left": 100
+        },
+        "dimension": {
+          "width": 900,
+          "height": 194.94812
+        }
+      },
+      {
+        "id": "PBgClc6XFWlH9Wtw-LBzJR8BycFD53nqL",
+        "text": "Продажи и списания — \nв журнале BAZAAR.",
+        "type": "TEXT",
+        "position": {
+          "top": 442,
+          "left": 100
+        },
+        "dimension": {
+          "width": 900,
+          "height": 107.99093332
+        }
+      }
+    ],
+    "nativeImages": [
+      {
+        "id": "PBgClc6XFWlH9Wtw-LBQnFzdgpJpg7Gbr",
+        "assetId": "MAHZ4rm06WA",
+        "type": "RECT",
+        "position": {
+          "top": 0,
+          "left": 0
+        },
+        "dimension": {
+          "width": 1080,
+          "height": 1350
+        }
+      },
+      {
+        "id": "PBgClc6XFWlH9Wtw-LBm39Vy2lvCHwz6p",
+        "assetId": "MAHZ4mHn9NY",
+        "type": "RECT",
+        "position": {
+          "top": 691,
+          "left": 0
+        },
+        "dimension": {
+          "width": 291,
+          "height": 305
+        }
+      },
+      {
+        "id": "PBgClc6XFWlH9Wtw-LBl2dzWWnxTYh5rl",
+        "assetId": "MAHZ4iaYR7o",
+        "type": "RECT",
+        "position": {
+          "top": 877,
+          "left": 0
+        },
+        "dimension": {
+          "width": 167,
+          "height": 187
+        }
+      },
+      {
+        "id": "PBgClc6XFWlH9Wtw-LBqbDTy3HZbyqn8V",
+        "assetId": "MAHZ4ksshq0",
+        "type": "RECT",
+        "position": {
+          "top": 675,
+          "left": 830
+        },
+        "dimension": {
+          "width": 230,
+          "height": 304
+        }
+      },
+      {
+        "id": "PBgClc6XFWlH9Wtw-LB2TNnLCBbmHKZYB",
+        "assetId": "MAHZ4pqjd2w",
+        "type": "RECT",
+        "position": {
+          "top": 860,
+          "left": 913
+        },
+        "dimension": {
+          "width": 167,
+          "height": 170
+        }
+      },
+      {
+        "id": "PBgClc6XFWlH9Wtw-LBF2fYwKLflMJ08n",
+        "assetId": "MAHZ4kMxaGo",
+        "type": "RECT",
+        "position": {
+          "top": 776,
+          "left": 228
+        },
+        "dimension": {
+          "width": 645,
+          "height": 338
+        }
+      },
+      {
+        "id": "PBgClc6XFWlH9Wtw-LB1RlNBC3zBnNzfl",
+        "assetId": "MAHZ4lmI7MA",
+        "type": "RECT",
+        "position": {
+          "top": 72,
+          "left": 89.99999999999997
+        },
+        "dimension": {
+          "width": 350.00000000000006,
+          "height": 87.50000000000001
+        }
+      }
+    ],
+    "editUrl": "https://www.canva.com/design/DAHZ4ucV4ig/1J_zpTRC7RZhQIfsmGkSnA/edit",
+    "font": {
+      "family": "Inter",
+      "headline": {
+        "size": 66,
+        "weight": "bold"
+      },
+      "body": {
+        "size": 34,
+        "weight": "bold"
+      }
+    },
+    "originalLogoAsset": "MAHZ4lmI7MA",
+    "actualEditingTest": {
+      "test": "Changed native headline by keyboard, saved, read back as rich text, restored original and reopened",
+      "result": "passed"
+    },
+    "proofImage": "artifacts/instagram-canva-20261103/production/qa/editable-master-layers-proof.jpg",
+    "latestSavedReadVerification": "passed after reopen; 2 TEXT objects and separate original BAZAAR logo"
+  },
+  "storyTransfer": {
+    "designId": "DAHZ4khwLfM",
+    "editUrl": "https://www.canva.com/design/DAHZ4khwLfM/9iu5kmJ045B0tMS-QJ5Dcw/edit",
+    "size": [
+      1080,
+      1920
+    ],
+    "nativeTextCount": 2,
+    "imageLayerCount": 7,
+    "originalLogoAsset": "MAHZ4lmI7MA",
+    "proofImage": "artifacts/instagram-canva-20261103/production/qa/native-story-layer-transfer.jpg",
+    "result": "native_text_and_separate_images_preserved",
+    "cardOffsetY": 235,
+    "nativeText": [
+      {
+        "id": "PBHggxqSd8qylNqg-LBST49BcBr409snZ",
+        "text": "Почему товара\nстало меньше?",
+        "type": "TEXT",
+        "position": {
+          "top": 443,
+          "left": 100
+        },
+        "dimension": {
+          "width": 900,
+          "height": 194.94812
+        }
+      },
+      {
+        "id": "PBHggxqSd8qylNqg-LB7v5bGXzjHZTQP9",
+        "text": "Продажи и списания — \nв журнале BAZAAR.",
+        "type": "TEXT",
+        "position": {
+          "top": 676.9999999999999,
+          "left": 100
+        },
+        "dimension": {
+          "width": 900,
+          "height": 107.99093332
+        }
+      }
+    ],
+    "nativeImages": [
+      {
+        "id": "PBHggxqSd8qylNqg-LB0l8vFfSky860m7",
+        "assetId": "MAHZ4rm06WA",
+        "type": "RECT",
+        "position": {
+          "top": 235,
+          "left": 0
+        },
+        "dimension": {
+          "width": 1080,
+          "height": 1350
+        }
+      },
+      {
+        "id": "PBHggxqSd8qylNqg-LBz9LLtGs10rNyVr",
+        "assetId": "MAHZ4mHn9NY",
+        "type": "RECT",
+        "position": {
+          "top": 926,
+          "left": 0
+        },
+        "dimension": {
+          "width": 291,
+          "height": 305
+        }
+      },
+      {
+        "id": "PBHggxqSd8qylNqg-LBYCpFgsHBdvZ1sW",
+        "assetId": "MAHZ4iaYR7o",
+        "type": "RECT",
+        "position": {
+          "top": 1112,
+          "left": 0
+        },
+        "dimension": {
+          "width": 167,
+          "height": 187
+        }
+      },
+      {
+        "id": "PBHggxqSd8qylNqg-LBPtJ7TKtDQJjNvy",
+        "assetId": "MAHZ4ksshq0",
+        "type": "RECT",
+        "position": {
+          "top": 910,
+          "left": 830
+        },
+        "dimension": {
+          "width": 230,
+          "height": 304
+        }
+      },
+      {
+        "id": "PBHggxqSd8qylNqg-LBpHz4jW5T38rY4C",
+        "assetId": "MAHZ4pqjd2w",
+        "type": "RECT",
+        "position": {
+          "top": 1095,
+          "left": 913
+        },
+        "dimension": {
+          "width": 167,
+          "height": 170
+        }
+      },
+      {
+        "id": "PBHggxqSd8qylNqg-LB6JfN0B7K8gVHpS",
+        "assetId": "MAHZ4kMxaGo",
+        "type": "RECT",
+        "position": {
+          "top": 1011,
+          "left": 228
+        },
+        "dimension": {
+          "width": 645,
+          "height": 338
+        }
+      },
+      {
+        "id": "PBHggxqSd8qylNqg-LBmMSVRp6k9DJbKC",
+        "assetId": "MAHZ4lmI7MA",
+        "type": "RECT",
+        "position": {
+          "top": 307,
+          "left": 89.99999999999997
+        },
+        "dimension": {
+          "width": 350.00000000000006,
+          "height": 87.50000000000001
+        }
+      }
+    ],
+    "latestSavedReadVerification": "passed after reopen; 2 TEXT objects and separate original BAZAAR logo"
+  },
+  "remaining": [
+    "Save the 4 reviewed native draft transactions after explicit confirmation required by the Canva integration.",
+    "Reopen saved full designs, verify fonts/layers and export full-size PNG/MP4 packages.",
+    "Promote the new native media into the existing approval pipeline; no Instagram publication or paid launch."
+  ],
+  "releaseReady": false,
+  "fullGoalComplete": false,
+  "fullDraft": {
+    "designs": 4,
+    "pages": 98,
+    "nativeTextObjects": 196,
+    "separateOriginalLogos": 98,
+    "photoPages": 56,
+    "separateApplicationScreens": 32,
+    "informationPages": 10,
+    "saveStatus": "pending explicit confirmation after v5 preview",
+    "nativePreviewManifest": "native-v5-preview.json",
+    "plan": "native-v5-plan.json",
+    "review": "http://127.0.0.1:3136/"
+  }
+}

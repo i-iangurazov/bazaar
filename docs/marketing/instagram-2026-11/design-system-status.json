@@ -8,11 +8,15 @@
     "forbiddenMarks": "old pair of diagonal symbols",
     "logo": "public/brand/logo.png; original asset, no redraw",
     "artworkDomainFooter": false,
-    "publicPlanNames": ["Новичок", "Бизнесмен", "Монополист"],
+    "publicPlanNames": [
+      "Новичок",
+      "Бизнесмен",
+      "Монополист"
+    ],
     "translatePlanNames": false,
     "screenshotPlacement": "Separate clean pages/scenes only; overlays on illustrations forbidden."
   },
-  "workflow": "Approved owner raster reference → specialist image tool for new photographic scenes → Canva only where native editing preserves accepted typography → factual and visual review → explicit package approval. Publication disabled.",
+  "workflow": "Copy verified native Canva master → editable headline/body → text-free specialist photographic layer and original logo → separate real application evidence pages → factual, mobile and grid review → explicit Canva save confirmation → native export → package approval. Publication disabled.",
   "publication": "disabled by user",
   "paidBudget": null,
   "oldVisuals": "rejected; local renderer and gallery stopped",
@@ -37,9 +41,16 @@
       "id": "catalog_ru_feed",
       "canvaDesignId": "DAHZ1lf4spg",
       "canvaEditUrl": "https://www.canva.com/d/ewcuvq1ktNjlrzB",
-      "size": [1080, 1350],
+      "size": [
+        1080,
+        1350
+      ],
       "status": "saved after explicit owner approval; dataset fields verified",
-      "fields": ["headline", "supporting_line", "cta"],
+      "fields": [
+        "headline",
+        "supporting_line",
+        "cta"
+      ],
       "ownerApproval": "Сохранить и проверить",
       "approvalScope": "Save template and test generation; no Instagram publication or ad launch"
     },
@@ -47,7 +58,10 @@
       "id": "catalog_ru_story",
       "canvaDesignId": "DAHZ1ldFMlc",
       "canvaEditUrl": "https://www.canva.com/d/GUx0eQUV7rRfVW5",
-      "size": [1080, 1920],
+      "size": [
+        1080,
+        1920
+      ],
       "status": "resize test; composition/safe zones not accepted as final"
     }
   ],
@@ -75,9 +89,22 @@
       "visualCheck": "One-line supporting text verified visually. Longer initial wording wrapped onto the product image and was corrected.",
       "testCleanup": "draft changes cancelled; duplicate archived in FAHZ1thu7x8",
       "publication": false
+    },
+    "imageToDesignLimit": {
+      "reached": true,
+      "message": "You've hit your Canva plan's monthly AI limit. To keep creating with ChatGPT, you may need to upgrade. For options, check your plan settings in Canva.",
+      "paidPlanPurchased": false,
+      "fallback": "Native master copies with editable text and separate text-free photographs."
+    },
+    "nativeEditableCopyTest": {
+      "masterDesignId": "DAHZ4ucV4ig",
+      "storyMasterDesignId": "DAHZ4khwLfM",
+      "savedMasterRoundTrip": "passed: native text changed by keyboard, saved, reopened and restored",
+      "fullPackDraftTextReplacement": "passed: 196 matching TEXT objects across 98 pages",
+      "fullPackSaveStatus": "pending explicit confirmation after preview"
     }
   },
-  "fullTwoWeekPack": "Revision 4: four saved carousels with 18 verified native PNGs; 24 Reel scenes, 42 Stories, 14 feed pages and one additional proof have native Canva previews. Remaining drafts require save approval and native file/video export. No full package approved for publication.",
+  "fullTwoWeekPack": "Revision 5: 98 native editable pages in 4 draft transactions, 196 actual text objects and 98 separate original logos. Full visual previews exist. Save confirmation and full-size PNG/MP4 export remain pending. Earlier v3–v4 flattened text cards are archive material.",
   "promptSet": {
     "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
     "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
@@ -94,7 +121,9 @@
     "approvedPackages": 0,
     "incompleteImportRejection": "verified; manifest unchanged",
     "selfDrawingCode": "moved to ignored rejected-generator archive; not in active scripts",
-    "reviewGallery": "artifacts/instagram-canva-20261103/review-p04-v4/index.html"
+    "reviewGallery": "artifacts/instagram-canva-20261103/review-native-v5/index.html",
+    "completePackagesRevision": 3,
+    "currentNativePackagesComplete": 0
   },
   "currentReview": {
     "designId": "DAHZ2Hj1ljY",
@@ -107,11 +136,19 @@
     "logoAssetId": "MAHZ2eLDa-o",
     "logoSource": "public/brand/logo.png",
     "layout": {
-      "size": [1122, 1402],
+      "size": [
+        1122,
+        1402
+      ],
       "textLeft": 104,
       "headlineFontSize": 64,
       "bodyFontSize": 32,
-      "logoBox": [104, 88, 300, 75]
+      "logoBox": [
+        104,
+        88,
+        300,
+        75
+      ]
     },
     "scope": "No publication, paid campaign or template multiplication.",
     "ownerApproval": "Сохранить этот вариант",
@@ -119,7 +156,10 @@
   },
   "exportedProof": {
     "path": "artifacts/instagram-canva-20261103/bazaar-stock-approved-ru-v3.png",
-    "size": [1122, 1402],
+    "size": [
+      1122,
+      1402
+    ],
     "sha256": "22b450298ec397eca2a1e8eaf1825cd28938342aecac4fc20b1e89affa187e09",
     "source": "Native Canva PNG download after commit",
     "visualCheck": "Full-resolution PNG inspected: original logo, no domain footer, corrected copy and smaller typography."
@@ -138,8 +178,19 @@
       "No raster CTA button or website footer",
       "Preserve consistent margins, semantic line breaks and balanced photograph"
     ],
-    "rejectedTrials": ["Cormorant Garamond + PT Sans", "Oswald + PT Sans"],
-    "scope": "Visual reference only. Not approval of a full carousel, translations, scheduling, Instagram publication, or paid ads."
+    "rejectedTrials": [
+      "Cormorant Garamond + PT Sans",
+      "Oswald + PT Sans"
+    ],
+    "scope": "Visual reference only. Not approval of a full carousel, translations, scheduling, Instagram publication, or paid ads.",
+    "nativeRebuildTypography": {
+      "family": "Inter",
+      "headlineCanvaSize": 66,
+      "bodyCanvaSize": 34,
+      "fontWeight": "bold",
+      "status": "Explicitly selected and UI-verified in the native master; original raster font metadata is unknown.",
+      "evidence": "artifacts/instagram-canva-20261103/production/qa/editable-master-layers-proof.jpg"
+    }
   },
   "productionRegistry": "PRODUCTION-STATUS.json",
   "sourceBoard": {
@@ -147,8 +198,14 @@
     "url": "https://www.figma.com/design/AtLlLGuYtMYAtodNHuQcG7",
     "imagesUploaded": 75,
     "exportFrameSizes": [
-      [1080, 1350],
-      [1080, 1920]
+      [
+        1080,
+        1350
+      ],
+      [
+        1080,
+        1920
+      ]
     ],
     "localPngExportsCompleted": 0,
     "limitation": "Starter MCP tool call limit reached; no upgrade or bypass. Returned references did not yield PNG downloads."
@@ -176,7 +233,7 @@
     }
   ],
   "historicalTrialsNote": "newVisuals, promptSet, currentReview and exportedProof record earlier experiments, not selected production artwork. latestDirection and productionRegistry govern this release.",
-  "activeEditorialRevision": "revision-plan.json",
+  "activeEditorialRevision": "native-v5-plan.json",
   "rejectedOverlay": {
     "designId": "DAHZ3o7bSyY",
     "transactionId": "5354175080281234914",
@@ -185,11 +242,16 @@
     "rule": "Owner forbids screenshots over illustrations. Do not reuse overlay preview."
   },
   "revision4NativeCarousels": {
-    "saved": ["p02", "p04", "p09"],
+    "saved": [
+      "p02",
+      "p04",
+      "p09"
+    ],
     "pages": 12,
     "originalLogoOnNewStudioArtwork": "Native Canva image asset MAHZ2eLDa-o",
     "applicationPlacement": "Own clean page; no illustration underneath",
-    "approvalScope": "Save carousel artwork, not complete campaign or publication"
+    "approvalScope": "Save carousel artwork, not complete campaign or publication",
+    "status": "historical image-fill designs; marketing text baked into imagery"
   },
   "updated": "2026-11-04",
   "revision4Current": {
@@ -219,6 +281,39 @@
     "sourcePrompts": "revision4-image-prompts.json",
     "gridDesktop": "artifacts/instagram-canva-20261103/production/qa/current-grid-v4-proof.jpg",
     "gridMobile": "artifacts/instagram-canva-20261103/production/qa/current-grid-v4-mobile.jpg",
-    "repeatableMethod": "Copy existing fixed-page design and replace specialist-generated images. Original logo stays a separate native asset. Current draft assembly validates this path; autofill is a separate plan-restricted capability."
+    "repeatableMethod": "Copy existing fixed-page design and replace specialist-generated images. Original logo stays a separate native asset. Current draft assembly validates this path; autofill is a separate plan-restricted capability.",
+    "status": "superseded_raster_text_reference_only"
+  },
+  "editableLayerRequirement": {
+    "required": true,
+    "ownerConfirmed": "2026-11-04",
+    "headline": "native Canva text, editable",
+    "supportingCopy": "native Canva text, editable",
+    "logo": "original BAZAAR image asset, separate",
+    "photo": "separate editable image object(s)",
+    "priorRasterCards": "visual reference only; cannot be presented as native text templates",
+    "status": "implemented in complete v5 drafts; saved master round trip verified"
+  },
+  "currentNativeDesigns": {
+    "carousels": {
+      "designId": "DAHZ4hKX-Uc",
+      "pages": 18,
+      "saveStatus": "draft transaction pending explicit confirmation"
+    },
+    "feed": {
+      "designId": "DAHZ4i7kvio",
+      "pages": 14,
+      "saveStatus": "draft transaction pending explicit confirmation"
+    },
+    "stories": {
+      "designId": "DAHZ4smWlbE",
+      "pages": 42,
+      "saveStatus": "draft transaction pending explicit confirmation"
+    },
+    "reels": {
+      "designId": "DAHZ4tAd1eY",
+      "pages": 24,
+      "saveStatus": "draft transaction pending explicit confirmation"
+    }
   }
 }

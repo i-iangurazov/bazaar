@@ -1,0 +1,1971 @@
+{
+  "revision": 5,
+  "publicationEnabled": false,
+  "paidBudget": null,
+  "typography": {
+    "family": "Inter",
+    "headlineCanvaSize": 66,
+    "bodyCanvaSize": 34,
+    "weight": "bold",
+    "sizeRule": "Inherited from the same verified native master. Never change per-card heading size."
+  },
+  "logoAsset": "MAHZ4lmI7MA",
+  "photos": {
+    "r01": {
+      "asset": "MAHZ47AbjZU",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/r01-text-free.png"
+    },
+    "p02": {
+      "asset": "MAHZ49zJN94",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/p02-text-free.png"
+    },
+    "r03": {
+      "asset": "MAHZ4_fiQBc",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/r03-text-free.png"
+    },
+    "p04": {
+      "asset": "MAHZ47m6QNc",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/p04-text-free.png"
+    },
+    "r05": {
+      "asset": "MAHZ452cxmw",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/r05-text-free.png"
+    },
+    "r08": {
+      "asset": "MAHZ41oN-iU",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/r08-text-free.png"
+    },
+    "r10": {
+      "asset": "MAHZ4gboUkc",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/r10-text-free.png"
+    },
+    "r12": {
+      "asset": "MAHZ4tut-F0",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/r12-text-free.png"
+    },
+    "p09": {
+      "asset": "MAHZ4gA5uXA",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/p09-text-free.png"
+    },
+    "p11": {
+      "asset": "MAHZ4oWCsFw",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/p11-text-free.png"
+    },
+    "s07": {
+      "asset": "MAHZ4kFic1w",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/photos/s07-text-free.png"
+    }
+  },
+  "appScreens": {
+    "pos-barcode-search-mobile": {
+      "asset": "MAHZ4fFSloI",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/pos-barcode-search-mobile.jpg",
+      "size": [
+        390,
+        302
+      ]
+    },
+    "pos-current-check-mobile": {
+      "asset": "MAHZ4WwaXvA",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/pos-current-check-mobile.jpg",
+      "size": [
+        390,
+        620
+      ]
+    },
+    "receiving-line-input-mobile": {
+      "asset": "MAHZ4dw2aes",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/receiving-line-input-mobile.jpg",
+      "size": [
+        324,
+        378
+      ]
+    },
+    "receiving-journal-mobile": {
+      "asset": "MAHZ4YlMSP0",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/receiving-journal-mobile.jpg",
+      "size": [
+        324,
+        361
+      ]
+    },
+    "stock-count-line-mobile": {
+      "asset": "MAHZ4YnSJLk",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-count-line-mobile.jpg",
+      "size": [
+        324,
+        172
+      ]
+    },
+    "stock-count-summary-mobile": {
+      "asset": "MAHZ4SSJpOw",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-count-summary-mobile.jpg",
+      "size": [
+        358,
+        271
+      ]
+    },
+    "stores-tape-stock-mobile": {
+      "asset": "MAHZ4e19suU",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stores-tape-stock-mobile.jpg",
+      "size": [
+        356,
+        532
+      ]
+    },
+    "baam-product-ranking": {
+      "asset": "MAHZ4ZOTsyQ",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/baam-product-ranking.jpg",
+      "size": [
+        449,
+        193
+      ]
+    },
+    "analytics-revenue": {
+      "asset": "MAHZ4coIBSg",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/analytics-revenue.jpg",
+      "size": [
+        331,
+        214
+      ]
+    },
+    "analytics-gross-profit": {
+      "asset": "MAHZ4cQI59I",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/analytics-gross-profit.jpg",
+      "size": [
+        331,
+        214
+      ]
+    },
+    "order-summary-mobile": {
+      "asset": "MAHZ4ampyKE",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/order-summary-mobile.jpg",
+      "size": [
+        358,
+        335
+      ]
+    },
+    "order-lines-mobile": {
+      "asset": "MAHZ4RMNrok",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/order-lines-mobile.jpg",
+      "size": [
+        358,
+        303
+      ]
+    },
+    "integration-api-mobile": {
+      "asset": "MAHZ4T5vzQM",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/integration-api-mobile.jpg",
+      "size": [
+        358,
+        243
+      ]
+    },
+    "signup-form-mobile": {
+      "asset": "MAHZ4c_y8AA",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/signup-form-mobile.jpg",
+      "size": [
+        358,
+        431
+      ]
+    },
+    "integration-mmarket-mobile": {
+      "asset": "MAHZ4YnLSqk",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/integration-mmarket-mobile.jpg",
+      "size": [
+        358,
+        171
+      ]
+    },
+    "transfer-recipient-stock-mobile": {
+      "asset": "MAHZ4YuilSY",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/transfer-recipient-stock-mobile.jpg",
+      "size": [
+        358,
+        387
+      ]
+    },
+    "stock-sale-mobile": {
+      "asset": "MAHZ3uurxEs",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-sale-mobile.jpg",
+      "size": [
+        324,
+        363
+      ]
+    },
+    "stock-writeoff-mobile": {
+      "asset": "MAHZ31DiGB4",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-writeoff-mobile.jpg",
+      "size": [
+        324,
+        361
+      ]
+    },
+    "catalog-shirt-mobile-v2": {
+      "asset": "MAHZ4Gonpho",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-shirt-mobile-v2.jpg",
+      "size": [
+        356,
+        350
+      ]
+    },
+    "catalog-variant-stock-mobile": {
+      "asset": "MAHZ4IlXFMo",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-variant-stock-mobile.jpg",
+      "size": [
+        298,
+        287
+      ]
+    },
+    "studio-original-mobile": {
+      "asset": "MAHZ4I7K1zE",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-original-mobile.jpg",
+      "size": [
+        324,
+        378
+      ]
+    },
+    "studio-result-mobile": {
+      "asset": "MAHZ4N5nx90",
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-result-mobile.jpg",
+      "size": [
+        324,
+        378
+      ]
+    }
+  },
+  "designs": {
+    "carousels": {
+      "id": "DAHZ4hKX-Uc",
+      "title": "BAZAAR · 4 карусели · РЕДАКТИРУЕМЫЕ · v5",
+      "owner": {
+        "user_id": "oUZaykWEHE08YcTpEfFjUs",
+        "team_id": "oBZayD2Y6qwA5VPjdSVAvc"
+      },
+      "urls": {
+        "edit_url": "https://www.canva.com/d/3FbjZbw7brIGPdV",
+        "view_url": "https://www.canva.com/d/nkQf4gV0XmFnYCB"
+      },
+      "created_at": 1793731984,
+      "updated_at": 1793731984,
+      "page_count": 1,
+      "design_types": [
+        "custom"
+      ],
+      "pages": [
+        {
+          "itemId": "p02",
+          "day": 2,
+          "layout": "photo",
+          "photoKey": "p02",
+          "headline": "Каталог\nбез путаницы",
+          "body": "Размеры, цвета и поиск —\nв BAZAAR.",
+          "slide": 1,
+          "page": 1,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p02",
+          "day": 2,
+          "layout": "application",
+          "screenKey": "catalog-shirt-mobile-v2",
+          "headline": "Карточка товара",
+          "body": "Название, цена и остаток.\nДемонстрационные данные",
+          "slide": 2,
+          "page": 2,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 163.65714285714284,
+            "top": 370,
+            "width": 752.6857142857143,
+            "height": 740
+          }
+        },
+        {
+          "itemId": "p02",
+          "day": 2,
+          "layout": "application",
+          "screenKey": "catalog-variant-stock-mobile",
+          "headline": "Размер и цвет",
+          "body": "Остатки вариантов — отдельно.\nДемонстрационные данные",
+          "slide": 3,
+          "page": 3,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 155.81881533101046,
+            "top": 370,
+            "width": 768.3623693379791,
+            "height": 740
+          }
+        },
+        {
+          "itemId": "p02",
+          "day": 2,
+          "layout": "photo",
+          "photoKey": "p02",
+          "headline": "Покажем\nна вашем примере",
+          "body": "Напишите «КАТАЛОГ»\nв Direct.",
+          "slide": 4,
+          "page": 4,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p04",
+          "day": 4,
+          "layout": "photo",
+          "photoKey": "p04",
+          "headline": "Почему товара\nстало меньше?",
+          "body": "Продажи и списания —\nв журнале BAZAAR.",
+          "slide": 1,
+          "page": 5,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p04",
+          "day": 4,
+          "layout": "application",
+          "screenKey": "stock-sale-mobile",
+          "headline": "Продажа",
+          "body": "Магазин, дата и количество.\nДемонстрационные данные",
+          "slide": 2,
+          "page": 6,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 209.75206611570246,
+            "top": 369.99999999999994,
+            "width": 660.4958677685951,
+            "height": 740.0000000000001
+          }
+        },
+        {
+          "itemId": "p04",
+          "day": 4,
+          "layout": "application",
+          "screenKey": "stock-writeoff-mobile",
+          "headline": "Списание",
+          "body": "Проверьте документ операции.\nДемонстрационные данные",
+          "slide": 3,
+          "page": 7,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 207.92243767313022,
+            "top": 370,
+            "width": 664.1551246537396,
+            "height": 740
+          }
+        },
+        {
+          "itemId": "p04",
+          "day": 4,
+          "layout": "photo",
+          "photoKey": "p04",
+          "headline": "Покажем\nна примере",
+          "body": "Напишите «ОСТАТОК»\nв Direct.",
+          "slide": 4,
+          "page": 8,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p09",
+          "day": 9,
+          "layout": "photo",
+          "photoKey": "p09",
+          "headline": "Фото товара\nдля каталога",
+          "body": "Студия картинок\nв BAZAAR.",
+          "slide": 1,
+          "page": 9,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p09",
+          "day": 9,
+          "layout": "application",
+          "screenKey": "studio-original-mobile",
+          "headline": "Исходное фото",
+          "body": "Оригинал сохраняется отдельно.\nДемонстрационные данные",
+          "slide": 2,
+          "page": 10,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 222.85714285714283,
+            "top": 370,
+            "width": 634.2857142857143,
+            "height": 740
+          }
+        },
+        {
+          "itemId": "p09",
+          "day": 9,
+          "layout": "application",
+          "screenKey": "studio-result-mobile",
+          "headline": "Результат",
+          "body": "Проверьте форму, цвет и детали.\nДемонстрационные данные",
+          "slide": 3,
+          "page": 11,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 222.85714285714283,
+            "top": 370,
+            "width": 634.2857142857143,
+            "height": 740
+          }
+        },
+        {
+          "itemId": "p09",
+          "day": 9,
+          "layout": "photo",
+          "photoKey": "p09",
+          "headline": "Покажем\nстудию картинок",
+          "body": "Напишите «ФОТО»\nв Direct.",
+          "slide": 4,
+          "page": 12,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "photo",
+          "photoKey": "p11",
+          "headline": "Тариф под\nваш магазин",
+          "body": "Магазины, товары,\nпользователи и модули.",
+          "slide": 1,
+          "page": 13,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "information",
+          "headline": "Новичок",
+          "body": "1 магазин\nДо 1 000 товаров\nДо 5 активных пользователей\n\nКасса, каталог,\nзаказы и ценники.",
+          "slide": 2,
+          "page": 14,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "information",
+          "headline": "Бизнесмен",
+          "body": "До 5 магазинов\nДо 5 000 товаров\nДо 10 активных пользователей\n\nВсё из тарифа «Новичок».\nИнвентаризация и аналитика.\nИмпорт и экспорт.",
+          "slide": 3,
+          "page": 15,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "information",
+          "headline": "Монополист",
+          "body": "До 15 магазинов\nДо 20 000 товаров\nДо 20 активных пользователей\n\nВсё из тарифа «Бизнесмен».\nКомплаенс и инструменты\nподдержки.\nККМ — при отдельной настройке.",
+          "slide": 4,
+          "page": 16,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "information",
+          "headline": "Что важно\nдля выбора?",
+          "body": "Сколько магазинов?\nСколько товаров?\nСколько сотрудников?\nКакие нужны модули?",
+          "slide": 5,
+          "page": 17,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "photo",
+          "photoKey": "p11",
+          "headline": "Подберём\nпод вашу задачу",
+          "body": "Напишите «ТАРИФ»\nв Direct.",
+          "slide": 6,
+          "page": 18,
+          "size": [
+            1080,
+            1350
+          ]
+        }
+      ]
+    },
+    "feed": {
+      "id": "DAHZ4i7kvio",
+      "title": "BAZAAR · Обложки и реклама · РЕДАКТИРУЕМЫЕ · v5",
+      "owner": {
+        "user_id": "oUZaykWEHE08YcTpEfFjUs",
+        "team_id": "oBZayD2Y6qwA5VPjdSVAvc"
+      },
+      "urls": {
+        "edit_url": "https://www.canva.com/d/KlK_aZFSTqc6hlH",
+        "view_url": "https://www.canva.com/d/CasVYNx270EUsYS"
+      },
+      "created_at": 1793731988,
+      "updated_at": 1793731988,
+      "page_count": 1,
+      "design_types": [
+        "custom"
+      ],
+      "pages": [
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "От товара\nдо чека",
+          "body": "Поиск, цена и текущий чек —\nв кассе BAZAAR.",
+          "role": "cover",
+          "page": 1,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "Покажем\nработу кассы",
+          "body": "Напишите «КАССА»\nв Direct.",
+          "role": "cta",
+          "page": 2,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "photo",
+          "photoKey": "r03",
+          "headline": "Приехала\nновая поставка?",
+          "body": "Товары, количество\nи себестоимость.",
+          "role": "cover",
+          "page": 3,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "photo",
+          "photoKey": "r03",
+          "headline": "Покажем\nприёмку товара",
+          "body": "Напишите «ПОСТАВКА»\nв Direct.",
+          "role": "cta",
+          "page": 4,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "photo",
+          "photoKey": "r05",
+          "headline": "На полке одно.\nВ учёте другое?",
+          "body": "Сверьте количество\nв инвентаризации.",
+          "role": "cover",
+          "page": 5,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "photo",
+          "photoKey": "r05",
+          "headline": "Разберём\nвашу сверку",
+          "body": "Напишите «СВЕРКА»\nв Direct.",
+          "role": "cta",
+          "page": 6,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "photo",
+          "photoKey": "r08",
+          "headline": "Где есть\nнужный товар?",
+          "body": "Проверьте остаток\nв нужном магазине.",
+          "role": "cover",
+          "page": 7,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "photo",
+          "photoKey": "r08",
+          "headline": "Покажем работу\nс магазинами",
+          "body": "Напишите «МАГАЗИНЫ»\nв Direct.",
+          "role": "cta",
+          "page": 8,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Что показали\nпродажи?",
+          "body": "Выручка, себестоимость\nи валовая прибыль.",
+          "role": "cover",
+          "page": 9,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Разберём\nваш отчёт",
+          "body": "Напишите «ОТЧЁТ»\nв Direct.",
+          "role": "cta",
+          "page": 10,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "photo",
+          "photoKey": "r12",
+          "headline": "Ваш каталог.\nВаши каналы.",
+          "body": "Интеграции\nв BAZAAR.",
+          "role": "cover",
+          "page": 11,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "photo",
+          "photoKey": "r12",
+          "headline": "Разберём\nваш канал продаж",
+          "body": "Напишите «КАНАЛЫ»\nв Direct.",
+          "role": "cta",
+          "page": 12,
+          "size": [
+            1080,
+            1350
+          ]
+        },
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "application",
+          "screenKey": "pos-barcode-search-mobile",
+          "headline": "Товар на кассе",
+          "body": "Поиск по штрихкоду.\nДемонстрационные данные",
+          "role": "supporting_ad_proof",
+          "page": 13,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 90.00000000000006,
+            "top": 391.53846153846155,
+            "width": 899.9999999999999,
+            "height": 696.9230769230769
+          }
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "application",
+          "screenKey": "analytics-gross-profit",
+          "headline": "Валовая прибыль",
+          "body": "До расходов вашего бизнеса.\nДемонстрационные данные",
+          "role": "analytics_ad_proof",
+          "page": 14,
+          "size": [
+            1080,
+            1350
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 449.0634441087613,
+            "width": 900,
+            "height": 581.8731117824774
+          }
+        }
+      ]
+    },
+    "stories": {
+      "id": "DAHZ4smWlbE",
+      "title": "BAZAAR · Stories 14×3 · РЕДАКТИРУЕМЫЕ · v5",
+      "owner": {
+        "user_id": "oUZaykWEHE08YcTpEfFjUs",
+        "team_id": "oBZayD2Y6qwA5VPjdSVAvc"
+      },
+      "urls": {
+        "edit_url": "https://www.canva.com/d/UAetyU-TlcntVPm",
+        "view_url": "https://www.canva.com/d/Ox1ZI1RDDH_I4Ov"
+      },
+      "created_at": 1793731985,
+      "updated_at": 1793731985,
+      "page_count": 1,
+      "design_types": [
+        "custom"
+      ],
+      "pages": [
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "Как находите\nтовар на кассе?",
+          "body": "Штрихкодом\nили через поиск?",
+          "frame": 1,
+          "interaction": {
+            "type": "poll",
+            "answers": [
+              "Штрихкод",
+              "Поиск"
+            ],
+            "question": "Как ищете товар на кассе?"
+          },
+          "page": 1,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "application",
+          "screenKey": "pos-barcode-search-mobile",
+          "headline": "Товар на кассе",
+          "body": "Найдите позицию по штрихкоду.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 2,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90.00000000000006,
+            "top": 671.5384615384615,
+            "width": 899.9999999999999,
+            "height": 696.9230769230769
+          }
+        },
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "Посмотрите\nкассу в работе",
+          "body": "Напишите «КАССА»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "КАССА"
+          },
+          "page": 3,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p02",
+          "day": 2,
+          "layout": "photo",
+          "photoKey": "p02",
+          "headline": "Одна модель.\nРазные размеры.",
+          "body": "Как различаете варианты\nв своём каталоге?",
+          "frame": 1,
+          "interaction": null,
+          "page": 4,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p02",
+          "day": 2,
+          "layout": "application",
+          "screenKey": "catalog-shirt-mobile-v2",
+          "headline": "Карточка товара",
+          "body": "Цена и остаток в магазине.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 5,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 112.80000000000001,
+            "top": 600,
+            "width": 854.4,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "p02",
+          "day": 2,
+          "layout": "photo",
+          "photoKey": "p02",
+          "headline": "Разберём\nваш ассортимент",
+          "body": "Напишите «КАТАЛОГ»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "КАТАЛОГ"
+          },
+          "page": 6,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "photo",
+          "photoKey": "r03",
+          "headline": "Поставка\nуже приехала?",
+          "body": "Запишите количество\nи себестоимость.",
+          "frame": 1,
+          "interaction": null,
+          "page": 7,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "application",
+          "screenKey": "receiving-line-input-mobile",
+          "headline": "Приёмка товара",
+          "body": "Количество и себестоимость.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 8,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 180,
+            "top": 600,
+            "width": 720,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "photo",
+          "photoKey": "r03",
+          "headline": "Покажем\nприёмку товара",
+          "body": "Напишите «ПОСТАВКА»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ПОСТАВКА"
+          },
+          "page": 9,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p04",
+          "day": 4,
+          "layout": "photo",
+          "photoKey": "p04",
+          "headline": "Почему товара\nстало меньше?",
+          "body": "Начните с истории\nопераций.",
+          "frame": 1,
+          "interaction": null,
+          "page": 10,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p04",
+          "day": 4,
+          "layout": "application",
+          "screenKey": "stock-writeoff-mobile",
+          "headline": "Списание",
+          "body": "Проверьте документ и количество.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 11,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 163.04709141274236,
+            "top": 600,
+            "width": 753.9058171745153,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "p04",
+          "day": 4,
+          "layout": "photo",
+          "photoKey": "p04",
+          "headline": "Покажем,\nгде проверить",
+          "body": "Напишите «ОСТАТОК»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ОСТАТОК"
+          },
+          "page": 12,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "photo",
+          "photoKey": "r05",
+          "headline": "Когда сверяли\nостатки?",
+          "body": "Начните с одной\nгруппы товаров.",
+          "frame": 1,
+          "interaction": null,
+          "page": 13,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "application",
+          "screenKey": "stock-count-line-mobile",
+          "headline": "Сверка остатков",
+          "body": "Учётное и фактическое.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 14,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 781.1111111111111,
+            "width": 900,
+            "height": 477.77777777777777
+          }
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "photo",
+          "photoKey": "r05",
+          "headline": "Покажем\nинвентаризацию",
+          "body": "Напишите «СВЕРКА»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "СВЕРКА"
+          },
+          "page": 15,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s06",
+          "day": 6,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Спросите BAAM\nо продажах",
+          "body": "Например: топ товаров\nза октябрь.",
+          "frame": 1,
+          "interaction": null,
+          "page": 16,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s06",
+          "day": 6,
+          "layout": "application",
+          "screenKey": "baam-product-ranking",
+          "headline": "Ответ BAAM",
+          "body": "Топ товаров за октябрь.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 17,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 826.5701559020044,
+            "width": 900,
+            "height": 386.85968819599105
+          }
+        },
+        {
+          "itemId": "s06",
+          "day": 6,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Посмотрите\nBAAM в работе",
+          "body": "Напишите «BAAM»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "BAAM"
+          },
+          "page": 18,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s07",
+          "day": 7,
+          "layout": "photo",
+          "photoKey": "s07",
+          "headline": "Покупатель\nзаказал товар?",
+          "body": "Сохраните заказ\nи состав покупки.",
+          "frame": 1,
+          "interaction": null,
+          "page": 19,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s07",
+          "day": 7,
+          "layout": "application",
+          "screenKey": "order-lines-mobile",
+          "headline": "Состав заказа",
+          "body": "Товары и сумма заказа.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 20,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 639.1340782122904,
+            "width": 900,
+            "height": 761.731843575419
+          }
+        },
+        {
+          "itemId": "s07",
+          "day": 7,
+          "layout": "photo",
+          "photoKey": "s07",
+          "headline": "Покажем\nработу с заказами",
+          "body": "Напишите «ЗАКАЗ»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ЗАКАЗ"
+          },
+          "page": 21,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "photo",
+          "photoKey": "r08",
+          "headline": "В какой точке\nесть товар?",
+          "body": "Начните с выбора\nмагазина.",
+          "frame": 1,
+          "interaction": null,
+          "page": 22,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "application",
+          "screenKey": "stores-tape-stock-mobile",
+          "headline": "Остатки по точкам",
+          "body": "Выберите нужный магазин.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 23,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 258.9473684210526,
+            "top": 600,
+            "width": 562.1052631578948,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "photo",
+          "photoKey": "r08",
+          "headline": "Сколько у вас\nмагазинов?",
+          "body": "Напишите «МАГАЗИНЫ»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "МАГАЗИНЫ"
+          },
+          "page": 24,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p09",
+          "day": 9,
+          "layout": "photo",
+          "photoKey": "p09",
+          "headline": "Фото\nдля каталога",
+          "body": "Начните с реального\nснимка товара.",
+          "frame": 1,
+          "interaction": null,
+          "page": 25,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p09",
+          "day": 9,
+          "layout": "application",
+          "screenKey": "studio-result-mobile",
+          "headline": "Результат студии",
+          "body": "Оцените детали перед сохранением.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 26,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 180,
+            "top": 600,
+            "width": 720,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "p09",
+          "day": 9,
+          "layout": "photo",
+          "photoKey": "p09",
+          "headline": "Покажем\nстудию картинок",
+          "body": "Напишите «ФОТО»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ФОТО"
+          },
+          "page": 27,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Выручка —\nещё не прибыль",
+          "body": "Проверьте себестоимость\nи возвраты.",
+          "frame": 1,
+          "interaction": null,
+          "page": 28,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "application",
+          "screenKey": "analytics-gross-profit",
+          "headline": "Валовая прибыль",
+          "body": "До расходов вашего бизнеса.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 29,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 729.0634441087614,
+            "width": 900,
+            "height": 581.8731117824774
+          }
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Разберём\nваш отчёт",
+          "body": "Напишите «ОТЧЁТ»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ОТЧЁТ"
+          },
+          "page": 30,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "information",
+          "headline": "Новичок",
+          "body": "1 магазин\nДо 1 000 товаров\nДо 5 активных пользователей\n\nКасса, каталог,\nзаказы и ценники.",
+          "frame": 1,
+          "interaction": null,
+          "page": 31,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "information",
+          "headline": "Бизнесмен",
+          "body": "До 5 магазинов\nДо 5 000 товаров\nДо 10 активных пользователей\n\nВсё из тарифа «Новичок».\nИнвентаризация и аналитика.\nИмпорт и экспорт.",
+          "frame": 2,
+          "interaction": null,
+          "page": 32,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "p11",
+          "day": 11,
+          "layout": "information",
+          "headline": "Монополист",
+          "body": "До 15 магазинов\nДо 20 000 товаров\nДо 20 активных пользователей\n\nВсё из тарифа «Бизнесмен».\nКомплаенс и инструменты\nподдержки.\nККМ — при отдельной настройке.\n\nНапишите «ТАРИФ» в Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ТАРИФ"
+          },
+          "page": 33,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "photo",
+          "photoKey": "r12",
+          "headline": "Где ещё\nпродаёте товары?",
+          "body": "Кроме своего\nмагазина?",
+          "frame": 1,
+          "interaction": {
+            "type": "question_sticker",
+            "question": "Какой канал хотите подключить?"
+          },
+          "page": 34,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "application",
+          "screenKey": "integration-mmarket-mobile",
+          "headline": "Подключение канала",
+          "body": "Требуется отдельная настройка.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 35,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 805.0558659217877,
+            "width": 900,
+            "height": 429.8882681564246
+          }
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "photo",
+          "photoKey": "r12",
+          "headline": "Разберём\nваш канал продаж",
+          "body": "Напишите «КАНАЛЫ»\nв Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "КАНАЛЫ"
+          },
+          "page": 36,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s13",
+          "day": 13,
+          "layout": "information",
+          "headline": "Что важно знать\nдо подключения?",
+          "body": "Касса, остатки\nили перенос каталога?",
+          "frame": 1,
+          "interaction": {
+            "type": "question_sticker",
+            "question": "Что хотите разобрать?"
+          },
+          "page": 37,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s13",
+          "day": 13,
+          "layout": "information",
+          "headline": "Что важно\nдля выбора?",
+          "body": "Сколько магазинов?\nСколько товаров?\nСколько сотрудников?\nКакие нужны модули?",
+          "frame": 2,
+          "interaction": null,
+          "page": 38,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s13",
+          "day": 13,
+          "layout": "information",
+          "headline": "Задайте\nсвой вопрос",
+          "body": "Ответьте на Stories\nили напишите в Direct.",
+          "frame": 3,
+          "interaction": {
+            "type": "direct_reply"
+          },
+          "page": 39,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s14",
+          "day": 14,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "Начните\nсо своего магазина",
+          "body": "Создайте аккаунт\nBAZAAR.",
+          "frame": 1,
+          "interaction": null,
+          "page": 40,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "s14",
+          "day": 14,
+          "layout": "application",
+          "screenKey": "signup-form-mobile",
+          "headline": "Регистрация",
+          "body": "Создайте аккаунт BAZAAR.\nДемонстрационные данные",
+          "frame": 2,
+          "interaction": null,
+          "page": 41,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 191.1368909512761,
+            "top": 600,
+            "width": 697.7262180974478,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "s14",
+          "day": 14,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "Создайте\nаккаунт BAZAAR",
+          "body": "Ссылка —\nв стикере Stories.",
+          "frame": 3,
+          "interaction": {
+            "type": "link_sticker",
+            "text": "Создать аккаунт",
+            "utmContent": "s14_ru"
+          },
+          "page": 42,
+          "size": [
+            1080,
+            1920
+          ]
+        }
+      ]
+    },
+    "reels": {
+      "id": "DAHZ4tAd1eY",
+      "title": "BAZAAR · 6 Reels × 4 сцены · РЕДАКТИРУЕМЫЕ · v5",
+      "owner": {
+        "user_id": "oUZaykWEHE08YcTpEfFjUs",
+        "team_id": "oBZayD2Y6qwA5VPjdSVAvc"
+      },
+      "urls": {
+        "edit_url": "https://www.canva.com/d/6A8zArF-3cuE58A",
+        "view_url": "https://www.canva.com/d/7eZllXfXMasdkKT"
+      },
+      "created_at": 1793731987,
+      "updated_at": 1793731987,
+      "page_count": 1,
+      "design_types": [
+        "custom"
+      ],
+      "pages": [
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "От товара\nдо чека",
+          "body": "Поиск, цена и текущий чек —\nв кассе BAZAAR.",
+          "scene": 1,
+          "page": 1,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "application",
+          "screenKey": "pos-barcode-search-mobile",
+          "headline": "Найдите товар",
+          "body": "Штрихкод или поиск в кассе.\nДемонстрационные данные",
+          "scene": 2,
+          "page": 2,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90.00000000000006,
+            "top": 671.5384615384615,
+            "width": 899.9999999999999,
+            "height": 696.9230769230769
+          }
+        },
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "application",
+          "screenKey": "stock-sale-mobile",
+          "headline": "Продажа в истории",
+          "body": "Завершённый чек можно открыть.\nДемонстрационные данные",
+          "scene": 3,
+          "page": 3,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 165.1239669421488,
+            "top": 600,
+            "width": 749.7520661157024,
+            "height": 839.9999999999999
+          }
+        },
+        {
+          "itemId": "r01",
+          "day": 1,
+          "layout": "photo",
+          "photoKey": "r01",
+          "headline": "Покажем\nработу кассы",
+          "body": "Напишите «КАССА»\nв Direct.",
+          "scene": 4,
+          "page": 4,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "photo",
+          "photoKey": "r03",
+          "headline": "Приехала\nновая поставка?",
+          "body": "Товары, количество\nи себестоимость.",
+          "scene": 1,
+          "page": 5,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "application",
+          "screenKey": "receiving-line-input-mobile",
+          "headline": "Приёмка товара",
+          "body": "Количество и себестоимость.\nДемонстрационные данные",
+          "scene": 2,
+          "page": 6,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 180,
+            "top": 600,
+            "width": 720,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "application",
+          "screenKey": "receiving-journal-mobile",
+          "headline": "Документ приёмки",
+          "body": "Проверьте проведённую операцию.\nДемонстрационные данные",
+          "scene": 3,
+          "page": 7,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 163.04709141274236,
+            "top": 600,
+            "width": 753.9058171745153,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "r03",
+          "day": 3,
+          "layout": "photo",
+          "photoKey": "r03",
+          "headline": "Покажем\nприёмку товара",
+          "body": "Напишите «ПОСТАВКА»\nв Direct.",
+          "scene": 4,
+          "page": 8,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "photo",
+          "photoKey": "r05",
+          "headline": "На полке одно.\nВ учёте другое?",
+          "body": "Сверьте количество\nв инвентаризации.",
+          "scene": 1,
+          "page": 9,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "application",
+          "screenKey": "stock-count-line-mobile",
+          "headline": "Сверка остатков",
+          "body": "Внесите фактическое количество.\nДемонстрационные данные",
+          "scene": 2,
+          "page": 10,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 781.1111111111111,
+            "width": 900,
+            "height": 477.77777777777777
+          }
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "application",
+          "screenKey": "stock-count-summary-mobile",
+          "headline": "Расхождение",
+          "body": "Проверьте до проведения.\nДемонстрационные данные",
+          "scene": 3,
+          "page": 11,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 679.3575418994413,
+            "width": 900,
+            "height": 681.2849162011173
+          }
+        },
+        {
+          "itemId": "r05",
+          "day": 5,
+          "layout": "photo",
+          "photoKey": "r05",
+          "headline": "Разберём\nвашу сверку",
+          "body": "Напишите «СВЕРКА»\nв Direct.",
+          "scene": 4,
+          "page": 12,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "photo",
+          "photoKey": "r08",
+          "headline": "Где есть\nнужный товар?",
+          "body": "Проверьте остаток\nв нужном магазине.",
+          "scene": 1,
+          "page": 13,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "application",
+          "screenKey": "stores-tape-stock-mobile",
+          "headline": "Остатки по точкам",
+          "body": "Количество в выбранном магазине.\nДемонстрационные данные",
+          "scene": 2,
+          "page": 14,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 258.9473684210526,
+            "top": 600,
+            "width": 562.1052631578948,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "application",
+          "screenKey": "transfer-recipient-stock-mobile",
+          "headline": "После перемещения",
+          "body": "Проверьте остаток у получателя.\nДемонстрационные данные",
+          "scene": 3,
+          "page": 15,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 151.47286821705427,
+            "top": 600,
+            "width": 777.0542635658915,
+            "height": 840
+          }
+        },
+        {
+          "itemId": "r08",
+          "day": 8,
+          "layout": "photo",
+          "photoKey": "r08",
+          "headline": "Покажем работу\nс магазинами",
+          "body": "Напишите «МАГАЗИНЫ»\nв Direct.",
+          "scene": 4,
+          "page": 16,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Что показали\nпродажи?",
+          "body": "Выручка, себестоимость\nи валовая прибыль.",
+          "scene": 1,
+          "page": 17,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "application",
+          "screenKey": "analytics-revenue",
+          "headline": "Выручка",
+          "body": "За выбранный магазин и период.\nДемонстрационные данные",
+          "scene": 2,
+          "page": 18,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 729.0634441087614,
+            "width": 900,
+            "height": 581.8731117824774
+          }
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "application",
+          "screenKey": "analytics-gross-profit",
+          "headline": "Валовая прибыль",
+          "body": "До расходов вашего бизнеса.\nДемонстрационные данные",
+          "scene": 3,
+          "page": 19,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 729.0634441087614,
+            "width": 900,
+            "height": 581.8731117824774
+          }
+        },
+        {
+          "itemId": "r10",
+          "day": 10,
+          "layout": "photo",
+          "photoKey": "r10",
+          "headline": "Разберём\nваш отчёт",
+          "body": "Напишите «ОТЧЁТ»\nв Direct.",
+          "scene": 4,
+          "page": 20,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "photo",
+          "photoKey": "r12",
+          "headline": "Ваш каталог.\nВаши каналы.",
+          "body": "Интеграции\nв BAZAAR.",
+          "scene": 1,
+          "page": 21,
+          "size": [
+            1080,
+            1920
+          ]
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "application",
+          "screenKey": "integration-mmarket-mobile",
+          "headline": "Канал продаж",
+          "body": "Подключение настраивается отдельно.\nДемонстрационные данные",
+          "scene": 2,
+          "page": 22,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 805.0558659217877,
+            "width": 900,
+            "height": 429.8882681564246
+          }
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "application",
+          "screenKey": "integration-api-mobile",
+          "headline": "BAZAAR API",
+          "body": "Доступ и обмены требуют настройки.\nДемонстрационные данные",
+          "scene": 3,
+          "page": 23,
+          "size": [
+            1080,
+            1920
+          ],
+          "screenPlacement": {
+            "left": 90,
+            "top": 714.5530726256983,
+            "width": 900,
+            "height": 610.8938547486034
+          }
+        },
+        {
+          "itemId": "r12",
+          "day": 12,
+          "layout": "photo",
+          "photoKey": "r12",
+          "headline": "Разберём\nваш канал продаж",
+          "body": "Напишите «КАНАЛЫ»\nв Direct.",
+          "scene": 4,
+          "page": 24,
+          "size": [
+            1080,
+            1920
+          ]
+        }
+      ]
+    }
+  },
+  "status": "complete_native_draft_pending_explicit_save_confirmation"
+}

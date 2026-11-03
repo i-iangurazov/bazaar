@@ -1,0 +1,86 @@
+{
+  "revision": 5,
+  "tool": "built-in image_gen",
+  "mode": "edit",
+  "purpose": "Text-free photographic layer only. All marketing words and original logo are separate native Canva elements.",
+  "transparentBackground": false,
+  "photos": [
+    {
+      "key": "r01",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/feed-reference/1.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/r01-text-free.png",
+      "canvaAsset": "MAHZ47AbjZU",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove all lettering/text and the complete upper-left logo and icon, restoring the same clean smooth white-pale-blue background underneath. Change only this removal. Preserve the existing exact photographic objects, object sizes/positions, camera angle, framing, lighting, material details, blue table, blue-white background and shadows. Preserve the portrait 4:5 composition and completely blank upper half. Keep any ordinary photographic packaging illustration or barcode intact, but no brand words. Output is ONLY a clean text-free photographic layer for Canva, with no heading, body, logo, buttons, watermark, UI or new decorative symbols. All wording and original branding will be separate native editable Canva elements."
+    },
+    {
+      "key": "p02",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/p02/p02_ru_01.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/p02-text-free.png",
+      "canvaAsset": "MAHZ49zJN94",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove all lettering/text and the complete upper-left logo and icon, restoring the same clean smooth white-pale-blue background underneath. Change only this removal. Preserve the existing exact photographic objects, object sizes/positions, camera angle, framing, lighting, material details, blue table, blue-white background and shadows. Preserve the portrait 4:5 composition and completely blank upper half. Keep any ordinary photographic packaging illustration or barcode intact, but no brand words. Output is ONLY a clean text-free photographic layer for Canva, with no heading, body, logo, buttons, watermark, UI or new decorative symbols. All wording and original branding will be separate native editable Canva elements."
+    },
+    {
+      "key": "r03",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/feed-reference/3.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/r03-text-free.png",
+      "canvaAsset": "MAHZ4_fiQBc",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove all lettering/text and the complete upper-left logo and icon, restoring the same clean smooth white-pale-blue background underneath. Change only this removal. Preserve the existing exact photographic objects, object sizes/positions, camera angle, framing, lighting, material details, blue table, blue-white background and shadows. Preserve the portrait 4:5 composition and completely blank upper half. Keep any ordinary photographic packaging illustration or barcode intact, but no brand words. Output is ONLY a clean text-free photographic layer for Canva, with no heading, body, logo, buttons, watermark, UI or new decorative symbols. All wording and original branding will be separate native editable Canva elements."
+    },
+    {
+      "key": "p04",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/p04/p04_ru_01.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/p04-text-free.png",
+      "canvaAsset": "MAHZ47m6QNc",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove all lettering/text and the complete upper-left logo and icon, restoring the same clean smooth white-pale-blue background underneath. Change only this removal. Preserve the existing exact photographic objects, object sizes/positions, camera angle, framing, lighting, material details, blue table, blue-white background and shadows. Preserve the portrait 4:5 composition and completely blank upper half. Keep any ordinary photographic packaging illustration or barcode intact, but no brand words. Output is ONLY a clean text-free photographic layer for Canva, with no heading, body, logo, buttons, watermark, UI or new decorative symbols. All wording and original branding will be separate native editable Canva elements."
+    },
+    {
+      "key": "r05",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/feed-reference/5.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/r05-text-free.png",
+      "canvaAsset": "MAHZ452cxmw",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove all lettering/text and the complete upper-left logo and icon, restoring the same clean smooth white-pale-blue background underneath. Change only this removal. Preserve the existing exact photographic objects, object sizes/positions, camera angle, framing, lighting, material details, blue table, blue-white background and shadows. Preserve the portrait 4:5 composition and completely blank upper half. Keep any ordinary photographic packaging illustration or barcode intact, but no brand words. Output is ONLY a clean text-free photographic layer for Canva, with no heading, body, logo, buttons, watermark, UI or new decorative symbols. All wording and original branding will be separate native editable Canva elements."
+    },
+    {
+      "key": "r08",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/feed-reference/7.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/r08-text-free.png",
+      "canvaAsset": "MAHZ41oN-iU",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove all lettering/text and the complete upper-left logo and icon, restoring the same clean smooth white-pale-blue background underneath. Change only this removal. Preserve the existing exact photographic objects, object sizes/positions, camera angle, framing, lighting, material details, blue table, blue-white background and shadows. Preserve the portrait 4:5 composition and completely blank upper half. Keep any ordinary photographic packaging illustration or barcode intact, but no brand words. Output is ONLY a clean text-free photographic layer for Canva, with no heading, body, logo, buttons, watermark, UI or new decorative symbols. All wording and original branding will be separate native editable Canva elements."
+    },
+    {
+      "key": "r10",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/feed-reference/9.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/r10-text-free.png",
+      "canvaAsset": "MAHZ4gboUkc",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached BAZAAR card. Remove every text glyph and the entire logo/icon at the upper left, restoring the smooth clean pale white-blue background underneath. Do not add anything. Preserve the exact book still life, receipt paper, camera angle, framing, lighting, blue table, blue-white background and all object sizes/positions. Preserve the 4:5 portrait composition and large blank upper half. This output is ONLY a text-free photographic background layer for Canva; all headlines and the original logo will be separate native editable elements. No letters, words, branding, symbols, watermarks, UI, call-to-action buttons or added decorative elements anywhere. Change only the removal of lettering and logo."
+    },
+    {
+      "key": "r12",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/feed-reference/11.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/r12-text-free.png",
+      "canvaAsset": "MAHZ4tut-F0",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove ALL text glyphs and the complete logo/icon, if present, restoring the same clean smooth pale white-blue background underneath. Change only this removal. Preserve the exact photographic objects, positions, sizes, angle, lighting, colors, shadows, blue table and blue-white background of the source. Preserve the portrait 4:5 composition with completely blank upper half. Output is ONLY the text-free photograph/background layer for Canva. No text, letters, numbers, logo, symbols, watermark, UI, buttons or new decorative objects. All typography and the original logo will be independent native Canva elements; do not generate them."
+    },
+    {
+      "key": "p09",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/p09/p09_ru_01.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/p09-text-free.png",
+      "canvaAsset": "MAHZ4gA5uXA",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove ALL text glyphs and the complete logo/icon, if present, restoring the same clean smooth pale white-blue background underneath. Change only this removal. Preserve the exact photographic objects, positions, sizes, angle, lighting, colors, shadows, blue table and blue-white background of the source. Preserve the portrait 4:5 composition with completely blank upper half. Output is ONLY the text-free photograph/background layer for Canva. No text, letters, numbers, logo, symbols, watermark, UI, buttons or new decorative objects. All typography and the original logo will be independent native Canva elements; do not generate them."
+    },
+    {
+      "key": "p11",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/p11/p11_ru_01.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/p11-text-free.png",
+      "canvaAsset": "MAHZ4oWCsFw",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove ALL text glyphs and the complete logo/icon, if present, restoring the same clean smooth pale white-blue background underneath. Change only this removal. Preserve the exact photographic objects, positions, sizes, angle, lighting, colors, shadows, blue table and blue-white background of the source. Preserve the portrait 4:5 composition with completely blank upper half. Output is ONLY the text-free photograph/background layer for Canva. No text, letters, numbers, logo, symbols, watermark, UI, buttons or new decorative objects. All typography and the original logo will be independent native Canva elements; do not generate them."
+    },
+    {
+      "key": "s07",
+      "input": "artifacts/instagram-canva-20261103/production/revision4/s07_ru_cover_v4.png",
+      "output": "artifacts/instagram-canva-20261103/production/revision5/photos/s07-text-free.png",
+      "canvaAsset": "MAHZ4kFic1w",
+      "prompt": "Use case: precise-object-edit. Edit target: the attached existing BAZAAR card. Remove ALL text glyphs and the complete logo/icon, if present, restoring the same clean smooth pale white-blue background underneath. Change only this removal. Preserve the exact photographic objects, positions, sizes, angle, lighting, colors, shadows, blue table and blue-white background of the source. Preserve the portrait 4:5 composition with completely blank upper half. Output is ONLY the text-free photograph/background layer for Canva. No text, letters, numbers, logo, symbols, watermark, UI, buttons or new decorative objects. All typography and the original logo will be independent native Canva elements; do not generate them."
+    }
+  ]
+}
