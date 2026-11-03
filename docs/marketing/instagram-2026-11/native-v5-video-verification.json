@@ -1,0 +1,87 @@
+{
+  "revision": 5,
+  "type": "Native Canva page sequences, not screen recordings",
+  "videos": [
+    {
+      "id": "r05_ru",
+      "designId": "DAHZ41t5CMw",
+      "title": "BAZAAR · R05 · Инвентаризация · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r05_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R05 · Инвентаризация · Reels · v5.mp4",
+      "bytes": 1174273,
+      "sha256": "a58099fd15624a336af8fbd253408e5c1960b50388c19fa12c853c6c7b72126c",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r03_ru",
+      "designId": "DAHZ41zrBjY",
+      "title": "BAZAAR · R03 · Приёмка · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r03_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R03 · Приёмка · Reels · v5.mp4",
+      "bytes": 1356587,
+      "sha256": "f9b0c72a0d3a3c5f2cd2b88d5e1e65ea796c245ae6b7bd3ba6ada6117653f3f4",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r01_ru",
+      "designId": "DAHZ49j_ki0",
+      "title": "BAZAAR · R01 · Касса · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r01_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R01 · Касса · Reels · v5.mp4",
+      "bytes": 1575997,
+      "sha256": "5798e68e0493e742073f54f6a52eeee7c0efc5545d7700223dcb491a79809458",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r08_ru",
+      "designId": "DAHZ4x6a1Fs",
+      "title": "BAZAAR · R08 · Магазины · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r08_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R08 · Магазины · Reels · v5.mp4",
+      "bytes": 1343667,
+      "sha256": "d5a87f2a8aeefa3c3b6f702161ba17993f0b66cd800c04593da6a9207fec7378",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    }
+  ],
+  "remainingReels": [
+    "r10_ru",
+    "r12_ru"
+  ],
+  "remainingAdVideos": [
+    "ad01_ru",
+    "ad02_ru",
+    "ad03_ru",
+    "ad04_ru"
+  ],
+  "fullSizePngExports": 0,
+  "publicationEnabled": false,
+  "paidBudget": null
+}

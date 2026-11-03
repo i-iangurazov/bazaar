@@ -1,6 +1,6 @@
 {
   "date": "2026-11-04",
-  "stage": "revision_5_native_editable_drafts_ready_for_save_confirmation",
+  "stage": "revision_5_native_sources_saved_exports_in_progress",
   "fullGoalComplete": false,
   "branch": "main",
   "primaryReleaseLanguage": "ru",
@@ -20,7 +20,10 @@
     "feedPages": 14,
     "analyticsProof": "Separate native feed page 14",
     "adConcepts": 4,
-    "profileCovers": 10
+    "profileCovers": 10,
+    "savedNativeReleaseDesigns": 4,
+    "savedNativeReleasePages": 98,
+    "nativeReelMp4Exports": 4
   },
   "target": {
     "feedCovers": 10,
@@ -40,9 +43,8 @@
   "gridPreview": "artifacts/instagram-canva-20261103/production/qa/native-v5-grid-desktop.jpg",
   "generationEvidence": "native-v5-photos.json",
   "remaining": [
-    "Save the 4 reviewed native draft transactions after explicit confirmation required by the Canva integration.",
-    "Reopen saved designs and verify native text, fonts and independent logo/photo layers.",
-    "Export and verify full-size PNGs and MP4s; promote the native package atomically into the review/approval pipeline. Instagram publication and paid advertising remain disabled."
+    "Finish the remaining full-size PNG and MP4 exports from saved Canva sources.",
+    "Verify and promote complete native media atomically into the approval pipeline. Instagram publication and paid advertising remain disabled."
   ],
   "canvaCapabilityNote": "Actual native text replacement is available on copied page designs. All 98 pages contain two TEXT objects plus a separate original logo. Photos are text-free image layers; 32 actual application screens are on separate white pages. Canva image-to-design reached the current plan AI limit; no upgrade purchased. Remaining production uses native copy/edit and text-free photographic layers.",
   "profileAudit": "profile-grid.json",
@@ -65,12 +67,12 @@
   },
   "browserAccess": {
     "profile": "Personal Chrome Ilias only",
-    "browserId": "3",
-    "lastCheck": "Working through cua_repl; native Canva downloads completed.",
-    "nextStep": "Continue in the same personal browser. Do not switch profile."
+    "browserId": "5 (last connected)",
+    "lastCheck": "Browser transport closed; connected browser inventory is empty. Native app fallback became unavailable (noWindowsAvailable).",
+    "nextStep": "Resume existing personal Chrome tabs after connection is restored. Do not switch to work profile."
   },
   "nativePlacementVerification": "Not performed in Instagram; publication disabled.",
-  "visualEvidence": "Revision 5: native editable marketing text and independent logo/photo layers; actual application screenshots on separate pages. The underlying illustrative photography remains raster. Reels are planned scene sequences, not screen recordings; v5 MP4 export remains pending.",
+  "visualEvidence": "98 saved editable pages; 196 native text objects and 98 original logos. All real application screenshots are on separate pages. Four native Canva MP4 page sequences exported at 1080×1920, 20 seconds; fully decoded. Remaining video/PNG exports pending.",
   "activeEditorialRevision": "native-v5-plan.json",
   "releaseReady": false,
   "previousRevision": {
@@ -129,7 +131,7 @@
     "adPlan": "revision4-ad-plan.json",
     "fullGoalComplete": false
   },
-  "lastUpdated": "2026-11-04T00:00:35+06:00",
+  "lastUpdated": "2026-11-04",
   "previousRevision3Media": {
     "created": {
       "feedCoverArtwork": 10,
@@ -377,12 +379,7 @@
       "scope": "Save carousel artwork only; not publication or approval of full day package."
     }
   ],
-  "pendingSaveDesigns": [
-    "DAHZ4ZnGNaI",
-    "DAHZ4c5HwEU",
-    "DAHZ4WMUFFU",
-    "DAHZ4c9kjZs"
-  ],
+  "pendingSaveDesigns": [],
   "studioDemoServer": "Dedicated 3125 server stopped after capture; files and isolated database retained.",
   "ownerCorrection": "Real editable text, separate original logo and photo/background layers are required. Revision-4 cover/body text was baked into images; exported files are visual sources, not a final editable package.",
   "revision4SaveResult": "All four remaining transactions committed after explicit owner approval; native exports are not the final deliverable after the layer correction.",
@@ -405,9 +402,85 @@
     "photoPages": 56,
     "separateApplicationPages": 32,
     "informationPages": 10,
-    "savedReleaseDesigns": 0,
+    "savedReleaseDesigns": 4,
     "savedMasters": 2,
-    "fullReleaseSaveApproval": "pending after v5 preview",
-    "paidPlanPurchased": false
-  }
+    "fullReleaseSaveApproval": "Explicit owner reply: Сохранить редактируемый выпуск",
+    "paidPlanPurchased": false,
+    "saveVerification": "native-v5-save-verification.json"
+  },
+  "canvaFolder": {
+    "id": "FAHZ49Cy4UY",
+    "url": "https://www.canva.com/folder/FAHZ49Cy4UY",
+    "verifiedDesignCount": 18
+  },
+  "nativeVideos": [
+    {
+      "id": "r05_ru",
+      "designId": "DAHZ41t5CMw",
+      "title": "BAZAAR · R05 · Инвентаризация · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r05_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R05 · Инвентаризация · Reels · v5.mp4",
+      "bytes": 1174273,
+      "sha256": "a58099fd15624a336af8fbd253408e5c1960b50388c19fa12c853c6c7b72126c",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r03_ru",
+      "designId": "DAHZ41zrBjY",
+      "title": "BAZAAR · R03 · Приёмка · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r03_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R03 · Приёмка · Reels · v5.mp4",
+      "bytes": 1356587,
+      "sha256": "f9b0c72a0d3a3c5f2cd2b88d5e1e65ea796c245ae6b7bd3ba6ada6117653f3f4",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r01_ru",
+      "designId": "DAHZ49j_ki0",
+      "title": "BAZAAR · R01 · Касса · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r01_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R01 · Касса · Reels · v5.mp4",
+      "bytes": 1575997,
+      "sha256": "5798e68e0493e742073f54f6a52eeee7c0efc5545d7700223dcb491a79809458",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r08_ru",
+      "designId": "DAHZ4x6a1Fs",
+      "title": "BAZAAR · R08 · Магазины · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r08_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R08 · Магазины · Reels · v5.mp4",
+      "bytes": 1343667,
+      "sha256": "d5a87f2a8aeefa3c3b6f702161ba17993f0b66cd800c04593da6a9207fec7378",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    }
+  ]
 }

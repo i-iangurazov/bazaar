@@ -1,6 +1,6 @@
 {
   "revision": 5,
-  "status": "full_native_draft_verified_pending_save_confirmation",
+  "status": "saved_native_sources_verified_exports_in_progress",
   "publicationEnabled": false,
   "paidBudget": null,
   "previousRasterExports": "Superseded. They do not satisfy native-text editing and are reference material only.",
@@ -284,9 +284,8 @@
     "latestSavedReadVerification": "passed after reopen; 2 TEXT objects and separate original BAZAAR logo"
   },
   "remaining": [
-    "Save the 4 reviewed native draft transactions after explicit confirmation required by the Canva integration.",
-    "Reopen saved full designs, verify fonts/layers and export full-size PNG/MP4 packages.",
-    "Promote the new native media into the existing approval pipeline; no Instagram publication or paid launch."
+    "Complete full-size PNG and remaining MP4 exports from saved Canva sources.",
+    "Promote complete native media atomically into the existing approval pipeline; no Instagram publication or paid launch."
   ],
   "releaseReady": false,
   "fullGoalComplete": false,
@@ -298,9 +297,20 @@
     "photoPages": 56,
     "separateApplicationScreens": 32,
     "informationPages": 10,
-    "saveStatus": "pending explicit confirmation after v5 preview",
+    "saveStatus": "committed after explicit owner confirmation; reopened and verified",
     "nativePreviewManifest": "native-v5-preview.json",
     "plan": "native-v5-plan.json",
     "review": "http://127.0.0.1:3136/"
+  },
+  "savedSources": {
+    "folder": {
+      "id": "FAHZ49Cy4UY",
+      "url": "https://www.canva.com/folder/FAHZ49Cy4UY",
+      "verifiedDesignCount": 18
+    },
+    "verification": "native-v5-save-verification.json",
+    "copyEditTest": "passed; cancelled on independent copy",
+    "exportedReels": 4,
+    "videoVerification": "native-v5-video-verification.json"
   }
 }

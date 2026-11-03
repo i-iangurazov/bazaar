@@ -64,6 +64,14 @@ for record in records:
     result.append({"group": group, "page": page, "itemId": spec["itemId"], "layout": spec["layout"], "file": record["file"], "size": size, "sha256": sha(file), "nativeTextCount": len(texts), "originalLogoCount": len(logos), "imageLayerCount": len(fills), "sources": sources})
 if len(result) != 98 or len({(x["group"], x["page"]) for x in result}) != 98:
     raise ValueError("Incomplete native release preview")
-out = {"revision": 5, "status": "uncommitted_native_drafts_ready_for_save_confirmation", "publicationEnabled": False, "paidBudget": None, "nativeTextObjects": 196, "pages": result, "layerEvidence": "artifacts/instagram-canva-20261103/production/revision5/native-element-evidence.json", "nativeTypography": {"family": "Inter", "headlineCanvaSize": 66, "bodyCanvaSize": 34, "weight": "bold", "evidence": "Inherited from the same UI-verified native master. Native text replacement and full-copy checks passed."}}
+saved = plan.get("sourceSaveStatus") == "committed"
+if saved:
+    confirmations = json.loads((BASE / "save-confirmations.json").read_text())
+    for group, design in plan["designs"].items():
+        confirmation = confirmations["designs"][group]
+        verification = next(x for x in confirmations["verification"] if x["key"] == group)
+        if confirmation["status"] != "committed" or confirmation["designId"] != design["id"] or confirmation["pages"] != len(design["pages"]) or verification["errors"]:
+            raise ValueError(f"Missing saved-design verification: {group}")
+out = {"revision": 5, "status": "saved_native_sources_verified" if saved else "uncommitted_native_drafts_ready_for_save_confirmation", "publicationEnabled": False, "paidBudget": None, "nativeTextObjects": 196, "pages": result, "layerEvidence": "artifacts/instagram-canva-20261103/production/revision5/native-element-evidence.json", "nativeTypography": {"family": "Inter", "headlineCanvaSize": 66, "bodyCanvaSize": 34, "weight": "bold", "evidence": "Inherited from the same UI-verified native master. Native text replacement and full-copy checks passed."}}
 (DOCS / "native-v5-preview.json").write_text(json.dumps(out, ensure_ascii=False, indent=2) + "\n")
 print(json.dumps({"previews": len(result), "nativeTextObjects": 196, "originalLogos": 98, "flatTextCards": 0, "layouts": {k: sum(x["layout"] == k for x in result) for k in ["photo", "application", "information"]}}))

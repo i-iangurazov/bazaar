@@ -248,7 +248,7 @@
       },
       "created_at": 1793731984,
       "updated_at": 1793731984,
-      "page_count": 1,
+      "page_count": 18,
       "design_types": [
         "custom"
       ],
@@ -537,7 +537,8 @@
             1350
           ]
         }
-      ]
+      ],
+      "saveStatus": "committed"
     },
     "feed": {
       "id": "DAHZ4i7kvio",
@@ -552,7 +553,7 @@
       },
       "created_at": 1793731988,
       "updated_at": 1793731988,
-      "page_count": 1,
+      "page_count": 14,
       "design_types": [
         "custom"
       ],
@@ -765,7 +766,8 @@
             "height": 581.8731117824774
           }
         }
-      ]
+      ],
+      "saveStatus": "committed"
     },
     "stories": {
       "id": "DAHZ4smWlbE",
@@ -780,7 +782,7 @@
       },
       "created_at": 1793731985,
       "updated_at": 1793731985,
-      "page_count": 1,
+      "page_count": 42,
       "design_types": [
         "custom"
       ],
@@ -1536,7 +1538,8 @@
             1920
           ]
         }
-      ]
+      ],
+      "saveStatus": "committed"
     },
     "reels": {
       "id": "DAHZ4tAd1eY",
@@ -1551,7 +1554,7 @@
       },
       "created_at": 1793731987,
       "updated_at": 1793731987,
-      "page_count": 1,
+      "page_count": 24,
       "design_types": [
         "custom"
       ],
@@ -1964,8 +1967,243 @@
             1920
           ]
         }
-      ]
+      ],
+      "saveStatus": "committed"
     }
   },
-  "status": "complete_native_draft_pending_explicit_save_confirmation"
+  "status": "saved_native_sources_export_in_progress",
+  "sourceSaveStatus": "committed",
+  "ownerSaveApproval": {
+    "answer": "Сохранить редактируемый выпуск",
+    "scope": "All 98 editable pages; no Instagram publication or paid advertising launch"
+  },
+  "canvaFolder": {
+    "id": "FAHZ49Cy4UY",
+    "url": "https://www.canva.com/folder/FAHZ49Cy4UY"
+  },
+  "splitDesigns": [
+    {
+      "key": "r05",
+      "kind": "reel",
+      "source": "DAHZ4tAd1eY",
+      "pages": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "title": "BAZAAR · R05 · Инвентаризация · Reels · v5",
+      "designId": "DAHZ41t5CMw",
+      "editUrl": "https://www.canva.com/d/UtcCdko9qlIFJl4",
+      "viewUrl": "https://www.canva.com/d/uOhw3UpalBZoPPs",
+      "pageCount": 4
+    },
+    {
+      "key": "r03",
+      "kind": "reel",
+      "source": "DAHZ4tAd1eY",
+      "pages": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "title": "BAZAAR · R03 · Приёмка · Reels · v5",
+      "designId": "DAHZ41zrBjY",
+      "editUrl": "https://www.canva.com/d/cTo3gkm1V4qbMMu",
+      "viewUrl": "https://www.canva.com/d/wZQZQvIVjdvFVzA",
+      "pageCount": 4
+    },
+    {
+      "key": "r01",
+      "kind": "reel",
+      "source": "DAHZ4tAd1eY",
+      "pages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "BAZAAR · R01 · Касса · Reels · v5",
+      "designId": "DAHZ49j_ki0",
+      "editUrl": "https://www.canva.com/d/HHHslh4jr_kX1UM",
+      "viewUrl": "https://www.canva.com/d/na4wKN-u0knCEg6",
+      "pageCount": 4
+    },
+    {
+      "key": "r08",
+      "kind": "reel",
+      "source": "DAHZ4tAd1eY",
+      "pages": [
+        13,
+        14,
+        15,
+        16
+      ],
+      "title": "BAZAAR · R08 · Магазины · Reels · v5",
+      "designId": "DAHZ4x6a1Fs",
+      "editUrl": "https://www.canva.com/d/W43aL_wjWlBA04K",
+      "viewUrl": "https://www.canva.com/d/1gASey0UujqM17d",
+      "pageCount": 4
+    },
+    {
+      "key": "r10",
+      "kind": "reel",
+      "source": "DAHZ4tAd1eY",
+      "pages": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "title": "BAZAAR · R10 · Аналитика · Reels · v5",
+      "designId": "DAHZ4yremVA",
+      "editUrl": "https://www.canva.com/d/ampykQgC1mN_sg3",
+      "viewUrl": "https://www.canva.com/d/HrElkduMnluGKaE",
+      "pageCount": 4
+    },
+    {
+      "key": "r12",
+      "kind": "reel",
+      "source": "DAHZ4tAd1eY",
+      "pages": [
+        21,
+        22,
+        23,
+        24
+      ],
+      "title": "BAZAAR · R12 · Интеграции · Reels · v5",
+      "designId": "DAHZ416QCX4",
+      "editUrl": "https://www.canva.com/d/bpweiPw5GacC6FF",
+      "viewUrl": "https://www.canva.com/d/mk8adL1OIdcSxo0",
+      "pageCount": 4
+    },
+    {
+      "key": "p02",
+      "kind": "carousel",
+      "source": "DAHZ4hKX-Uc",
+      "pages": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "title": "BAZAAR · P02 · Каталог · Карусель · v5",
+      "designId": "DAHZ41LAaYI",
+      "editUrl": "https://www.canva.com/d/HXbgzKLhkegJtcB",
+      "viewUrl": "https://www.canva.com/d/J-Ae-VCeXdHieIM",
+      "pageCount": 4
+    },
+    {
+      "key": "p04",
+      "kind": "carousel",
+      "source": "DAHZ4hKX-Uc",
+      "pages": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "title": "BAZAAR · P04 · Остатки · Карусель · v5",
+      "designId": "DAHZ40s67-Y",
+      "editUrl": "https://www.canva.com/d/CLbY8vK3J5cZhDO",
+      "viewUrl": "https://www.canva.com/d/_s1o48M1bTLZUlw",
+      "pageCount": 4
+    },
+    {
+      "key": "p11",
+      "kind": "carousel",
+      "source": "DAHZ4hKX-Uc",
+      "pages": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "title": "BAZAAR · P11 · Тарифы · Карусель · v5",
+      "designId": "DAHZ42VUu_8",
+      "editUrl": "https://www.canva.com/d/QMw11LiQ-q3h0_q",
+      "viewUrl": "https://www.canva.com/d/TVog4ADm4Z-O0os",
+      "pageCount": 6
+    },
+    {
+      "key": "p09",
+      "kind": "carousel",
+      "source": "DAHZ4hKX-Uc",
+      "pages": [
+        9,
+        10,
+        11,
+        12
+      ],
+      "title": "BAZAAR · P09 · Студия картинок · Карусель · v5",
+      "designId": "DAHZ47BaQOs",
+      "editUrl": "https://www.canva.com/d/l_jL4X8BpFhcNOr",
+      "viewUrl": "https://www.canva.com/d/wEqkR0mDPm_ukh1",
+      "pageCount": 4
+    },
+    {
+      "key": "ad01",
+      "kind": "ad",
+      "source": "DAHZ4smWlbE",
+      "pages": [
+        4,
+        5,
+        6
+      ],
+      "title": "BAZAAR · AD01 · Каталог · Видео 9×16 · v5",
+      "designId": "DAHZ4xj_pG8",
+      "editUrl": "https://www.canva.com/d/Kr6rNMhoJeYTv6l",
+      "viewUrl": "https://www.canva.com/d/zqjwxjq03yrJof4",
+      "pageCount": 3
+    },
+    {
+      "key": "ad02",
+      "kind": "ad",
+      "source": "DAHZ4smWlbE",
+      "pages": [
+        10,
+        11,
+        12
+      ],
+      "title": "BAZAAR · AD02 · Остатки · Видео 9×16 · v5",
+      "designId": "DAHZ45mav0U",
+      "editUrl": "https://www.canva.com/d/33FCTp2r6eD2x01",
+      "viewUrl": "https://www.canva.com/d/TQ-oO_Q8q9_svF6",
+      "pageCount": 3
+    },
+    {
+      "key": "ad03",
+      "kind": "ad",
+      "source": "DAHZ4smWlbE",
+      "pages": [
+        28,
+        29,
+        30
+      ],
+      "title": "BAZAAR · AD03 · Аналитика · Видео 9×16 · v5",
+      "designId": "DAHZ4xFbrtU",
+      "editUrl": "https://www.canva.com/d/9k96gLzleV_1Chu",
+      "viewUrl": "https://www.canva.com/d/NMTuk8YCzkuhd3H",
+      "pageCount": 3
+    },
+    {
+      "key": "ad04",
+      "kind": "ad",
+      "source": "DAHZ4smWlbE",
+      "pages": [
+        25,
+        26,
+        27
+      ],
+      "title": "BAZAAR · AD04 · Студия картинок · Видео 9×16 · v5",
+      "designId": "DAHZ40mOSno",
+      "editUrl": "https://www.canva.com/d/QBO57rGNHjFEtry",
+      "viewUrl": "https://www.canva.com/d/cS8YV0vNmSJCnPg",
+      "pageCount": 3
+    }
+  ],
+  "savedSourceVerification": "native-v5-save-verification.json"
 }
