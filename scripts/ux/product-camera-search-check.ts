@@ -199,6 +199,8 @@ export async function verifyProductCameraSearch(
         await expect(search).toHaveValue("");
         await expect(search).toBeFocused();
         await search.fill(barcode);
+        await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe(barcode);
+        await expect(page.getByText(name, { exact: true }).filter({ visible: true })).toBeVisible();
         await page.reload();
         await expect(search).toHaveValue(barcode);
         await expect(page.getByText(name, { exact: true }).filter({ visible: true })).toBeVisible();
