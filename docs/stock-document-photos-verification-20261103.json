@@ -61,11 +61,7 @@
         "en: document renders photos and identifiers",
         "real authenticated HTTP POST returns all 500 metadata rows without URL-length limits"
       ],
-      "locales": [
-        "ru",
-        "kg",
-        "en"
-      ],
+      "locales": ["ru", "kg", "en"],
       "desktop": "1440x1000",
       "mobile": "390x844, including scrolled document rows",
       "javascriptErrors": [],
@@ -102,7 +98,8 @@
       },
       "note": "Synthetic image URLs, actual authenticated transfer form. Network-byte and real-world latency claims are intentionally not inferred from this fixture."
     },
-    "latestAcceptance": "Production/standalone rebuild, all 13 browser scenarios and unchanged business hashes repeated after adding lazy image loading."
+    "latestAcceptance": "Production/standalone rebuild, all 13 browser scenarios and unchanged business hashes repeated after adding lazy image loading.",
+    "ciMemoryRecovery": "The lazy-loading commit CI exhausted Node's default 2 GiB heap in tsc before assertions ran. Set a 4 GiB heap only for the CI checks step; production runtime and the 512 MiB catalog-scale guard remain unchanged. Require a fresh complete CI run for this configuration."
   },
   "reference": {
     "url": "https://github.com/frappe/erpnext/blob/develop/erpnext/stock/doctype/stock_entry/stock_entry.py",

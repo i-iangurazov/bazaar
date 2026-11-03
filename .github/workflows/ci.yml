@@ -107,6 +107,8 @@ jobs:
         run: node --test scripts/deployment/public-smoke.test.mjs
       - name: Run checks
         if: matrix.suite == 'checks'
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm test:ci
       - name: Verify 10,000 products and 100,000 prices in an isolated fresh database
         if: matrix.suite == 'catalog-scale'
