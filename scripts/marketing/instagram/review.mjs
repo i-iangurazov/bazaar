@@ -9,6 +9,10 @@ const root = "artifacts/instagram-canva-20261103";
 const out = `${root}/review-p04-v4`;
 const campaignText = await readFile("docs/marketing/instagram-2026-11/campaign.json", "utf8");
 const campaign = JSON.parse(campaignText);
+if (campaign.version >= 5) {
+  await import("./native-review.mjs");
+  process.exit(0);
+}
 const sources = JSON.parse(await readFile(`${root}/production/assets.json`, "utf8"));
 const manifest = JSON.parse(await readFile(`${root}/manifest.json`, "utf8"));
 const revisionPlan = JSON.parse(

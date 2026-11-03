@@ -1,238 +1,231 @@
 {
-  "version": 3,
+  "version": 5,
   "campaign": "kg_store_launch_202611",
   "account": "bazaar.pos",
-  "startDate": "2026-11-04",
-  "endDate": "2026-11-17",
+  "locales": [
+    "ru"
+  ],
+  "packageDirectory": "artifacts/instagram-canva-20261103/release-v5",
+  "startDate": null,
+  "endDate": null,
   "timezone": "Asia/Bishkek",
+  "publicationEnabled": false,
   "paidBudget": null,
   "sourceOfTruth": {
     "landing": "https://www.bazaar.kg/",
-    "planCatalog": "src/server/billing/planCatalog.ts"
+    "planCatalog": "src/server/billing/planCatalog.ts",
+    "nativePlan": "docs/marketing/instagram-2026-11/native-v5-plan.json",
+    "screenshots": "docs/marketing/instagram-2026-11/app-screen-evidence.json"
   },
+  "schedule": {
+    "mode": "relative_days_until_full_release_approval",
+    "timezone": "Asia/Bishkek",
+    "feedHypothesis": "19:30",
+    "storiesHypothesis": [
+      "12:30",
+      "12:30",
+      "19:45"
+    ],
+    "storyOnlyDays": "Three frames at 12:30",
+    "rule": "Move all 14 days together. No backfilling missed dates with mass posting; times are hypotheses pending account Insights."
+  },
+  "brandRules": {
+    "name": "BAZAAR",
+    "logo": "public/brand/logo.png",
+    "logoRule": "Original asset in Latin, unchanged proportions. No translated or regenerated wordmark.",
+    "typeRule": "Keep the currently accepted clean dense sans-serif letterforms. Normalize headline weight and scale; do not introduce another font family. Inspect at equal canvas width and in the whole grid.",
+    "fontFamilyStatus": "Unknown in the original raster. Canva's automatic DM Sans reconstruction was visually different and is excluded.",
+    "reference": "references/owner-approved-stock-cover.png",
+    "secondaryTypeAppearanceReference": "artifacts/instagram-canva-20261103/production/feed-native/r05_ru_cover.png",
+    "noDrawnCtaButton": true,
+    "noDomainFooter": true,
+    "screenshotsOnIllustration": "forbidden_by_owner",
+    "screenshotPlacement": "Separate carousel slides, separate Story frames and separate Reel scenes. No interface screenshot over an illustrated or photographic card.",
+    "posOnlyInInstagramUsername": true,
+    "screenshotTypography": "Preserve real application typography. Do not retype, regenerate or retouch interface labels, statuses or values. Marketing headline consistency applies to illustrated cards.",
+    "typography": {
+      "family": "Inter",
+      "headlineCanvaSize": 66,
+      "bodyCanvaSize": 34,
+      "weight": "bold",
+      "sizeRule": "Inherited from the same verified native master. Never change per-card heading size."
+    }
+  },
+  "measurement": {
+    "primary": [
+      "Qualified inbound retail leads",
+      "Cost per qualified lead after an approved paid test",
+      "Registered businesses",
+      "Cost per registered business"
+    ],
+    "secondary": [
+      "Scheduled and attended demonstrations",
+      "Link-sticker visits",
+      "Video retention and saves as content diagnostics"
+    ],
+    "qualification": [
+      "Operating retail business in Kyrgyzstan",
+      "Decision maker or person involved in choosing the system",
+      "Task and store/product scale understood",
+      "Agreed next step"
+    ],
+    "sourcePolicy": "A Direct keyword is not proof of a paid source. Use Meta referral/ad ID when available, record self-report separately, and keep unknown attribution unknown.",
+    "paidTest": "Prepare distinct checkout and stock-control concepts first. Do not launch, reserve spend or set a positive budget without owner approval.",
+    "iteration": "Review qualified conversations, demonstrations and business registrations after week one. Change the second-week mix using evidence; do not infer a winner from followers or one day of low-volume data."
+  },
+  "canvaFolder": {
+    "id": "FAHZ49Cy4UY",
+    "url": "https://www.canva.com/folder/FAHZ49Cy4UY"
+  },
+  "languageNote": "RU release. Previous Kyrgyz alternatives remain archived and require native editorial review before use.",
   "items": [
     {
       "id": "r01",
       "day": 1,
-      "date": "2026-11-04",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "reel",
-      "topic": "products",
-      "status": "draft",
-      "language": "ru",
+      "topic": "checkout",
+      "industry": "grocery",
       "title": {
-        "ru": "Товары в BAZAAR",
-        "kg": "BAZAAR: товарлар"
-      },
-      "frames": {
-        "ru": [
-          "Как вы ведёте каталог? В таблице или в системе?",
-          "Найдите нужный товар. Название, SKU или штрихкод.",
-          "Цена и остаток — рядом. В каталоге выбранного магазина.",
-          "Начните со своих товаров. Создайте аккаунт BAZAAR."
-        ],
-        "kg": [
-          "BAZAAR: товарлар. Дүкөнүңүздүн товарлары — бир каталогдо.",
-          "Керектүү товарды табыңыз. Аталышы, SKU же штрихкоду боюнча издеңиз.",
-          "Баа жана калдык — жанаша. Керектүү дүкөндүн каталогун ачыңыз.",
-          "Өз ассортиментиңизден баштаңыз. Аккаунт түзүңүз. Биринчи дүкөндүн товарларын даярдаңыз."
-        ]
+        "ru": "От товара до чека"
       },
       "caption": {
-        "ru": "Каталог в BAZAAR — основа работы с товаром: название, штрихкод, цена и остаток выбранного магазина.\n\nПосле знакомства с кассой переходим к тому, что вы продаёте. Найдите нужную позицию по названию, SKU или штрихкоду и проверьте её данные.\n\nНачните со своего ассортимента. Регистрация — по ссылке в профиле.\n\n#bazaar #касса #склад #учеттоваров #розница",
-        "kg": "BAZAAR каталогу — товар менен иштөөнүн негизи: аталышы, штрихкоду, баасы жана тандалган дүкөндөгү калдыгы.\n\nКассадан кийин ассортиментке өтөбүз. Товарды аталышы, SKU же штрихкоду боюнча таап, маалыматтарын текшериңиз.\n\nӨз ассортиментиңизден баштаңыз. Катталуу шилтемеси профилде.\n\n#bazaar #касса #склад #учеттоваров #розница"
+        "ru": "Покупатель уже у кассы. Найдите товар по штрихкоду или через поиск, проверьте цену и количество в текущем чеке. Завершённую продажу можно открыть в истории.\n\nВ ролике — интерфейс BAZAAR и демонстрационные данные.\n\nХотите посмотреть кассу на ассортименте своего магазина? Напишите «КАССА» в Direct."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "Как вы ведёте каталог? В таблице или в системе?",
-          "Цена и остаток — рядом. В каталоге выбранного магазина.",
-          "Начните со своих товаров. Создайте аккаунт BAZAAR."
-        ],
-        "kg": [
-          "Каталог таблицадабы же системадабы?",
-          "Аталыш, штрихкод, баа жана калдык — BAZAAR ичинде.",
-          "Товарлардан баштаңыз. Катталуу шилтемеси."
+          "От товара\nдо чека\nПоиск, цена и текущий чек —\nв кассе BAZAAR.",
+          "Найдите товар\nШтрихкод или поиск в кассе.\nДемонстрационные данные",
+          "Продажа в истории\nЗавершённый чек можно открыть.\nДемонстрационные данные",
+          "Покажем\nработу кассы\nНапишите «КАССА»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "signup",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": 20,
       "slides": {
         "ru": [
           {
-            "title": "Как вы ведёте\nкаталог?",
-            "body": "В таблице\nили в системе?"
+            "title": "От товара\nдо чека",
+            "body": "Поиск, цена и текущий чек —\nв кассе BAZAAR."
           },
           {
-            "title": "Найдите\nнужный товар",
-            "body": "Название, SKU\nили штрихкод."
+            "title": "Найдите товар",
+            "body": "Штрихкод или поиск в кассе.\nДемонстрационные данные"
           },
           {
-            "title": "Цена и остаток —\nрядом",
-            "body": "В каталоге\nвыбранного магазина."
+            "title": "Продажа в истории",
+            "body": "Завершённый чек можно открыть.\nДемонстрационные данные"
           },
           {
-            "title": "Начните\nсо своих товаров",
-            "body": "Создайте аккаунт\nBAZAAR."
-          }
-        ],
-        "kg": [
-          {
-            "title": "BAZAAR: товарлар",
-            "body": "Дүкөнүңүздүн товарлары — бир каталогдо."
-          },
-          {
-            "title": "Керектүү товарды табыңыз",
-            "body": "Аталышы, SKU же штрихкоду боюнча издеңиз."
-          },
-          {
-            "title": "Баа жана калдык — жанаша",
-            "body": "Керектүү дүкөндүн каталогун ачыңыз."
-          },
-          {
-            "title": "Өз ассортиментиңизден баштаңыз",
-            "body": "Аккаунт түзүңүз. Биринчи дүкөндүн товарларын даярдаңыз."
+            "title": "Покажем\nработу кассы",
+            "body": "Напишите «КАССА»\nв Direct."
           }
         ]
       },
-      "ctaMode": "signup",
-      "directKeyword": null,
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-04T19:30:00+06:00",
-        "includeReelInMainGrid": true,
-        "storyFrames": [
+      "stories": {
+        "ru": [
+          "Как находите\nтовар на кассе?\nШтрихкодом\nили через поиск?",
+          "Товар на кассе\nНайдите позицию по штрихкоду.\nДемонстрационные данные",
+          "Посмотрите\nкассу в работе\nНапишите «КАССА»\nв Direct."
+        ]
+      },
+      "storySlides": {
+        "ru": [
           {
-            "frame": 1,
-            "at": "2026-11-04T12:30:00+06:00",
-            "role": "situation"
+            "title": "Как находите\nтовар на кассе?",
+            "body": "Штрихкодом\nили через поиск?"
           },
           {
-            "frame": 2,
-            "at": "2026-11-04T12:30:00+06:00",
-            "role": "feature_explanation"
+            "title": "Товар на кассе",
+            "body": "Найдите позицию по штрихкоду.\nДемонстрационные данные"
           },
           {
-            "frame": 3,
-            "at": "2026-11-04T19:45:00+06:00",
-            "role": "action"
+            "title": "Посмотрите\nкассу в работе",
+            "body": "Напишите «КАССА»\nв Direct."
           }
-        ],
-        "nativeAction": "link_sticker",
-        "gridPositionAfterDay14": 10,
-        "coverBrief": "Утверждённая светлая сине-белая предметная фотография. Крупный заголовок и исходный логотип; без выдуманного интерфейса.",
-        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
-        "canvaVideoDesignId": "DAHZ2tbDPeE",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ2tbDPeE", "DAHZ3IgIN5k"]
+        ]
       },
       "storyInteractions": [
         {
           "frame": 1,
           "type": "poll",
-          "question": "Как ведёте каталог?",
-          "answers": ["В таблице", "В системе"],
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
+          "answers": [
+            "Штрихкод",
+            "Поиск"
+          ],
+          "question": "Как ищете товар на кассе?"
         },
         {
           "frame": 3,
-          "type": "link_sticker",
-          "text": "Создать аккаунт",
-          "utmContent": "r01_ru",
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
+          "type": "direct_reply",
+          "keyword": "КАССА"
         }
       ],
-      "coverCopy": {
-        "ru": {
-          "title": "Товары\nв BAZAAR",
-          "body": "Название, цена и остаток —\nв одном каталоге."
-        }
+      "ctaMode": "demo",
+      "directKeyword": "КАССА",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "media": {
+        "videoSeconds": 20,
+        "audio": "none",
+        "type": "native Canva page sequence"
       },
-      "artworkSources": {
-        "cover": "r01_ru_cover",
-        "frames": [
-          "r01_ru_vertical_01",
-          "r01_ru_vertical_02",
-          "r01_ru_vertical_03",
-          "r01_ru_vertical_04"
-        ],
-        "stories": ["r01_ru_vertical_01", "r01_ru_vertical_03", "r01_ru_vertical_04"],
-        "storyReelFrames": [1, 3, 4]
-      },
-      "storySlides": {
-        "ru": [
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 1,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
           {
-            "title": "Как вы ведёте\nкаталог?",
-            "body": "В таблице\nили в системе?"
+            "frame": 1,
+            "relativeDay": 1,
+            "timeHypothesis": "12:30"
           },
           {
-            "title": "Цена и остаток —\nрядом",
-            "body": "В каталоге\nвыбранного магазина."
+            "frame": 2,
+            "relativeDay": 1,
+            "timeHypothesis": "12:30"
           },
           {
-            "title": "Начните\nсо своих товаров",
-            "body": "Создайте аккаунт\nBAZAAR."
+            "frame": 3,
+            "relativeDay": 1,
+            "timeHypothesis": "19:45"
           }
-        ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ49j_ki0",
+          "DAHZ4tAd1eY",
+          "DAHZ4i7kvio",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 10
       }
     },
     {
       "id": "p02",
       "day": 2,
-      "date": "2026-11-05",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "carousel",
-      "topic": "products",
-      "status": "draft",
-      "language": "ru",
+      "topic": "catalog",
+      "industry": "clothing",
       "title": {
-        "ru": "Каталог без путаницы",
-        "kg": "Каталогдогу тартип"
-      },
-      "frames": {
-        "ru": [
-          "Каталог без путаницы. Размеры, цвета и поиск — в BAZAAR.",
-          "Найдите нужный товар. По названию, SKU или штрихкоду.",
-          "Один товар. Разные варианты. Размеры и цвета — отдельно в каталоге.",
-          "Покажем на вашем примере. Напишите «КАТАЛОГ» в Direct."
-        ],
-        "kg": [
-          "Каталогдогу тартип. BAZAAR: товарлар, варианттар жана издөө.",
-          "Аталыш жана штрихкод. Керектүү товарды тааныш маалыматтар боюнча издеңиз.",
-          "Товар варианттары. Өлчөмдөрдү, түстөрдү жана башка варианттарды каталогдо бөлүңүз.",
-          "Ассортиментти даярдаңыз. Товарларды кол менен кошсо болот. Импорт — BUSINESS жана ENTERPRISE."
-        ]
+        "ru": "Каталог без путаницы"
       },
       "caption": {
-        "ru": "Один товар может иметь несколько вариантов. Для магазина одежды это размеры и цвета; для других товаров — свой набор характеристик.\n\nВ BAZAAR каталог помогает разделить позиции и найти нужную по названию или штрихкоду. Товары можно добавлять вручную. Импорт доступен в BUSINESS и ENTERPRISE.\n\nХотите посмотреть на примере вашего ассортимента? Напишите «КАТАЛОГ» в Direct.\n\n#bazaar #касса #склад #учеттоваров #розница",
-        "kg": "Бир товардын бир нече варианты болушу мүмкүн. Кийим дүкөнүндө бул өлчөмдөр жана түстөр; башка товарларда — өзгөчө мүнөздөмөлөр.\n\nBAZAAR каталогу товарларды бөлүп, аталышы же штрихкоду боюнча табууга жардам берет. Кол менен кошуу бар. Импорт BUSINESS жана ENTERPRISE тарифтеринде жеткиликтүү.\n\nАссортиментиңиздин мисалында көргүңүз келеби? Direct аркылуу «КАТАЛОГ» деп жазыңыз.\n\n#bazaar #касса #склад #учеттоваров #розница"
+        "ru": "Белая футболка размера M и синяя размера L — разные варианты, которые важно различать при продаже и проверке остатков. В BAZAAR нужную позицию можно искать по названию, SKU или штрихкоду.\n\nВнутри карусели — реальные экраны с демонстрационными данными.\n\nНапишите «КАТАЛОГ» в Direct — разберём, как организовать ваш ассортимент."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "Размеры и цвета смешались? Учитываете размеры отдельно?",
-          "Варианты — отдельно. Размеры и цвета — в каталоге BAZAAR.",
-          "Разберём ваш ассортимент. Напишите «КАТАЛОГ» в ответ на Stories."
-        ],
-        "kg": [
-          "Өлчөмдөр менен түстөр эсепте аралашып кетеби?",
-          "Товар варианттары ассортиментти бөлүүгө жардам берет.",
-          "«КАТАЛОГ» деп жазыңыз. Мисалда көрсөтөбүз."
+          "Каталог\nбез путаницы\nРазмеры, цвета и поиск —\nв BAZAAR.",
+          "Карточка товара\nНазвание, цена и остаток.\nДемонстрационные данные",
+          "Размер и цвет\nОстатки вариантов — отдельно.\nДемонстрационные данные",
+          "Покажем\nна вашем примере\nНапишите «КАТАЛОГ»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
       "slides": {
         "ru": [
           {
@@ -240,264 +233,145 @@
             "body": "Размеры, цвета и поиск —\nв BAZAAR."
           },
           {
-            "title": "Найдите\nнужный товар",
-            "body": "По названию, SKU\nили штрихкоду."
+            "title": "Карточка товара",
+            "body": "Название, цена и остаток.\nДемонстрационные данные"
           },
           {
-            "title": "Один товар.\nРазные варианты.",
-            "body": "Размеры и цвета —\nотдельно в каталоге."
+            "title": "Размер и цвет",
+            "body": "Остатки вариантов — отдельно.\nДемонстрационные данные"
           },
           {
             "title": "Покажем\nна вашем примере",
             "body": "Напишите «КАТАЛОГ»\nв Direct."
           }
-        ],
-        "kg": [
-          {
-            "title": "Каталогдогу тартип",
-            "body": "BAZAAR: товарлар, варианттар жана издөө."
-          },
-          {
-            "title": "Аталыш жана штрихкод",
-            "body": "Керектүү товарды тааныш маалыматтар боюнча издеңиз."
-          },
-          {
-            "title": "Товар варианттары",
-            "body": "Өлчөмдөрдү, түстөрдү жана башка варианттарды каталогдо бөлүңүз."
-          },
-          {
-            "title": "Ассортиментти даярдаңыз",
-            "body": "Товарларды кол менен кошсо болот. Импорт — BUSINESS жана ENTERPRISE."
-          }
         ]
       },
-      "ctaMode": "demo",
-      "directKeyword": "КАТАЛОГ",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-05T19:30:00+06:00",
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-05T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-05T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-05T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 9,
-        "coverBrief": "Варианты одного товара; размеры/цвета видны в фотографии, без мелкой таблицы.",
-        "visualReadiness": "complete_native_carousel_and_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "Каталог\nбез путаницы",
-          "body": "Размеры, цвета и поиск —\nв BAZAAR."
-        }
-      },
-      "artworkSources": {
-        "cover": "p02_ru_01",
-        "frames": ["p02_ru_01", "p02_ru_02", "p02_ru_03", "p02_ru_04"],
-        "stories": ["p02_ru_story_01", "p02_ru_story_02", "p02_ru_story_03"]
+      "stories": {
+        "ru": [
+          "Одна модель.\nРазные размеры.\nКак различаете варианты\nв своём каталоге?",
+          "Карточка товара\nЦена и остаток в магазине.\nДемонстрационные данные",
+          "Разберём\nваш ассортимент\nНапишите «КАТАЛОГ»\nв Direct."
+        ]
       },
       "storySlides": {
         "ru": [
           {
-            "title": "Размеры и цвета\nсмешались?",
-            "body": "Учитываете размеры\nотдельно?"
+            "title": "Одна модель.\nРазные размеры.",
+            "body": "Как различаете варианты\nв своём каталоге?"
           },
           {
-            "title": "Варианты —\nотдельно",
-            "body": "Размеры и цвета —\nв каталоге BAZAAR."
+            "title": "Карточка товара",
+            "body": "Цена и остаток в магазине.\nДемонстрационные данные"
           },
           {
             "title": "Разберём\nваш ассортимент",
-            "body": "Напишите «КАТАЛОГ»\nв ответ на Stories."
+            "body": "Напишите «КАТАЛОГ»\nв Direct."
           }
         ]
       },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
       "storyInteractions": [
         {
-          "frame": 1,
-          "type": "poll",
-          "question": "Учитываете размеры отдельно?",
-          "answers": ["Да", "Пока нет"],
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
-        },
-        {
           "frame": 3,
-          "type": "reply",
-          "keyword": "КАТАЛОГ",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
+          "type": "direct_reply",
+          "keyword": "КАТАЛОГ"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "КАТАЛОГ",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 2,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 2,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 2,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 2,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ41LAaYI",
+          "DAHZ4hKX-Uc",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 9
+      }
     },
     {
       "id": "r03",
       "day": 3,
-      "date": "2026-11-06",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "reel",
       "topic": "receiving",
-      "status": "draft",
-      "language": "ru",
+      "industry": "phone_accessories",
       "title": {
-        "ru": "Приехала новая поставка?",
-        "kg": "Жаңы товар келдиби?"
-      },
-      "frames": {
-        "ru": [
-          "Приехала новая поставка? Добавьте товары в остатки магазина.",
-          "Укажите, что получили. Выберите магазин, товары и количество.",
-          "Проверьте документ. Посмотрите статус и товары в поступлении.",
-          "Покажем приёмку товара. Напишите «ПОСТАВКА» в Direct."
-        ],
-        "kg": [
-          "Жаңы товар келдиби? Товарларды дүкөндүн эсебине киргизиңиз.",
-          "Келген товарды көрсөтүңүз. Дүкөндү, товарларды жана санын тандаңыз.",
-          "Документти текшериңиз. Өткөрүлгөн кириш журналда көрүнөт.",
-          "Мисалдан көрүңүз. Товарды кабыл алууну жана калдыгын текшерүүнү көрсөтөбүз."
-        ]
+        "ru": "Приехала новая поставка?"
       },
       "caption": {
-        "ru": "Товар приехал в магазин — теперь важно отразить его в учёте. В BAZAAR для этого есть оприходование.\n\nУкажите магазин, товары и количество, проверьте документ и проведите операцию. Движение сохраняется в журнале: позже можно вернуться к нему и понять, откуда появился остаток.\n\nХотите посмотреть путь от поступления до продажи? Напишите «ПОСТАВКА» в Direct.\n\n#bazaar #касса #склад #учеттоваров #розница",
-        "kg": "Товар дүкөнгө келди — эми аны эсепке киргизүү керек. BAZAAR ичинде бул үчүн кириш операциясы бар.\n\nДүкөндү, товарларды жана санын көрсөтүп, документти текшерип өткөрүңүз. Кыймыл журналда сакталат: кийин калдыктын кайдан келгенин көрө аласыз.\n\nКириштен сатууга чейинки жолду көргүңүз келеби? Direct аркылуу «ПОСТАВКА» деп жазыңыз.\n\n#bazaar #касса #склад #учеттоваров #розница"
+        "ru": "Привезли партию кабелей для телефона. Важно записать, что именно приехало, сколько единиц вы получили и по какой себестоимости.\n\nВ оприходовании BAZAAR выберите магазин, добавьте товары и проверьте документ. После проведения количество отразится в остатках. На экране — учебный пример.\n\nНапишите «ПОСТАВКА» в Direct — покажем этот сценарий на вашем примере."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "Приехала новая поставка? Добавьте товары в остатки магазина.",
-          "Укажите, что получили. Выберите магазин, товары и количество.",
-          "Покажем приёмку товара. Напишите «ПОСТАВКА» в Direct."
-        ],
-        "kg": [
-          "Товар келди. Эсепке киргиздиңизби?",
-          "Кириште товарларды жана санын көрсөтүңүз.",
-          "«ПОСТАВКА» деп жазыңыз. Кантип иштээрин көрсөтөбүз."
+          "Приехала\nновая поставка?\nТовары, количество\nи себестоимость.",
+          "Приёмка товара\nКоличество и себестоимость.\nДемонстрационные данные",
+          "Документ приёмки\nПроверьте проведённую операцию.\nДемонстрационные данные",
+          "Покажем\nприёмку товара\nНапишите «ПОСТАВКА»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": 20,
       "slides": {
         "ru": [
           {
             "title": "Приехала\nновая поставка?",
-            "body": "Добавьте товары\nв остатки магазина."
+            "body": "Товары, количество\nи себестоимость."
           },
           {
-            "title": "Укажите,\nчто получили",
-            "body": "Выберите магазин,\nтовары и количество."
+            "title": "Приёмка товара",
+            "body": "Количество и себестоимость.\nДемонстрационные данные"
           },
           {
-            "title": "Проверьте\nдокумент",
-            "body": "Посмотрите статус\nи товары в поступлении."
+            "title": "Документ приёмки",
+            "body": "Проверьте проведённую операцию.\nДемонстрационные данные"
           },
           {
             "title": "Покажем\nприёмку товара",
             "body": "Напишите «ПОСТАВКА»\nв Direct."
           }
-        ],
-        "kg": [
-          {
-            "title": "Жаңы товар келдиби?",
-            "body": "Товарларды дүкөндүн эсебине киргизиңиз."
-          },
-          {
-            "title": "Келген товарды көрсөтүңүз",
-            "body": "Дүкөндү, товарларды жана санын тандаңыз."
-          },
-          {
-            "title": "Документти текшериңиз",
-            "body": "Өткөрүлгөн кириш журналда көрүнөт."
-          },
-          {
-            "title": "Мисалдан көрүңүз",
-            "body": "Товарды кабыл алууну жана калдыгын текшерүүнү көрсөтөбүз."
-          }
         ]
       },
-      "ctaMode": "demo",
-      "directKeyword": "ПОСТАВКА",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-06T19:30:00+06:00",
-        "includeReelInMainGrid": true,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-06T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-06T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-06T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 8,
-        "coverBrief": "Новая поставка: коробка и товары, ракурс отличается от P04.",
-        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
-        "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "Приехала\nновая поставка?",
-          "body": "Добавьте товары\nв остатки магазина."
-        }
-      },
-      "artworkSources": {
-        "cover": "r03_ru_cover",
-        "frames": [
-          "r03_ru_vertical_01",
-          "r03_ru_vertical_02",
-          "r03_ru_vertical_03",
-          "r03_ru_vertical_04"
-        ],
-        "stories": ["r03_ru_vertical_01", "r03_ru_vertical_02", "r03_ru_vertical_04"],
-        "storyReelFrames": [1, 2, 4]
+      "stories": {
+        "ru": [
+          "Поставка\nуже приехала?\nЗапишите количество\nи себестоимость.",
+          "Приёмка товара\nКоличество и себестоимость.\nДемонстрационные данные",
+          "Покажем\nприёмку товара\nНапишите «ПОСТАВКА»\nв Direct."
+        ]
       },
       "storySlides": {
         "ru": [
           {
-            "title": "Приехала\nновая поставка?",
-            "body": "Добавьте товары\nв остатки магазина."
+            "title": "Поставка\nуже приехала?",
+            "body": "Запишите количество\nи себестоимость."
           },
           {
-            "title": "Укажите,\nчто получили",
-            "body": "Выберите магазин,\nтовары и количество."
+            "title": "Приёмка товара",
+            "body": "Количество и себестоимость.\nДемонстрационные данные"
           },
           {
             "title": "Покажем\nприёмку товара",
@@ -505,1987 +379,1512 @@
           }
         ]
       },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
       "storyInteractions": [
         {
           "frame": 3,
-          "type": "reply",
-          "keyword": "ПОСТАВКА",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
+          "type": "direct_reply",
+          "keyword": "ПОСТАВКА"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "ПОСТАВКА",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "media": {
+        "videoSeconds": 20,
+        "audio": "none",
+        "type": "native Canva page sequence"
+      },
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 3,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 3,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 3,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 3,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ41zrBjY",
+          "DAHZ4tAd1eY",
+          "DAHZ4i7kvio",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 8
+      }
     },
     {
       "id": "p04",
       "day": 4,
-      "date": "2026-11-07",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "carousel",
-      "topic": "inventory",
-      "status": "draft",
-      "language": "ru",
+      "topic": "stock_movements",
+      "industry": "household",
       "title": {
-        "ru": "Почему товара стало меньше?",
-        "kg": "Товар эмнеге азайды?"
-      },
-      "frames": {
-        "ru": [
-          "Почему товара стало меньше? Продажи и списания — в журнале BAZAAR.",
-          "Проверьте продажи. Выберите магазин и период. Посмотрите, сколько продали.",
-          "Не только продажи. Проверьте перемещения и списания в журнале.",
-          "Покажем на примере. Напишите «ОСТАТОК» в Direct."
-        ],
-        "kg": [
-          "Товар эмнеге азайды? Сатуулар жана эсептен чыгаруулар — BAZAAR журналында.",
-          "Сатууларды караңыз. Керектүү мезгилде канча товар сатылганын текшериңиз.",
-          "Башка өзгөрүүлөрдү текшериңиз. Товар башка дүкөнгө которулган же эсептен чыгарылган болушу мүмкүн.",
-          "Мисалдан карайлы. Документти кайдан таап, статусун кантип текшерүүнү көрсөтөбүз."
-        ]
+        "ru": "Почему товара стало меньше?"
       },
       "caption": {
-        "ru": "Товара стало меньше, но вы не помните почему? Проверьте, что происходило с ним в магазине.\n\nВ журнале BAZAAR можно посмотреть продажи, поступления, перемещения и списания. Выберите магазин и период, найдите документ и проверьте его статус.\n\nХотите увидеть, где это находится? Напишите «ОСТАТОК» в Direct — покажем на демонстрационных данных.\n\n#bazaar #учеттоваров #магазин",
-        "kg": "Товар азайды, бирок себеби эсиңиздеби? Дүкөндө ал товар менен эмне болгонун текшериңиз.\n\nBAZAAR журналынан сатууларды, кириштерди, которууларды жана эсептен чыгарууларды көрө аласыз. Дүкөндү жана мезгилди тандап, документти таап, статусун текшериңиз.\n\nКайдан көрүүнү билгиңиз келеби? Direct аркылуу «ОСТАТОК» деп жазыңыз — демо маалыматтар менен көрсөтөбүз.\n\n#bazaar #учеттоваров #магазин"
+        "ru": "На полке товара стало меньше. Причину стоит искать в операциях: продажах, перемещениях и списаниях.\n\nОткройте журнал движения BAZAAR, выберите магазин и период, затем проверьте нужный документ. Карусель показывает реальные экраны на учебных данных.\n\nНапишите «ОСТАТОК» в Direct — покажем, где искать историю товара."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "Почему товара стало меньше? Продажи и списания — в журнале BAZAAR.",
-          "Продажи или списания? История товара — в журнале BAZAAR.",
-          "Покажем, где проверить. Напишите «ОСТАТОК» в ответ на Stories."
-        ],
-        "kg": [
-          "Товар эмнеге азайды?",
-          "Журналдан сатууларды, которууларды жана эсептен чыгарууларды текшериңиз.",
-          "«ОСТАТОК» деп жазыңыз. Мисалда көрсөтөбүз."
+          "Почему товара\nстало меньше?\nПродажи и списания —\nв журнале BAZAAR.",
+          "Продажа\nМагазин, дата и количество.\nДемонстрационные данные",
+          "Списание\nПроверьте документ операции.\nДемонстрационные данные",
+          "Покажем\nна примере\nНапишите «ОСТАТОК»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
       "slides": {
-        "ru": [
-          {
-            "title": "Почему товара стало меньше?",
-            "body": "Продажи и списания — в журнале BAZAAR."
-          },
-          {
-            "title": "Проверьте\nпродажи",
-            "body": "Выберите магазин и период.\nПосмотрите, сколько продали."
-          },
-          {
-            "title": "Не только\nпродажи",
-            "body": "Проверьте перемещения\nи списания в журнале."
-          },
-          {
-            "title": "Покажем\nна примере",
-            "body": "Напишите «ОСТАТОК»\nв Direct."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Товар эмнеге азайды?",
-            "body": "Сатуулар жана эсептен чыгаруулар — BAZAAR журналында."
-          },
-          {
-            "title": "Сатууларды караңыз",
-            "body": "Керектүү мезгилде канча товар сатылганын текшериңиз."
-          },
-          {
-            "title": "Башка өзгөрүүлөрдү текшериңиз",
-            "body": "Товар башка дүкөнгө которулган же эсептен чыгарылган болушу мүмкүн."
-          },
-          {
-            "title": "Мисалдан карайлы",
-            "body": "Документти кайдан таап, статусун кантип текшерүүнү көрсөтөбүз."
-          }
-        ]
-      },
-      "ctaMode": "demo",
-      "directKeyword": "ОСТАТОК",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-07T19:30:00+06:00",
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-07T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-07T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-07T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 7,
-        "coverBrief": "Точная утверждённая обложка references/owner-approved-stock-cover.png; три продолжения с проверкой продаж, движений и обращением в Direct.",
-        "visualReadiness": "complete_native_carousel_and_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
-      },
-      "artworkSources": {
-        "cover": "p04_ru_01",
-        "frames": ["p04_ru_01", "p04_ru_02", "p04_ru_03", "p04_ru_04"],
-        "stories": ["p04_ru_story_01", "p04_ru_story_02", "p04_ru_story_03"]
-      },
-      "storySlides": {
         "ru": [
           {
             "title": "Почему товара\nстало меньше?",
             "body": "Продажи и списания —\nв журнале BAZAAR."
           },
           {
-            "title": "Продажи или\nсписания?",
-            "body": "История товара —\nв журнале BAZAAR."
+            "title": "Продажа",
+            "body": "Магазин, дата и количество.\nДемонстрационные данные"
           },
           {
-            "title": "Покажем,\nгде проверить",
-            "body": "Напишите «ОСТАТОК»\nв ответ на Stories."
+            "title": "Списание",
+            "body": "Проверьте документ операции.\nДемонстрационные данные"
+          },
+          {
+            "title": "Покажем\nна примере",
+            "body": "Напишите «ОСТАТОК»\nв Direct."
           }
         ]
       },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
+      "stories": {
+        "ru": [
+          "Почему товара\nстало меньше?\nНачните с истории\nопераций.",
+          "Списание\nПроверьте документ и количество.\nДемонстрационные данные",
+          "Покажем,\nгде проверить\nНапишите «ОСТАТОК»\nв Direct."
+        ]
+      },
+      "storySlides": {
+        "ru": [
+          {
+            "title": "Почему товара\nстало меньше?",
+            "body": "Начните с истории\nопераций."
+          },
+          {
+            "title": "Списание",
+            "body": "Проверьте документ и количество.\nДемонстрационные данные"
+          },
+          {
+            "title": "Покажем,\nгде проверить",
+            "body": "Напишите «ОСТАТОК»\nв Direct."
+          }
+        ]
       },
       "storyInteractions": [
         {
           "frame": 3,
-          "type": "reply",
-          "keyword": "ОСТАТОК",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
+          "type": "direct_reply",
+          "keyword": "ОСТАТОК"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "ОСТАТОК",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 4,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 4,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 4,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 4,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ40s67-Y",
+          "DAHZ4hKX-Uc",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 7
+      }
     },
     {
       "id": "r05",
       "day": 5,
-      "date": "2026-11-08",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "reel",
-      "topic": "inventory",
-      "status": "draft",
-      "language": "ru",
+      "topic": "stock_counts",
+      "industry": "stationery",
       "title": {
-        "ru": "На полке одно. В учёте другое?",
-        "kg": "Текчеде башка. Эсепте башкабы?"
-      },
-      "frames": {
-        "ru": [
-          "На полке одно. В учёте другое? Начните с истории одного товара.",
-          "Выберите один товар. Проверьте магазин и нужный период.",
-          "Посмотрите движения. Продажи, перемещения и списания.",
-          "Разберём ваш пример. Напишите «ОСТАТОК» в Direct."
-        ],
-        "kg": [
-          "Текчеде башка. Эсепте башкабы? Бир товардын тарыхынан баштаңыз.",
-          "Дүкөндү тандаңыз. Керектүү дүкөндөгү товарды салыштырыңыз.",
-          "Эмне өзгөргөнүн караңыз. Кириштерди, сатууларды, которууларды жана эсептен чыгарууларды текшериңиз.",
-          "Товарды кайра саноо керекпи? Кайра саноо BUSINESS жана ENTERPRISE тарифтеринде бар. Көрсөтүүнү сураңыз."
-        ]
+        "ru": "На полке одно. В учёте другое?"
       },
       "caption": {
-        "ru": "Если фактический остаток отличается от учётного, важно понять причину.\n\nНачните с одного магазина и одного товара: посмотрите последние поступления, продажи, перемещения и списания. История помогает найти операцию, которую стоит проверить.\n\nВ BAZAAR есть и пересчёты — на BUSINESS и ENTERPRISE. Напишите «ОСТАТОК», чтобы посмотреть подходящий сценарий.\n\n#bazaar #касса #склад #учеттоваров #розница",
-        "kg": "Иш жүзүндөгү калдык эсептегиден айырмаланса, себебин түшүнүү маанилүү.\n\nБир дүкөндөн жана бир товардан баштаңыз: акыркы кириштерди, сатууларды, которууларды жана эсептен чыгарууларды караңыз. Тарых текшериле турган операцияны табууга жардам берет.\n\nBAZAAR ичинде кайра саноо BUSINESS жана ENTERPRISE тарифтеринде бар. Керектүү ишти көрүү үчүн «ОСТАТОК» деп жазыңыз.\n\n#bazaar #касса #склад #учеттоваров #розница"
+        "ru": "По учёту — 13 блокнотов. А сколько их на полке? Инвентаризация нужна, чтобы сравнить записанное и фактическое количество.\n\nВ BAZAAR выберите магазин и товары, внесите результат подсчёта, проверьте расхождения перед проведением. В ролике — учебный пример. Инвентаризация доступна на тарифах «Бизнесмен» и «Монополист».\n\nНапишите «СВЕРКА» в Direct — покажем, как устроен пересчёт."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "На полке одно. В учёте другое? Начните с истории одного товара.",
-          "Выберите один товар. Проверьте магазин и нужный период.",
-          "Разберём ваш пример. Напишите «ОСТАТОК» в Direct."
-        ],
-        "kg": [
-          "Текчедеги жана эсептеги сандар айырмаланабы?",
-          "Товар боюнча акыркы өзгөрүүлөрдү текшериңиз.",
-          "Direct аркылуу «ОСТАТОК» деп жазыңыз."
+          "На полке одно.\nВ учёте другое?\nСверьте количество\nв инвентаризации.",
+          "Сверка остатков\nВнесите фактическое количество.\nДемонстрационные данные",
+          "Расхождение\nПроверьте до проведения.\nДемонстрационные данные",
+          "Разберём\nвашу сверку\nНапишите «СВЕРКА»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": 20,
       "slides": {
         "ru": [
           {
             "title": "На полке одно.\nВ учёте другое?",
-            "body": "Начните с истории\nодного товара."
+            "body": "Сверьте количество\nв инвентаризации."
           },
           {
-            "title": "Выберите\nодин товар",
-            "body": "Проверьте магазин\nи нужный период."
+            "title": "Сверка остатков",
+            "body": "Внесите фактическое количество.\nДемонстрационные данные"
           },
           {
-            "title": "Посмотрите\nдвижения",
-            "body": "Продажи, перемещения\nи списания."
+            "title": "Расхождение",
+            "body": "Проверьте до проведения.\nДемонстрационные данные"
           },
           {
-            "title": "Разберём\nваш пример",
-            "body": "Напишите «ОСТАТОК»\nв Direct."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Текчеде башка. Эсепте башкабы?",
-            "body": "Бир товардын тарыхынан баштаңыз."
-          },
-          {
-            "title": "Дүкөндү тандаңыз",
-            "body": "Керектүү дүкөндөгү товарды салыштырыңыз."
-          },
-          {
-            "title": "Эмне өзгөргөнүн караңыз",
-            "body": "Кириштерди, сатууларды, которууларды жана эсептен чыгарууларды текшериңиз."
-          },
-          {
-            "title": "Товарды кайра саноо керекпи?",
-            "body": "Кайра саноо BUSINESS жана ENTERPRISE тарифтеринде бар. Көрсөтүүнү сураңыз."
+            "title": "Разберём\nвашу сверку",
+            "body": "Напишите «СВЕРКА»\nв Direct."
           }
         ]
       },
-      "ctaMode": "demo",
-      "directKeyword": "ОСТАТОК",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-08T19:30:00+06:00",
-        "includeReelInMainGrid": true,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-08T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-08T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-08T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 6,
-        "coverBrief": "Утверждённая светлая сине-белая предметная фотография. Крупный заголовок и исходный логотип; без выдуманного интерфейса.",
-        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
-        "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "На полке одно.\nВ учёте другое?",
-          "body": "Начните с истории\nодного товара."
-        }
-      },
-      "artworkSources": {
-        "cover": "r05_ru_cover",
-        "frames": [
-          "r05_ru_vertical_01",
-          "r05_ru_vertical_02",
-          "r05_ru_vertical_03",
-          "r05_ru_vertical_04"
-        ],
-        "stories": ["r05_ru_vertical_01", "r05_ru_vertical_02", "r05_ru_vertical_04"],
-        "storyReelFrames": [1, 2, 4]
+      "stories": {
+        "ru": [
+          "Когда сверяли\nостатки?\nНачните с одной\nгруппы товаров.",
+          "Сверка остатков\nУчётное и фактическое.\nДемонстрационные данные",
+          "Покажем\nинвентаризацию\nНапишите «СВЕРКА»\nв Direct."
+        ]
       },
       "storySlides": {
         "ru": [
           {
-            "title": "На полке одно.\nВ учёте другое?",
-            "body": "Начните с истории\nодного товара."
+            "title": "Когда сверяли\nостатки?",
+            "body": "Начните с одной\nгруппы товаров."
           },
           {
-            "title": "Выберите\nодин товар",
-            "body": "Проверьте магазин\nи нужный период."
+            "title": "Сверка остатков",
+            "body": "Учётное и фактическое.\nДемонстрационные данные"
           },
           {
-            "title": "Разберём\nваш пример",
-            "body": "Напишите «ОСТАТОК»\nв Direct."
+            "title": "Покажем\nинвентаризацию",
+            "body": "Напишите «СВЕРКА»\nв Direct."
           }
         ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
       },
       "storyInteractions": [
         {
           "frame": 3,
-          "type": "reply",
-          "keyword": "ОСТАТОК",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
+          "type": "direct_reply",
+          "keyword": "СВЕРКА"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "СВЕРКА",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "media": {
+        "videoSeconds": 20,
+        "audio": "none",
+        "type": "native Canva page sequence"
+      },
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 5,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 5,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 5,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 5,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ41t5CMw",
+          "DAHZ4tAd1eY",
+          "DAHZ4i7kvio",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 6
+      }
     },
     {
       "id": "s06",
       "day": 6,
-      "date": "2026-11-09",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "stories",
-      "topic": "onboarding",
-      "status": "draft",
-      "language": "ru",
+      "topic": "baam",
+      "industry": "cross_retail",
       "title": {
-        "ru": "С чего начать учёт",
-        "kg": "Эсепти эмнеден баштоо керек"
-      },
-      "frames": {
-        "ru": [],
-        "kg": []
+        "ru": "Спросите BAAM о продажах"
       },
       "caption": {
-        "ru": "",
-        "kg": ""
+        "ru": ""
+      },
+      "operatorNotes": "Пример запроса BAAM: «Покажи топ-7 товаров за октябрь 2026 года». В учебном бизнесе помощник вернул фактический рейтинг и ссылку на товар. Проверяйте магазин, период и источник ответа. Базовые команды и подключённый ИИ — разные режимы; работу внешнего ИИ-провайдера этим примером не подтверждаем.",
+      "frames": {
+        "ru": []
+      },
+      "slides": {
+        "ru": []
       },
       "stories": {
         "ru": [
-          "Учёт: с чего начать? С одного магазина и понятного каталога.",
-          "Добавьте первые товары. Название, цена, штрихкод и остаток.",
-          "Начните в BAZAAR. Создайте аккаунт по ссылке в Stories."
-        ],
-        "kg": [
-          "Дүкөндү жаңы системага даярдап жатасызбы?",
-          "Каталог, калдыктар жана укуктардан баштаңыз.",
-          "Катталыңыз же өтүнмө калтырыңыз."
+          "Спросите BAAM\nо продажах\nНапример: топ товаров\nза октябрь.",
+          "Ответ BAAM\nТоп товаров за октябрь.\nДемонстрационные данные",
+          "Посмотрите\nBAAM в работе\nНапишите «BAAM»\nв Direct."
         ]
-      },
-      "storyTime": "12:30",
-      "cta": "signup",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
-      "ctaMode": "signup",
-      "directKeyword": null,
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": null,
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-09T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-09T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-09T12:30:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "link_sticker",
-        "gridPositionAfterDay14": null,
-        "coverBrief": null,
-        "visualReadiness": "complete_native_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
-      },
-      "artworkSources": {
-        "frames": [],
-        "stories": ["s06_ru_story_01", "s06_ru_story_02", "s06_ru_story_03"]
       },
       "storySlides": {
         "ru": [
           {
-            "title": "Учёт:\nс чего начать?",
-            "body": "С одного магазина\nи понятного каталога."
+            "title": "Спросите BAAM\nо продажах",
+            "body": "Например: топ товаров\nза октябрь."
           },
           {
-            "title": "Добавьте\nпервые товары",
-            "body": "Название, цена,\nштрихкод и остаток."
+            "title": "Ответ BAAM",
+            "body": "Топ товаров за октябрь.\nДемонстрационные данные"
           },
           {
-            "title": "Начните\nв BAZAAR",
-            "body": "Создайте аккаунт\nпо ссылке в Stories."
+            "title": "Посмотрите\nBAAM в работе",
+            "body": "Напишите «BAAM»\nв Direct."
           }
         ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
       },
       "storyInteractions": [
         {
           "frame": 3,
-          "type": "link_sticker",
-          "text": "Создать аккаунт",
-          "utmContent": "s06_ru",
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
+          "type": "direct_reply",
+          "keyword": "BAAM"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "BAAM",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 6,
+        "feedAt": null,
+        "feedTimeHypothesis": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 6,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 6,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 6,
+            "timeHypothesis": "12:30"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": null
+      }
     },
     {
       "id": "s07",
       "day": 7,
-      "date": "2026-11-10",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "stories",
-      "topic": "questions",
-      "status": "draft",
-      "language": "ru",
+      "topic": "customer_orders",
+      "industry": "phone_accessories",
       "title": {
-        "ru": "Вопрос владельцу магазина",
-        "kg": "Дүкөн ээсине суроо"
-      },
-      "frames": {
-        "ru": [],
-        "kg": []
+        "ru": "Заказ покупателя — в системе"
       },
       "caption": {
-        "ru": "",
-        "kg": ""
+        "ru": ""
+      },
+      "operatorNotes": "Пример магазина аксессуаров: чехол и кабель в заказе покупателя. Использовать фактический статус документа; не обещать автоматическое резервирование или оплату без отдельной проверки сценария.",
+      "frames": {
+        "ru": []
+      },
+      "slides": {
+        "ru": []
       },
       "stories": {
         "ru": [
-          "Что сложнее в учёте? Товары, остатки или работа кассы?",
-          "Расскажите о магазине. Что продаёте и сколько у вас точек?",
-          "Какую задачу разобрать? Оставьте вопрос — покажем нужный сценарий."
-        ],
-        "kg": [
-          "Дүкөндүн кайсы ишин кийинкиде көрсөтөлү?",
-          "Касса • калдыктар • товарлар • отчёттор",
-          "Direct аркылуу жазыңыз. Суроолоруңузду окуйбуз."
+          "Покупатель\nзаказал товар?\nСохраните заказ\nи состав покупки.",
+          "Состав заказа\nТовары и сумма заказа.\nДемонстрационные данные",
+          "Покажем\nработу с заказами\nНапишите «ЗАКАЗ»\nв Direct."
         ]
-      },
-      "storyTime": "12:30",
-      "cta": "question",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
-      "ctaMode": "question",
-      "directKeyword": null,
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": null,
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-10T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-10T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-10T12:30:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "question_or_reply",
-        "gridPositionAfterDay14": null,
-        "coverBrief": null,
-        "visualReadiness": "complete_native_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
-      },
-      "artworkSources": {
-        "frames": [],
-        "stories": ["s07_ru_story_01", "s07_ru_story_02", "s07_ru_story_03"]
       },
       "storySlides": {
         "ru": [
           {
-            "title": "Что сложнее\nв учёте?",
-            "body": "Товары, остатки\nили работа кассы?"
+            "title": "Покупатель\nзаказал товар?",
+            "body": "Сохраните заказ\nи состав покупки."
           },
           {
-            "title": "Расскажите\nо магазине",
-            "body": "Что продаёте\nи сколько у вас точек?"
+            "title": "Состав заказа",
+            "body": "Товары и сумма заказа.\nДемонстрационные данные"
           },
           {
-            "title": "Какую задачу\nразобрать?",
-            "body": "Оставьте вопрос —\nпокажем нужный сценарий."
+            "title": "Покажем\nработу с заказами",
+            "body": "Напишите «ЗАКАЗ»\nв Direct."
           }
         ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
       },
       "storyInteractions": [
         {
           "frame": 3,
-          "type": "question_sticker",
-          "question": "Что хотите узнать о BAZAAR?",
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
+          "type": "direct_reply",
+          "keyword": "ЗАКАЗ"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "ЗАКАЗ",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 7,
+        "feedAt": null,
+        "feedTimeHypothesis": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 7,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 7,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 7,
+            "timeHypothesis": "12:30"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": null
+      }
     },
     {
       "id": "r08",
       "day": 8,
-      "date": "2026-11-11",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "reel",
-      "topic": "stores",
-      "status": "draft",
-      "language": "ru",
+      "topic": "multi_store",
+      "industry": "hardware",
       "title": {
-        "ru": "Где лежит нужный товар?",
-        "kg": "Керектүү товар кайсы дүкөндө?"
-      },
-      "frames": {
-        "ru": [
-          "Где лежит нужный товар? Остатки — отдельно по магазинам.",
-          "Выберите магазин. Посмотрите остаток нужного товара.",
-          "Переместите товар. Оформите перемещение между магазинами.",
-          "Покажем работу с магазинами. Напишите «МАГАЗИНЫ» в Direct."
-        ],
-        "kg": [
-          "Керектүү товар кайсы дүкөндө? Калдыктарды ар бир дүкөн боюнча өзүнчө көрүңүз.",
-          "Дүкөндү тандаңыз. Ошол дүкөндө канча товар бар экенин көрүңүз.",
-          "Товарды башка дүкөнгө бересизби? Эсепке алуу үчүн которууну каттаңыз.",
-          "Канча дүкөнүңүз бар? STARTER — 1, BUSINESS — 5ке чейин, ENTERPRISE — 15ке чейин."
-        ]
+        "ru": "В каком магазине есть товар?"
       },
       "caption": {
-        "ru": "Для нескольких точек важно видеть остатки каждого магазина и оформлять перемещения. В BAZAAR STARTER рассчитан на 1 магазин, BUSINESS — до 5, ENTERPRISE — до 15. Права сотрудников настраиваются отдельно. Напишите «МАГАЗИНЫ» и укажите число точек — покажем подходящий сценарий.\n\n#bazaar #касса #склад #учеттоваров #розница",
-        "kg": "Бир нече соода түйүнү үчүн ар бир дүкөндүн калдыгын көрүү жана которууну каттоо маанилүү. BAZAAR STARTER — 1 дүкөн, BUSINESS — 5ке чейин, ENTERPRISE — 15ке чейин. Кызматкерлердин укуктары өзүнчө жөндөлөт. «МАГАЗИНЫ» деп жазып, дүкөндөрдүн санын көрсөтүңүз.\n\n#bazaar #касса #склад #учеттоваров #розница"
+        "ru": "В одной точке товар закончился, в другой он есть. В BAZAAR остаток проверяется по выбранному магазину, а перемещение оформляется отдельным документом с отправителем и получателем.\n\nЛимит магазинов зависит от тарифа. На экране — демонстрационные данные.\n\nНапишите «МАГАЗИНЫ» в Direct и укажите количество точек — подберём сценарий показа."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "Где лежит нужный товар? Остатки — отдельно по магазинам.",
-          "Выберите магазин. Посмотрите остаток нужного товара.",
-          "Покажем работу с магазинами. Напишите «МАГАЗИНЫ» в Direct."
-        ],
-        "kg": [
-          "Бир дүкөнбү же бир нече соода түйүнүбү?",
-          "Дүкөндөр боюнча калдыктар жана өзүнчө которуулар.",
-          "«МАГАЗИНЫ» деп жазып, санын айтыңыз."
+          "Где есть\nнужный товар?\nПроверьте остаток\nв нужном магазине.",
+          "Остатки по точкам\nКоличество в выбранном магазине.\nДемонстрационные данные",
+          "После перемещения\nПроверьте остаток у получателя.\nДемонстрационные данные",
+          "Покажем работу\nс магазинами\nНапишите «МАГАЗИНЫ»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": 20,
       "slides": {
         "ru": [
           {
-            "title": "Где лежит\nнужный товар?",
-            "body": "Остатки — отдельно\nпо магазинам."
+            "title": "Где есть\nнужный товар?",
+            "body": "Проверьте остаток\nв нужном магазине."
           },
           {
-            "title": "Выберите\nмагазин",
-            "body": "Посмотрите остаток\nнужного товара."
+            "title": "Остатки по точкам",
+            "body": "Количество в выбранном магазине.\nДемонстрационные данные"
           },
           {
-            "title": "Переместите\nтовар",
-            "body": "Оформите перемещение\nмежду магазинами."
+            "title": "После перемещения",
+            "body": "Проверьте остаток у получателя.\nДемонстрационные данные"
           },
           {
             "title": "Покажем работу\nс магазинами",
             "body": "Напишите «МАГАЗИНЫ»\nв Direct."
           }
-        ],
-        "kg": [
-          {
-            "title": "Керектүү товар кайсы дүкөндө?",
-            "body": "Калдыктарды ар бир дүкөн боюнча өзүнчө көрүңүз."
-          },
-          {
-            "title": "Дүкөндү тандаңыз",
-            "body": "Ошол дүкөндө канча товар бар экенин көрүңүз."
-          },
-          {
-            "title": "Товарды башка дүкөнгө бересизби?",
-            "body": "Эсепке алуу үчүн которууну каттаңыз."
-          },
-          {
-            "title": "Канча дүкөнүңүз бар?",
-            "body": "STARTER — 1, BUSINESS — 5ке чейин, ENTERPRISE — 15ке чейин."
-          }
         ]
       },
-      "ctaMode": "demo",
-      "directKeyword": "МАГАЗИНЫ",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-11T19:30:00+06:00",
-        "includeReelInMainGrid": true,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-11T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-11T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-11T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 5,
-        "coverBrief": "Утверждённая светлая сине-белая предметная фотография. Крупный заголовок и исходный логотип; без выдуманного интерфейса.",
-        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
-        "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "Где лежит\nнужный товар?",
-          "body": "Остатки — отдельно\nпо магазинам."
-        }
-      },
-      "artworkSources": {
-        "cover": "r08_ru_cover",
-        "frames": [
-          "r08_ru_vertical_01",
-          "r08_ru_vertical_02",
-          "r08_ru_vertical_03",
-          "r08_ru_vertical_04"
-        ],
-        "stories": ["r08_ru_vertical_01", "r08_ru_vertical_02", "r08_ru_vertical_04"],
-        "storyReelFrames": [1, 2, 4]
+      "stories": {
+        "ru": [
+          "В какой точке\nесть товар?\nНачните с выбора\nмагазина.",
+          "Остатки по точкам\nВыберите нужный магазин.\nДемонстрационные данные",
+          "Сколько у вас\nмагазинов?\nНапишите «МАГАЗИНЫ»\nв Direct."
+        ]
       },
       "storySlides": {
         "ru": [
           {
-            "title": "Где лежит\nнужный товар?",
-            "body": "Остатки — отдельно\nпо магазинам."
+            "title": "В какой точке\nесть товар?",
+            "body": "Начните с выбора\nмагазина."
           },
           {
-            "title": "Выберите\nмагазин",
-            "body": "Посмотрите остаток\nнужного товара."
+            "title": "Остатки по точкам",
+            "body": "Выберите нужный магазин.\nДемонстрационные данные"
           },
           {
-            "title": "Покажем работу\nс магазинами",
+            "title": "Сколько у вас\nмагазинов?",
             "body": "Напишите «МАГАЗИНЫ»\nв Direct."
           }
         ]
       },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
       "storyInteractions": [
         {
           "frame": 3,
-          "type": "reply",
-          "keyword": "МАГАЗИНЫ",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
+          "type": "direct_reply",
+          "keyword": "МАГАЗИНЫ"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "МАГАЗИНЫ",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "media": {
+        "videoSeconds": 20,
+        "audio": "none",
+        "type": "native Canva page sequence"
+      },
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 8,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 8,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 8,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 8,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ4x6a1Fs",
+          "DAHZ4tAd1eY",
+          "DAHZ4i7kvio",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 5
+      }
     },
     {
       "id": "p09",
       "day": 9,
-      "date": "2026-11-12",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "carousel",
-      "topic": "onboarding",
-      "status": "draft",
-      "language": "ru",
+      "topic": "image_studio",
+      "industry": "footwear",
       "title": {
-        "ru": "Начать с одного магазина",
-        "kg": "Бир дүкөндөн баштаңыз"
-      },
-      "frames": {
-        "ru": [
-          "Начать с одного магазина. Аккаунт, товары, команда.",
-          "Создайте аккаунт. Добавьте свой бизнес и первый магазин.",
-          "Подготовьте каталог. Добавьте товары вручную. Импорт — BUSINESS и ENTERPRISE.",
-          "Подключите команду. Назначьте сотрудникам права. Начать — по ссылке в профиле."
-        ],
-        "kg": [
-          "Бир дүкөндөн баштаңыз. BAZAAR менен иштөөгө үч кадам.",
-          "Аккаунт жана дүкөн. Катталып, өз бизнесиңизди түзүңүз.",
-          "Каталог жана калдыктар. Товарларды даярдаңыз. Импорт — BUSINESS жана ENTERPRISE.",
-          "Команда жана укуктар. Кызматкерлерди кошуп, ишине жараша укук бериңиз."
-        ]
+        "ru": "Фото товара для каталога"
       },
       "caption": {
-        "ru": "Начните с одного магазина: создайте аккаунт BAZAAR, добавьте бизнес и магазин, подготовьте каталог и начальные остатки, назначьте сотрудникам права.\n\nТовары можно добавить вручную. Импорт доступен в BUSINESS и ENTERPRISE; перед переносом проверьте формат файла.\n\nРегистрация — по ссылке в профиле. Если регистрация доступна по приглашению, на этой странице можно оставить заявку.\n\n#bazaar #учеттоваров #магазин",
-        "kg": "Баарын биринчи күнү көчүрүү шарт эмес. Бир дүкөндөн баштаңыз: аккаунт түзүп, каталог менен калдыктарды даярдаңыз жана кызматкерлерге укук бериңиз. Импорттун алдында тарифти жана файл форматын текшериңиз. Катталуу шилтемеси профилде. Кирүү чакыруу менен болсо, ошол жерден өтүнмө калтырсаңыз болот.\n\n#bazaar #касса #склад #учеттоваров #розница"
+        "ru": "Фото для каталога начинается с вашего товара. В студии BAZAAR можно загрузить исходник, выбрать светлый фон и сравнить результат перед сохранением в карточку. Оригинал хранится отдельно.\n\nПеред сохранением проверьте форму, цвет, надписи и мелкие детали товара. Обработка работает при подключённом сервисе генерации; финальный результат всегда требует просмотра человеком.\n\nНапишите «ФОТО» в Direct — покажем, как устроен процесс."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "Один магазин — хорошее начало. Аккаунт, товары и права сотрудников.",
-          "Переносите постепенно. Сначала подготовьте один каталог.",
-          "Начните в BAZAAR. Создайте аккаунт по ссылке в Stories."
-        ],
-        "kg": [
-          "Бир дүкөндөн баштасаңыз болот.",
-          "Товарларды жана кызматкерлерди даярдаңыз.",
-          "Бул шилтеме аркылуу катталыңыз."
+          "Фото товара\nдля каталога\nСтудия картинок\nв BAZAAR.",
+          "Исходное фото\nОригинал сохраняется отдельно.\nДемонстрационные данные",
+          "Результат\nПроверьте форму, цвет и детали.\nДемонстрационные данные",
+          "Покажем\nстудию картинок\nНапишите «ФОТО»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "signup",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
       "slides": {
         "ru": [
           {
-            "title": "Начать с\nодного магазина",
-            "body": "Аккаунт, товары,\nкоманда."
+            "title": "Фото товара\nдля каталога",
+            "body": "Студия картинок\nв BAZAAR."
           },
           {
-            "title": "Создайте\nаккаунт",
-            "body": "Добавьте свой бизнес\nи первый магазин."
+            "title": "Исходное фото",
+            "body": "Оригинал сохраняется отдельно.\nДемонстрационные данные"
           },
           {
-            "title": "Подготовьте\nкаталог",
-            "body": "Добавьте товары вручную.\nИмпорт — BUSINESS и ENTERPRISE."
+            "title": "Результат",
+            "body": "Проверьте форму, цвет и детали.\nДемонстрационные данные"
           },
           {
-            "title": "Подключите\nкоманду",
-            "body": "Назначьте сотрудникам права.\nНачать — по ссылке в профиле."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Бир дүкөндөн баштаңыз",
-            "body": "BAZAAR менен иштөөгө үч кадам."
-          },
-          {
-            "title": "Аккаунт жана дүкөн",
-            "body": "Катталып, өз бизнесиңизди түзүңүз."
-          },
-          {
-            "title": "Каталог жана калдыктар",
-            "body": "Товарларды даярдаңыз. Импорт — BUSINESS жана ENTERPRISE."
-          },
-          {
-            "title": "Команда жана укуктар",
-            "body": "Кызматкерлерди кошуп, ишине жараша укук бериңиз."
+            "title": "Покажем\nстудию картинок",
+            "body": "Напишите «ФОТО»\nв Direct."
           }
         ]
       },
-      "ctaMode": "signup",
-      "directKeyword": null,
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-12T19:30:00+06:00",
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-12T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-12T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-12T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "link_sticker",
-        "gridPositionAfterDay14": 4,
-        "coverBrief": "Одна точка и понятное начало; светлая предметная сцена без обещания скорости внедрения.",
-        "visualReadiness": "complete_native_carousel_and_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "Начать с\nодного магазина",
-          "body": "Аккаунт, товары,\nкоманда."
-        }
-      },
-      "artworkSources": {
-        "cover": "p09_ru_01",
-        "frames": ["p09_ru_01", "p09_ru_02", "p09_ru_03", "p09_ru_04"],
-        "stories": ["p09_ru_story_01", "p09_ru_story_02", "p09_ru_story_03"]
+      "stories": {
+        "ru": [
+          "Фото\nдля каталога\nНачните с реального\nснимка товара.",
+          "Результат студии\nОцените детали перед сохранением.\nДемонстрационные данные",
+          "Покажем\nстудию картинок\nНапишите «ФОТО»\nв Direct."
+        ]
       },
       "storySlides": {
         "ru": [
           {
-            "title": "Один магазин —\nхорошее начало",
-            "body": "Аккаунт, товары\nи права сотрудников."
+            "title": "Фото\nдля каталога",
+            "body": "Начните с реального\nснимка товара."
           },
           {
-            "title": "Переносите\nпостепенно",
-            "body": "Сначала подготовьте\nодин каталог."
+            "title": "Результат студии",
+            "body": "Оцените детали перед сохранением.\nДемонстрационные данные"
           },
           {
-            "title": "Начните\nв BAZAAR",
-            "body": "Создайте аккаунт\nпо ссылке в Stories."
+            "title": "Покажем\nстудию картинок",
+            "body": "Напишите «ФОТО»\nв Direct."
           }
         ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
       },
       "storyInteractions": [
         {
           "frame": 3,
-          "type": "link_sticker",
-          "text": "Создать аккаунт",
-          "utmContent": "p09_ru",
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
+          "type": "direct_reply",
+          "keyword": "ФОТО"
         }
-      ]
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "ФОТО",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 9,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 9,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 9,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 9,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ47BaQOs",
+          "DAHZ4hKX-Uc",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 4
+      }
     },
     {
       "id": "r10",
       "day": 10,
-      "date": "2026-11-13",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
+      "date": null,
       "format": "reel",
       "topic": "analytics",
-      "status": "draft",
-      "language": "ru",
+      "industry": "books",
       "title": {
-        "ru": "Как прошла неделя?",
-        "kg": "Жума кандай өттү?"
-      },
-      "frames": {
-        "ru": [
-          "Как прошла неделя? Выручка и валовая прибыль. BUSINESS и ENTERPRISE.",
-          "Выберите период. Посмотрите выручку и валовую прибыль.",
-          "Посмотрите товары. Разберите продажи своего ассортимента.",
-          "Покажем аналитику. Напишите «ОТЧЁТ» в Direct. BUSINESS и ENTERPRISE."
-        ],
-        "kg": [
-          "Жума кандай өттү? Сатуунун жыйынтыгын көрүңүз.",
-          "Мезгилди тандаңыз. Түшүм, дүң пайда жана товарлар — аналитикада.",
-          "Өздүк наркты эске алыңыз. Дүң пайда таза пайдадан айырмаланат.",
-          "Керектүү отчётту карайбыз. Аналитика — BUSINESS жана ENTERPRISE. Көрсөтүүдөгү маалыматтар — демонстрациялык."
-        ]
+        "ru": "Что показали продажи?"
       },
       "caption": {
-        "ru": "Отчёт нужен, чтобы отвечать на конкретный вопрос владельца. На показе откроем аналитику за период и разберём выручку, валовую прибыль и товары. Используем демонстрационные данные. Возможность доступна в BUSINESS и ENTERPRISE. Напишите «ОТЧЁТ» в Direct.\n\n#bazaar #касса #склад #учеттоваров #розница",
-        "kg": "Отчёт дүкөн ээсинин так суроосуна жооп бериши керек. Көрсөтүүдө белгилүү мезгилдин түшүмүн, дүң пайдасын жана товарларын карайбыз. Демонстрациялык маалыматтар колдонулат. Бул мүмкүнчүлүк BUSINESS жана ENTERPRISE тарифтеринде бар. Direct аркылуу «ОТЧЁТ» деп жазыңыз.\n\n#bazaar #касса #склад #учеттоваров #розница"
+        "ru": "Выручка и прибыль отвечают на разные вопросы. В аналитике BAZAAR выберите магазин и период, посмотрите продажи после возвратов, себестоимость и валовую прибыль. Это ещё не чистая прибыль: расходы бизнеса нужно учитывать отдельно.\n\nВ ролике — реальные показатели учебного бизнеса, а не результаты клиента. Аналитика доступна на тарифах «Бизнесмен» и «Монополист».\n\nНапишите «ОТЧЁТ» в Direct — покажем, как читать эти показатели."
       },
-      "stories": {
+      "operatorNotes": null,
+      "frames": {
         "ru": [
-          "Как прошла неделя? Выручка и валовая прибыль. BUSINESS и ENTERPRISE.",
-          "Выберите период. Посмотрите выручку и валовую прибыль.",
-          "Покажем аналитику. Напишите «ОТЧЁТ» в Direct. BUSINESS и ENTERPRISE."
-        ],
-        "kg": [
-          "Бир жумада кайсы товар сатылды?",
-          "Отчётту демонстрациялык маалыматта карайбыз.",
-          "BUSINESS / ENTERPRISE. Көрсөтүүнү сураңыз."
+          "Что показали\nпродажи?\nВыручка, себестоимость\nи валовая прибыль.",
+          "Выручка\nЗа выбранный магазин и период.\nДемонстрационные данные",
+          "Валовая прибыль\nДо расходов вашего бизнеса.\nДемонстрационные данные",
+          "Разберём\nваш отчёт\nНапишите «ОТЧЁТ»\nв Direct."
         ]
       },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": 20,
       "slides": {
         "ru": [
           {
-            "title": "Как прошла\nнеделя?",
-            "body": "Выручка и валовая прибыль.\nBUSINESS и ENTERPRISE."
+            "title": "Что показали\nпродажи?",
+            "body": "Выручка, себестоимость\nи валовая прибыль."
           },
           {
-            "title": "Выберите\nпериод",
-            "body": "Посмотрите выручку\nи валовую прибыль."
+            "title": "Выручка",
+            "body": "За выбранный магазин и период.\nДемонстрационные данные"
           },
           {
-            "title": "Посмотрите\nтовары",
-            "body": "Разберите продажи\nсвоего ассортимента."
-          },
-          {
-            "title": "Покажем\nаналитику",
-            "body": "Напишите «ОТЧЁТ» в Direct.\nBUSINESS и ENTERPRISE."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Жума кандай өттү?",
-            "body": "Сатуунун жыйынтыгын көрүңүз."
-          },
-          {
-            "title": "Мезгилди тандаңыз",
-            "body": "Түшүм, дүң пайда жана товарлар — аналитикада."
-          },
-          {
-            "title": "Өздүк наркты эске алыңыз",
-            "body": "Дүң пайда таза пайдадан айырмаланат."
-          },
-          {
-            "title": "Керектүү отчётту карайбыз",
-            "body": "Аналитика — BUSINESS жана ENTERPRISE. Көрсөтүүдөгү маалыматтар — демонстрациялык."
-          }
-        ]
-      },
-      "ctaMode": "demo",
-      "directKeyword": "ОТЧЁТ",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-13T19:30:00+06:00",
-        "includeReelInMainGrid": true,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-13T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-13T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-13T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 3,
-        "coverBrief": "Реальный читаемый отчёт; BUSINESS/ENTERPRISE рядом с обещанием аналитики.",
-        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
-        "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "Как прошла\nнеделя?",
-          "body": "Выручка и валовая прибыль.\nBUSINESS и ENTERPRISE."
-        }
-      },
-      "artworkSources": {
-        "cover": "r10_ru_cover",
-        "frames": [
-          "r10_ru_vertical_01",
-          "r10_ru_vertical_02",
-          "r10_ru_vertical_03",
-          "r10_ru_vertical_04"
-        ],
-        "stories": ["r10_ru_vertical_01", "r10_ru_vertical_02", "r10_ru_vertical_04"],
-        "storyReelFrames": [1, 2, 4]
-      },
-      "storySlides": {
-        "ru": [
-          {
-            "title": "Как прошла\nнеделя?",
-            "body": "Выручка и валовая прибыль.\nBUSINESS и ENTERPRISE."
-          },
-          {
-            "title": "Выберите\nпериод",
-            "body": "Посмотрите выручку\nи валовую прибыль."
-          },
-          {
-            "title": "Покажем\nаналитику",
-            "body": "Напишите «ОТЧЁТ» в Direct.\nBUSINESS и ENTERPRISE."
-          }
-        ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
-      "storyInteractions": [
-        {
-          "frame": 3,
-          "type": "reply",
-          "keyword": "ОТЧЁТ",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
-        }
-      ]
-    },
-    {
-      "id": "p11",
-      "day": 11,
-      "date": "2026-11-14",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
-      "format": "carousel",
-      "topic": "pricing",
-      "status": "draft",
-      "language": "ru",
-      "title": {
-        "ru": "Тариф под ваш магазин",
-        "kg": "Дүкөнгө ылайык тариф"
-      },
-      "frames": {
-        "ru": [
-          "Тариф под ваш магазин. Возможности — под вашу задачу.",
-          "STARTER. 1 магазин До 1 000 товаров До 5 пользователей",
-          "BUSINESS. До 5 магазинов Аналитика, импорт и пересчёты",
-          "ENTERPRISE. До 15 магазинов. Напишите «ТАРИФ» в Direct."
-        ],
-        "kg": [
-          "Дүкөнгө ылайык тариф. Мүмкүнчүлүктөрдү тапшырмага жараша тандаңыз.",
-          "STARTER. 1 дүкөн · 1 000ге чейин товар · 5ке чейин колдонуучу.",
-          "BUSINESS. 5ке чейин дүкөн · аналитика, импорт жана кайра саноо.",
-          "Дүкөндөр көбөйүп жатабы? ENTERPRISE — 15ке чейин дүкөн. Учурдагы баалар bazaar.kg сайтында."
-        ]
-      },
-      "caption": {
-        "ru": "Подберите BAZAAR под задачи своего магазина.\n\nSTARTER: 1 магазин, до 1 000 товаров и до 5 пользователей. BUSINESS: до 5 магазинов; ENTERPRISE: до 15. Импорт, аналитика и пересчёты доступны в BUSINESS и ENTERPRISE.\n\nНапишите «ТАРИФ» в Direct: что продаёте, сколько у вас магазинов и какие возможности нужны. Уточним подходящий вариант и действующие условия подключения.\n\n#bazaar #учеттоваров #магазин",
-        "kg": "Бир кассага жана бир нече дүкөнгө ар башка мүмкүнчүлүктөр керек. bazaar.kg сайтынан дүкөн, товар жана кызматкер чектерин салыштырыңыз. Импорт, аналитика жана кайра саноо эки жогорку тарифте бар. Кошулуу жана узартуу колдоо кызматы аркылуу: сайтта жазылууну онлайн төлөө азырынча иштетилген эмес. «ТАРИФ» деп жазып, тапшырмаңызды айтыңыз.\n\n#bazaar #касса #склад #учеттоваров #розница"
-      },
-      "stories": {
-        "ru": [
-          "Сколько у вас магазинов? Одна точка или несколько?",
-          "Возможности — под вашу задачу. Импорт и аналитика — BUSINESS и ENTERPRISE.",
-          "Подберём тариф. Напишите «ТАРИФ» в ответ на Stories."
-        ],
-        "kg": [
-          "Дүкөнүңүзгө кайсы мүмкүнчүлүктөр керек?",
-          "Сайттан тарифтердин чектерин салыштырыңыз.",
-          "«ТАРИФ» деп жазып, тапшырмаңызды айтыңыз."
-        ]
-      },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
-      "slides": {
-        "ru": [
-          {
-            "title": "Тариф под\nваш магазин",
-            "body": "Возможности —\nпод вашу задачу."
-          },
-          {
-            "title": "STARTER",
-            "body": "1 магазин\nДо 1 000 товаров\nДо 5 пользователей"
-          },
-          {
-            "title": "BUSINESS",
-            "body": "До 5 магазинов\nАналитика, импорт\nи пересчёты"
-          },
-          {
-            "title": "ENTERPRISE",
-            "body": "До 15 магазинов.\nНапишите «ТАРИФ» в Direct."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Дүкөнгө ылайык тариф",
-            "body": "Мүмкүнчүлүктөрдү тапшырмага жараша тандаңыз."
-          },
-          {
-            "title": "STARTER",
-            "body": "1 дүкөн · 1 000ге чейин товар · 5ке чейин колдонуучу."
-          },
-          {
-            "title": "BUSINESS",
-            "body": "5ке чейин дүкөн · аналитика, импорт жана кайра саноо."
-          },
-          {
-            "title": "Дүкөндөр көбөйүп жатабы?",
-            "body": "ENTERPRISE — 15ке чейин дүкөн. Учурдагы баалар bazaar.kg сайтында."
-          }
-        ]
-      },
-      "ctaMode": "demo",
-      "directKeyword": "ТАРИФ",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-14T19:30:00+06:00",
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-14T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-14T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-14T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 2,
-        "coverBrief": "Светлая предметная сцена; сравнение тарифов внутри, не мелкая таблица на обложке.",
-        "visualReadiness": "complete_native_carousel_and_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "Тариф под\nваш магазин",
-          "body": "Возможности —\nпод вашу задачу."
-        }
-      },
-      "artworkSources": {
-        "cover": "p11_ru_01",
-        "frames": ["p11_ru_01", "p11_ru_02", "p11_ru_03", "p11_ru_04"],
-        "stories": ["p11_ru_story_01", "p11_ru_story_02", "p11_ru_story_03"]
-      },
-      "storySlides": {
-        "ru": [
-          {
-            "title": "Сколько\nу вас магазинов?",
-            "body": "Одна точка\nили несколько?"
-          },
-          {
-            "title": "Возможности —\nпод вашу задачу",
-            "body": "Импорт и аналитика —\nBUSINESS и ENTERPRISE."
-          },
-          {
-            "title": "Подберём\nтариф",
-            "body": "Напишите «ТАРИФ»\nв ответ на Stories."
-          }
-        ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
-      "storyInteractions": [
-        {
-          "frame": 3,
-          "type": "reply",
-          "keyword": "ТАРИФ",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
-        }
-      ]
-    },
-    {
-      "id": "r12",
-      "day": 12,
-      "date": "2026-11-15",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
-      "format": "reel",
-      "topic": "pos",
-      "status": "draft",
-      "language": "ru",
-      "title": {
-        "ru": "Сначала посмотрите BAZAAR",
-        "kg": "Адегенде BAZAAR менен таанышыңыз"
-      },
-      "frames": {
-        "ru": [
-          "Сначала посмотрите BAZAAR. Покажем кассу, товары и остатки.",
-          "Расскажите о магазине. Что продаёте? Сколько у вас точек?",
-          "Выберем ваш сценарий. Касса, товары, остатки или отчёты.",
-          "Договоримся о показе. Напишите «ПОКАЗ» в Direct."
-        ],
-        "kg": [
-          "Адегенде BAZAAR менен таанышыңыз. Кассаны, товарларды же калдыктарды көрсөтөбүз.",
-          "Дүкөнүңүз тууралуу айтыңыз. Шаарды, эмне сатарыңызды жана дүкөндөрдүн санын жазыңыз.",
-          "Эмнени көрсөтөлү? Сиздин сурооңузду демо маалыматтар менен карайбыз.",
-          "Убакытты макулдашалы. Direct аркылуу «ПОКАЗ» деп жазыңыз."
-        ]
-      },
-      "caption": {
-        "ru": "Показ BAZAAR начинается с задачи вашего магазина.\n\nРасскажите, что продаёте, в каком городе работаете и сколько у вас точек. Выберем нужный сценарий: касса, товары, остатки или отчёты — и согласуем время. На показе используем демонстрационные данные.\n\nНапишите «ПОКАЗ» в Direct.\n\n#bazaar #учеттоваров #магазин",
-        "kg": "Direct аркылуу «ПОКАЗ» деп жазып, дүкөндүн түрүн, шаарды жана дүкөндөрдүн санын айтыңыз. Керектүү иш тартибин тандап, убакытты макулдашабыз. Өз алдынча баштоо үчүн катталуу шилтемеси профилде.\n\n#bazaar #касса #склад #учеттоваров #розница"
-      },
-      "stories": {
-        "ru": [
-          "Сначала посмотрите BAZAAR. Покажем кассу, товары и остатки.",
-          "Расскажите о магазине. Что продаёте? Сколько у вас точек?",
-          "Договоримся о показе. Напишите «ПОКАЗ» в Direct."
-        ],
-        "kg": [
-          "Адегенде BAZAAR менен таанышкыңыз келеби?",
-          "Шаарды, дүкөндүн түрүн жана санын айтыңыз.",
-          "«ПОКАЗ» деп жазыңыз. Убакытты макулдашабыз."
-        ]
-      },
-      "storyTime": "12:30",
-      "cta": "demo",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": 20,
-      "slides": {
-        "ru": [
-          {
-            "title": "Сначала\nпосмотрите BAZAAR",
-            "body": "Покажем кассу,\nтовары и остатки."
-          },
-          {
-            "title": "Расскажите\nо магазине",
-            "body": "Что продаёте?\nСколько у вас точек?"
-          },
-          {
-            "title": "Выберем\nваш сценарий",
-            "body": "Касса, товары,\nостатки или отчёты."
-          },
-          {
-            "title": "Договоримся\nо показе",
-            "body": "Напишите «ПОКАЗ»\nв Direct."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Адегенде BAZAAR менен таанышыңыз",
-            "body": "Кассаны, товарларды же калдыктарды көрсөтөбүз."
-          },
-          {
-            "title": "Дүкөнүңүз тууралуу айтыңыз",
-            "body": "Шаарды, эмне сатарыңызды жана дүкөндөрдүн санын жазыңыз."
-          },
-          {
-            "title": "Эмнени көрсөтөлү?",
-            "body": "Сиздин сурооңузду демо маалыматтар менен карайбыз."
-          },
-          {
-            "title": "Убакытты макулдашалы",
-            "body": "Direct аркылуу «ПОКАЗ» деп жазыңыз."
-          }
-        ]
-      },
-      "ctaMode": "demo",
-      "directKeyword": "ПОКАЗ",
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": "2026-11-15T19:30:00+06:00",
-        "includeReelInMainGrid": true,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-15T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-15T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-15T19:45:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "reply_or_direct",
-        "gridPositionAfterDay14": 1,
-        "coverBrief": "Рабочая сцена с реальным читаемым экраном, приглашение посмотреть продукт.",
-        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
-        "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
-      },
-      "coverCopy": {
-        "ru": {
-          "title": "Сначала\nпосмотрите BAZAAR",
-          "body": "Покажем кассу,\nтовары и остатки."
-        }
-      },
-      "artworkSources": {
-        "cover": "r12_ru_cover",
-        "frames": [
-          "r12_ru_vertical_01",
-          "r12_ru_vertical_02",
-          "r12_ru_vertical_03",
-          "r12_ru_vertical_04"
-        ],
-        "stories": ["r12_ru_vertical_01", "r12_ru_vertical_02", "r12_ru_vertical_04"],
-        "storyReelFrames": [1, 2, 4]
-      },
-      "storySlides": {
-        "ru": [
-          {
-            "title": "Сначала\nпосмотрите BAZAAR",
-            "body": "Покажем кассу,\nтовары и остатки."
-          },
-          {
-            "title": "Расскажите\nо магазине",
-            "body": "Что продаёте?\nСколько у вас точек?"
-          },
-          {
-            "title": "Договоримся\nо показе",
-            "body": "Напишите «ПОКАЗ»\nв Direct."
-          }
-        ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
-      "storyInteractions": [
-        {
-          "frame": 3,
-          "type": "reply",
-          "keyword": "ПОКАЗ",
-          "instruction": "Убедиться, что ответы на Stories разрешены. При закрытых ответах заменить инструкцию в специализированном инструменте до публикации.",
-          "positionHint": "Не добавлять нарисованную кнопку."
-        }
-      ]
-    },
-    {
-      "id": "s13",
-      "day": 13,
-      "date": "2026-11-16",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
-      "format": "stories",
-      "topic": "questions",
-      "status": "draft",
-      "language": "ru",
-      "title": {
-        "ru": "Ответы на вопросы",
-        "kg": "Суроолорго жооптор"
-      },
-      "frames": {
-        "ru": [],
-        "kg": []
-      },
-      "caption": {
-        "ru": "",
-        "kg": ""
-      },
-      "stories": {
-        "ru": [
-          "Сколько магазинов можно подключить? STARTER — 1. BUSINESS — до 5. ENTERPRISE — до 15.",
-          "Можно перенести товары? Импорт доступен в BUSINESS и ENTERPRISE.",
-          "Остался вопрос? Спросите в ответ на Stories."
-        ],
-        "kg": [
-          "Кошулуу жөнүндө сурооңуз барбы?",
-          "Импорт жана аналитика тарифке жараша.",
-          "Сурооңузду жазыңыз. Так жооп беребиз."
-        ]
-      },
-      "storyTime": "12:30",
-      "cta": "question",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
-      "ctaMode": "question",
-      "directKeyword": null,
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": null,
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-16T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-16T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-16T12:30:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "question_or_reply",
-        "gridPositionAfterDay14": null,
-        "coverBrief": null,
-        "visualReadiness": "complete_native_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
-      },
-      "artworkSources": {
-        "frames": [],
-        "stories": ["s13_ru_story_01", "s13_ru_story_02", "s13_ru_story_03"]
-      },
-      "storySlides": {
-        "ru": [
-          {
-            "title": "Сколько магазинов\nможно подключить?",
-            "body": "STARTER — 1. BUSINESS — до 5.\nENTERPRISE — до 15."
-          },
-          {
-            "title": "Можно\nперенести товары?",
-            "body": "Импорт доступен\nв BUSINESS и ENTERPRISE."
-          },
-          {
-            "title": "Остался\nвопрос?",
-            "body": "Спросите в ответ\nна Stories."
-          }
-        ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
-      "storyInteractions": [
-        {
-          "frame": 3,
-          "type": "reply",
-          "question": "Что хотите узнать о BAZAAR?",
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
-        }
-      ]
-    },
-    {
-      "id": "s14",
-      "day": 14,
-      "date": "2026-11-17",
-      "time": "19:30",
-      "timezone": "Asia/Bishkek",
-      "format": "stories",
-      "topic": "onboarding",
-      "status": "draft",
-      "language": "ru",
-      "title": {
-        "ru": "Создайте аккаунт BAZAAR",
-        "kg": "Кийинки кадамды тандаңыз"
-      },
-      "frames": {
-        "ru": [],
-        "kg": []
-      },
-      "caption": {
-        "ru": "",
-        "kg": ""
-      },
-      "stories": {
-        "ru": [
-          "Готовы попробовать? Начните с одного магазина и своих товаров.",
-          "Подготовьте первый каталог. Название, цена и начальные остатки.",
-          "Создайте аккаунт BAZAAR. Регистрация — по ссылке в Stories."
-        ],
-        "kg": [
-          "Кайсы кийинки кадам сизге ыңгайлуу?",
-          "Өз алдынча катталуубу же көрсөтүүбү?",
-          "Катталуу үчүн шилтеме. Көрсөтүү үчүн Direct."
-        ]
-      },
-      "storyTime": "12:30",
-      "cta": "signup",
-      "claimSources": ["landing", "planCatalog"],
-      "durationSeconds": null,
-      "ctaMode": "signup",
-      "directKeyword": null,
-      "distribution": {
-        "status": "planned_only_not_scheduled",
-        "primaryLocale": "ru",
-        "alternateLocale": "kg_after_editorial_review",
-        "publishBothLocalesInSameSlot": false,
-        "feedAt": null,
-        "includeReelInMainGrid": null,
-        "storyFrames": [
-          {
-            "frame": 1,
-            "at": "2026-11-17T12:30:00+06:00",
-            "role": "situation"
-          },
-          {
-            "frame": 2,
-            "at": "2026-11-17T12:30:00+06:00",
-            "role": "feature_explanation"
-          },
-          {
-            "frame": 3,
-            "at": "2026-11-17T12:30:00+06:00",
-            "role": "action"
-          }
-        ],
-        "nativeAction": "link_sticker",
-        "gridPositionAfterDay14": null,
-        "coverBrief": null,
-        "visualReadiness": "complete_native_story_draft_package",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
-        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
-      },
-      "artworkSources": {
-        "frames": [],
-        "stories": ["s14_ru_story_01", "s14_ru_story_02", "s14_ru_story_03"]
-      },
-      "storySlides": {
-        "ru": [
-          {
-            "title": "Готовы\nпопробовать?",
-            "body": "Начните с одного магазина\nи своих товаров."
-          },
-          {
-            "title": "Подготовьте\nпервый каталог",
-            "body": "Название, цена\nи начальные остатки."
-          },
-          {
-            "title": "Создайте\nаккаунт BAZAAR",
-            "body": "Регистрация —\nпо ссылке в Stories."
-          }
-        ]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
-      "storyInteractions": [
-        {
-          "frame": 3,
-          "type": "link_sticker",
-          "text": "Создать аккаунт",
-          "utmContent": "s14_ru",
-          "positionHint": "Свободная нижняя область; добавить в Instagram и проверить, что стикер не закрывает текст, логотип и системные элементы."
-        }
-      ]
-    }
-  ],
-  "ads": [
-    {
-      "id": "ad01",
-      "topic": "products",
-      "status": "draft",
-      "paid": true,
-      "title": {
-        "ru": "Каталог без путаницы",
-        "kg": "Дүкөнүңүз үчүн касса"
-      },
-      "frames": {
-        "ru": [
-          "Каталог без путаницы. Размеры, цвета и поиск — в BAZAAR.",
-          "Найдите нужный товар. По названию, SKU или штрихкоду.",
-          "Покажем на вашем примере. Напишите «КАТАЛОГ» в Direct."
-        ],
-        "kg": [
-          "Дүкөнүңүз үчүн касса. Товарды аталышы же штрихкоду боюнча табыңыз.",
-          "Чекти түзүңүз. Товарларды кошуп, санын көрсөтүңүз.",
-          "BAZAAR иш жүзүндө кандай? Дүкөнүңүз тууралуу айтыңыз. Көрсөтүү убактысын макулдашабыз."
-        ]
-      },
-      "caption": {
-        "ru": "Размеры и цвета смешиваются в учёте? В BAZAAR можно разделить варианты товара и найти нужную позицию по названию, SKU или штрихкоду.\n\nНапишите «КАТАЛОГ» в Direct. Расскажите, что продаёте: покажем подходящий сценарий на демонстрационных данных.",
-        "kg": "Дүкөнүңүз үчүн касса Товарды аталышы же штрихкоду боюнча табыңыз.\n\nТоварларды кошуп, санын көрсөтүңүз.\n\nДүкөнүңүз үчүн BAZAAR көрсөтүүсүн сураңыз."
-      },
-      "claimSources": ["landing", "planCatalog"],
-      "slides": {
-        "ru": [
-          {
-            "title": "Каталог\nбез путаницы",
-            "body": "Размеры, цвета и поиск —\nв BAZAAR."
-          },
-          {
-            "title": "Найдите\nнужный товар",
-            "body": "По названию, SKU\nили штрихкоду."
-          },
-          {
-            "title": "Покажем\nна вашем примере",
-            "body": "Напишите «КАТАЛОГ»\nв Direct."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Дүкөнүңүз үчүн касса",
-            "body": "Товарды аталышы же штрихкоду боюнча табыңыз."
-          },
-          {
-            "title": "Чекти түзүңүз",
-            "body": "Товарларды кошуп, санын көрсөтүңүз."
-          },
-          {
-            "title": "BAZAAR иш жүзүндө кандай?",
-            "body": "Дүкөнүңүз тууралуу айтыңыз. Көрсөтүү убактысын макулдашабыз."
-          }
-        ]
-      },
-      "cta": "demo",
-      "ctaMode": "demo",
-      "directKeyword": "КАТАЛОГ",
-      "verticalSlides": {
-        "ru": [
-          {
-            "title": "Размеры и цвета\nсмешались?",
-            "body": "Учитываете размеры\nотдельно?"
-          },
-          {
-            "title": "Варианты —\nотдельно",
-            "body": "Размеры и цвета —\nв каталоге BAZAAR."
-          },
-          {
-            "title": "Разберём\nваш ассортимент",
-            "body": "Напишите «КАТАЛОГ»\nв Direct."
-          }
-        ]
-      },
-      "artworkSources": {
-        "frames": ["p02_ru_01", "p02_ru_02", "p02_ru_04"],
-        "verticalFrames": ["p02_ru_story_01", "p02_ru_story_02", "ad01_ru_vertical_03"]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
-      "distribution": {
-        "status": "draft_blocked_no_budget",
-        "primaryLocale": "ru",
-        "nativeAction": "send_instagram_message",
-        "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
-      }
-    },
-    {
-      "id": "ad02",
-      "topic": "inventory",
-      "status": "draft",
-      "paid": true,
-      "title": {
-        "ru": "Почему товара стало меньше?",
-        "kg": "Товар эмнеге азайды?"
-      },
-      "frames": {
-        "ru": [
-          "Почему товара стало меньше? Продажи и списания — в журнале BAZAAR.",
-          "Не только продажи. Проверьте перемещения и списания в журнале.",
-          "Покажем на примере. Напишите «ОСТАТОК» в Direct."
-        ],
-        "kg": [
-          "Товар эмнеге азайды? Сатуулар жана эсептен чыгаруулар — BAZAAR журналында.",
-          "Эмне болгонун текшериңиз. Дүкөндү жана мезгилди тандап, керектүү документти табыңыз.",
-          "Мисалда көрсөтөбүз. Шаарды жана канча дүкөнүңүз бар экенин жазыңыз."
-        ]
-      },
-      "caption": {
-        "ru": "Товара стало меньше — проверьте, что с ним происходило. В журнале BAZAAR можно посмотреть продажи, поступления, перемещения и списания.\n\nНапишите «ОСТАТОК» в Direct. Покажем, где проверить историю товара, на демонстрационных данных.",
-        "kg": "Товар эмнеге азайды? Сатуулар жана эсептен чыгаруулар — BAZAAR журналында.\n\nДүкөндү жана мезгилди тандап, керектүү документти табыңыз.\n\nДүкөнүңүз үчүн BAZAAR көрсөтүүсүн сураңыз."
-      },
-      "claimSources": ["landing", "planCatalog"],
-      "slides": {
-        "ru": [
-          {
-            "title": "Почему товара стало меньше?",
-            "body": "Продажи и списания — в журнале BAZAAR."
-          },
-          {
-            "title": "Не только\nпродажи",
-            "body": "Проверьте перемещения\nи списания в журнале."
-          },
-          {
-            "title": "Покажем\nна примере",
-            "body": "Напишите «ОСТАТОК»\nв Direct."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Товар эмнеге азайды?",
-            "body": "Сатуулар жана эсептен чыгаруулар — BAZAAR журналында."
-          },
-          {
-            "title": "Эмне болгонун текшериңиз",
-            "body": "Дүкөндү жана мезгилди тандап, керектүү документти табыңыз."
-          },
-          {
-            "title": "Мисалда көрсөтөбүз",
-            "body": "Шаарды жана канча дүкөнүңүз бар экенин жазыңыз."
-          }
-        ]
-      },
-      "cta": "demo",
-      "ctaMode": "demo",
-      "directKeyword": "ОСТАТОК",
-      "verticalSlides": {
-        "ru": [
-          {
-            "title": "Почему товара\nстало меньше?",
-            "body": "Продажи и списания —\nв журнале BAZAAR."
-          },
-          {
-            "title": "Продажи или\nсписания?",
-            "body": "История товара —\nв журнале BAZAAR."
-          },
-          {
-            "title": "Разберём\nваш пример",
-            "body": "Напишите «ОСТАТОК»\nв Direct."
-          }
-        ]
-      },
-      "artworkSources": {
-        "frames": ["p04_ru_01", "p04_ru_03", "p04_ru_04"],
-        "verticalFrames": ["p04_ru_story_01", "p04_ru_story_02", "r05_ru_vertical_04"]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
-      },
-      "distribution": {
-        "status": "draft_blocked_no_budget",
-        "primaryLocale": "ru",
-        "nativeAction": "send_instagram_message",
-        "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI", "DAHZ24dI8do"]
-      }
-    },
-    {
-      "id": "ad03",
-      "topic": "analytics",
-      "status": "draft",
-      "paid": true,
-      "title": {
-        "ru": "Как прошла неделя?",
-        "kg": "Бир жумада эмне сатылды?"
-      },
-      "frames": {
-        "ru": [
-          "Как прошла неделя? Выручка и валовая прибыль. BUSINESS и ENTERPRISE.",
-          "Выручка и валовая прибыль. Выберите магазин и период. BUSINESS и ENTERPRISE.",
-          "Разберём ваш отчёт. Напишите «ОТЧЁТ» в Direct."
-        ],
-        "kg": [
-          "Бир жумада эмне сатылды? Түшүмдү жана товарларды көрүңүз. Аналитика — BUSINESS жана ENTERPRISE.",
-          "Дүң пайданы караңыз. Ал өздүк наркты эске алат жана таза пайдадан айырмаланат.",
-          "Керектүү отчётту карайлы. Аналитиканы демо маалыматтар менен көрсөтөбүз."
-        ]
-      },
-      "caption": {
-        "ru": "Посмотрите выручку и валовую прибыль за выбранный период в BAZAAR. Аналитика доступна в BUSINESS и ENTERPRISE. Валовая прибыль не равна чистой прибыли магазина.\n\nНапишите «ОТЧЁТ» в Direct: покажем аналитику на демонстрационных данных.",
-        "kg": "Бир жумада эмне сатылды? Түшүмдү жана товарларды көрүңүз. Аналитика — BUSINESS жана ENTERPRISE.\n\nАл өздүк наркты эске алат жана таза пайдадан айырмаланат.\n\nДүкөнүңүз үчүн BAZAAR көрсөтүүсүн сураңыз."
-      },
-      "claimSources": ["landing", "planCatalog"],
-      "slides": {
-        "ru": [
-          {
-            "title": "Как прошла\nнеделя?",
-            "body": "Выручка и валовая прибыль.\nBUSINESS и ENTERPRISE."
-          },
-          {
-            "title": "Выручка\nи валовая прибыль",
-            "body": "Выберите магазин и период.\nBUSINESS и ENTERPRISE."
+            "title": "Валовая прибыль",
+            "body": "До расходов вашего бизнеса.\nДемонстрационные данные"
           },
           {
             "title": "Разберём\nваш отчёт",
             "body": "Напишите «ОТЧЁТ»\nв Direct."
           }
-        ],
-        "kg": [
-          {
-            "title": "Бир жумада эмне сатылды?",
-            "body": "Түшүмдү жана товарларды көрүңүз. Аналитика — BUSINESS жана ENTERPRISE."
-          },
-          {
-            "title": "Дүң пайданы караңыз",
-            "body": "Ал өздүк наркты эске алат жана таза пайдадан айырмаланат."
-          },
-          {
-            "title": "Керектүү отчётту карайлы",
-            "body": "Аналитиканы демо маалыматтар менен көрсөтөбүз."
-          }
         ]
       },
-      "cta": "demo",
-      "ctaMode": "demo",
-      "directKeyword": "ОТЧЁТ",
-      "verticalSlides": {
+      "stories": {
+        "ru": [
+          "Выручка —\nещё не прибыль\nПроверьте себестоимость\nи возвраты.",
+          "Валовая прибыль\nДо расходов вашего бизнеса.\nДемонстрационные данные",
+          "Разберём\nваш отчёт\nНапишите «ОТЧЁТ»\nв Direct."
+        ]
+      },
+      "storySlides": {
         "ru": [
           {
-            "title": "Как прошла\nнеделя?",
-            "body": "Выручка и валовая прибыль.\nBUSINESS и ENTERPRISE."
+            "title": "Выручка —\nещё не прибыль",
+            "body": "Проверьте себестоимость\nи возвраты."
           },
           {
-            "title": "Выберите\nпериод",
-            "body": "Посмотрите выручку\nи валовую прибыль."
+            "title": "Валовая прибыль",
+            "body": "До расходов вашего бизнеса.\nДемонстрационные данные"
           },
           {
-            "title": "Покажем\nаналитику",
-            "body": "Напишите «ОТЧЁТ» в Direct.\nBUSINESS и ENTERPRISE."
+            "title": "Разберём\nваш отчёт",
+            "body": "Напишите «ОТЧЁТ»\nв Direct."
           }
         ]
       },
-      "artworkSources": {
-        "frames": ["r10_ru_cover", "ad03_ru_02", "ad03_ru_03"],
-        "verticalFrames": ["r10_ru_vertical_01", "r10_ru_vertical_02", "r10_ru_vertical_04"]
-      },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
+      "storyInteractions": [
+        {
+          "frame": 3,
+          "type": "direct_reply",
+          "keyword": "ОТЧЁТ"
+        }
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "ОТЧЁТ",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "media": {
+        "videoSeconds": 20,
+        "audio": "none",
+        "type": "native Canva page sequence"
       },
       "distribution": {
-        "status": "draft_blocked_no_budget",
+        "status": "complete_draft_not_approved",
         "primaryLocale": "ru",
-        "nativeAction": "send_instagram_message",
-        "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI", "DAHZ24dI8do"]
+        "relativeDay": 10,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 10,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 10,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 10,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ4yremVA",
+          "DAHZ4tAd1eY",
+          "DAHZ4i7kvio",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 3
       }
     },
     {
-      "id": "ad04",
-      "topic": "demo",
-      "status": "draft",
-      "paid": true,
+      "id": "p11",
+      "day": 11,
+      "date": null,
+      "format": "carousel",
+      "topic": "plans",
+      "industry": "cross_retail",
       "title": {
-        "ru": "Сначала посмотрите BAZAAR",
-        "kg": "Адегенде BAZAAR менен таанышыңыз"
-      },
-      "frames": {
-        "ru": [
-          "Сначала посмотрите BAZAAR. Покажем кассу, товары и остатки.",
-          "Покажем ваш сценарий. Касса, товары и остатки магазина.",
-          "Расскажите о магазине. Напишите «ПОКАЗ» в Direct."
-        ],
-        "kg": [
-          "Адегенде BAZAAR менен таанышыңыз. Касса, товарлар, калдыктар — демо маалыматтар менен.",
-          "Дүкөндүн ишин тандаңыз. Сатууну, товар кабыл алууну же калдыктарды текшерүүнү көрсөтөбүз.",
-          "Көрсөтүү убактысын макулдашалы. Шаарды жана канча дүкөнүңүз бар экенин жазыңыз."
-        ]
+        "ru": "Тариф под ваш магазин"
       },
       "caption": {
-        "ru": "Выбираете учёт для магазина? Сначала посмотрите, как в BAZAAR работают касса, товары и остатки.\n\nНапишите «ПОКАЗ» в Direct. Расскажите, что продаёте и сколько у вас магазинов: выберем сценарий и договоримся о времени. Показ — на демонстрационных данных.",
-        "kg": "Адегенде BAZAAR менен таанышыңыз Касса, товарлар, калдыктар — демо маалыматтар менен.\n\nСатууну, товар кабыл алууну же калдыктарды текшерүүнү көрсөтөбүз.\n\nДүкөнүңүз үчүн BAZAAR көрсөтүүсүн сураңыз."
+        "ru": "Тариф выбирают по задачам и масштабу магазина.\n\n«Новичок»: 1 магазин, до 1 000 товаров и 5 активных пользователей. Касса, каталог, заказы покупателей и ценники.\n\n«Бизнесмен»: до 5 магазинов, 5 000 товаров и 10 активных пользователей. Добавляются аналитика, импорт и экспорт, инвентаризация, цены по магазинам, комплекты, партии со сроками годности и закрытие периода.\n\n«Монополист»: до 15 магазинов, 20 000 товаров и 20 активных пользователей. Возможности «Бизнесмен», комплаенс, инструменты поддержки и модуль ККМ при отдельной настройке. Подключение оборудования и внешних сервисов не происходит автоматически.\n\nНапишите «ТАРИФ» в Direct: сколько у вас магазинов, примерно сколько товаров и какие задачи хотите решить?"
       },
-      "claimSources": ["landing", "planCatalog"],
+      "operatorNotes": null,
+      "frames": {
+        "ru": [
+          "Тариф под\nваш магазин\nМагазины, товары,\nпользователи и модули.",
+          "Новичок\n1 магазин\nДо 1 000 товаров\nДо 5 активных пользователей\n\nКасса, каталог,\nзаказы и ценники.",
+          "Бизнесмен\nДо 5 магазинов\nДо 5 000 товаров\nДо 10 активных пользователей\n\nВсё из тарифа «Новичок».\nИнвентаризация и аналитика.\nИмпорт и экспорт.",
+          "Монополист\nДо 15 магазинов\nДо 20 000 товаров\nДо 20 активных пользователей\n\nВсё из тарифа «Бизнесмен».\nКомплаенс и инструменты\nподдержки.\nККМ — при отдельной настройке.",
+          "Что важно\nдля выбора?\nСколько магазинов?\nСколько товаров?\nСколько сотрудников?\nКакие нужны модули?",
+          "Подберём\nпод вашу задачу\nНапишите «ТАРИФ»\nв Direct."
+        ]
+      },
       "slides": {
         "ru": [
           {
-            "title": "Сначала\nпосмотрите BAZAAR",
-            "body": "Покажем кассу,\nтовары и остатки."
+            "title": "Тариф под\nваш магазин",
+            "body": "Магазины, товары,\nпользователи и модули."
           },
           {
-            "title": "Покажем\nваш сценарий",
-            "body": "Касса, товары\nи остатки магазина."
+            "title": "Новичок",
+            "body": "1 магазин\nДо 1 000 товаров\nДо 5 активных пользователей\n\nКасса, каталог,\nзаказы и ценники."
           },
           {
-            "title": "Расскажите\nо магазине",
-            "body": "Напишите «ПОКАЗ»\nв Direct."
-          }
-        ],
-        "kg": [
-          {
-            "title": "Адегенде BAZAAR менен таанышыңыз",
-            "body": "Касса, товарлар, калдыктар — демо маалыматтар менен."
+            "title": "Бизнесмен",
+            "body": "До 5 магазинов\nДо 5 000 товаров\nДо 10 активных пользователей\n\nВсё из тарифа «Новичок».\nИнвентаризация и аналитика.\nИмпорт и экспорт."
           },
           {
-            "title": "Дүкөндүн ишин тандаңыз",
-            "body": "Сатууну, товар кабыл алууну же калдыктарды текшерүүнү көрсөтөбүз."
+            "title": "Монополист",
+            "body": "До 15 магазинов\nДо 20 000 товаров\nДо 20 активных пользователей\n\nВсё из тарифа «Бизнесмен».\nКомплаенс и инструменты\nподдержки.\nККМ — при отдельной настройке."
           },
           {
-            "title": "Көрсөтүү убактысын макулдашалы",
-            "body": "Шаарды жана канча дүкөнүңүз бар экенин жазыңыз."
+            "title": "Что важно\nдля выбора?",
+            "body": "Сколько магазинов?\nСколько товаров?\nСколько сотрудников?\nКакие нужны модули?"
+          },
+          {
+            "title": "Подберём\nпод вашу задачу",
+            "body": "Напишите «ТАРИФ»\nв Direct."
           }
         ]
       },
-      "cta": "demo",
+      "stories": {
+        "ru": [
+          "Новичок\n1 магазин\nДо 1 000 товаров\nДо 5 активных пользователей\n\nКасса, каталог,\nзаказы и ценники.",
+          "Бизнесмен\nДо 5 магазинов\nДо 5 000 товаров\nДо 10 активных пользователей\n\nВсё из тарифа «Новичок».\nИнвентаризация и аналитика.\nИмпорт и экспорт.",
+          "Монополист\nДо 15 магазинов\nДо 20 000 товаров\nДо 20 активных пользователей\n\nВсё из тарифа «Бизнесмен».\nКомплаенс и инструменты\nподдержки.\nККМ — при отдельной настройке.\n\nНапишите «ТАРИФ» в Direct."
+        ]
+      },
+      "storySlides": {
+        "ru": [
+          {
+            "title": "Новичок",
+            "body": "1 магазин\nДо 1 000 товаров\nДо 5 активных пользователей\n\nКасса, каталог,\nзаказы и ценники."
+          },
+          {
+            "title": "Бизнесмен",
+            "body": "До 5 магазинов\nДо 5 000 товаров\nДо 10 активных пользователей\n\nВсё из тарифа «Новичок».\nИнвентаризация и аналитика.\nИмпорт и экспорт."
+          },
+          {
+            "title": "Монополист",
+            "body": "До 15 магазинов\nДо 20 000 товаров\nДо 20 активных пользователей\n\nВсё из тарифа «Бизнесмен».\nКомплаенс и инструменты\nподдержки.\nККМ — при отдельной настройке.\n\nНапишите «ТАРИФ» в Direct."
+          }
+        ]
+      },
+      "storyInteractions": [
+        {
+          "frame": 3,
+          "type": "direct_reply",
+          "keyword": "ТАРИФ"
+        }
+      ],
       "ctaMode": "demo",
-      "directKeyword": "ПОКАЗ",
+      "directKeyword": "ТАРИФ",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 11,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 11,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 11,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 11,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ42VUu_8",
+          "DAHZ4hKX-Uc",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 2
+      }
+    },
+    {
+      "id": "r12",
+      "day": 12,
+      "date": null,
+      "format": "reel",
+      "topic": "integrations",
+      "industry": "cross_retail",
+      "title": {
+        "ru": "Ваш каталог. Ваши каналы."
+      },
+      "caption": {
+        "ru": "Каталог магазина и внешние каналы должны работать по понятной схеме. В BAZAAR есть раздел интеграций: M-Market, Bakai Store, O! Market и Bazaar API.\n\nПодключение, состав передаваемых данных и режим обмена зависят от выбранной интеграции и её настроек. В ролике показываем реальные экраны. Каждое подключение настраивается под магазин.\n\nНапишите «КАНАЛЫ» в Direct и расскажите, где продаёте сейчас — обсудим подходящий сценарий."
+      },
+      "operatorNotes": null,
+      "frames": {
+        "ru": [
+          "Ваш каталог.\nВаши каналы.\nИнтеграции\nв BAZAAR.",
+          "Канал продаж\nПодключение настраивается отдельно.\nДемонстрационные данные",
+          "BAZAAR API\nДоступ и обмены требуют настройки.\nДемонстрационные данные",
+          "Разберём\nваш канал продаж\nНапишите «КАНАЛЫ»\nв Direct."
+        ]
+      },
+      "slides": {
+        "ru": [
+          {
+            "title": "Ваш каталог.\nВаши каналы.",
+            "body": "Интеграции\nв BAZAAR."
+          },
+          {
+            "title": "Канал продаж",
+            "body": "Подключение настраивается отдельно.\nДемонстрационные данные"
+          },
+          {
+            "title": "BAZAAR API",
+            "body": "Доступ и обмены требуют настройки.\nДемонстрационные данные"
+          },
+          {
+            "title": "Разберём\nваш канал продаж",
+            "body": "Напишите «КАНАЛЫ»\nв Direct."
+          }
+        ]
+      },
+      "stories": {
+        "ru": [
+          "Где ещё\nпродаёте товары?\nКроме своего\nмагазина?",
+          "Подключение канала\nТребуется отдельная настройка.\nДемонстрационные данные",
+          "Разберём\nваш канал продаж\nНапишите «КАНАЛЫ»\nв Direct."
+        ]
+      },
+      "storySlides": {
+        "ru": [
+          {
+            "title": "Где ещё\nпродаёте товары?",
+            "body": "Кроме своего\nмагазина?"
+          },
+          {
+            "title": "Подключение канала",
+            "body": "Требуется отдельная настройка.\nДемонстрационные данные"
+          },
+          {
+            "title": "Разберём\nваш канал продаж",
+            "body": "Напишите «КАНАЛЫ»\nв Direct."
+          }
+        ]
+      },
+      "storyInteractions": [
+        {
+          "frame": 1,
+          "type": "question_sticker",
+          "question": "Какой канал хотите подключить?"
+        },
+        {
+          "frame": 3,
+          "type": "direct_reply",
+          "keyword": "КАНАЛЫ"
+        }
+      ],
+      "ctaMode": "demo",
+      "directKeyword": "КАНАЛЫ",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "media": {
+        "videoSeconds": 20,
+        "audio": "none",
+        "type": "native Canva page sequence"
+      },
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 12,
+        "feedAt": null,
+        "feedTimeHypothesis": "19:30",
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 12,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 12,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 12,
+            "timeHypothesis": "19:45"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ416QCX4",
+          "DAHZ4tAd1eY",
+          "DAHZ4i7kvio",
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": 1
+      }
+    },
+    {
+      "id": "s13",
+      "day": 13,
+      "date": null,
+      "format": "stories",
+      "topic": "objections",
+      "industry": "cross_retail",
+      "title": {
+        "ru": "Что важно перед подключением?"
+      },
+      "caption": {
+        "ru": ""
+      },
+      "operatorNotes": "Отвечать по реальным обращениям. Не выдумывать вопросы от клиентов и не превращать ответы в массовую рассылку. Для импорта и аналитики учитывать «Бизнесмен» / «Монополист».",
+      "frames": {
+        "ru": []
+      },
+      "slides": {
+        "ru": []
+      },
+      "stories": {
+        "ru": [
+          "Что важно знать\nдо подключения?\nКасса, остатки\nили перенос каталога?",
+          "Что важно\nдля выбора?\nСколько магазинов?\nСколько товаров?\nСколько сотрудников?\nКакие нужны модули?",
+          "Задайте\nсвой вопрос\nОтветьте на Stories\nили напишите в Direct."
+        ]
+      },
+      "storySlides": {
+        "ru": [
+          {
+            "title": "Что важно знать\nдо подключения?",
+            "body": "Касса, остатки\nили перенос каталога?"
+          },
+          {
+            "title": "Что важно\nдля выбора?",
+            "body": "Сколько магазинов?\nСколько товаров?\nСколько сотрудников?\nКакие нужны модули?"
+          },
+          {
+            "title": "Задайте\nсвой вопрос",
+            "body": "Ответьте на Stories\nили напишите в Direct."
+          }
+        ]
+      },
+      "storyInteractions": [
+        {
+          "frame": 1,
+          "type": "question_sticker",
+          "question": "Что хотите разобрать?"
+        },
+        {
+          "frame": 3,
+          "type": "direct_reply"
+        }
+      ],
+      "ctaMode": "question",
+      "directKeyword": "ВОПРОС",
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 13,
+        "feedAt": null,
+        "feedTimeHypothesis": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 13,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 13,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 13,
+            "timeHypothesis": "12:30"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": null
+      }
+    },
+    {
+      "id": "s14",
+      "day": 14,
+      "date": null,
+      "format": "stories",
+      "topic": "onboarding",
+      "industry": "cross_retail",
+      "title": {
+        "ru": "Начните со своего магазина"
+      },
+      "caption": {
+        "ru": ""
+      },
+      "operatorNotes": "Ссылка ведёт на существующий путь регистрации. Не обещать доступность всех модулей стартового тарифа, бесплатную миграцию или автоматическое подключение интеграций. Новая серверная атрибуция пока не развёрнута в production.",
+      "frames": {
+        "ru": []
+      },
+      "slides": {
+        "ru": []
+      },
+      "stories": {
+        "ru": [
+          "Начните\nсо своего магазина\nСоздайте аккаунт\nBAZAAR.",
+          "Регистрация\nСоздайте аккаунт BAZAAR.\nДемонстрационные данные",
+          "Создайте\nаккаунт BAZAAR\nСсылка —\nв стикере Stories."
+        ]
+      },
+      "storySlides": {
+        "ru": [
+          {
+            "title": "Начните\nсо своего магазина",
+            "body": "Создайте аккаунт\nBAZAAR."
+          },
+          {
+            "title": "Регистрация",
+            "body": "Создайте аккаунт BAZAAR.\nДемонстрационные данные"
+          },
+          {
+            "title": "Создайте\nаккаунт BAZAAR",
+            "body": "Ссылка —\nв стикере Stories."
+          }
+        ]
+      },
+      "storyInteractions": [
+        {
+          "frame": 3,
+          "type": "link_sticker",
+          "text": "Создать аккаунт",
+          "utmContent": "s14_ru_story_3"
+        }
+      ],
+      "ctaMode": "signup",
+      "directKeyword": null,
+      "claimSources": [
+        "landing",
+        "planCatalog",
+        "screenshots"
+      ],
+      "distribution": {
+        "status": "complete_draft_not_approved",
+        "primaryLocale": "ru",
+        "relativeDay": 14,
+        "feedAt": null,
+        "feedTimeHypothesis": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "relativeDay": 14,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 2,
+            "relativeDay": 14,
+            "timeHypothesis": "12:30"
+          },
+          {
+            "frame": 3,
+            "relativeDay": 14,
+            "timeHypothesis": "12:30"
+          }
+        ],
+        "canvaSourceDesignIds": [
+          "DAHZ4smWlbE"
+        ],
+        "gridPositionAfterDay14": null
+      }
+    }
+  ],
+  "ads": [
+    {
+      "id": "ad01",
+      "paid": true,
+      "status": "draft_no_budget_no_launch",
+      "title": {
+        "ru": "Каталог без путаницы"
+      },
+      "caption": {
+        "ru": "Размеры и цвета смешиваются в учёте? В BAZAAR варианты товара можно учитывать отдельно.\n\nНапишите «КАТАЛОГ» в Direct и расскажите, что продаёте. Покажем подходящий сценарий на демонстрационных данных."
+      },
+      "frames": {
+        "ru": [
+          "Каталог\nбез путаницы\nРазмеры, цвета и поиск —\nв BAZAAR.",
+          "Размер и цвет\nОстатки вариантов — отдельно.\nДемонстрационные данные",
+          "Покажем\nна вашем примере\nНапишите «КАТАЛОГ»\nв Direct."
+        ]
+      },
+      "slides": {
+        "ru": [
+          {
+            "title": "Каталог\nбез путаницы",
+            "body": "Размеры, цвета и поиск —\nв BAZAAR."
+          },
+          {
+            "title": "Размер и цвет",
+            "body": "Остатки вариантов — отдельно.\nДемонстрационные данные"
+          },
+          {
+            "title": "Покажем\nна вашем примере",
+            "body": "Напишите «КАТАЛОГ»\nв Direct."
+          }
+        ]
+      },
       "verticalSlides": {
         "ru": [
           {
-            "title": "Сначала\nпосмотрите BAZAAR",
-            "body": "Покажем кассу,\nтовары и остатки."
+            "title": "Одна модель.\nРазные размеры.",
+            "body": "Как различаете варианты\nв своём каталоге?"
           },
           {
-            "title": "Расскажите\nо магазине",
-            "body": "Что продаёте?\nСколько у вас точек?"
+            "title": "Карточка товара",
+            "body": "Цена и остаток в магазине.\nДемонстрационные данные"
           },
           {
-            "title": "Договоримся\nо показе",
-            "body": "Напишите «ПОКАЗ»\nв Direct."
+            "title": "Разберём\nваш ассортимент",
+            "body": "Напишите «КАТАЛОГ»\nв Direct."
           }
         ]
       },
-      "artworkSources": {
-        "frames": ["r12_ru_cover", "ad04_ru_02", "ad04_ru_03"],
-        "verticalFrames": ["r12_ru_vertical_01", "r12_ru_vertical_02", "r12_ru_vertical_04"]
+      "stories": {
+        "ru": []
       },
-      "editorialStatus": {
-        "ru": "copy_synchronised_with_current_artwork_not_owner_approved",
-        "kg": "unselected_draft_requires_native_review_and_resync_with_ru"
+      "ctaMode": "demo",
+      "directKeyword": "КАТАЛОГ",
+      "offer": "Показ учёта размеров и цветов на примере ассортимента магазина.",
+      "qualifyingQuestion": "Что продаёте и сколько вариантов размера или цвета у товаров?",
+      "media": {
+        "videoSeconds": 15,
+        "audio": "none",
+        "type": "native Canva page sequence"
       },
       "distribution": {
         "status": "draft_blocked_no_budget",
         "primaryLocale": "ru",
         "nativeAction": "send_instagram_message",
-        "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
-        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI", "DAHZ24dI8do"]
-      }
+        "canvaSourceDesignIds": [
+          "DAHZ4xj_pG8",
+          "DAHZ4smWlbE",
+          "DAHZ4hKX-Uc"
+        ],
+        "attribution": "Платный источник Direct подтверждают по идентификатору объявления или данным перехода в диалоге Meta. Общее с органикой ключевое слово не доказывает платный источник. Дубли одного бизнеса объединяются; неизвестный источник сохраняется неизвестным."
+      },
+      "operatorNotes": "Лента: основное изображение 4:5; доказательство и заключительная карточка приложены отдельно. Вертикальная версия: MP4 15 секунд и три исходных кадра. Нативные размещения и кнопку проверяют в Meta после согласования бюджета. Кампания не создана."
+    },
+    {
+      "id": "ad02",
+      "paid": true,
+      "status": "draft_no_budget_no_launch",
+      "title": {
+        "ru": "Почему товара стало меньше?"
+      },
+      "caption": {
+        "ru": "Товара стало меньше — проверьте, что с ним происходило. В журнале BAZAAR видны продажи, поступления, перемещения и списания.\n\nНапишите «ОСТАТОК» в Direct. Покажем историю операций на демонстрационном примере и обсудим задачу вашего магазина."
+      },
+      "frames": {
+        "ru": [
+          "Почему товара\nстало меньше?\nПродажи и списания —\nв журнале BAZAAR.",
+          "Списание\nПроверьте документ операции.\nДемонстрационные данные",
+          "Покажем\nна примере\nНапишите «ОСТАТОК»\nв Direct."
+        ]
+      },
+      "slides": {
+        "ru": [
+          {
+            "title": "Почему товара\nстало меньше?",
+            "body": "Продажи и списания —\nв журнале BAZAAR."
+          },
+          {
+            "title": "Списание",
+            "body": "Проверьте документ операции.\nДемонстрационные данные"
+          },
+          {
+            "title": "Покажем\nна примере",
+            "body": "Напишите «ОСТАТОК»\nв Direct."
+          }
+        ]
+      },
+      "verticalSlides": {
+        "ru": [
+          {
+            "title": "Почему товара\nстало меньше?",
+            "body": "Начните с истории\nопераций."
+          },
+          {
+            "title": "Списание",
+            "body": "Проверьте документ и количество.\nДемонстрационные данные"
+          },
+          {
+            "title": "Покажем,\nгде проверить",
+            "body": "Напишите «ОСТАТОК»\nв Direct."
+          }
+        ]
+      },
+      "stories": {
+        "ru": []
+      },
+      "ctaMode": "demo",
+      "directKeyword": "ОСТАТОК",
+      "offer": "Показ журнала продаж и списаний: где проверить изменение остатка.",
+      "qualifyingQuestion": "Как сейчас учитываете продажи и списания и в каком городе работает магазин?",
+      "media": {
+        "videoSeconds": 15,
+        "audio": "none",
+        "type": "native Canva page sequence"
+      },
+      "distribution": {
+        "status": "draft_blocked_no_budget",
+        "primaryLocale": "ru",
+        "nativeAction": "send_instagram_message",
+        "canvaSourceDesignIds": [
+          "DAHZ45mav0U",
+          "DAHZ4smWlbE",
+          "DAHZ4hKX-Uc"
+        ],
+        "attribution": "Платный источник Direct подтверждают по идентификатору объявления или данным перехода в диалоге Meta. Общее с органикой ключевое слово не доказывает платный источник. Дубли одного бизнеса объединяются; неизвестный источник сохраняется неизвестным."
+      },
+      "operatorNotes": "Лента: основное изображение 4:5; доказательство и заключительная карточка приложены отдельно. Вертикальная версия: MP4 15 секунд и три исходных кадра. Нативные размещения и кнопку проверяют в Meta после согласования бюджета. Кампания не создана."
+    },
+    {
+      "id": "ad03",
+      "paid": true,
+      "status": "draft_no_budget_no_launch",
+      "title": {
+        "ru": "Что показали продажи?"
+      },
+      "caption": {
+        "ru": "Выручка, себестоимость и валовая прибыль помогают разобраться в продажах магазина. В BAZAAR можно выбрать период и посмотреть показатели.\n\nАналитика доступна в тарифах «Бизнесмен» и «Монополист». На экране — демонстрационные данные; валовая прибыль учитывает себестоимость товара.\n\nНапишите «ОТЧЁТ» в Direct и расскажите, какой отчёт нужен вашему магазину."
+      },
+      "frames": {
+        "ru": [
+          "Что показали\nпродажи?\nВыручка, себестоимость\nи валовая прибыль.",
+          "Валовая прибыль\nДо расходов вашего бизнеса.\nДемонстрационные данные",
+          "Разберём\nваш отчёт\nНапишите «ОТЧЁТ»\nв Direct."
+        ]
+      },
+      "slides": {
+        "ru": [
+          {
+            "title": "Что показали\nпродажи?",
+            "body": "Выручка, себестоимость\nи валовая прибыль."
+          },
+          {
+            "title": "Валовая прибыль",
+            "body": "До расходов вашего бизнеса.\nДемонстрационные данные"
+          },
+          {
+            "title": "Разберём\nваш отчёт",
+            "body": "Напишите «ОТЧЁТ»\nв Direct."
+          }
+        ]
+      },
+      "verticalSlides": {
+        "ru": [
+          {
+            "title": "Выручка —\nещё не прибыль",
+            "body": "Проверьте себестоимость\nи возвраты."
+          },
+          {
+            "title": "Валовая прибыль",
+            "body": "До расходов вашего бизнеса.\nДемонстрационные данные"
+          },
+          {
+            "title": "Разберём\nваш отчёт",
+            "body": "Напишите «ОТЧЁТ»\nв Direct."
+          }
+        ]
+      },
+      "stories": {
+        "ru": []
+      },
+      "ctaMode": "demo",
+      "directKeyword": "ОТЧЁТ",
+      "offer": "Показ выручки, себестоимости и валовой прибыли за выбранный период.",
+      "qualifyingQuestion": "Сколько у вас магазинов и какие показатели хотите видеть в отчёте?",
+      "media": {
+        "videoSeconds": 15,
+        "audio": "none",
+        "type": "native Canva page sequence"
+      },
+      "distribution": {
+        "status": "draft_blocked_no_budget",
+        "primaryLocale": "ru",
+        "nativeAction": "send_instagram_message",
+        "canvaSourceDesignIds": [
+          "DAHZ4xFbrtU",
+          "DAHZ4smWlbE",
+          "DAHZ4i7kvio"
+        ],
+        "attribution": "Платный источник Direct подтверждают по идентификатору объявления или данным перехода в диалоге Meta. Общее с органикой ключевое слово не доказывает платный источник. Дубли одного бизнеса объединяются; неизвестный источник сохраняется неизвестным."
+      },
+      "operatorNotes": "Лента: основное изображение 4:5; доказательство и заключительная карточка приложены отдельно. Вертикальная версия: MP4 15 секунд и три исходных кадра. Нативные размещения и кнопку проверяют в Meta после согласования бюджета. Кампания не создана."
+    },
+    {
+      "id": "ad04",
+      "paid": true,
+      "status": "draft_no_budget_no_launch",
+      "title": {
+        "ru": "Фото товара для каталога"
+      },
+      "caption": {
+        "ru": "Подготовьте фото товара для каталога в студии картинок BAZAAR. Покажем исходную фотографию и фактический результат обработки на демонстрационном товаре.\n\nНапишите «ФОТО» в Direct и расскажите, что продаёте. Подключение студии и подходящий сценарий разберём отдельно; результат проверяют перед использованием в каталоге."
+      },
+      "frames": {
+        "ru": [
+          "Фото товара\nдля каталога\nСтудия картинок\nв BAZAAR.",
+          "Результат\nПроверьте форму, цвет и детали.\nДемонстрационные данные",
+          "Покажем\nстудию картинок\nНапишите «ФОТО»\nв Direct."
+        ]
+      },
+      "slides": {
+        "ru": [
+          {
+            "title": "Фото товара\nдля каталога",
+            "body": "Студия картинок\nв BAZAAR."
+          },
+          {
+            "title": "Результат",
+            "body": "Проверьте форму, цвет и детали.\nДемонстрационные данные"
+          },
+          {
+            "title": "Покажем\nстудию картинок",
+            "body": "Напишите «ФОТО»\nв Direct."
+          }
+        ]
+      },
+      "verticalSlides": {
+        "ru": [
+          {
+            "title": "Фото\nдля каталога",
+            "body": "Начните с реального\nснимка товара."
+          },
+          {
+            "title": "Результат студии",
+            "body": "Оцените детали перед сохранением.\nДемонстрационные данные"
+          },
+          {
+            "title": "Покажем\nстудию картинок",
+            "body": "Напишите «ФОТО»\nв Direct."
+          }
+        ]
+      },
+      "stories": {
+        "ru": []
+      },
+      "ctaMode": "demo",
+      "directKeyword": "ФОТО",
+      "offer": "Показ студии картинок: исходная фотография и фактический результат обработки в BAZAAR.",
+      "qualifyingQuestion": "Какие товары фотографируете и для какого каталога нужны изображения?",
+      "media": {
+        "videoSeconds": 15,
+        "audio": "none",
+        "type": "native Canva page sequence"
+      },
+      "distribution": {
+        "status": "draft_blocked_no_budget",
+        "primaryLocale": "ru",
+        "nativeAction": "send_instagram_message",
+        "canvaSourceDesignIds": [
+          "DAHZ40mOSno",
+          "DAHZ4smWlbE",
+          "DAHZ4hKX-Uc"
+        ],
+        "attribution": "Платный источник Direct подтверждают по идентификатору объявления или данным перехода в диалоге Meta. Общее с органикой ключевое слово не доказывает платный источник. Дубли одного бизнеса объединяются; неизвестный источник сохраняется неизвестным."
+      },
+      "operatorNotes": "Лента: основное изображение 4:5; доказательство и заключительная карточка приложены отдельно. Вертикальная версия: MP4 15 секунд и три исходных кадра. Нативные размещения и кнопку проверяют в Meta после согласования бюджета. Кампания не создана."
     }
-  ],
-  "editorialDirection": {
-    "references": [
-      "https://www.instagram.com/bazaar.pos/p/DU1Z4sdApKw4ZzIE4jqzRYzvOk0jv0Azjv_emA0/",
-      "https://www.instagram.com/bazaar.pos/p/DU1adr9gvYAJXO6ATcK4Yh060Xyss3w6VuhIL40/",
-      "https://www.instagram.com/bazaar.pos/p/DU1as05gmgx6NHhddp5LSoCiFUN3epI18Q_yQs0/"
-    ],
-    "sequence": "Товары → поступления → история остатков → магазины → начало работы → отчёты → выбор тарифа → показ",
-    "design": "Approved owner reference governs the complete series. No fake CTA buttons, footer URLs, old slash marks or translated BAZAAR.",
-    "distributionPlan": "docs/marketing/instagram-2026-11/DISTRIBUTION-AND-GRID.md",
-    "languagePolicy": "One primary RU package per slot; KG alternatives after native editorial review and explicit slot selection. Do not automatically double-post.",
-    "scheduleStatus": "Draft only, never schedule until complete package approval and separate publication authorization. Shift all dates if start is missed; no catch-up bulk posts.",
-    "visualEvidence": "All current artwork uses illustrative AI retail still life. Reels are silent sequences of four 5-second cards assembled in Canva, not recorded product demonstrations.",
-    "adLocalePolicy": "Only RU concepts prepared for visual review. KG ads are unselected older text drafts; resynchronise and obtain native editorial review before creating or using KG exports."
-  },
-  "brandRules": {
-    "name": "BAZAAR",
-    "translation": "Never translate or transliterate BAZAAR; preserve Latin spelling in Russian, Kyrgyz and English.",
-    "instagramHandle": "@bazaar.pos",
-    "posUsage": "POS is only part of the Instagram username, not part of the display brand name.",
-    "referencePolicy": "Past Instagram posts demonstrate content sequence only. Do not copy their layout or reuse their decoration as mandatory brand assets.",
-    "excludedElements": [
-      "two diagonal symbols from old post",
-      "literal reconstruction of old post"
-    ],
-    "typography": "Preserve letterforms, dense clean sans-serif character and sizes from owner-approved-stock-cover.png. Font family of raster source is unverified. Cormorant Garamond and Oswald trials rejected; no new typeface experiment in production series.",
-    "rendering": "Specialised design application only. Local code-based post generator is stopped.",
-    "logo": "Use the original public/brand/logo.png asset at the top instead of typeset BAZAAR. Never redraw or translate the logo.",
-    "posterFooter": "No bazaar.kg footer on artwork. Tracking links stay in profile, Story links and ad destinations.",
-    "copy": "Use concrete shop situations and plain language. No internal material IDs in public Direct keywords. Every slide must add information.",
-    "composition": "Preserve owner-approved hierarchy, scale, margins, blue/white photographic composition. Vary relevant photo subjects and product demonstrations within this direction; never shrink all text to make copy fit.",
-    "artworkCta": "No simulated clickable buttons in PNGs. Organic cover may omit CTA; last slide/caption gives one Direct or profile instruction. Stories reserve room for a real link sticker or reply. Paid ads use native CTA only after budget approval.",
-    "referenceFile": "docs/marketing/instagram-2026-11/references/owner-approved-stock-cover.png",
-    "researchBrief": "docs/marketing/instagram-2026-11/DESIGN-RESEARCH.md"
-  }
+  ]
 }

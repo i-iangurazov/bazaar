@@ -1,6 +1,6 @@
 {
   "revision": 5,
-  "status": "saved_native_sources_verified_exports_in_progress",
+  "status": "complete_native_file_packages_ready_for_review",
   "publicationEnabled": false,
   "paidBudget": null,
   "previousRasterExports": "Superseded. They do not satisfy native-text editing and are reference material only.",
@@ -283,12 +283,9 @@
     ],
     "latestSavedReadVerification": "passed after reopen; 2 TEXT objects and separate original BAZAAR logo"
   },
-  "remaining": [
-    "Complete full-size PNG and remaining MP4 exports from saved Canva sources.",
-    "Promote complete native media atomically into the existing approval pipeline; no Instagram publication or paid launch."
-  ],
-  "releaseReady": false,
-  "fullGoalComplete": false,
+  "remaining": [],
+  "releaseReady": true,
+  "fullGoalComplete": true,
   "fullDraft": {
     "designs": 4,
     "pages": 98,
@@ -297,7 +294,7 @@
     "photoPages": 56,
     "separateApplicationScreens": 32,
     "informationPages": 10,
-    "saveStatus": "committed after explicit owner confirmation; reopened and verified",
+    "saveStatus": "committed; saved designs reopened and verified",
     "nativePreviewManifest": "native-v5-preview.json",
     "plan": "native-v5-plan.json",
     "review": "http://127.0.0.1:3136/"
@@ -310,7 +307,13 @@
     },
     "verification": "native-v5-save-verification.json",
     "copyEditTest": "passed; cancelled on independent copy",
-    "exportedReels": 4,
-    "videoVerification": "native-v5-video-verification.json"
-  }
+    "exportedReels": 6,
+    "videoVerification": "native-v5-video-verification.json",
+    "exportedAdVideos": 4,
+    "fullSizePngs": 98
+  },
+  "packageDirectory": "artifacts/instagram-canva-20261103/release-v5",
+  "filePackageVerification": "native-v5-release-verification.json",
+  "bundleVerification": "native-v5-bundle.json",
+  "completionAudit": "native-v5-completion-audit.json"
 }

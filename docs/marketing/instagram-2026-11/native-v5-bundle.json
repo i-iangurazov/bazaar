@@ -1,0 +1,13 @@
+{
+  "revision": 5,
+  "file": "artifacts/instagram-canva-20261103/review-native-v5/BAZAAR-Instagram-14-days-v5.zip",
+  "bytes": 144045416,
+  "sha256": "f8b1e79781e711931a2e31dc98f016c8634fe24e51ce73b3a98cc8b9e1e3f9fd",
+  "files": 157,
+  "packages": 18,
+  "nativePagesCovered": 98,
+  "extraAdaptations": 6,
+  "crcAndAllMediaHashes": "passed",
+  "publicationEnabled": false,
+  "paidBudget": null
+}

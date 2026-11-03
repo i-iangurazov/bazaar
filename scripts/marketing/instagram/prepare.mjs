@@ -1,16 +1,17 @@
 // Prepare text, verified offers and tracking links for specialised design tools.
 // This script does not draw, render, resize or publish visual content.
 import { readFile, writeFile, mkdir, access } from "node:fs/promises";
-const dir = "artifacts/instagram-canva-20261103";
+const campaignFile = process.env.BAZAAR_INSTAGRAM_CAMPAIGN ?? "docs/marketing/instagram-2026-11/campaign.json";
 const campaign = JSON.parse(
-  await readFile("docs/marketing/instagram-2026-11/campaign.json", "utf8"),
+  await readFile(campaignFile, "utf8"),
 );
+const dir = campaign.packageDirectory ?? "artifacts/instagram-canva-20261103";
 await mkdir(dir, { recursive: true });
 const briefs = [];
 for (const item of [...campaign.items, ...campaign.ads])
-  for (const locale of ["ru", "kg"]) {
+  for (const locale of campaign.locales ?? ["ru", "kg"]) {
     const id = `${item.id}_${locale}`;
-    const landing = new URL(`https://www.bazaar.kg/${locale}`);
+    const landing = new URL(`https://www.bazaar.kg/${item.ctaMode === "signup" ? "signup" : locale}`);
     landing.search = new URLSearchParams({
       utm_source: "instagram",
       utm_medium: item.paid ? "paid_social" : "organic_social",
@@ -36,10 +37,16 @@ for (const item of [...campaign.items, ...campaign.ads])
       timezone: campaign.timezone,
       title: item.title[locale],
       caption: item.caption[locale],
+      operatorNotes: item.operatorNotes ?? null,
       slides: item.slides?.[locale] ?? [],
       verticalSlides: item.verticalSlides?.[locale] ?? [],
       stories: item.stories?.[locale] ?? [],
-      storyInteractions: item.storyInteractions ?? [],
+      storyInteractions: (item.storyInteractions ?? []).map((interaction) => {
+        if (interaction.type !== "link_sticker") return interaction;
+        const url = new URL(landing);
+        url.searchParams.set("utm_content", interaction.utmContent ?? id);
+        return { ...interaction, url: url.href };
+      }),
       ctaMode: item.ctaMode,
       directKeyword: item.directKeyword ?? null,
       artworkSources: item.artworkSources ?? null,
@@ -51,7 +58,7 @@ for (const item of [...campaign.items, ...campaign.ads])
     briefs.push(brief);
     await writeFile(
       `${dir}/${id}-copy.txt`,
-      `${brief.caption}\n\n${brief.slides.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n")}\n\n${brief.verticalSlides.length ? `Vertical ad artwork:\n${brief.verticalSlides.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n")}\n\n` : ""}Stories:\n${brief.stories.join("\n")}\n\nNative Story interactions (add in Instagram, never bake into the image):\n${JSON.stringify(brief.storyInteractions, null, 2)}\n\nStory / ad link: ${brief.landingUrl}\nWhatsApp demo: ${brief.demoUrl}\n`,
+      `Подпись к публикации:\n${brief.caption || "В этот день — только Stories, подпись ленты не используется."}\n\nТекст карточек:\n${brief.slides.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n")}\n\n${brief.verticalSlides.length ? `Вертикальные сцены рекламы:\n${brief.verticalSlides.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n")}\n\n` : ""}Stories:\n${brief.stories.join("\n\n")}\n\nНастоящие стикеры Instagram (добавить при подготовке публикации):\n${JSON.stringify(brief.storyInteractions, null, 2)}\n\nСсылка с метками: ${brief.landingUrl}\n${brief.operatorNotes ? `\nЗаметки для ведущего аккаунта (не публиковать):\n${brief.operatorNotes}\n` : ""}`,
     );
     if (item.format === "reel") {
       const srt = item.frames[locale]

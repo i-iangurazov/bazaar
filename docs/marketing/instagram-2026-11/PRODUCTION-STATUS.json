@@ -1,7 +1,7 @@
 {
   "date": "2026-11-04",
-  "stage": "revision_5_native_sources_saved_exports_in_progress",
-  "fullGoalComplete": false,
+  "stage": "revision_5_complete_native_file_packages_ready_for_review",
+  "fullGoalComplete": true,
   "branch": "main",
   "primaryReleaseLanguage": "ru",
   "kgAlternatives": "Text drafts retained; native editorial review required before use",
@@ -23,7 +23,9 @@
     "profileCovers": 10,
     "savedNativeReleaseDesigns": 4,
     "savedNativeReleasePages": 98,
-    "nativeReelMp4Exports": 4
+    "nativeReelMp4Exports": 6,
+    "nativeAdMp4Exports": 4,
+    "nativePngExports": 98
   },
   "target": {
     "feedCovers": 10,
@@ -37,15 +39,31 @@
       "vertical"
     ]
   },
-  "completeFilePackages": [],
+  "completeFilePackages": [
+    "r01_ru",
+    "p02_ru",
+    "r03_ru",
+    "p04_ru",
+    "r05_ru",
+    "s06_ru",
+    "s07_ru",
+    "r08_ru",
+    "p09_ru",
+    "r10_ru",
+    "p11_ru",
+    "r12_ru",
+    "s13_ru",
+    "s14_ru",
+    "ad01_ru",
+    "ad02_ru",
+    "ad03_ru",
+    "ad04_ru"
+  ],
   "approvedPackages": 0,
   "reviewGallery": "artifacts/instagram-canva-20261103/review-native-v5/index.html",
   "gridPreview": "artifacts/instagram-canva-20261103/production/qa/native-v5-grid-desktop.jpg",
   "generationEvidence": "native-v5-photos.json",
-  "remaining": [
-    "Finish the remaining full-size PNG and MP4 exports from saved Canva sources.",
-    "Verify and promote complete native media atomically into the approval pipeline. Instagram publication and paid advertising remain disabled."
-  ],
+  "remaining": [],
   "canvaCapabilityNote": "Actual native text replacement is available on copied page designs. All 98 pages contain two TEXT objects plus a separate original logo. Photos are text-free image layers; 32 actual application screens are on separate white pages. Canva image-to-design reached the current plan AI limit; no upgrade purchased. Remaining production uses native copy/edit and text-free photographic layers.",
   "profileAudit": "profile-grid.json",
   "figmaSourceBoard": {
@@ -67,14 +85,14 @@
   },
   "browserAccess": {
     "profile": "Personal Chrome Ilias only",
-    "browserId": "5 (last connected)",
-    "lastCheck": "Browser transport closed; connected browser inventory is empty. Native app fallback became unavailable (noWindowsAvailable).",
-    "nextStep": "Resume existing personal Chrome tabs after connection is restored. Do not switch to work profile."
+    "browserId": "1",
+    "lastCheck": "All native exports completed and downloaded.",
+    "nextStep": "No browser action required for completed file package."
   },
   "nativePlacementVerification": "Not performed in Instagram; publication disabled.",
-  "visualEvidence": "98 saved editable pages; 196 native text objects and 98 original logos. All real application screenshots are on separate pages. Four native Canva MP4 page sequences exported at 1080×1920, 20 seconds; fully decoded. Remaining video/PNG exports pending.",
-  "activeEditorialRevision": "native-v5-plan.json",
-  "releaseReady": false,
+  "visualEvidence": "98 saved native editable pages; 196 text objects; 98 original logos; 98 full-size PNGs decoded; 6 Reels at 20 seconds and 4 ads at 15 seconds decoded. Real product screenshots remain on separate pages/scenes.",
+  "activeEditorialRevision": "campaign.json (version 5)",
+  "releaseReady": true,
   "previousRevision": {
     "revision": 3,
     "completeFilePackages": [
@@ -481,6 +499,118 @@
       "fullDecode": "passed",
       "audio": "none",
       "type": "native Canva page sequence"
+    },
+    {
+      "id": "r10_ru",
+      "designId": "DAHZ4yremVA",
+      "title": "BAZAAR · R10 · Аналитика · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r10_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R10 · Аналитика · Reels · v5.mp4",
+      "bytes": 1290015,
+      "sha256": "6edcc9a58f2c174818ab2130e3c856674e541ac049e3227cc36778473512fdc8",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r12_ru",
+      "designId": "DAHZ416QCX4",
+      "title": "BAZAAR · R12 · Интеграции · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r12_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R12 · Интеграции · Reels · v5.mp4",
+      "bytes": 1303529,
+      "sha256": "3874a0012b4e3a2a27e523398da2ae2d24b0f26d194f527b8a59e92fc193d288",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad01_ru",
+      "designId": "DAHZ4xj_pG8",
+      "title": "BAZAAR · AD01 · Каталог · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad01_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD01 · Каталог · Видео 9×16 · v5.mp4",
+      "bytes": 1263206,
+      "sha256": "51b2d8a1ef2b6e5b53200685dbd1e397b861f8ec35cac9f38448197db36b9415",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad02_ru",
+      "designId": "DAHZ45mav0U",
+      "title": "BAZAAR · AD02 · Остатки · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad02_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD02 · Остатки · Видео 9×16 · v5.mp4",
+      "bytes": 1113053,
+      "sha256": "69b9d2e498c657fb931b3cfadec8255f1c05009ccdb5a24a0b5ee51fac914efc",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad03_ru",
+      "designId": "DAHZ4xFbrtU",
+      "title": "BAZAAR · AD03 · Аналитика · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad03_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD03 · Аналитика · Видео 9×16 · v5.mp4",
+      "bytes": 1188321,
+      "sha256": "adddaca32cca98921f012b0f44e20851c4ad39bc1c59e13b28b958a9108eeaf4",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad04_ru",
+      "designId": "DAHZ40mOSno",
+      "title": "BAZAAR · AD04 · Студия картинок · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad04_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD04 · Студия картинок · Видео 9×16 · v5.mp4",
+      "bytes": 1673484,
+      "sha256": "a5994672c26f0ba647381035e9f694e78350f746f198a9b7a635c42f09a272cd",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
     }
-  ]
+  ],
+  "status": "complete_native_file_packages_ready_for_review",
+  "packageDirectory": "artifacts/instagram-canva-20261103/release-v5",
+  "filePackageVerification": "native-v5-release-verification.json",
+  "bundleVerification": "native-v5-bundle.json",
+  "ownerNextSteps": [
+    "Review complete packages before any publication approval.",
+    "Choose start date and verify native placement/stickers when separately authorized.",
+    "Approve budget and ad account before paid launch."
+  ],
+  "completionAudit": "native-v5-completion-audit.json"
 }

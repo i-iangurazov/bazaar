@@ -30,7 +30,10 @@ export function exportQueue(manifest, approvals, campaign) {
 }
 async function main() {
   const [action, id, suppliedHash, by] = process.argv.slice(2);
-  const dir = "artifacts/instagram-canva-20261103";
+  const campaignFile = process.env.BAZAAR_INSTAGRAM_CAMPAIGN ?? "docs/marketing/instagram-2026-11/campaign.json";
+  const campaignText = await readFile(campaignFile, "utf8");
+  const campaign = JSON.parse(campaignText);
+  const dir = campaign.packageDirectory ?? "artifacts/instagram-canva-20261103";
   const manifest = JSON.parse(await readFile(`${dir}/manifest.json`, "utf8"));
   const approvalFile = `${dir}/approvals.json`;
   let approvals = {};
@@ -56,10 +59,8 @@ async function main() {
     await writeFile(approvalFile, JSON.stringify(approvals, null, 2), { mode: 0o600 });
     console.log("Local approval saved; nothing has been scheduled or published.");
   } else if (action === "export") {
-    const queue = exportQueue(manifest, approvals, "kg_store_launch_202611");
-    const campaignHash = hash(
-      await readFile("docs/marketing/instagram-2026-11/campaign.json", "utf8"),
-    );
+    const queue = exportQueue(manifest, approvals, campaign.campaign);
+    const campaignHash = hash(campaignText);
     for (const row of queue) {
       if (row.campaignHash !== campaignHash)
         throw new Error(`Brief changed; re-import and review: ${row.id}`);

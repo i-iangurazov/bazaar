@@ -69,19 +69,114 @@
       "fullDecode": "passed",
       "audio": "none",
       "type": "native Canva page sequence"
+    },
+    {
+      "id": "r10_ru",
+      "designId": "DAHZ4yremVA",
+      "title": "BAZAAR · R10 · Аналитика · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r10_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R10 · Аналитика · Reels · v5.mp4",
+      "bytes": 1290015,
+      "sha256": "6edcc9a58f2c174818ab2130e3c856674e541ac049e3227cc36778473512fdc8",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "r12_ru",
+      "designId": "DAHZ416QCX4",
+      "title": "BAZAAR · R12 · Интеграции · Reels · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/r12_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · R12 · Интеграции · Reels · v5.mp4",
+      "bytes": 1303529,
+      "sha256": "3874a0012b4e3a2a27e523398da2ae2d24b0f26d194f527b8a59e92fc193d288",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 20,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad01_ru",
+      "designId": "DAHZ4xj_pG8",
+      "title": "BAZAAR · AD01 · Каталог · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad01_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD01 · Каталог · Видео 9×16 · v5.mp4",
+      "bytes": 1263206,
+      "sha256": "51b2d8a1ef2b6e5b53200685dbd1e397b861f8ec35cac9f38448197db36b9415",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad02_ru",
+      "designId": "DAHZ45mav0U",
+      "title": "BAZAAR · AD02 · Остатки · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad02_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD02 · Остатки · Видео 9×16 · v5.mp4",
+      "bytes": 1113053,
+      "sha256": "69b9d2e498c657fb931b3cfadec8255f1c05009ccdb5a24a0b5ee51fac914efc",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad03_ru",
+      "designId": "DAHZ4xFbrtU",
+      "title": "BAZAAR · AD03 · Аналитика · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad03_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD03 · Аналитика · Видео 9×16 · v5.mp4",
+      "bytes": 1188321,
+      "sha256": "adddaca32cca98921f012b0f44e20851c4ad39bc1c59e13b28b958a9108eeaf4",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
+    },
+    {
+      "id": "ad04_ru",
+      "designId": "DAHZ40mOSno",
+      "title": "BAZAAR · AD04 · Студия картинок · Видео 9×16 · v5",
+      "file": "artifacts/instagram-canva-20261103/production/revision5/exports/videos/ad04_ru.mp4",
+      "source": "/Users/ilias_iangurazov/Downloads/BAZAAR · AD04 · Студия картинок · Видео 9×16 · v5.mp4",
+      "bytes": 1673484,
+      "sha256": "a5994672c26f0ba647381035e9f694e78350f746f198a9b7a635c42f09a272cd",
+      "size": [
+        1080,
+        1920
+      ],
+      "durationSeconds": 15,
+      "fullDecode": "passed",
+      "audio": "none",
+      "type": "native Canva page sequence"
     }
   ],
-  "remainingReels": [
-    "r10_ru",
-    "r12_ru"
-  ],
-  "remainingAdVideos": [
-    "ad01_ru",
-    "ad02_ru",
-    "ad03_ru",
-    "ad04_ru"
-  ],
-  "fullSizePngExports": 0,
+  "remainingReels": [],
+  "remainingAdVideos": [],
+  "fullSizePngExports": 98,
+  "pngDecode": "All 98 fully decoded with no blank images",
   "publicationEnabled": false,
   "paidBudget": null
 }

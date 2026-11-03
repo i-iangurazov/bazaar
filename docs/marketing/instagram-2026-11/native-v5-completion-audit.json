@@ -1,0 +1,107 @@
+{
+  "revision": 5,
+  "date": "2026-11-04",
+  "scope": "Complete editable 14-day promotion pack and local approval/measurement workflow. Publication, paid launch and production deployment remain excluded by owner instructions.",
+  "result": "complete_within_authorized_scope",
+  "checks": [
+    {
+      "requirement": "Product and real signup flow",
+      "evidence": "ATTRIBUTION-VERIFICATION.md; app-screen-evidence.json; current planCatalog.ts",
+      "result": "passed"
+    },
+    {
+      "requirement": "Design and Instagram research",
+      "evidence": "DESIGN-RESEARCH.md; DISTRIBUTION-AND-GRID.md; revision-plan.json.research",
+      "result": "passed"
+    },
+    {
+      "requirement": "Owner reference and consistent typography",
+      "evidence": "native-v5-preview.json: 196 native text objects from UI-verified Inter 66/34 Bold master; final desktop/mobile screenshots",
+      "result": "passed"
+    },
+    {
+      "requirement": "Original Latin logo and unchanged tariff names",
+      "evidence": "native-v5-save-verification.json: 98 original logos; campaign.json p11; planCatalog.ts limits",
+      "result": "passed"
+    },
+    {
+      "requirement": "Native editable marketing text and separate photos",
+      "evidence": "native-v5-save-verification.json: readback of 4 saved designs and copy/edit test passed",
+      "result": "passed"
+    },
+    {
+      "requirement": "Real screenshots on independent pages",
+      "evidence": "native-v5-preview.json: 32 application pages, asset matches and overlap checks; actual video frames inspected",
+      "result": "passed"
+    },
+    {
+      "requirement": "Varied functions and photographic industries",
+      "evidence": "native-v5-plan.json: 14 topic days, 11 text-free photo assets; app-screen-evidence.json",
+      "result": "passed"
+    },
+    {
+      "requirement": "Full two-week content",
+      "evidence": "native-v5-release-verification.json: 6 Reels, 4 carousels/18 slides, 42 Stories, 4 ads, 18 packages",
+      "result": "passed"
+    },
+    {
+      "requirement": "Native full-size media",
+      "evidence": "native-v5-video-verification.json: 98 PNGs and 10 MP4s decoded; source media-manifest hashes",
+      "result": "passed"
+    },
+    {
+      "requirement": "Profile composition and sequencing",
+      "evidence": "final grid screenshot; browser stages 8/13 tiles; mobile 390x844 without horizontal overflow",
+      "result": "passed"
+    },
+    {
+      "requirement": "One CTA and valid signup sticker",
+      "evidence": "campaign.json; actual S14 brief URL verified with utm_content=s14_ru_story_3",
+      "result": "passed"
+    },
+    {
+      "requirement": "Repeatable generation and approval process",
+      "evidence": "assemble-native-release.mjs; prepare.mjs; ingest.mjs; workflow.mjs; copy/edit test",
+      "result": "passed"
+    },
+    {
+      "requirement": "Incomplete or changed assets rejected",
+      "evidence": "real CLI rejection of missing Story and 20-second ad; manifest unchanged; all package hashes reverified; 5 workflow tests",
+      "result": "passed"
+    },
+    {
+      "requirement": "Qualified leads and acquisition metrics",
+      "evidence": "README.md; report.mjs; tests/unit/instagram-workflow.test.ts; attribution-report.sql",
+      "result": "passed"
+    },
+    {
+      "requirement": "No publishing, spending, spam or fake growth",
+      "evidence": "queue 0; publicationEnabled false; paidBudget null; owner no-publication instruction retained",
+      "result": "passed"
+    },
+    {
+      "requirement": "Personal browser only and sources organized",
+      "evidence": "Canva folder verified 18 named designs; personal Chrome Ilias browser 1",
+      "result": "passed"
+    },
+    {
+      "requirement": "Downloadable deliverable",
+      "evidence": "native-v5-bundle.json: 157 entries, CRC and every media hash passed; HTTP 200 with correct length",
+      "result": "passed"
+    },
+    {
+      "requirement": "Repository and checks",
+      "evidence": "main; typecheck, lint, i18n, ESLint and 5 workflow tests passed; git diff --check",
+      "result": "passed"
+    }
+  ],
+  "uncompletedRequiredWork": [],
+  "ownerNextSteps": [
+    "Review complete packages before any later publication approval.",
+    "Set dates and confirm native placements/stickers only when publishing is authorized.",
+    "Approve budget and account before paid launch."
+  ],
+  "publicationEnabled": false,
+  "paidBudget": null,
+  "productionAttribution": "Implemented and tested locally; not deployed"
+}

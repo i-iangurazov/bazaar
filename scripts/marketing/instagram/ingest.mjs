@@ -5,15 +5,15 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import sharp from "sharp";
-const dir = "artifacts/instagram-canva-20261103";
 const digest = (s) => createHash("sha256").update(s).digest("hex");
 if (!process.argv[2])
   throw new Error("Pass a JSON export list; see the runbook. Run prepare.mjs first.");
 const input = JSON.parse(await readFile(process.argv[2], "utf8"));
 if (!Array.isArray(input.packages) || !input.packages.length)
   throw new Error("Expected non-empty packages list");
-const campaignText = await readFile("docs/marketing/instagram-2026-11/campaign.json", "utf8");
+const campaignText = await readFile(process.env.BAZAAR_INSTAGRAM_CAMPAIGN ?? "docs/marketing/instagram-2026-11/campaign.json", "utf8");
 const campaign = JSON.parse(campaignText);
+const dir = campaign.packageDirectory ?? "artifacts/instagram-canva-20261103";
 const briefs = JSON.parse(await readFile(`${dir}/briefs.json`, "utf8"));
 const manifest = JSON.parse(await readFile(`${dir}/manifest.json`, "utf8"));
 const used = new Set();
@@ -39,8 +39,9 @@ for (const source of input.packages) {
     (source.verticalFrames?.length ?? 0) !== (item.paid ? expectedFrames : 0)
   )
     throw new Error(`Incomplete frame/story export: ${id}`);
-  if ((brief.type === "reel") !== Boolean(source.video))
-    throw new Error(`Reels require a finished video: ${id}`);
+  const videoSeconds = brief.type === "reel" ? 20 : item.paid && item.media?.videoSeconds === 15 ? 15 : null;
+  if (Boolean(videoSeconds) !== Boolean(source.video))
+    throw new Error(`Video export does not match the required package: ${id}`);
   if (brief.type === "reel" && !source.cover)
     throw new Error(`Reels require a separately reviewed profile cover: ${id}`);
   if (source.cover && (brief.type !== "reel" || !["canva", "imagegen"].includes(source.coverTool)))
@@ -83,8 +84,10 @@ for (const source of input.packages) {
         encoding: "utf8",
         timeout: 10000,
       }).stderr ?? "";
-    if (!/1080x1920/.test(info) || !/Duration: 00:00:20/.test(info))
-      throw new Error("Reel must be 1080×1920 and 20 seconds");
+    const duration = /Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/.exec(info);
+    const seconds = duration ? Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]) : NaN;
+    if (!/1080x1920/.test(info) || Math.abs(seconds - videoSeconds) > 0.1 || !Number.isFinite(seconds))
+      throw new Error(`Video must be 1080×1920 and ${videoSeconds} seconds`);
     assets.push({
       file: `${id}.mp4`,
       sha256: digest(await readFile(source.video)),

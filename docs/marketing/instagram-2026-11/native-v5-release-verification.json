@@ -1,0 +1,196 @@
+{
+  "revision": 5,
+  "status": "complete_file_packages_not_approved_for_publication",
+  "promoted": true,
+  "directory": "artifacts/instagram-canva-20261103/release-v5",
+  "campaignHash": "1b0d1dca36ce7d22aa9add03ae01e5968d0f5ea4d1a5bf4f0e675af56977477d",
+  "nativePngs": 98,
+  "reels": 6,
+  "adVideos": 4,
+  "storyFrames": 42,
+  "carouselSlides": 18,
+  "packageCount": 18,
+  "packages": [
+    {
+      "id": "r01_ru",
+      "files": 11,
+      "approvalHash": "8d0ab788b6e4570b28145e3c771f376d6b4d07c0f242d5ca7afc05c9aba80d0e",
+      "canvaDesignIds": [
+        "DAHZ49j_ki0",
+        "DAHZ4tAd1eY",
+        "DAHZ4i7kvio",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "p02_ru",
+      "files": 8,
+      "approvalHash": "823a56eac554a453ee50689b76ba1517e29066e566a08d0521b6b5808a577c52",
+      "canvaDesignIds": [
+        "DAHZ41LAaYI",
+        "DAHZ4hKX-Uc",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "r03_ru",
+      "files": 11,
+      "approvalHash": "06a6a5859d778328a396cfe642c8319c86c9dcbae732447f4e7b51566d69c2e1",
+      "canvaDesignIds": [
+        "DAHZ41zrBjY",
+        "DAHZ4tAd1eY",
+        "DAHZ4i7kvio",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "p04_ru",
+      "files": 8,
+      "approvalHash": "b9c280f4b27fdfe0aca2f9876a61c0d2ae1cdb1ad71057e55f975122f3204a6c",
+      "canvaDesignIds": [
+        "DAHZ40s67-Y",
+        "DAHZ4hKX-Uc",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "r05_ru",
+      "files": 11,
+      "approvalHash": "4eabc1406c0c504235b52b0f7a08677aed0129ffe31052b5183c2f64d5275371",
+      "canvaDesignIds": [
+        "DAHZ41t5CMw",
+        "DAHZ4tAd1eY",
+        "DAHZ4i7kvio",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "s06_ru",
+      "files": 4,
+      "approvalHash": "6017c44e142fb372d6ab00e1902ac40c955dda30c4f1c2407341c925341876a5",
+      "canvaDesignIds": [
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "s07_ru",
+      "files": 4,
+      "approvalHash": "26402ffece52935eed13720df270fbc199c01cdafa382493409587dfdf55f363",
+      "canvaDesignIds": [
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "r08_ru",
+      "files": 11,
+      "approvalHash": "f3c068806b664f960df6b27dd50cd0fe4a04026dca9d100b659fbfdf8f6ae57e",
+      "canvaDesignIds": [
+        "DAHZ4x6a1Fs",
+        "DAHZ4tAd1eY",
+        "DAHZ4i7kvio",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "p09_ru",
+      "files": 8,
+      "approvalHash": "78109d0fe01b43ed765f5d8afae75d95906153ef99916ed88b1950fc52e29dad",
+      "canvaDesignIds": [
+        "DAHZ47BaQOs",
+        "DAHZ4hKX-Uc",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "r10_ru",
+      "files": 11,
+      "approvalHash": "2558f9ea05a05fc7fba1bf8af1af538ccfbfbfc4681324343a8e438983b9a0ef",
+      "canvaDesignIds": [
+        "DAHZ4yremVA",
+        "DAHZ4tAd1eY",
+        "DAHZ4i7kvio",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "p11_ru",
+      "files": 10,
+      "approvalHash": "60b7e274c8d2186d5653b80e1ec5113b9fdf48d12a73ab7c8ad5ad9c7cf20492",
+      "canvaDesignIds": [
+        "DAHZ42VUu_8",
+        "DAHZ4hKX-Uc",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "r12_ru",
+      "files": 11,
+      "approvalHash": "9633b522f85b5ba8cd468ac250458e0196258462c26d76bcc03f787d731204d0",
+      "canvaDesignIds": [
+        "DAHZ416QCX4",
+        "DAHZ4tAd1eY",
+        "DAHZ4i7kvio",
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "s13_ru",
+      "files": 4,
+      "approvalHash": "3e4f04b5f678a73a31607caff1e91c4bd7da84fd71236f318e75b94628ff36df",
+      "canvaDesignIds": [
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "s14_ru",
+      "files": 4,
+      "approvalHash": "8df140ed3f3ddc3e6065d76609d5197a66dd1073bf2d6fd59f0d50217d397d01",
+      "canvaDesignIds": [
+        "DAHZ4smWlbE"
+      ]
+    },
+    {
+      "id": "ad01_ru",
+      "files": 8,
+      "approvalHash": "59e07870332d99184109c65cee11a5960d9d35c56c884b88f9ecce1bb9e983af",
+      "canvaDesignIds": [
+        "DAHZ4xj_pG8",
+        "DAHZ4smWlbE",
+        "DAHZ4hKX-Uc"
+      ]
+    },
+    {
+      "id": "ad02_ru",
+      "files": 8,
+      "approvalHash": "80ce8e9d294bfa387d01b5e2899ec687ff3885a0af43c1c46a061b9f2af04875",
+      "canvaDesignIds": [
+        "DAHZ45mav0U",
+        "DAHZ4smWlbE",
+        "DAHZ4hKX-Uc"
+      ]
+    },
+    {
+      "id": "ad03_ru",
+      "files": 8,
+      "approvalHash": "7680ccf8372e2b1d841fdacbdaa23989fd27d47df1a76d9f24b3ad5ed3890aa2",
+      "canvaDesignIds": [
+        "DAHZ4xFbrtU",
+        "DAHZ4smWlbE",
+        "DAHZ4i7kvio"
+      ]
+    },
+    {
+      "id": "ad04_ru",
+      "files": 8,
+      "approvalHash": "e5e427c268f784b7c9c04d71ce3662298b1630620e584b96f71494ebb6e4b9a2",
+      "canvaDesignIds": [
+        "DAHZ40mOSno",
+        "DAHZ4smWlbE",
+        "DAHZ4hKX-Uc"
+      ]
+    }
+  ],
+  "approvedQueueCount": 0,
+  "publicationEnabled": false,
+  "paidBudget": null
+}
