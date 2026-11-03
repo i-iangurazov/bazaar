@@ -1,0 +1,38 @@
+{
+  "applicationId": "kg.bazaar.app",
+  "version": "1.0.0",
+  "build": 1,
+  "category": "Business",
+  "supportUrl": "https://www.bazaar.kg/help",
+  "privacyUrl": "https://www.bazaar.kg/privacy",
+  "marketingUrl": "https://www.bazaar.kg",
+  "publicationStatus": "google-play-internal-active-not-public",
+  "locales": {
+    "ru": {
+      "name": "Bazaar",
+      "subtitle": "Продажи и учёт магазина",
+      "shortDescription": "Товары, остатки, продажи, заказы и отчёты магазина в одной системе.",
+      "description": "Bazaar помогает вести ежедневную работу магазина с телефона или планшета.\n\n• Находите товары и проверяйте остатки.\n• Работайте с продажами и заказами.\n• Оформляйте приёмку, перемещения и списания.\n• Просматривайте отчёты и показатели магазина.\n• Используйте камеру для сканирования штрихкодов и системный обмен документами.\n\nДля работы нужны интернет, учётная запись Bazaar и доступ к организации и магазину. Доступные разделы зависят от роли сотрудника и тарифа организации.\n\nСправка: https://www.bazaar.kg/help\nКонфиденциальность: https://www.bazaar.kg/privacy",
+      "keywords": "магазин,товары,остатки,продажи,склад,заказы,учёт,касса,штрихкод",
+      "releaseNotes": "Первая мобильная версия Bazaar: товары, продажи, складские операции и отчёты."
+    },
+    "en-US": {
+      "name": "Bazaar",
+      "subtitle": "Sales and store inventory",
+      "shortDescription": "Products, stock, sales, orders and store reports in one workspace.",
+      "description": "Bazaar helps you manage daily store operations from a phone or tablet.\n\n• Find products and check stock.\n• Work with sales and orders.\n• Manage receiving, transfers and write-offs.\n• View store reports and business metrics.\n• Scan product barcodes with the camera and share documents through your device.\n\nAn internet connection, a Bazaar account and access to an organization and store are required. Available features depend on your staff role and the organization's plan.\n\nHelp: https://www.bazaar.kg/help\nPrivacy: https://www.bazaar.kg/privacy",
+      "keywords": "inventory,store,retail,sales,stock,orders,barcode,warehouse,POS",
+      "releaseNotes": "The first mobile release of Bazaar: products, sales, inventory operations and reports."
+    },
+    "ky-KG": {
+      "name": "Bazaar",
+      "subtitle": "Дүкөндүн сатуусу жана эсеби",
+      "shortDescription": "Товарлар, калдыктар, сатуулар, буйрутмалар жана отчёттор бир системада.",
+      "description": "Bazaar телефон же планшет аркылуу дүкөндүн күнүмдүк ишин жүргүзүүгө жардам берет.\n\n• Товарларды таап, калдыктарды текшериңиз.\n• Сатуулар жана буйрутмалар менен иштеңиз.\n• Кабыл алууну, которууларды жана эсептен чыгарууну жүргүзүңүз.\n• Дүкөндүн отчётторун жана көрсөткүчтөрүн көрүңүз.\n• Камера менен штрихкоддорду сканерлеп, документтерди түзмөк аркылуу бөлүшүңүз.\n\nИнтернет, Bazaar аккаунту жана уюмга, дүкөнгө кирүү укугу керек. Жеткиликтүү бөлүмдөр кызматкердин ролуна жана уюмдун тарифине жараша болот.\n\nЖардам: https://www.bazaar.kg/help\nКупуялык: https://www.bazaar.kg/privacy",
+      "keywords": "дүкөн,товар,калдык,сатуу,кампа,буйрутма,эсеп,касса,штрихкод",
+      "releaseNotes": "Bazaar колдонмосунун биринчи мобилдик версиясы: товарлар, сатуулар, кампа иштери жана отчёттор."
+    }
+  },
+  "supportEmail": "support@bazaar.kg",
+  "googlePlayAppId": "4973851578570693264"
+}

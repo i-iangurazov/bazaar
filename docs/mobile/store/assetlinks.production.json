@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kg.bazaar.app",
+      "sha256_cert_fingerprints": [
+        "F7:53:85:3A:89:27:64:DF:99:BD:FE:23:06:A8:01:F1:68:13:3F:F5:E1:F0:92:B3:EC:3A:AA:05:C6:1A:C5:04"
+      ]
+    }
+  }
+]

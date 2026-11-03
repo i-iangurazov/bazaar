@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-03",
+  "baseCommit": "8c95e74",
+  "branch": "main",
+  "applicationId": "kg.bazaar.app",
+  "version": "1.0.0",
+  "build": 1,
+  "android": {
+    "signedAabSha256": "64ee7b9c82bb808e93386c378f4c8f4018b5381fda64897787473e1ae98ede79",
+    "unsignedAabSha256": "9de929af686b295a2b1a61e86a6fb6064396856a2b77e6c30dca78bcb9d6899c",
+    "debugApkSha256": "f52b808db052dc452dfbbf6c96651f3489d7885cd9e155c9c8f2cb937bc945bc",
+    "uploadCertificateSha256": "C1:BE:D0:61:C5:7C:0A:E2:C9:8B:01:E1:00:C5:D0:0F:71:2F:51:3A:8B:B1:6C:54:F3:E2:CA:E6:62:0F:C7:2C",
+    "targetSdk": 36,
+    "minSdk": 26,
+    "signatureVerified": true,
+    "lintErrors": 0,
+    "lintWarnings": 22,
+    "apk16kbZipAlignment": true,
+    "elf64Alignment16kb": true,
+    "deviceVerified": false,
+    "releaseApkSha256": "547a7e9b9c1c992233640bb450bbf791f9d37bee5345c30f11578b582f5df6d4",
+    "releaseApkSignatureVerified": true,
+    "releaseApk16kbZipAlignment": true,
+    "releaseApkPubliclyHosted": false,
+    "directAndPlaySigningIdentitiesDiffer": true
+  },
+  "ios": {
+    "archiveAttempted": true,
+    "archiveProduced": false,
+    "blocker": "Full Xcode absent; CommandLineTools only. Owner confirmed no Apple Developer account.",
+    "plistSyntax": "passed"
+  },
+  "checks": {
+    "mobileUnitTests": 63,
+    "mobileDatabaseTests": 5,
+    "pwaTests": 2,
+    "typecheck": "passed",
+    "lint": "passed",
+    "i18n": "passed",
+    "isolatedProductionWebBuild": "passed",
+    "browserCaptures": 14,
+    "browserPageErrors": 0
+  },
+  "googlePlay": {
+    "appId": "4973851578570693264",
+    "track": "internal",
+    "trackId": "4701689887089077061",
+    "release": "1.0.0 (1) — internal",
+    "publishedToInternal": true,
+    "testersEligible": 1,
+    "testersOptedInNotVerified": true,
+    "inviteUrl": "https://play.google.com/apps/internaltest/4701689887089077061",
+    "publicReviewSubmitted": false,
+    "requiredClosedTest": {
+      "minimumTesters": 12,
+      "consecutiveDays": 14,
+      "started": false
+    },
+    "warning": "Native debug symbols for prebuilt SDK libraries not supplied; Java ReTrace mapping attached.",
+    "appSigningCertificateSha256": "F7:53:85:3A:89:27:64:DF:99:BD:FE:23:06:A8:01:F1:68:13:3F:F5:E1:F0:92:B3:EC:3A:AA:05:C6:1A:C5:04",
+    "storeListingDraftLanguages": [
+      "ru-RU",
+      "en-US",
+      "ky-KG"
+    ],
+    "storeIconUploaded": true,
+    "defaultFeatureGraphicUploaded": true,
+    "nativeScreenshotsUploaded": false
+  },
+  "webDeployment": false,
+  "privateKeyCommitted": false,
+  "customerProductionDatabaseWrites": 0
+}

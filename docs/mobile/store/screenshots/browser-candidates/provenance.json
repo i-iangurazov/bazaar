@@ -1,0 +1,128 @@
+{
+  "date": "2026-11-03",
+  "source": "local production Next build, synthetic isolated preview database on 55461",
+  "nativeRuntime": false,
+  "storeSubmissionReady": false,
+  "evidence": [
+    {
+      "device": "phone",
+      "path": "/dashboard",
+      "url": "http://localhost:3146/dashboard",
+      "file": "phone-02-dashboard.png",
+      "width": 1242,
+      "height": 2688,
+      "body": "Перейти к содержимому\n\nBAZAAR\n\nГлавная\n\n2\nГлавная\nКасса\nТовары\nПродажи\nЕщё\nОбзор бизнеса\n\nГлавное по",
+      "errors": []
+    },
+    {
+      "device": "phone",
+      "path": "/products",
+      "url": "http://localhost:3146/products?list=1&storeId=&q=&page=1&pageSize=25&sortBy=updatedAt&sortDirection=desc&view=table&category=&type=all&readiness=all&archived=false",
+      "file": "phone-03-products.png",
+      "width": 1242,
+      "height": 2688,
+      "body": "Перейти к содержимому\n\nBAZAAR\n\nТовары\n\n2\nГлавная\nКасса\nТовары\nПродажи\nЕщё\nТовары\n\nАктивный каталог о",
+      "errors": []
+    },
+    {
+      "device": "phone",
+      "path": "/inventory",
+      "url": "http://localhost:3146/inventory?list=1&storeId=cmw08xks10004i0w5ulsfzet4&q=&page=1&pageSize=25&sortBy=product&sortDirection=asc&view=table&stockFilter=all&planning=false",
+      "file": "phone-04-inventory.png",
+      "width": 1242,
+      "height": 2688,
+      "body": "Перейти к содержимому\n\nBAZAAR\n\nЗапасы\n\n2\nГлавная\nКасса\nТовары\nПродажи\nЕщё\nЗапасы\n\nПоиск и корректиро",
+      "errors": []
+    },
+    {
+      "device": "phone",
+      "path": "/sales/orders",
+      "url": "http://localhost:3146/sales/orders",
+      "file": "phone-05-orders.png",
+      "width": 1242,
+      "height": 2688,
+      "body": "Перейти к содержимому\n\nBAZAAR\n\nПродажи\n\nГлавная\nКасса\nТовары\nПродажи\nЕщё\nЗаказы\nКлиенты\nЗаказы клиен",
+      "errors": []
+    },
+    {
+      "device": "phone",
+      "path": "/reports",
+      "url": "http://localhost:3146/reports",
+      "file": "phone-06-reports.png",
+      "width": 1242,
+      "height": 2688,
+      "body": "Перейти к содержимому\n\nBAZAAR\n\nОтчеты\n\nГлавная\nКасса\nТовары\nПродажи\nЕщё\nЦентр отчётности\n\nUI QA · Ба",
+      "errors": []
+    },
+    {
+      "device": "phone",
+      "path": "/help",
+      "url": "http://localhost:3146/help",
+      "file": "phone-07-guide.png",
+      "width": 1242,
+      "height": 2688,
+      "body": "BAZAAR\nGuide\nRU\nKG\nEN\nBAZAAR GUIDE\nКак вам помочь?\n\nКороткие визуальные инструкции для кассы, товаро",
+      "errors": []
+    },
+    {
+      "device": "tablet",
+      "path": "/dashboard",
+      "url": "http://localhost:3146/dashboard",
+      "file": "tablet-02-dashboard.png",
+      "width": 2048,
+      "height": 2732,
+      "body": "Перейти к содержимому\nБыстрые действия\nОсновное\nПанель\nКасса\nТовары\nЗапасы\nОбзор\nДвижение товаров\nОп",
+      "errors": []
+    },
+    {
+      "device": "tablet",
+      "path": "/products",
+      "url": "http://localhost:3146/products?list=1&storeId=&q=&page=1&pageSize=25&sortBy=updatedAt&sortDirection=desc&view=table&category=&type=all&readiness=all&archived=false",
+      "file": "tablet-03-products.png",
+      "width": 2048,
+      "height": 2732,
+      "body": "Перейти к содержимому\nБыстрые действия\nОсновное\nПанель\nКасса\nТовары\nЗапасы\nОбзор\nДвижение товаров\nОп",
+      "errors": []
+    },
+    {
+      "device": "tablet",
+      "path": "/inventory",
+      "url": "http://localhost:3146/inventory?list=1&storeId=cmw08xks10004i0w5ulsfzet4&q=&page=1&pageSize=25&sortBy=product&sortDirection=asc&view=table&stockFilter=all&planning=false",
+      "file": "tablet-04-inventory.png",
+      "width": 2048,
+      "height": 2732,
+      "body": "Перейти к содержимому\nБыстрые действия\nОсновное\nПанель\nКасса\nТовары\nЗапасы\nОбзор\nДвижение товаров\nОп",
+      "errors": []
+    },
+    {
+      "device": "tablet",
+      "path": "/sales/orders",
+      "url": "http://localhost:3146/sales/orders",
+      "file": "tablet-05-orders.png",
+      "width": 2048,
+      "height": 2732,
+      "body": "Перейти к содержимому\nБыстрые действия\nОсновное\nПанель\nКасса\nТовары\nЗапасы\nОбзор\nДвижение товаров\nОп",
+      "errors": []
+    },
+    {
+      "device": "tablet",
+      "path": "/reports",
+      "url": "http://localhost:3146/reports",
+      "file": "tablet-06-reports.png",
+      "width": 2048,
+      "height": 2732,
+      "body": "Перейти к содержимому\nБыстрые действия\nОтчеты\nBAAM\nОтчеты\nМетрики\nAdmin User\nАдминистратор\nНастроить",
+      "errors": []
+    },
+    {
+      "device": "tablet",
+      "path": "/help",
+      "url": "http://localhost:3146/help",
+      "file": "tablet-07-guide.png",
+      "width": 2048,
+      "height": 2732,
+      "body": "BAZAAR\nGuide\nRU\nKG\nEN\nВойти в Bazaar\nBAZAAR GUIDE\nКак вам помочь?\n\nКороткие визуальные инструкции дл",
+      "errors": []
+    }
+  ]
+}

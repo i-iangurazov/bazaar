@@ -1,0 +1,83 @@
+name: Mobile build rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version (x.y.z)
+        default: '1.0.0'
+        required: true
+      build:
+        description: Unused positive build number
+        default: '1'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MOBILE_APP_VERSION: ${{ inputs.version }}
+      MOBILE_BUILD_NUMBER: ${{ inputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm mobile:test
+      - run: pnpm mobile:release android unsigned
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-unsigned-rehearsal
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/mapping/release/
+            android/app/build/reports/lint-results-release.*
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      MOBILE_APP_VERSION: ${{ inputs.version }}
+      MOBILE_BUILD_NUMBER: ${{ inputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Select an installed Xcode with the required SDK
+        run: |
+          selected=''
+          for app in /Applications/Xcode*.app; do
+            sdk=$(DEVELOPER_DIR="$app/Contents/Developer" xcrun --sdk iphoneos --show-sdk-version 2>/dev/null || true)
+            major=${sdk%%.*}
+            if [[ "$major" =~ ^[0-9]+$ ]] && (( major >= 26 )); then
+              selected="$app/Contents/Developer"
+            fi
+          done
+          test -n "$selected" || { echo 'iOS SDK 26+ required'; exit 1; }
+          echo "DEVELOPER_DIR=$selected" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm mobile:release ios unsigned
+      - name: Preserve archive as a single file
+        run: tar -czf ios-unsigned-archive.tar.gz artifacts/mobile-release-*/Bazaar-unsigned.xcarchive
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-rehearsal
+          path: ios-unsigned-archive.tar.gz

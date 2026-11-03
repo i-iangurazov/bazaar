@@ -39,3 +39,7 @@ BAZAAR_ANDROID_KEY_PASSWORD
 Add the release certificate SHA-256 fingerprint to `ANDROID_APP_LINK_SHA256_FINGERPRINTS` on the server. Multiple fingerprints are comma-separated. Add Firebase's `google-services.json` only in the protected build workspace; it is ignored by Git.
 
 Before Play upload, verify the AAB signature, Play App Signing identity, `https://www.bazaar.kg/.well-known/assetlinks.json`, camera-on-demand, notification rationale, links, offline mutation denial, and the POS regression matrix.
+
+`pnpm mobile:release android unsigned` explicitly rehearses without an upload identity. `pnpm mobile:release android signed` requires all four protected signing settings and verifies the AAB signature. Both run release lint. Set `MOBILE_APP_VERSION` and `MOBILE_BUILD_NUMBER` for consistent iOS/Android versions; legacy Android overrides must match. The debug APK is a development build. The release AAB remains unsigned unless a protected upload identity is supplied.
+
+See [store handoff](store/REVIEW_HANDOFF.md) for account, privacy, billing, device and upload gates.

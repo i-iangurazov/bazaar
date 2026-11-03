@@ -56,7 +56,9 @@
     "dev:stabilization": "NODE_OPTIONS=--max-old-space-size=8192 node --import tsx scripts/stabilization/dev.ts",
     "test:reports": "node --import tsx scripts/reporting/run.ts",
     "test:ux": "node --import tsx scripts/ux/run.ts",
-    "test:browser:print-navigation": "node --import tsx scripts/qa/print-and-command-panel.tsx"
+    "test:browser:print-navigation": "node --import tsx scripts/qa/print-and-command-panel.tsx",
+    "mobile:release": "node --import tsx scripts/mobile/release.ts",
+    "mobile:store-assets": "node --import tsx scripts/mobile/store-assets.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.985.0",

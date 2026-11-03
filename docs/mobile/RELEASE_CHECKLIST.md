@@ -1,11 +1,21 @@
 # Native release checklist
 
+Preparation evidence: [2026-11-03 release status](RELEASE_STATUS_20261103.md).
+Store copy, privacy/billing gates and signing handoff: [store/REVIEW_HANDOFF.md](store/REVIEW_HANDOFF.md).
+Until approval: [PWA installation](INSTALL_BEFORE_STORE_REVIEW.md).
+
+Unchecked device/store gates remain required even when automated builds pass.
+
 ## Shared gate
 
-- [ ] Exact `main` SHA recorded; web typecheck, lint, i18n, tests, build and diff-check pass.
+- [ ] Exact source SHA and uncommitted changes recorded (current work is on `main` by explicit human instruction); web typecheck, lint, i18n, tests, build and diff-check pass.
 - [ ] Additive migrations applied with `prisma migrate deploy`; no pending migrations and no `db push`.
 - [ ] Production, Preview and development mobile base URLs validated.
 - [ ] Native bundle scan contains no DB/Redis/provider/auth/signing secrets.
+- [ ] Account creation/deletion and public deletion-request URL verified.
+- [ ] Seller, App Privacy/Data safety, retention and subscription billing treatment confirmed.
+- [ ] Review demo account/contact and content/age declarations completed.
+- [ ] iOS required-reason manifest is included in the compiled archive.
 - [ ] Web, PWA, desktop POS and mobile browser POS smoke pass.
 - [ ] Login/logout/restart/user switch, org/store/register context and expired session pass.
 - [ ] Offline/reconnect cannot report a failed server mutation as successful.
@@ -35,5 +45,5 @@
 - Short description: **POS, товары, остатки, заказы и аналитика — одна система для магазина.**
 - Support: `https://www.bazaar.kg/help`
 - Privacy: `https://www.bazaar.kg/privacy`
-- Release notes template: **Bazaar для iOS и Android: мобильная касса, сканирование штрихкодов, безопасные уведомления, ссылки и системный обмен документами.**
-- Required screenshots: login, dashboard, mobile POS/catalog, scanner permission/context, split payment, held receipt, products, receiving, orders, reports, Bazaar Guide.
+- Release notes template: **Bazaar для iOS и Android: товары, продажи, складские операции и отчёты.**
+- Screenshot capture matrix: login, dashboard, mobile POS/catalog, scanner permission/context, split payment, held receipt, products, receiving, orders, reports, Bazaar Guide. Select the allowed number per store/device class; capture real native UI with synthetic data and preserve provenance. Current browser candidates do not complete native-device verification.
