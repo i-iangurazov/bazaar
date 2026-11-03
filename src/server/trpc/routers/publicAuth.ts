@@ -40,9 +40,15 @@ export const publicAuthRouter = router({
   requestAccess: publicProcedure
     .use(rateLimit({ windowMs: 60_000, max: 5, prefix: "access-request" }))
     .input(z.object({ email: emailSchema, orgName: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
-        return await requestAccess({ email: input.email, orgName: input.orgName });
+        const request = await requestAccess({
+          email: input.email,
+          orgName: input.orgName,
+          attribution: ctx.acquisition,
+        });
+        // Only acknowledgement is public; never return an existing lead's data.
+        return { sent: Boolean(request.id) };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -66,6 +72,7 @@ export const publicAuthRouter = router({
           name: input.name,
           preferredLocale: input.preferredLocale,
           requestId: ctx.requestId,
+          attribution: ctx.acquisition,
         });
       } catch (error) {
         throw toTRPCError(error);

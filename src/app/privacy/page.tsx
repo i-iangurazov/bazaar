@@ -12,7 +12,15 @@ export const generateMetadata = async (): Promise<Metadata> => {
   };
 };
 
-const sections = ["data", "purpose", "permissions", "security", "sharing", "control"] as const;
+const sections = [
+  "data",
+  "purpose",
+  "acquisition",
+  "permissions",
+  "security",
+  "sharing",
+  "control",
+] as const;
 
 const PrivacyPage = async () => {
   const t = await getTranslations("privacy");
@@ -44,7 +52,9 @@ const PrivacyPage = async () => {
         <section className="mt-12 rounded-lg border border-border bg-card p-6">
           <h2 className="text-xl font-semibold">{t("supportTitle")}</h2>
           <p className="mt-2 leading-7 text-muted-foreground">{t("supportBody")}</p>
-          <Button asChild className="mt-4 min-h-11 px-5"><Link href="/help">{t("supportAction")}</Link></Button>
+          <Button asChild className="mt-4 min-h-11 px-5">
+            <Link href="/help">{t("supportAction")}</Link>
+          </Button>
         </section>
       </article>
     </main>

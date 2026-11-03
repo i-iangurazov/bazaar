@@ -705,6 +705,7 @@ model User {
   role            Role
   isOrgOwner      Boolean         @default(false)
   preferredLocale String          @default("ru")
+  signupAttribution Json?
   themePreference ThemePreference @default(LIGHT)
   isActive        Boolean         @default(true)
   emailVerifiedAt DateTime?
@@ -3389,6 +3390,7 @@ model AccessRequest {
   organizationId String?
   email          String
   orgName        String?
+  signupAttribution Json?
   createdAt      DateTime @default(now())
 
   organization Organization? @relation(fields: [organizationId], references: [id])

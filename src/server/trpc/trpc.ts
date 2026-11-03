@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import superjson from "superjson";
+import { acquisitionCookieName, parseAcquisition, type Acquisition } from "@/lib/acquisition";
 
 import { prisma } from "@/server/db/prisma";
 import { assertStartupConfigured } from "@/server/config/startupChecks";
@@ -58,14 +59,14 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
   const cookies = parseCookies(cookieHeader);
   const token = await getAuthTokenFromCookieHeader(cookieHeader);
   const user = token
-      ? {
-          id: token.sub ?? "",
-          email: token.email ?? "",
-          role: token.role as Role,
-          organizationId: token.organizationId as string,
-          isPlatformOwner: Boolean(token.isPlatformOwner),
-          isOrgOwner: Boolean(token.isOrgOwner),
-        }
+    ? {
+        id: token.sub ?? "",
+        email: token.email ?? "",
+        role: token.role as Role,
+        organizationId: token.organizationId as string,
+        isPlatformOwner: Boolean(token.isPlatformOwner),
+        isOrgOwner: Boolean(token.isOrgOwner),
+      }
     : null;
 
   let impersonation: ImpersonationContext | null = null;
@@ -109,10 +110,16 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
     ip,
     requestId,
     logger: getLogger(requestId),
+    acquisition:
+      req.headers.get("dnt") === "1" || req.headers.get("sec-gpc") === "1"
+        ? undefined
+        : parseAcquisition(cookies.get(acquisitionCookieName)),
   };
 };
 
-export type Context = Awaited<ReturnType<typeof createContext>>;
+export type Context = Omit<Awaited<ReturnType<typeof createContext>>, "acquisition"> & {
+  acquisition?: Acquisition;
+};
 
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
@@ -175,7 +182,8 @@ const withTiming = t.middleware(async ({ path, type, ctx, input, next }) => {
 
 export const rateLimit = (config: RateLimitConfig) => {
   return t.middleware(async ({ ctx, next, path }) => {
-    const isTest = process.env.NODE_ENV === "test" || process.env.CI === "1" || process.env.CI === "true";
+    const isTest =
+      process.env.NODE_ENV === "test" || process.env.CI === "1" || process.env.CI === "true";
     if (isTest) {
       return next();
     }
@@ -241,7 +249,9 @@ const baseProcedure = t.procedure.use(withTiming);
 export const router = t.router;
 export const publicProcedure = baseProcedure;
 export const protectedProcedure = baseProcedure.use(isAuthed).use(ensureActivePlan);
-export const managerProcedure = baseProcedure.use(hasRole([Role.ADMIN, Role.MANAGER])).use(ensureActivePlan);
+export const managerProcedure = baseProcedure
+  .use(hasRole([Role.ADMIN, Role.MANAGER]))
+  .use(ensureActivePlan);
 export const adminProcedure = baseProcedure.use(hasRole([Role.ADMIN])).use(ensureActivePlan);
 export const cashierProcedure = baseProcedure
   .use(hasRole([Role.ADMIN, Role.MANAGER, Role.STAFF, Role.CASHIER]))

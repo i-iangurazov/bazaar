@@ -12,6 +12,9 @@ import { assertWithinLimits } from "@/server/services/planLimits";
 import { isEmailVerificationRequired } from "@/server/config/auth";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { selfServeSignupEnabled } from "@/server/billing/paymentConfig";
+import { parseAcquisition, type Acquisition } from "@/lib/acquisition";
+
+const validatedAttribution = (value?: Acquisition) => parseAcquisition(JSON.stringify(value));
 
 const DEFAULT_TRIAL_DAYS = Number(process.env.TRIAL_DAYS ?? "14");
 
@@ -36,6 +39,7 @@ const ensureSignupOpen = () => {
 export const requestAccess = async (input: {
   email: string;
   orgName?: string | null;
+  attribution?: Acquisition;
 }) => {
   const existing = await prisma.accessRequest.findFirst({
     where: { email: input.email },
@@ -47,6 +51,7 @@ export const requestAccess = async (input: {
     data: {
       email: input.email,
       orgName: input.orgName ?? null,
+      signupAttribution: validatedAttribution(input.attribution),
     },
   });
 };
@@ -57,6 +62,7 @@ export const createSignup = async (input: {
   name: string;
   preferredLocale: string;
   requestId: string;
+  attribution?: Acquisition;
 }): Promise<{
   sent: boolean;
   nextPath?: string;
@@ -66,7 +72,11 @@ export const createSignup = async (input: {
   ensureSignupOpen();
   const verificationRequired = isEmailVerificationRequired();
 
-  const createRegistrationNextPath = async (userId: string, email: string, organizationId?: string | null) => {
+  const createRegistrationNextPath = async (
+    userId: string,
+    email: string,
+    organizationId?: string | null,
+  ) => {
     const registration = await createAuthToken({
       userId,
       email,
@@ -91,10 +101,17 @@ export const createSignup = async (input: {
 
     // Resuming onboarding must authenticate the existing identity. Registration
     // is never an alternate password-reset endpoint.
-    if (!existingUser.isActive || !(await bcrypt.compare(input.password, existingUser.passwordHash))) {
+    if (
+      !existingUser.isActive ||
+      !(await bcrypt.compare(input.password, existingUser.passwordHash))
+    ) {
       throw new AppError("accountAlreadyExists", "CONFLICT", 409);
     }
-    const nextPath = await createRegistrationNextPath(existingUser.id, existingUser.email, existingUser.organizationId);
+    const nextPath = await createRegistrationNextPath(
+      existingUser.id,
+      existingUser.email,
+      existingUser.organizationId,
+    );
     return { sent: true, nextPath };
   }
 
@@ -107,6 +124,7 @@ export const createSignup = async (input: {
       role: "ADMIN",
       passwordHash,
       preferredLocale: input.preferredLocale,
+      signupAttribution: validatedAttribution(input.attribution),
       emailVerifiedAt: verificationRequired ? null : new Date(),
     },
   });
@@ -167,7 +185,8 @@ export const registerBusinessFromToken = async (input: {
       }
       await assertWithinLimits({ organizationId, kind: "stores" });
     } else {
-      const trialDays = Number.isFinite(DEFAULT_TRIAL_DAYS) && DEFAULT_TRIAL_DAYS > 0 ? DEFAULT_TRIAL_DAYS : 14;
+      const trialDays =
+        Number.isFinite(DEFAULT_TRIAL_DAYS) && DEFAULT_TRIAL_DAYS > 0 ? DEFAULT_TRIAL_DAYS : 14;
       const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
       const createdOrg = await tx.organization.create({
         data: {
@@ -180,12 +199,14 @@ export const registerBusinessFromToken = async (input: {
         },
       });
       organizationId = createdOrg.id;
-      await tx.unit.createMany({ data: [
-        { code: "шт", labelRu: "шт", labelKg: "даана", quantityPrecision: 0 },
-        { code: "кг", labelRu: "кг", labelKg: "кг", quantityPrecision: 3 },
-        { code: "л", labelRu: "л", labelKg: "л", quantityPrecision: 3 },
-        { code: "м", labelRu: "м", labelKg: "м", quantityPrecision: 3 },
-      ].map(unit => ({ ...unit, organizationId: createdOrg.id })) });
+      await tx.unit.createMany({
+        data: [
+          { code: "шт", labelRu: "шт", labelKg: "даана", quantityPrecision: 0 },
+          { code: "кг", labelRu: "кг", labelKg: "кг", quantityPrecision: 3 },
+          { code: "л", labelRu: "л", labelKg: "л", quantityPrecision: 3 },
+          { code: "м", labelRu: "м", labelKg: "м", quantityPrecision: 3 },
+        ].map((unit) => ({ ...unit, organizationId: createdOrg.id })),
+      });
       await tx.user.update({
         where: { id: user.id },
         data: { organizationId, isOrgOwner: true },

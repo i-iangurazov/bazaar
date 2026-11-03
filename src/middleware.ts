@@ -8,6 +8,12 @@ import {
   type Locale,
 } from "./lib/locales";
 import { canAccessAppRoute, getRoleHomePath } from "./lib/roleAccess";
+import {
+  acquisitionCookieName,
+  acquisitionFromSearch,
+  acquisitionMaxAge,
+  parseAcquisition,
+} from "./lib/acquisition";
 
 const localeCookieOptions = {
   path: "/",
@@ -104,6 +110,27 @@ export const middleware = async (request: NextRequest) => {
   }
 
   const response = NextResponse.next();
+  // First tagged visit wins for 30 days. Never track private app/catalog pages,
+  // prefetches or privacy opt-outs; capture happens before any signup navigation.
+  if (
+    (pathname === "/" || pathname === "/signup") &&
+    !request.headers.has("next-router-prefetch") &&
+    request.headers.get("purpose") !== "prefetch"
+  ) {
+    if (request.headers.get("dnt") === "1" || request.headers.get("sec-gpc") === "1") {
+      response.cookies.delete(acquisitionCookieName);
+    } else if (!parseAcquisition(request.cookies.get(acquisitionCookieName)?.value)) {
+      const acquisition = acquisitionFromSearch(request.nextUrl.searchParams);
+      if (acquisition)
+        response.cookies.set(acquisitionCookieName, JSON.stringify(acquisition), {
+          path: "/",
+          maxAge: acquisitionMaxAge,
+          httpOnly: true,
+          sameSite: "lax",
+          secure: request.nextUrl.protocol === "https:",
+        });
+    }
+  }
   const resolvedLocale = resolveLocale(request);
   const existingLocale = request.cookies.get("NEXT_LOCALE")?.value;
   if (existingLocale !== resolvedLocale) {
