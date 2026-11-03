@@ -95,6 +95,13 @@ async function readyList(page: Page) {
     "List did not finish loading",
   );
 }
+async function searchProducts(page: Page, value: string) {
+  await page.locator("#products-search").fill(value);
+  // Typing updates a local draft first. Wait for the committed URL and list,
+  // rather than reloading while the intentional debounce is still pending.
+  await page.waitForURL((url) => url.searchParams.get("q") === value);
+  await readyList(page);
+}
 async function clearOfBaam(page: Page, action: Locator) {
   await until(async () => {
     const button = await action.boundingBox();
@@ -200,7 +207,7 @@ try {
     async () => new URL(dashboard.url()).searchParams.get("readiness") === "all",
     "Deep-linked filter could not be cleared",
   );
-  await dashboard.locator("#products-search").fill(f.products[0].sku);
+  await searchProducts(dashboard, f.products[0].sku);
   await stockCell(dashboard).waitFor();
   const canonical = new URL(dashboard.url()).search;
   // The live router must see the filter before a document reload. Otherwise
@@ -225,7 +232,7 @@ try {
   await stockCell(dashboard).waitFor();
   assert.equal(new URL(dashboard.url()).search, canonical);
   record("Search/store survive reload, same-tab edit and browser Back");
-  await dashboard.locator("#products-search").fill("nothing-matches-ux-1974");
+  await searchProducts(dashboard, "nothing-matches-ux-1974");
   await dashboard.getByText("По этим условиям ничего не найдено", { exact: true }).waitFor();
   await dashboard.screenshot({ path: `${directory}/filtered-empty.png` });
   assert.equal(
@@ -261,7 +268,7 @@ try {
     async () => (await selection.getAttribute("data-count")) === String(matching.length),
     "All-result selection ignored readiness",
   );
-  await dashboard.locator("#products-search").fill("nothing-matches-selection");
+  await searchProducts(dashboard, "nothing-matches-selection");
   await selection.waitFor({ state: "hidden" });
   await dashboard.goto(`${base}/products?storeId=${f.storeId}&readiness=missingPrice&pageSize=1`);
   await readyList(dashboard);
@@ -280,7 +287,7 @@ try {
     .check();
   await selection.getByRole("button", { name: /Выбрать все/ }).click();
   await until(async () => selectionRequested, "Select-all request did not start");
-  await dashboard.locator("#products-search").fill("nothing-matches-selection");
+  await searchProducts(dashboard, "nothing-matches-selection");
   releaseSelection();
   await dashboard.waitForTimeout(700);
   assert.equal(await selection.count(), 0, "Late selection response restored hidden records");
@@ -290,7 +297,7 @@ try {
   record(
     "Bulk selection is limited to filtered results and late responses cannot select hidden records",
   );
-  await dashboard.locator("#products-search").fill(f.products[0].sku);
+  await searchProducts(dashboard, f.products[0].sku);
   await stockCell(dashboard).waitFor();
   const initial = await stock(admin);
   await stockCell(dashboard).focus();
