@@ -3389,6 +3389,8 @@
     "transferProductUnavailableSource": "Product is unavailable in the selected source store.",
     "transferProductUnavailableDestination": "Product will be assigned to the destination store during transfer.",
     "transferAdded": "Added",
+    "lineDetailsLoadError": "Could not refresh product photos and identifiers. Your inputs have not changed.",
+    "lineDetailsRetry": "Retry loading",
     "transferTableTitle": "Transfer lines",
     "transferSourceStock": "Source stock",
     "transferDestinationStock": "Destination stock",

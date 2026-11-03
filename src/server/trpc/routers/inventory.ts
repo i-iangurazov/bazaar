@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   adminProcedure,
   managerProcedure,
+  managerReadProcedure,
   protectedProcedure,
   rateLimit,
   router,
@@ -52,6 +53,7 @@ import { getTransferLineContext } from "@/server/services/transferLineContext";
 import { AppError } from "@/server/services/errors";
 import { getProductStockCandidates } from "@/server/services/productStockIdentity";
 import { reconcileTransferAttempt } from "@/server/services/transferRecovery";
+import { getInventoryProductPresentation } from "@/server/services/inventoryProductPresentation";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
 const inventorySortKeySchema = z.enum([
@@ -1457,6 +1459,18 @@ export const inventoryRouter = router({
       } catch (error) {
         throw toTRPCError(error);
       }
+    }),
+
+  productPresentation: managerReadProcedure
+    .input(z.object({
+      storeId: z.string().min(1).max(191),
+      productIds: z.array(z.string().min(1).max(191)).min(1).max(500),
+      documentKey: z.string().min(1).max(300).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await getInventoryProductPresentation(ctx.prisma, ctx.user, input);
+      } catch (error) { throw toTRPCError(error); }
     }),
 
   transferLineContext: managerProcedure

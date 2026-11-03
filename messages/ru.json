@@ -3389,6 +3389,8 @@
     "transferProductUnavailableSource": "Товар недоступен в выбранном магазине-источнике.",
     "transferProductUnavailableDestination": "Товар будет назначен магазину-получателю при перемещении.",
     "transferAdded": "Добавлен",
+    "lineDetailsLoadError": "Не удалось обновить фотографии и реквизиты товаров. Введённые значения не изменены.",
+    "lineDetailsRetry": "Повторить загрузку",
     "transferTableTitle": "Товары к перемещению",
     "transferSourceStock": "Остаток источника",
     "transferDestinationStock": "Остаток получателя",
