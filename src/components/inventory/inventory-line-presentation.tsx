@@ -23,6 +23,7 @@ export function InventoryProductThumbnail({
         <img
           src={imageUrl}
           alt=""
+          loading="lazy"
           className="h-full w-full object-cover"
           decoding="async"
           onError={() => setFailedUrl(imageUrl)}
