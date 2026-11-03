@@ -77,7 +77,7 @@
       "publication": false
     }
   },
-  "fullTwoWeekPack": "18 complete native revision-3 drafts exist; none approved. Revision 4 is in progress: current fonts, varied industries and modules, exact plan names/limits, standalone real screens. Not final.",
+  "fullTwoWeekPack": "Revision 4: four saved carousels with 18 verified native PNGs; 24 Reel scenes, 42 Stories, 14 feed pages and one additional proof have native Canva previews. Remaining drafts require save approval and native file/video export. No full package approved for publication.",
   "promptSet": {
     "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
     "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
@@ -190,5 +190,35 @@
     "originalLogoOnNewStudioArtwork": "Native Canva image asset MAHZ2eLDa-o",
     "applicationPlacement": "Own clean page; no illustration underneath",
     "approvalScope": "Save carousel artwork, not complete campaign or publication"
+  },
+  "updated": "2026-11-04",
+  "revision4Current": {
+    "savedCarousels": [
+      {
+        "id": "p04",
+        "designId": "DAHZ38NQyrc",
+        "pages": 4
+      },
+      {
+        "id": "p02",
+        "designId": "DAHZ4AhYA_I",
+        "pages": 4
+      },
+      {
+        "id": "p09",
+        "designId": "DAHZ4LfpgUI",
+        "pages": 4
+      },
+      {
+        "id": "p11",
+        "designId": "DAHZ4IHrqnA",
+        "pages": 6
+      }
+    ],
+    "drafts": "revision4-draft-preview.json",
+    "sourcePrompts": "revision4-image-prompts.json",
+    "gridDesktop": "artifacts/instagram-canva-20261103/production/qa/current-grid-v4-proof.jpg",
+    "gridMobile": "artifacts/instagram-canva-20261103/production/qa/current-grid-v4-mobile.jpg",
+    "repeatableMethod": "Copy existing fixed-page design and replace specialist-generated images. Original logo stays a separate native asset. Current draft assembly validates this path; autofill is a separate plan-restricted capability."
   }
 }

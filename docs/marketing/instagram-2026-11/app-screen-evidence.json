@@ -299,12 +299,55 @@
       "bytes": 108858,
       "size": [1710, 929],
       "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stores-tape-stock-mobile.jpg",
+      "sha256": "1255069b97eb24a9c05b81e6d3006acb67be20f8ca2382178f748d9bc738c40a",
+      "bytes": 17498,
+      "size": [356, 532],
+      "purpose": "standalone_application_frame_selected"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/integration-api-mobile.jpg",
+      "sha256": "ce0b0bcfa234c051462973499f3e61c940c3528cb02675a56d562e9c723d9937",
+      "bytes": 9390,
+      "size": [358, 243],
+      "purpose": "standalone_application_frame_selected"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/integration-mmarket-mobile.jpg",
+      "sha256": "a983ac6376783e7dc1faf658a490b58982b3665223aac6bbcd29b1e1a7530829",
+      "bytes": 6556,
+      "size": [358, 171],
+      "purpose": "standalone_application_frame_selected"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/receiving-journal-mobile.jpg",
+      "sha256": "e057b8ca3baa6fe85c6b016f25854479338b525e056e8c8cf8897ff5d6592066",
+      "bytes": 15072,
+      "size": [324, 361],
+      "purpose": "standalone_application_frame_selected"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/transfer-recipient-stock-mobile.jpg",
+      "sha256": "bd311d138a7969cbb0516bd4a6372a44e8e58bff26721fa0ac398d2f0fe95283",
+      "bytes": 14803,
+      "size": [358, 387],
+      "purpose": "standalone_application_frame_selected"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/signup-form-mobile.jpg",
+      "sha256": "cb56c2dd4789e455a760450a40fede9521d0c3df69b66cd1c2e62953f6e05c8c",
+      "bytes": 12710,
+      "size": [358, 431],
+      "purpose": "standalone_application_frame_selected"
     }
   ],
   "nativeExportEvidence": [
     "artifacts/instagram-canva-20261103/production/feed-native-verification.json",
     "artifacts/instagram-canva-20261103/production/stories-series-verification.json",
-    "artifacts/instagram-canva-20261103/production/ad01-vertical-verification.json"
+    "artifacts/instagram-canva-20261103/production/ad01-vertical-verification.json",
+    "artifacts/instagram-canva-20261103/production/revision4/p11/verification.json"
   ],
   "notIncluded": "No customer data from the authenticated production dashboard is included in these screenshots.",
   "demoOperations": "artifacts/instagram-canva-20261103/demo-fixture.json",
@@ -312,6 +355,15 @@
     {
       "file": "catalog-shirt-mobile.jpg",
       "reason": "Fixed app navigation obscures the product card. Replaced with clean version 2 after viewport-boundary check."
+    },
+    {
+      "file": "app-screens/transfer-journal-mobile.jpg",
+      "reason": "Narrow journal card has overlapping long store/author text; use clean recipient detail instead."
+    },
+    {
+      "file": "app-screens/transfer-journal-mobile-v2.jpg",
+      "reason": "Narrow journal card has overlapping long store/author text; use clean recipient detail instead."
     }
-  ]
+  ],
+  "updated": "2026-11-04"
 }

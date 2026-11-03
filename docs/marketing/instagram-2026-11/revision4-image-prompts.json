@@ -9,7 +9,7 @@
       ],
       "prompt": "Specialist image edit for the BAZAAR Instagram campaign, 4:5 portrait. Keep the currently accepted clean dense geometric sans-serif letterforms, rounded confident shapes with no decorative strokes. Do not substitute any new typeface. Match the headline's visible capital height, weight, spacing and left alignment exactly to reference r05_ru_cover.png: two blue lines beginning at the same x and y, with the same apparent size. Keep generous margins, the blue-white studio light, and the diagonal blue cast shadow. Keep all Russian spelling exact. IMPORTANT: remove the entire logo/wordmark only from its current upper-left area, leaving clean light background there; the exact original BAZAAR logo will be placed separately in Canva. Do NOT generate any logo, brand text in the logo area, watermark, URL, CTA button, application screenshot, fake UI or third-party brand. The body text is dark navy, two lines in the existing supporting-text style. Change only the specified content and product scene. No collage. Edit target and type reference: attached r05_ru_cover.png. Preserve the headline EXACTLY: «На полке одно.\\nВ учёте другое?» Replace only the explanatory body with «Сверьте количество\\nв инвентаризации.» In the lower photographic scene, replace EVERY cosmetic jar and any towel with colorful stationery: a neat short stack of small A5 notebooks, one loose notebook nearby, a cup of yellow pencils and a small pack of pens on the same blue retail shelf/counter. Maintain realistic product materials and natural colors, no packaging lettering. Do not add hands or a screenshot. The lower scene must feel like a stationery shop and retain the accepted photo quality.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r05_ru_cover_v4.png",
-      "status": "Generated artwork; exact original logo placement and native export pending"
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
     },
     {
       "id": "r03_ru_cover_v4",
@@ -19,7 +19,7 @@
       ],
       "prompt": "Specialist image edit for the BAZAAR Instagram campaign, 4:5 portrait. Keep the currently accepted clean dense geometric sans-serif letterforms, rounded confident shapes with no decorative strokes. Do not substitute any new typeface. Match the headline's visible capital height, weight, spacing and left alignment exactly to reference r05_ru_cover.png: two blue lines beginning at the same x and y, with the same apparent size. Keep generous margins, the blue-white studio light, and the diagonal blue cast shadow. Keep all Russian spelling exact. IMPORTANT: remove the entire logo/wordmark only from its current upper-left area, leaving clean light background there; the exact original BAZAAR logo will be placed separately in Canva. Do NOT generate any logo, brand text in the logo area, watermark, URL, CTA button, application screenshot, fake UI or third-party brand. The body text is dark navy, two lines in the existing supporting-text style. Change only the specified content and product scene. No collage. Image 1 r03_ru_cover.png is the edit target; image 2 r05_ru_cover.png is only the exact headline-letterform/weight/size reference. Exact headline: «Приехала\\nновая поставка?» Exact body: «Товары, количество\\nи себестоимость.» In the lower scene replace all pump bottles, cosmetic pots, towels and laundry basket with a fresh delivery of phone accessories: one open cardboard carton holding several neatly coiled white USB-C cables in unbranded small sleeves, one black charging cable visible on the blue counter and a few simple small accessory boxes. The carton is one purposeful delivery example, with no skincare products. Photorealistic clean blue-white retail still life, natural cardboard, white and black cable materials. No application screen.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r03_ru_cover_v4.png",
-      "status": "Generated artwork; exact original logo placement and native export pending"
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
     },
     {
       "id": "p09_ru_cover_v4",
@@ -77,7 +77,7 @@
       ],
       "prompt": "Image 1 is the edit target; image 2 gives the already accepted headline size/weight. Targeted correction only. The blue «Новичок» heading is too large. Reduce ONLY that blue heading to exactly 70 percent of its present linear size, preserving its same letterforms and weight proportions, and put its top-left at x108 y237 on the existing 1122×1402 canvas. Its capital height should be about 66px, matching image 2 at equal canvas width. Do NOT scale up a single-line title to fill space. Keep all dark quota and feature text, spelling, values, placements, background and empty upper logo region exactly unchanged. Do not add any icon, decoration, logo, UI or illustration. Leave the rest of the page alone.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/p11_ru_novichok_type2_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "saved_in_native_p11_exported_and_owner_save_approved"
     },
     {
       "id": "r01_ru_cover_v4",
@@ -87,7 +87,7 @@
       ],
       "prompt": "Use the accepted r05_ru_cover.png letterforms, exact visible headline weight and scale. Do not substitute a typeface. 4:5 portrait; same blue-white photographic brand composition, margins and two-level Russian type hierarchy. Main headline capitals must visually match the reference at equal canvas width, rather than being enlarged to fit the word length. Leave the original logo region upper-left clean and blank for the original BAZAAR logo to be inserted in Canva. No new logo, no CTA button, no website, no watermark, no fake application UI, no screenshot and no repeated skincare pots, pump bottles, towels or laundry basket. Exact text only. Image 1 is the edit target, image 2 only the exact headline style/size reference. Replace the headline with «От товара\\nдо чека» in two blue lines. Exact supporting text «Поиск, цена и текущий чек —\\nв кассе BAZAAR.» The existing headline is too heavy: match the r05 reference weight without changing family. Replace the entire lower cosmetics/laundry scene with a grocery checkout still life: one bag of ground coffee, a small tea carton, one chocolate bar in an unbranded wrapper and a compact handheld barcode scanner on the blue counter. Realistic natural product materials and varied packaging colors, all without legible brands. No cash, card numbers or app display.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r01_ru_cover_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
     },
     {
       "id": "r08_ru_cover_v4",
@@ -97,7 +97,7 @@
       ],
       "prompt": "Use the accepted r05_ru_cover.png letterforms, exact visible headline weight and scale. Do not substitute a typeface. 4:5 portrait; same blue-white photographic brand composition, margins and two-level Russian type hierarchy. Main headline capitals must visually match the reference at equal canvas width, rather than being enlarged to fit the word length. Leave the original logo region upper-left clean and blank for the original BAZAAR logo to be inserted in Canva. No new logo, no CTA button, no website, no watermark, no fake application UI, no screenshot and no repeated skincare pots, pump bottles, towels or laundry basket. Exact text only. Image 1 is the edit target, image 2 the type reference. Exact main heading «Где есть\\nнужный товар?» Exact supporting text «Проверьте остаток\\nв нужном магазине.» Replace all skincare jars, bottles, towels and white retail cupboards with a hardware-shop scene: two clearly separate blue retail storage bins holding a yellow-and-black tape measure, a screwdriver and small boxes of metal fasteners. Natural tool colors, photoreal materials, blue-white light and calm intentional composition. Do not label the bins, draw arrows, add screens or show fake stock counts.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r08_ru_cover_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
     },
     {
       "id": "r10_ru_cover_v4",
@@ -107,7 +107,7 @@
       ],
       "prompt": "Use the accepted r05_ru_cover.png letterforms, exact visible headline weight and scale. Do not substitute a typeface. 4:5 portrait; same blue-white photographic brand composition, margins and two-level Russian type hierarchy. Main headline capitals must visually match the reference at equal canvas width, rather than being enlarged to fit the word length. Leave the original logo region upper-left clean and blank for the original BAZAAR logo to be inserted in Canva. No new logo, no CTA button, no website, no watermark, no fake application UI, no screenshot and no repeated skincare pots, pump bottles, towels or laundry basket. Exact text only. Image 1 is the edit target, image 2 the type reference. Exact main headline «Что показали\\nпродажи?» Exact supporting text «Выручка, себестоимость\\nи валовая прибыль.» Remove every English tariff code and replace the ENTIRE lower towel/cosmetic/notebook still life with a bookshop: a short varied stack of real books, one open book and a small plain sales receipt on the blue counter. Different muted red, yellow, navy and cream book covers without readable titles; clear paper texture, natural soft shadow. This is a bookshop photograph, with no graphs, invented numbers, phone, laptop or application screenshot. Actual analytics is shown on separate scenes.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r10_ru_cover_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
     },
     {
       "id": "p11_ru_biznesmen_type2_v4",
@@ -135,7 +135,7 @@
       ],
       "prompt": "Image 1 is the edit target. Image 2 is the exact accepted headline letterform/weight/scale reference. Preserve that clean dense sans-serif, large blue two-line title and dark navy two-line body, with the same visible scale and margins. Do not substitute another font. 4:5 portrait, light blue-white studio photograph and soft diagonal shadow. Remove the upper-left logo only and leave the region blank: the original BAZAAR logo will be placed in Canva. No CTA button, website, watermark, app UI or invented interface. Remove every cosmetic bottle, jar, towel and laundry basket; keep only the specified retail subject. Main blue headline exactly «Тариф под\\nваш магазин». Its current scale is slightly larger than reference 2: match reference 2's capital height and weight, preserving its good letterforms. Supporting text exactly «Магазины, товары,\\nпользователи и модули.» Preserve the three beautiful white, pale-blue and royal-blue shopping bags in the lower composition. Remove all the surrounding skincare/laundry props, leaving a calm blue retail counter, real paper textures, rope handles and the three bags in different sizes. Do not add new objects or labels.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/p11_ru_cover_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "saved_in_native_p11_exported_and_owner_save_approved"
     },
     {
       "id": "p11_ru_end_v4",
@@ -145,7 +145,7 @@
       ],
       "prompt": "Image 1 is the edit target. Image 2 is the exact accepted headline letterform/weight/scale reference. Preserve that clean dense sans-serif, large blue two-line title and dark navy two-line body, with the same visible scale and margins. Do not substitute another font. 4:5 portrait, light blue-white studio photograph and soft diagonal shadow. Remove the upper-left logo only and leave the region blank: the original BAZAAR logo will be placed in Canva. No CTA button, website, watermark, app UI or invented interface. Remove every cosmetic bottle, jar, towel and laundry basket; keep only the specified retail subject. Completely replace the old English tariff heading with the blue two-line text «Подберём\\nпод вашу задачу». Same headline size, weight and letterforms as reference 2, not the oversized English heading. Supporting text exactly «Напишите «ТАРИФ»\\nв Direct.» Preserve the lower arrangement of the three blue-white shopping bags, with one larger blue bag forward. Remove every pump bottle, towel and laundry basket from the scene; use calm empty blue-white retail background around the bags. No screenshot, invented feature, price or additional slogan.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/p11_ru_end_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "saved_in_native_p11_exported_and_owner_save_approved"
     },
     {
       "id": "p11_ru_questions_v4",
@@ -155,7 +155,7 @@
       ],
       "prompt": "Create a clean 4:5 BAZAAR information slide that uses image 1's EXACT current sans-serif letterforms, blue headline weight and capital height. Image 2 is the matching clean tariff-series background and dark body type reference. Two-line main headline exactly «Что важно\\nдля выбора?» at the same left margin and title position as image 1; no word-dependent font enlargement. Below, four readable separate dark-navy lines in the established supporting type: «Сколько магазинов?» / «Сколько товаров?» / «Сколько сотрудников?» / «Какие нужны модули?» Generous consistent spacing, clear hierarchy and calm blue-white background. Leave the upper-left original-logo region empty. No picture, icons, buttons, UI, screenshot, footer URL, price, tiny footnotes or other words. This is a simple readable qualification slide, not a screenshot or fake app form.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/p11_ru_questions_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "saved_in_native_p11_exported_and_owner_save_approved"
     },
     {
       "id": "p11_ru_biznesmen_copyfix_v4",
@@ -164,7 +164,7 @@
       ],
       "prompt": "Targeted copy edit only to the supplied BAZAAR tariff slide. In the first line of the bottom feature block, replace exactly «Всё из «Новичок»» with «Всё из тарифа «Новичок»». Insert the single word «тарифа» so the Russian phrase is grammatical. Keep exactly the same current dark font family, size, weight, baseline and left alignment; the longer line fits the existing width. Preserve all other words, all quotas, the blue «Бизнесмен» title with its current size and weight, all spacing, background and empty logo region. Add no logo, icon, UI, picture, button, website or other changes. Same 4:5 canvas.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/p11_ru_biznesmen_copyfix_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "saved_in_native_p11_exported_and_owner_save_approved"
     },
     {
       "id": "p11_ru_monopolist_copyfix_v4",
@@ -173,7 +173,7 @@
       ],
       "prompt": "Targeted copy edit only to the supplied BAZAAR tariff slide. In the first line of the bottom feature block, replace exactly «Всё из «Бизнесмен»» with «Всё из тарифа «Бизнесмен»». Insert only «тарифа» for grammatical Russian. Keep the same current dark font family, size, weight, baseline and left margin; the line can use the available width. Preserve every other word and number, the blue «Монополист» title's exact size/weight, background and layout. Leave the logo area blank. Do not add icons, logo, picture, app UI, button, footer, price or new words. Same 4:5 canvas.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/p11_ru_monopolist_copyfix_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "saved_in_native_p11_exported_and_owner_save_approved"
     },
     {
       "id": "r12_ru_cover_v4",
@@ -192,7 +192,147 @@
       ],
       "prompt": "Edit the supplied BAZAAR grocery-checkout card. Preserve the photograph, current font letterforms, headline size/weight, margins, lighting, background and empty logo area exactly. Replace ONLY the text: blue headline «Покажем\\nработу кассы»; dark supporting line «Напишите «КАССА»\\nв Direct.» Keep the same two-line title and body hierarchy. No button, URL, logo, app screenshot, new props or other changes. Same 4:5 portrait.",
       "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r01_ru_end_v4.png",
-      "status": "generated_native_logo_and_visual_QA_pending"
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "r03_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r03_ru_cover_v4.png"
+      ],
+      "prompt": "Precise text-localization edit of the supplied BAZAAR card. Preserve the photograph, current clean rounded sans-serif letterforms, exact headline size and weight, text left margin, title and supporting-copy positions, blue-white lighting, scene and blank upper-left logo area. Replace ONLY text. Blue headline verbatim: «Покажем\\nприход товара». Dark supporting copy verbatim: «Напишите «ПОСТАВКА»\\nв Direct.». Keep the same two-line title and two-line supporting hierarchy; do not shrink, expand or replace the font. No button, URL, logo, screenshot, new props, icons, decoration or watermark. Same 4:5 canvas. The original Latin BAZAAR logo is inserted as an unchanged asset later in Canva.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-12f4ffb1-a025-4d5b-9259-b20b193e8ee9.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r03_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "r05_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r05_ru_cover_v4.png"
+      ],
+      "prompt": "Precise text-localization edit of the supplied BAZAAR card. Preserve the photograph, current clean rounded sans-serif letterforms, exact headline size and weight, text left margin, title and supporting-copy positions, blue-white lighting, scene and blank upper-left logo area. Replace ONLY text. Blue headline verbatim: «Покажем\\nсверку остатков». Dark supporting copy verbatim: «Напишите «СВЕРКА»\\nв Direct.». Keep the same two-line title and two-line supporting hierarchy; do not shrink, expand or replace the font. No button, URL, logo, screenshot, new props, icons, decoration or watermark. Same 4:5 canvas. The original Latin BAZAAR logo is inserted as an unchanged asset later in Canva.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-1ac293d8-5670-41ee-bc5a-179d0cac44e5.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r05_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "r08_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r08_ru_cover_v4.png"
+      ],
+      "prompt": "Precise text-localization edit of the supplied BAZAAR card. Preserve the photograph, current clean rounded sans-serif letterforms, exact headline size and weight, text left margin, title and supporting-copy positions, blue-white lighting, scene and blank upper-left logo area. Replace ONLY text. Blue headline verbatim: «Покажем учёт\\nпо магазинам». Dark supporting copy verbatim: «Напишите «МАГАЗИНЫ»\\nв Direct.». Keep the same two-line title and two-line supporting hierarchy; do not shrink, expand or replace the font. No button, URL, logo, screenshot, new props, icons, decoration or watermark. Same 4:5 canvas. The original Latin BAZAAR logo is inserted as an unchanged asset later in Canva.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-c986a017-72f6-4155-af0f-d62282a62787.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r08_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "r10_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r10_ru_cover_v4.png"
+      ],
+      "prompt": "Precise text-localization edit of the supplied BAZAAR card. Preserve the photograph, current clean rounded sans-serif letterforms, exact headline size and weight, text left margin, title and supporting-copy positions, blue-white lighting, scene and blank upper-left logo area. Replace ONLY text. Blue headline verbatim: «Покажем\\nаналитику продаж». Dark supporting copy verbatim: «Напишите «ОТЧЁТ»\\nв Direct.». Keep the same two-line title and two-line supporting hierarchy; do not shrink, expand or replace the font. No button, URL, logo, screenshot, new props, icons, decoration or watermark. Same 4:5 canvas. The original Latin BAZAAR logo is inserted as an unchanged asset later in Canva.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-8f950b14-4ba0-417c-a109-76664e603678.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r10_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s06_ru_cover_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r10_ru_cover_v4.png"
+      ],
+      "prompt": "Specialist BAZAAR Instagram card edit, same 4:5 canvas. Reference image is the edit target and exact typography master. Preserve its CURRENT clean rounded sans-serif letterforms, blue headline's exact size and weight, line spacing, text margins and positions, dark supporting text scale and weight, white/blue light and diagonal shadow. Do not change to another font. Blue title verbatim: «Какие товары\\nпринесли выручку?». Dark body verbatim: «Спросите BAAM\\nо продажах.». Keep the bookshop still life with the books and receipt unchanged. Leave the entire upper-left logo area clean and BLANK: the exact original Latin BAZAAR logo is inserted later in Canva. No button, URL, watermark, app screenshot, fake UI, icon or additional words.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-a6ff40d9-6776-4726-9570-787b0054092c.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s06_ru_cover_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s06_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r10_ru_cover_v4.png"
+      ],
+      "prompt": "Specialist BAZAAR Instagram card edit, same 4:5 canvas. Reference image is the edit target and exact typography master. Preserve its CURRENT clean rounded sans-serif letterforms, blue headline's exact size and weight, line spacing, text margins and positions, dark supporting text scale and weight, white/blue light and diagonal shadow. Do not change to another font. Blue title verbatim: «Покажем\\nработу BAAM». Dark body verbatim: «Напишите «BAAM»\\nв Direct.». Keep the bookshop still life with the books and receipt unchanged. Leave the entire upper-left logo area clean and BLANK: the exact original Latin BAZAAR logo is inserted later in Canva. No button, URL, watermark, app screenshot, fake UI, icon or additional words.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-7aef6fc8-e4d1-45a3-bfb5-7b7ea7e0b564.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s06_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s07_ru_cover_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r03_ru_cover_v4.png"
+      ],
+      "prompt": "Specialist BAZAAR Instagram card edit, same 4:5 canvas. Reference image is the edit target and exact typography master. Preserve its CURRENT clean rounded sans-serif letterforms, blue headline's exact size and weight, line spacing, text margins and positions, dark supporting text scale and weight, white/blue light and diagonal shadow. Do not change to another font. Blue title verbatim: «Заказ уже\\nв работе?». Dark body verbatim: «Товары и сумма —\\nв заказе покупателя.». Replace only the goods in the lower parcel scene with two neatly folded blue and white T-shirts and a plain small paper shopping bag beside a shipping carton. A realistic clothing-shop order ready for packing. No towels, cosmetics, invented interface, writing on packaging or screens. Leave the entire upper-left logo area clean and BLANK: the exact original Latin BAZAAR logo is inserted later in Canva. No button, URL, watermark, app screenshot, fake UI, icon or additional words.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-72b64e30-c02f-4be9-b827-3339e61b576e.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s07_ru_cover_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s07_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r03_ru_cover_v4.png"
+      ],
+      "prompt": "Specialist BAZAAR Instagram card edit, same 4:5 canvas. Reference image is the edit target and exact typography master. Preserve its CURRENT clean rounded sans-serif letterforms, blue headline's exact size and weight, line spacing, text margins and positions, dark supporting text scale and weight, white/blue light and diagonal shadow. Do not change to another font. Blue title verbatim: «Покажем\\nзаказы покупателей». Dark body verbatim: «Напишите «ЗАКАЗ»\\nв Direct.». Replace only the goods in the lower parcel scene with two neatly folded blue and white T-shirts and a plain small paper shopping bag beside a shipping carton. A realistic clothing-shop order ready for packing. No towels, cosmetics, invented interface, writing on packaging or screens. Leave the entire upper-left logo area clean and BLANK: the exact original Latin BAZAAR logo is inserted later in Canva. No button, URL, watermark, app screenshot, fake UI, icon or additional words.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-8af00f41-16cf-4788-8c8b-f232a53d39f8.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s07_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "r12_ru_cover_clean_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r12_ru_cover_v4.png"
+      ],
+      "prompt": "Precise object removal only. In the attached BAZAAR marketing card, erase ONLY the entire upper-left generated logo: both the blue square icon and Latin BAZAAR wordmark. Reconstruct the clean pale background behind that logo. Preserve every other pixel as closely as possible: current Russian title and supporting copy, same exact typography, size, weight, layout, boxes, books, cable, paper roll, colors and light. Do not replace the logo with another logo or text. That area must be completely empty. No other changes; same 4:5 canvas.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-4c715c1d-a5d0-4009-9717-7446a0895e66.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r12_ru_cover_clean_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "r12_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r12_ru_cover_v4.png"
+      ],
+      "prompt": "Precise BAZAAR card edit. Preserve the entire parcel/books/cable still-life photograph, same clean rounded sans-serif letterforms, headline weight/size, left margin and text positions. Replace only blue title with «Покажем\\nинтеграции» and dark supporting copy with «Напишите «КАНАЛЫ»\\nв Direct.». ALSO remove the entire generated blue logo icon and wordmark from the upper-left; leave clean blank pale background there for insertion of the unchanged original later in Canva. No other words, logo, button, URL, screen or decoration. Same 4:5 canvas.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-e1cb98f4-f5c4-4deb-bf80-ef617ab9084f.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/r12_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s14_ru_cover_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r01_ru_cover_v4.png"
+      ],
+      "prompt": "Text edit only of the supplied BAZAAR grocery-checkout card. Preserve current rounded sans-serif letterforms, exact headline weight/size, positions, margins, photograph, colors and blank upper-left logo area. Blue title exactly «Начните\\nс BAZAAR». Dark body exactly «Создайте аккаунт\\nдля своего магазина.». No button, URL, logo, app UI, new objects or other changes. Same 4:5 canvas. Keep the upper-left logo area blank for the exact original asset in Canva.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-7902044e-ee09-434c-9930-f4371153e264.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s14_ru_cover_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s14_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/r01_ru_cover_v4.png"
+      ],
+      "prompt": "Text edit only of the supplied BAZAAR grocery-checkout card. Preserve current rounded sans-serif letterforms, exact headline weight/size, positions, margins, photograph, colors and blank upper-left logo area. Blue title exactly «Откройте\\nрегистрацию». Dark body exactly «Ссылка —\\nв этой Stories.». No button, drawn link sticker, URL, logo, app UI, new objects or other changes. A REAL clickable Instagram link sticker will be added natively outside this artwork. Same 4:5 canvas. Keep the upper-left logo area blank for the exact original asset in Canva.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-4055c7c4-c6a7-4569-a45d-c03a926f2b5b.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s14_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s13_ru_cover_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/p11_ru_cover_v4.png"
+      ],
+      "prompt": "Targeted text edit to the supplied BAZAAR card. Preserve the current clean rounded sans-serif font appearance, title's exact weight and size, line spacing, text positions and margins, photograph of the three shopping bags, light and blue-white colors. Replace only the blue headline with «Что важно\\nперед подключением?» and dark supporting text with «Касса, остатки\\nили перенос каталога?». Keep upper-left logo area completely blank for original asset placement in Canva. No button, URL, logo, app screenshot, new goods, icons or watermark. Same 4:5 canvas.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-cf18728c-bd34-4c56-b803-0c68e906e77b.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s13_ru_cover_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
+    },
+    {
+      "id": "s13_ru_end_v4",
+      "refs": [
+        "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/instagram-canva-20261103/production/revision4/p11_ru_end_v4.png"
+      ],
+      "prompt": "Targeted text edit to the supplied BAZAAR card. Preserve the current clean rounded sans-serif font appearance, title's exact weight and size, line spacing, text positions and margins, photograph of the three shopping bags, light and blue-white colors. Replace only the blue headline with «Задайте\\nсвой вопрос» and dark supporting text with «Ответьте на Stories\\nили напишите в Direct.». Keep upper-left logo area completely blank for original asset placement in Canva. No button, URL, logo, app screenshot, new goods, icons or watermark. Same 4:5 canvas.",
+      "source": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-de6d8e26-1194-4245-bc95-1a3966f03556.png",
+      "outputFile": "artifacts/instagram-canva-20261103/production/revision4/s13_ru_end_v4.png",
+      "status": "assembled_in_native_canva_draft_full_preview_available_save_pending"
     }
   ]
 }

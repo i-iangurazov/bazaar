@@ -7,8 +7,8 @@
   "paidBudget": null,
   "fullGoalComplete": false,
   "checks": {
-    "scriptSyntax": "passed",
-    "reviewScriptEslint": "passed",
+    "scriptSyntax": "passed for both review files",
+    "reviewScriptEslint": "passed for review.mjs and revision-review.mjs",
     "workflowUnitTests": {
       "passed": 5,
       "command": "node node_modules/vitest/vitest.mjs run tests/unit/instagram-workflow.test.ts"
@@ -28,32 +28,39 @@
     "productionBuild": "not repeated: no production application code changed",
     "revisedCalendarDays": 14,
     "revisedStoryFramesPlanned": 42,
-    "savedNativeCarousels": 3,
-    "verifiedNativeCarouselPNGs": 12,
+    "savedNativeCarousels": 4,
+    "verifiedNativeCarouselPNGs": 18,
     "carouselSize": [1080, 1350],
-    "currentGalleryLocalReferencesResolved": 230,
+    "currentGalleryLocalReferencesResolved": 727,
     "missingGalleryReferences": [],
-    "desktopReview": "Full four-slide P02/P04/P09 sequences inspected; P02 fixed-navigation overlap detected and replaced before owner approval.",
-    "mobileReview": "P04 review at 390×844; horizontal carousel navigation checked. Native Instagram composer crop/stickers remain unverified."
+    "desktopReview": "All six Reel sequences, key Story sequences, four ad concepts and complete profile grid inspected. Additional analytics crop issue corrected by replacing the image element before approval.",
+    "mobileReview": "Profile grid verified at actual 390×844: document width 390, no horizontal overflow; week 1 has 8 tiles and week 2 has 13 including existing posts. Native Instagram composer remains unverified.",
+    "nativeDraftPreviewPages": 81,
+    "actualNativeElementAudit": "All 80 pages match expected asset IDs and counts. Every app page has one screenshot only; no illustrated background.",
+    "currentGalleryAnchorsResolved": 68,
+    "workflowApprovedQueue": 0
   },
   "externalChecks": {
     "canvaConnected": true,
     "browser": "Personal Chrome Ilias, browser 3; working",
-    "canvaSavedDesigns": ["DAHZ4AhYA_I", "DAHZ38NQyrc", "DAHZ4LfpgUI"],
+    "canvaSavedDesigns": ["DAHZ38NQyrc", "DAHZ4AhYA_I", "DAHZ4LfpgUI", "DAHZ4IHrqnA"],
     "imageStudio": "One actual successful job via BAZAAR UI in isolated media-production database; native original/result reviewed",
     "instagramPublication": "disabled by owner",
     "paidAds": "not created",
     "productionAttribution": "not deployed",
-    "canvaAutofill": "Current plan restriction observed previously; no upgrade purchased"
+    "canvaAutofill": "Current plan restriction observed previously; no upgrade purchased",
+    "canvaDraftDesigns": ["DAHZ4ZnGNaI", "DAHZ4c5HwEU", "DAHZ4WMUFFU", "DAHZ4c9kjZs"]
   },
   "priorAttributionVerification": {
     "commit": "39efff5",
     "note": "Earlier unit, auth and disposable-database integration checks passed; no attribution code changed in this revision."
   },
   "remaining": [
-    "Complete and save P11 after full preview.",
-    "Finish revised Reels, 42 Stories and ad adaptations; verify actual native exports and new profile grid.",
-    "Atomically replace campaign packages and prepare the full review archive.",
-    "KG alternatives require synchronisation/editorial review; account publication remains disabled."
-  ]
+    "Obtain explicit save confirmation for the four remaining Canva draft designs after full preview.",
+    "Commit and export the revised Reels/Stories/feed/ad proof; inspect native files and fully decode videos.",
+    "Check repeatable copy-and-edit on a separate template copy without buying an upgrade.",
+    "Atomically replace campaign/media packages, preserve revision 3, verify complete packages and prepare a review archive.",
+    "Full-package publication approval, Instagram permissions and paid budget remain absent."
+  ],
+  "updated": "2026-11-04"
 }

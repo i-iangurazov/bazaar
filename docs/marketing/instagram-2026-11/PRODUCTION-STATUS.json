@@ -1,6 +1,6 @@
 {
   "date": "2026-11-03",
-  "stage": "revision_4_in_progress",
+  "stage": "revision_4_remaining_canva_drafts_reviewed_awaiting_owner_save_approval",
   "fullGoalComplete": false,
   "branch": "main",
   "primaryReleaseLanguage": "ru",
@@ -9,15 +9,14 @@
   "publicationEnabled": false,
   "paidBudget": null,
   "created": {
-    "feedCoverArtwork": 10,
-    "carouselSlideArtwork": 16,
-    "canvaReels": 6,
-    "storyArtwork": 42,
-    "nativeStoryFrames1080x1920": 42,
-    "adConceptsWithBothFormatArtworkMapped": 4,
-    "adVisualAssignments": 24,
-    "uniqueSourceImages": 75,
-    "nativeFeedImages1080x1350": 26
+    "savedCarousels": 4,
+    "savedNativeCarouselPNGs": 18,
+    "reelScenesInNativeCanvaDraft": 24,
+    "storyFramesInNativeCanvaDraft": 42,
+    "feedPagesInNativeCanvaDraft": 14,
+    "additionalAnalyticsProofDraft": 1,
+    "adConcepts": 4,
+    "profileCovers": 10
   },
   "target": {
     "feedCovers": 10,
@@ -28,158 +27,20 @@
     "adFramesPerFormat": 3,
     "adFormats": ["feed", "vertical"]
   },
-  "completeFilePackages": [
-    "r01_ru",
-    "r03_ru",
-    "r05_ru",
-    "r08_ru",
-    "r10_ru",
-    "r12_ru",
-    "p02_ru",
-    "p04_ru",
-    "s06_ru",
-    "s07_ru",
-    "p09_ru",
-    "p11_ru",
-    "s13_ru",
-    "s14_ru",
-    "ad01_ru",
-    "ad02_ru",
-    "ad03_ru",
-    "ad04_ru"
-  ],
+  "completeFilePackages": [],
   "approvedPackages": 0,
   "reviewGallery": "artifacts/instagram-canva-20261103/review-p04-v4/index.html",
-  "gridPreview": "artifacts/instagram-canva-20261103/production/qa/planned-grid-3x4.png",
-  "generationEvidence": "artifacts/instagram-canva-20261103/production/assets.json",
+  "gridPreview": "artifacts/instagram-canva-20261103/production/qa/current-grid-v4-proof.jpg",
+  "generationEvidence": "revision4-image-prompts.json",
   "remaining": [
-    "Retain current accepted font appearance and normalize illustrated headline weight and scale.",
-    "Use Новичок, Бизнесмен and Монополист unchanged, with store, product and active-user limits plus actual features.",
-    "Produce varied retail scenes and the broader module sequence in revision-plan.json.",
-    "Place real screenshots only on separate clean slides, Story frames and Reel scenes. Never over an illustration.",
-    "Finish native exports and verification of the revised 6 Reels, 4 carousels (18 slides), 42 Stories and 4 ad concepts.",
-    "Re-ingest revised packages, verify the chronological and profile views on desktop/mobile, and build the full review archive.",
-    "Obtain complete-package review. Publication remains disabled; paid budget is null."
+    "Obtain explicit save confirmation for the four remaining Canva draft designs after full preview.",
+    "Commit and export the revised Reels/Stories/feed/ad proof; inspect native files and fully decode videos.",
+    "Check repeatable copy-and-edit on a separate template copy without buying an upgrade.",
+    "Atomically replace campaign/media packages, preserve revision 3, verify complete packages and prepare a review archive.",
+    "Full-package publication approval, Instagram permissions and paid budget remain absent."
   ],
-  "canvaCapabilityNote": "Current new video timeline works in personal Canva UI. MCP start-editing exposes no fills despite real 4-scene video; inspection transaction cancelled without changes. Do not claim video bulk-edit automation through this API works.",
+  "canvaCapabilityNote": "Classic 1080×1920 page designs expose editable image fills. All 80 assembled pages checked against actual transaction element states; app frames contain one screenshot on a white page. Previous new-video-timeline limitation remains historical. Copy-and-edit is available; autofill previously required another Canva plan.",
   "profileAudit": "profile-grid.json",
-  "videos": [
-    {
-      "designId": "DAHZ2tbDPeE",
-      "editUrl": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
-      "path": "artifacts/instagram-canva-20261103/production/r01_ru.mp4",
-      "size": [1080, 1920],
-      "seconds": 20,
-      "fps": 30,
-      "codec": "H264",
-      "audio": "none",
-      "fullDecode": "passed",
-      "visualFramesCheckedAtSeconds": [2, 7, 12, 17],
-      "sha256": "9b3666108ed6aba50efccb5f513e0f85ecef797d66a916b4c726d3be2671a133"
-    },
-    {
-      "id": "r03_ru",
-      "canvaDesignId": "DAHZ24dI8do",
-      "sourceTimelineSeconds": [0, 20],
-      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
-      "file": "artifacts/instagram-canva-20261103/production/r03_ru.mp4",
-      "sha256": "131841d35fba5918eca4d95eb0b01913f8bd1a324e0b4e7a89fa1369161cf7a1",
-      "size": [1080, 1920],
-      "seconds": 20,
-      "fps": 30,
-      "audio": "none",
-      "fullDecode": "passed",
-      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
-      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
-    },
-    {
-      "id": "r05_ru",
-      "canvaDesignId": "DAHZ24dI8do",
-      "sourceTimelineSeconds": [20, 40],
-      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
-      "file": "artifacts/instagram-canva-20261103/production/r05_ru.mp4",
-      "sha256": "0fbab9d7af15690b56d6656a98ee18b73cf8a8d5f5b6e6a49d727a347a3760dd",
-      "size": [1080, 1920],
-      "seconds": 20,
-      "fps": 30,
-      "audio": "none",
-      "fullDecode": "passed",
-      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
-      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
-    },
-    {
-      "id": "r08_ru",
-      "canvaDesignId": "DAHZ24dI8do",
-      "sourceTimelineSeconds": [40, 60],
-      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
-      "file": "artifacts/instagram-canva-20261103/production/r08_ru.mp4",
-      "sha256": "82e33cebcf64afaed11a93fab6ae9d7c57e9962ae17217321172885faa58bcc2",
-      "size": [1080, 1920],
-      "seconds": 20,
-      "fps": 30,
-      "audio": "none",
-      "fullDecode": "passed",
-      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
-      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
-    },
-    {
-      "id": "r10_ru",
-      "canvaDesignId": "DAHZ24dI8do",
-      "sourceTimelineSeconds": [60, 80],
-      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
-      "file": "artifacts/instagram-canva-20261103/production/r10_ru.mp4",
-      "sha256": "be03ee766391fe8a9de846c0fa674d178aae9c194d7cc4f46d7781a9b17aba74",
-      "size": [1080, 1920],
-      "seconds": 20,
-      "fps": 30,
-      "audio": "none",
-      "fullDecode": "passed",
-      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
-      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
-    },
-    {
-      "id": "r12_ru",
-      "canvaDesignId": "DAHZ24dI8do",
-      "sourceTimelineSeconds": [80, 100],
-      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
-      "file": "artifacts/instagram-canva-20261103/production/r12_ru.mp4",
-      "sha256": "1024110929f376aedbc06337a481975bbe96307e883de47598fce54602ae3156",
-      "size": [1080, 1920],
-      "seconds": 20,
-      "fps": 30,
-      "audio": "none",
-      "fullDecode": "passed",
-      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
-      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
-      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
-    }
-  ],
-  "canvaProjects": [
-    {
-      "id": "DAHZ2tbDPeE",
-      "url": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
-      "purpose": "R01; actual 20-second MP4 downloaded and verified"
-    },
-    {
-      "id": "DAHZ24dI8do",
-      "url": "https://www.canva.com/d/EedbigQsHHc0PPK",
-      "purpose": "Five Reels; 100-second native MP4 downloaded, five exact 20-second segments encoded and verified"
-    },
-    {
-      "id": "DAHZ2-vrRbI",
-      "url": "https://www.canva.com/d/fkFylJl83ix9_Ag",
-      "purpose": "Native revision-3 Stories exported and verified; revised standalone application frames pending."
-    },
-    {
-      "id": "DAHZ3IgIN5k",
-      "url": "https://www.canva.com/d/XdfrSQA5elzN82u",
-      "purpose": "26 native revision-3 feed PNGs exported and verified; current editorial revision is not yet complete."
-    }
-  ],
   "figmaSourceBoard": {
     "fileKey": "AtLlLGuYtMYAtodNHuQcG7",
     "url": "https://www.figma.com/design/AtLlLGuYtMYAtodNHuQcG7",
@@ -233,16 +94,215 @@
     "designStatus": "archived in FAHZ1thu7x8",
     "rule": "Owner forbids screenshots over illustrations. Do not reuse overlay preview."
   },
-  "revision4Preview": "revision-preview.json",
-  "appScreens": "app-screen-evidence.json",
+  "revision4Preview": {
+    "savedCarousels": 4,
+    "savedNativeCarouselPNGs": 18,
+    "remainingNativeDraftPreviews": 81,
+    "evidence": "revision4-draft-preview.json",
+    "status": "awaiting_explicit_canva_save_confirmation"
+  },
+  "appScreens": {
+    "evidence": "app-screen-evidence.json",
+    "recordedNativeFiles": 38,
+    "database": "bazaar_instagram_demo_20261103",
+    "customerDataUsed": false
+  },
   "imageStudioVerification": "One actual successful UI job in isolated media-production environment; output manually reviewed; not saved to production.",
   "standaloneScreenshots": "P02, P04 and P09 saved with separate native application pages. All 12 actual PNG exports are 1080×1350 and were inspected in the sequence. No screenshot over an illustrated card.",
   "revision4": {
-    "savedNativeCarousels": ["p02", "p04", "p09"],
-    "savedNativeCarouselPages": 12,
-    "saveApproval": "Explicit owner approval after full-sequence previews",
-    "fullCampaignApproval": false,
-    "fullRevisedFilePackages": 0,
-    "next": "Complete P11, six Reels, all revised Stories and ad adaptations; then atomically replace campaign/media packages."
-  }
+    "status": "revision_4_remaining_canva_drafts_reviewed_awaiting_owner_save_approval",
+    "savedCarouselCount": 4,
+    "savedCarouselSlides": 18,
+    "draftPreviewPages": 81,
+    "previewEvidence": "revision4-draft-preview.json",
+    "adPlan": "revision4-ad-plan.json",
+    "fullGoalComplete": false
+  },
+  "lastUpdated": "2026-11-04T00:00:35+06:00",
+  "previousRevision3Media": {
+    "created": {
+      "feedCoverArtwork": 10,
+      "carouselSlideArtwork": 16,
+      "canvaReels": 6,
+      "storyArtwork": 42,
+      "nativeStoryFrames1080x1920": 42,
+      "adConceptsWithBothFormatArtworkMapped": 4,
+      "adVisualAssignments": 24,
+      "uniqueSourceImages": 75,
+      "nativeFeedImages1080x1350": 26
+    },
+    "completeFilePackages": [
+      "r01_ru",
+      "r03_ru",
+      "r05_ru",
+      "r08_ru",
+      "r10_ru",
+      "r12_ru",
+      "p02_ru",
+      "p04_ru",
+      "s06_ru",
+      "s07_ru",
+      "p09_ru",
+      "p11_ru",
+      "s13_ru",
+      "s14_ru",
+      "ad01_ru",
+      "ad02_ru",
+      "ad03_ru",
+      "ad04_ru"
+    ],
+    "videos": [
+      {
+        "designId": "DAHZ2tbDPeE",
+        "editUrl": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
+        "path": "artifacts/instagram-canva-20261103/production/r01_ru.mp4",
+        "size": [1080, 1920],
+        "seconds": 20,
+        "fps": 30,
+        "codec": "H264",
+        "audio": "none",
+        "fullDecode": "passed",
+        "visualFramesCheckedAtSeconds": [2, 7, 12, 17],
+        "sha256": "9b3666108ed6aba50efccb5f513e0f85ecef797d66a916b4c726d3be2671a133"
+      },
+      {
+        "id": "r03_ru",
+        "canvaDesignId": "DAHZ24dI8do",
+        "sourceTimelineSeconds": [0, 20],
+        "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+        "file": "artifacts/instagram-canva-20261103/production/r03_ru.mp4",
+        "sha256": "131841d35fba5918eca4d95eb0b01913f8bd1a324e0b4e7a89fa1369161cf7a1",
+        "size": [1080, 1920],
+        "seconds": 20,
+        "fps": 30,
+        "audio": "none",
+        "fullDecode": "passed",
+        "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+        "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+      },
+      {
+        "id": "r05_ru",
+        "canvaDesignId": "DAHZ24dI8do",
+        "sourceTimelineSeconds": [20, 40],
+        "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+        "file": "artifacts/instagram-canva-20261103/production/r05_ru.mp4",
+        "sha256": "0fbab9d7af15690b56d6656a98ee18b73cf8a8d5f5b6e6a49d727a347a3760dd",
+        "size": [1080, 1920],
+        "seconds": 20,
+        "fps": 30,
+        "audio": "none",
+        "fullDecode": "passed",
+        "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+        "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+      },
+      {
+        "id": "r08_ru",
+        "canvaDesignId": "DAHZ24dI8do",
+        "sourceTimelineSeconds": [40, 60],
+        "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+        "file": "artifacts/instagram-canva-20261103/production/r08_ru.mp4",
+        "sha256": "82e33cebcf64afaed11a93fab6ae9d7c57e9962ae17217321172885faa58bcc2",
+        "size": [1080, 1920],
+        "seconds": 20,
+        "fps": 30,
+        "audio": "none",
+        "fullDecode": "passed",
+        "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+        "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+      },
+      {
+        "id": "r10_ru",
+        "canvaDesignId": "DAHZ24dI8do",
+        "sourceTimelineSeconds": [60, 80],
+        "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+        "file": "artifacts/instagram-canva-20261103/production/r10_ru.mp4",
+        "sha256": "be03ee766391fe8a9de846c0fa674d178aae9c194d7cc4f46d7781a9b17aba74",
+        "size": [1080, 1920],
+        "seconds": 20,
+        "fps": 30,
+        "audio": "none",
+        "fullDecode": "passed",
+        "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+        "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+      },
+      {
+        "id": "r12_ru",
+        "canvaDesignId": "DAHZ24dI8do",
+        "sourceTimelineSeconds": [80, 100],
+        "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+        "file": "artifacts/instagram-canva-20261103/production/r12_ru.mp4",
+        "sha256": "1024110929f376aedbc06337a481975bbe96307e883de47598fce54602ae3156",
+        "size": [1080, 1920],
+        "seconds": 20,
+        "fps": 30,
+        "audio": "none",
+        "fullDecode": "passed",
+        "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+        "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+        "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+      }
+    ],
+    "canvaProjects": [
+      {
+        "id": "DAHZ2tbDPeE",
+        "url": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
+        "purpose": "R01; actual 20-second MP4 downloaded and verified"
+      },
+      {
+        "id": "DAHZ24dI8do",
+        "url": "https://www.canva.com/d/EedbigQsHHc0PPK",
+        "purpose": "Five Reels; 100-second native MP4 downloaded, five exact 20-second segments encoded and verified"
+      },
+      {
+        "id": "DAHZ2-vrRbI",
+        "url": "https://www.canva.com/d/fkFylJl83ix9_Ag",
+        "purpose": "Native revision-3 Stories exported and verified; revised standalone application frames pending."
+      },
+      {
+        "id": "DAHZ3IgIN5k",
+        "url": "https://www.canva.com/d/XdfrSQA5elzN82u",
+        "purpose": "26 native revision-3 feed PNGs exported and verified; current editorial revision is not yet complete."
+      }
+    ]
+  },
+  "savedCarouselApprovals": [
+    {
+      "id": "p04",
+      "designId": "DAHZ38NQyrc",
+      "transactionId": "7066668845857718282",
+      "pageCount": 4,
+      "ownerApproval": "Explicit reply: Сохранить эту карусель",
+      "scope": "Save carousel artwork only; not publication or approval of full day package."
+    },
+    {
+      "id": "p02",
+      "designId": "DAHZ4AhYA_I",
+      "transactionId": "8497687628223794675",
+      "pageCount": 4,
+      "ownerApproval": "Explicit reply: Сохранить обе карусели",
+      "scope": "Save carousel artwork only; not publication or approval of full day package."
+    },
+    {
+      "id": "p09",
+      "designId": "DAHZ4LfpgUI",
+      "transactionId": "2785997400849574635",
+      "pageCount": 4,
+      "ownerApproval": "Explicit reply: Сохранить обе карусели",
+      "scope": "Save carousel artwork only; not publication or approval of full day package."
+    },
+    {
+      "id": "p11",
+      "designId": "DAHZ4IHrqnA",
+      "transactionId": "5959909242333679988",
+      "pageCount": 6,
+      "ownerApproval": "Explicit reply: Сохранить тарифную карусель",
+      "scope": "Save carousel artwork only; not publication or approval of full day package."
+    }
+  ],
+  "pendingSaveDesigns": ["DAHZ4ZnGNaI", "DAHZ4c5HwEU", "DAHZ4WMUFFU", "DAHZ4c9kjZs"],
+  "studioDemoServer": "Dedicated 3125 server stopped after capture; files and isolated database retained."
 }

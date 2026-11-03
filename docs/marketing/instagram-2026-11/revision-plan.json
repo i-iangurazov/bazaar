@@ -148,7 +148,8 @@
           "body": "Штрихкодом\nили через поиск?",
           "interaction": {
             "type": "poll",
-            "answers": ["Штрихкод", "Поиск"]
+            "answers": ["Штрихкод", "Поиск"],
+            "question": "Как ищете товар на кассе?"
           }
         },
         {
@@ -537,7 +538,7 @@
         {
           "title": "Нужно\nперемещение?",
           "body": "Проверьте отправителя\nи получателя.",
-          "proof": "Actual transfer document"
+          "proof": "Actual transfer detail: Остатки у получателя · Ош · Южный; Рулетка 5 м, 4 units after the synthetic transfer."
         },
         {
           "title": "Покажем работу\nс магазинами",
@@ -874,9 +875,9 @@
           }
         },
         {
-          "title": "Начните\nсо своей задачи",
-          "body": "Под неё подбирают\nмодули и тариф.",
-          "proof": "A real product context matching one collected question; no invented testimonial."
+          "title": "Что важно\nдля выбора?",
+          "body": "Сколько магазинов? Сколько товаров? Сколько сотрудников? Какие нужны модули?",
+          "proof": "A standalone qualification card. No invented customer question or testimonial."
         },
         {
           "title": "Задайте\nсвой вопрос",
@@ -888,11 +889,7 @@
       ],
       "caption": "Отвечать по реальным обращениям. Не выдумывать вопросы от клиентов и не превращать ответы в массовую рассылку. Для импорта и аналитики учитывать «Бизнесмен» / «Монополист».",
       "layoutSequence": [],
-      "storyLayoutSequence": [
-        "illustrated_card",
-        "standalone_application_screen",
-        "illustrated_card"
-      ]
+      "storyLayoutSequence": ["illustrated_card", "standalone_plan_information", "illustrated_card"]
     },
     {
       "id": "s14",

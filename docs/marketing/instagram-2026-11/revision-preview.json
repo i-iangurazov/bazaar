@@ -167,6 +167,75 @@
       "imageStudioStatus": "SUCCEEDED",
       "inputDisclosure": "The source photo is AI-generated demonstration imagery, not a customer photo; the result is actual BAZAAR processing.",
       "ownerApproval": "Explicit reply: Сохранить обе карусели"
+    },
+    {
+      "status": "canva_saved_native_png_verified",
+      "fullPackageReady": false,
+      "publicationEnabled": false,
+      "id": "p11",
+      "title": "Тариф под ваш магазин",
+      "designId": "DAHZ4IHrqnA",
+      "transactionId": "5959909242333679988",
+      "editUrl": "https://www.canva.com/design/DAHZ4IHrqnA/KA4657BIm2IFz1aUw_GBOw/edit",
+      "pages": [
+        {
+          "number": 1,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p11/p11_ru_01.png",
+          "sha256": "b60560a60397b4f32b74c52d90368b4e8aa026a95209bd9e694410cb8bde2c85",
+          "size": [1080, 1350],
+          "layout": "illustrated_card",
+          "label": "1 · Обложка"
+        },
+        {
+          "number": 2,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p11/p11_ru_02.png",
+          "sha256": "e78ac9dcf572eb060241adee6c305fff4061a381c3ca80e4284e8340f1180b16",
+          "size": [1080, 1350],
+          "layout": "standalone_plan_information",
+          "label": "2 · Новичок"
+        },
+        {
+          "number": 3,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p11/p11_ru_03.png",
+          "sha256": "6108f43e0a0e24f4b93814e9cb513dd9d97b5696edfbe955221f151404550849",
+          "size": [1080, 1350],
+          "layout": "standalone_plan_information",
+          "label": "3 · Бизнесмен"
+        },
+        {
+          "number": 4,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p11/p11_ru_04.png",
+          "sha256": "9c5ee0e9f159e5f8b89fbbde71bcc28db9d0a712a62c8bb6b48ec6e5c9ba2f4a",
+          "size": [1080, 1350],
+          "layout": "standalone_plan_information",
+          "label": "4 · Монополист"
+        },
+        {
+          "number": 5,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p11/p11_ru_05.png",
+          "sha256": "5ca8e69a223e01e631927eeb162ece8fbd146f0b129fa2290ee61c697e0b7342",
+          "size": [1080, 1350],
+          "layout": "standalone_plan_information",
+          "label": "5 · Критерии выбора"
+        },
+        {
+          "number": 6,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p11/p11_ru_06.png",
+          "sha256": "8d857add48ceefaa774d2e4a11e0357f8d19da7826332b89fa419983015c20b3",
+          "size": [1080, 1350],
+          "layout": "illustrated_card",
+          "label": "6 · Следующий шаг"
+        }
+      ],
+      "pageStructureVerification": {
+        "source": "Actual Canva native export and transaction",
+        "nativeCanvas": [1080, 1350],
+        "imageFillsPerPage": [2, 2, 2, 2, 2, 2],
+        "applicationPages": [],
+        "illustratedBackgroundOnApplicationPages": false,
+        "originalLatinLogoAsset": "MAHZ2eLDa-o"
+      },
+      "ownerApproval": "Explicit reply: Сохранить тарифную карусель"
     }
   ],
   "rejectedPreviews": [
