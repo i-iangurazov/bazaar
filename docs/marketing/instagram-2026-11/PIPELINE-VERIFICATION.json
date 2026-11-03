@@ -27,17 +27,19 @@
       "1080x1350",
       "1080x1920"
     ],
-    "templateFields": "draft pending explicit save approval",
-    "autofill": "not verified",
+    "templateFields": "saved after explicit owner approval; headline, supporting_line, cta verified",
+    "autofill": "tested; current plan rejects generation",
     "instagramPublication": "disabled",
     "paidAds": "not created",
-    "productionAttribution": "not deployed"
+    "productionAttribution": "not deployed",
+    "copyEditFallback": "copy + text replacement verified in draft; layout inspected and corrected; test cancelled and archived"
   },
   "limitations": [
     "Full new visual pack is not complete.",
     "Reels scripts are not finished video exports.",
     "Only first new RU/KG catalog posters have been generated with specialised tools.",
     "Resized Story composition is not accepted as final.",
-    "Canva resize trial uses are exhausted; no subscription started."
+    "Canva resize trial uses are exhausted; no subscription started.",
+    "Native Canva autofill is unavailable on the current plan. Copy/edit works but requires visual review; no paid upgrade purchased."
   ]
 }

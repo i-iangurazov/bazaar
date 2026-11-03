@@ -31,17 +31,28 @@
     {
       "id": "catalog_ru_feed",
       "canvaDesignId": "DAHZ1lf4spg",
-      "canvaEditUrl": "https://www.canva.com/d/_Yp1-WJHtsMSxL6",
-      "size": [1080, 1350],
-      "status": "autofill field draft awaits explicit preview approval",
-      "fields": ["headline", "supporting_line", "cta"],
-      "transactionId": "625395437710687910"
+      "canvaEditUrl": "https://www.canva.com/d/ewcuvq1ktNjlrzB",
+      "size": [
+        1080,
+        1350
+      ],
+      "status": "saved after explicit owner approval; dataset fields verified",
+      "fields": [
+        "headline",
+        "supporting_line",
+        "cta"
+      ],
+      "ownerApproval": "Сохранить и проверить",
+      "approvalScope": "Save template and test generation; no Instagram publication or ad launch"
     },
     {
       "id": "catalog_ru_story",
       "canvaDesignId": "DAHZ1ldFMlc",
       "canvaEditUrl": "https://www.canva.com/d/GUx0eQUV7rRfVW5",
-      "size": [1080, 1920],
+      "size": [
+        1080,
+        1920
+      ],
       "status": "resize test; composition/safe zones not accepted as final"
     }
   ],
@@ -51,8 +62,25 @@
     "brandTemplatesFound": 0,
     "existingVideoDesign": "DAHBifS1iOc",
     "resizeTrialUsesRemaining": 0,
-    "autofill": "not yet verified; awaiting template save approval",
-    "widget": "did not appear; use direct tools"
+    "autofill": "tested and rejected by current plan; dataset exists, generation requires a plan with autofill access",
+    "widget": "did not appear; use direct tools",
+    "autofillTest": {
+      "result": "plan restriction; no new design created",
+      "errorCode": "INVALID_ARGUMENT",
+      "paidPlanPurchased": false
+    },
+    "copyEditTest": {
+      "result": "copy and draft text replacement work in current plan",
+      "testDesignId": "DAHZ1pOj_hw",
+      "sourceDesignId": "DAHZ1lf4spg",
+      "sourcePreserved": true,
+      "headline": "Каталог без путаницы",
+      "supporting_line": "Поиск товаров.",
+      "cta": "Запросить показ",
+      "visualCheck": "One-line supporting text verified visually. Longer initial wording wrapped onto the product image and was corrected.",
+      "testCleanup": "draft changes cancelled; duplicate archived in FAHZ1thu7x8",
+      "publication": false
+    }
   },
   "fullTwoWeekPack": "not completed in new visual direction; scripts and calendar remain prepared",
   "promptSet": {
