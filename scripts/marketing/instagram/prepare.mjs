@@ -31,6 +31,8 @@ for (const item of [...campaign.items, ...campaign.ads])
       date: item.date ?? null,
       time: item.time ?? null,
       storyTime: item.storyTime ?? null,
+      distribution: item.distribution ?? null,
+      selectedForFirstRelease: !item.paid && locale === item.distribution?.primaryLocale,
       timezone: campaign.timezone,
       title: item.title[locale],
       caption: item.caption[locale],

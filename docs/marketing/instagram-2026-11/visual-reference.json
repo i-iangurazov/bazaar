@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-03",
+  "status": "visual_reference_approved",
+  "ownerApproval": "Вот это можно использовать даже как эталон.",
+  "file": "references/owner-approved-stock-cover.png",
+  "sha256": "e5cc2e0a34d0d0417109fefe1c89c37b8f1b321e9888891f2d6f8c451d44f85f",
+  "canvaAssetId": "MAHZ2bU9qfA",
+  "tool": "built-in ImageGen edit; asset imported into Canva successfully",
+  "prompt": "Use case: precise-object-edit / compositing. Edit target: image 1, the 1122x1402 BAZAAR Instagram poster. Supporting insert: image 2, the authentic BAZAAR logo with icon and wordmark. Make ONLY these three edits to image 1: (1) remove the entire blue rounded CTA button and its white text 'Записаться на показ' at the bottom, seamlessly restoring the same blue tabletop beneath it; (2) remove the bottom text 'bazaar.kg', seamlessly restore the tabletop; (3) replace the plain black BAZAAR word at the upper left with the exact supplied original blue icon+BAZAAR wordmark from image 2, proportionally scaled to approximately 300x75px at x104,y88, without the logo reference's dark preview backdrop; place the blue logo on the existing pale white background. Critical invariants: preserve the existing headline letterforms, weight, size, line breaks, coordinates and blue color EXACTLY. Preserve the existing black subtitle typography, size and coordinates EXACTLY. Do not change or retype/reinterpret the central text: 'Почему товара\\nстало меньше?' and 'Продажи и списания —\\nв журнале BAZAAR.' Keep all photography, carton, barcode, bottles, basket, towels, shadows, framing, colors and 1122x1402 layout unchanged. No new CTA, footer, website, decorative marks, added objects or new typography. User has specifically approved these existing type shapes and sizes, so they must remain identical to image 1. Precise minimal edit, not a redesign.",
+  "approvalScope": "Visual reference only. Not approval of a full carousel, translations, scheduling, Instagram publication, or paid ads.",
+  "fontFamily": "Unknown in original raster; preserve approved letterforms and scale. Do not claim an identified installed family.",
+  "rejectedTrials": ["Cormorant Garamond + PT Sans", "Oswald + PT Sans"],
+  "abandonedTrial": "Nunito ExtraBold + Nunito Regular trial was superseded before review by explicit owner choice of supplied example.",
+  "invariants": [
+    "BAZAAR in Latin, original site logo at top",
+    "Approved dense clean sans-serif letterforms and visible sizes",
+    "Blue headline, dark body, pale background, photographic scene",
+    "No raster CTA button or website footer",
+    "Preserve consistent margins, semantic line breaks and balanced photograph"
+  ]
+}

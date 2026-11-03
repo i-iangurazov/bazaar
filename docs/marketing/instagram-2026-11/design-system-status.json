@@ -9,7 +9,7 @@
     "logo": "public/brand/logo.png; original asset, no redraw",
     "artworkDomainFooter": false
   },
-  "workflow": "Specialist image tools for photographic assets → actual font selection and typesetting in Canva → visual/factual review → owner approval → publishing only after separate authorization",
+  "workflow": "Approved owner raster reference → specialist image tool for new photographic scenes → Canva only where native editing preserves accepted typography → factual and visual review → explicit package approval. Publication disabled.",
   "publication": "disabled by user",
   "paidBudget": null,
   "oldVisuals": "rejected; local renderer and gallery stopped",
@@ -74,7 +74,7 @@
       "publication": false
     }
   },
-  "fullTwoWeekPack": "not completed; layout multiplication paused while typography and composition are reworked from the owner reference",
+  "fullTwoWeekPack": "Not completed. One visual reference approved. All 8 serif carousel draft transactions and the unreviewed Nunito trial cancelled; no finished complete package approved.",
   "promptSet": {
     "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
     "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
@@ -121,23 +121,20 @@
     "visualCheck": "Full-resolution PNG inspected: original logo, no domain footer, corrected copy and smaller typography."
   },
   "latestDirection": {
-    "reference": "artifacts/instagram-canva-20261103/reference-stock-owner-20261103.png",
-    "referenceSha256": "be06a36e0f87152c48dfba91ab733a40b1c4c6d2715d39ca8bd3425341e62762",
-    "source": "Owner supplied image and explicit feedback on 2026-11-03",
+    "status": "owner-approved visual reference",
+    "reference": "docs/marketing/instagram-2026-11/references/owner-approved-stock-cover.png",
+    "sha256": "e5cc2e0a34d0d0417109fefe1c89c37b8f1b321e9888891f2d6f8c451d44f85f",
+    "canvaAssetId": "MAHZ2bU9qfA",
+    "ownerApproval": "Вот это можно использовать даже как эталон.",
+    "typography": "Unknown in original raster; preserve approved letterforms and scale. Do not claim an identified installed family.",
     "keep": [
-      "photographic scene",
-      "blue and white palette",
-      "stronger headline scale of supplied image"
+      "BAZAAR in Latin, original site logo at top",
+      "Approved dense clean sans-serif letterforms and visible sizes",
+      "Blue headline, dark body, pale background, photographic scene",
+      "No raster CTA button or website footer",
+      "Preserve consistent margins, semantic line breaks and balanced photograph"
     ],
-    "remove": [
-      "raster CTA button and its background",
-      "artwork domain footer",
-      "typeset top brand instead of original logo"
-    ],
-    "fontCandidates": ["Oswald + PT Sans", "Cormorant Garamond + PT Sans"],
-    "canvaFontSearch": "Oswald, Cormorant Garamond and PT Sans found; Golos not found. Search only, no font applied.",
-    "fontCoverage": "See font-coverage.json: exact Google Fonts files inspected for ҢңӨөҮү. Canva rendering is a separate check.",
-    "researchBrief": "DESIGN-RESEARCH.md",
-    "status": "research and next-version brief prepared; no new layout generated or approved"
+    "rejectedTrials": ["Cormorant Garamond + PT Sans", "Oswald + PT Sans"],
+    "scope": "Visual reference only. Not approval of a full carousel, translations, scheduling, Instagram publication, or paid ads."
   }
 }

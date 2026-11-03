@@ -46,5 +46,14 @@
     "requiredCharacters": "ҢңӨөҮү",
     "missing": [],
     "scope": "Unicode cmap check of Google Fonts TTF. Canva availability, font version and optical rendering are not verified. No fonts installed."
+  },
+  {
+    "family": "Nunito",
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf",
+    "sha256": "bb55a5ca5c2042335b3991af27c4d0705d0ef41cac6164ac737fd8f2a1e85207",
+    "requiredCharacters": "ҢңӨөҮү",
+    "missing": [],
+    "scope": "Unicode cmap check of Google Fonts TTF. Canva availability, font version and optical rendering are not verified. No fonts installed.",
+    "decision": "Historical unreviewed trial only. Owner subsequently chose exact original raster letterforms; do not substitute Nunito."
   }
 ]

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "campaign": "kg_store_launch_202611",
   "account": "bazaar.pos",
   "startDate": "2026-11-04",
@@ -98,7 +98,36 @@
         ]
       },
       "ctaMode": "signup",
-      "directKeyword": null
+      "directKeyword": null,
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-04T19:30:00+06:00",
+        "includeReelInMainGrid": true,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-04T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-04T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-04T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "link_sticker",
+        "gridPositionAfterDay14": 10,
+        "coverBrief": "Предметы ассортимента и читаемый фрагмент реального поиска; светлая сцена, масштаб букв эталона.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "p02",
@@ -187,7 +216,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "КАТАЛОГ"
+      "directKeyword": "КАТАЛОГ",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-05T19:30:00+06:00",
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-05T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-05T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-05T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 9,
+        "coverBrief": "Варианты одного товара; размеры/цвета видны в фотографии, без мелкой таблицы.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "r03",
@@ -276,7 +334,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "ПОСТАВКА"
+      "directKeyword": "ПОСТАВКА",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-06T19:30:00+06:00",
+        "includeReelInMainGrid": true,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-06T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-06T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-06T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 8,
+        "coverBrief": "Новая поставка: коробка и товары, ракурс отличается от P04.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "p04",
@@ -365,7 +452,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "ОСТАТОК"
+      "directKeyword": "ОСТАТОК",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-07T19:30:00+06:00",
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-07T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-07T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-07T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 7,
+        "coverBrief": "Точная утверждённая обложка references/owner-approved-stock-cover.png. Остальные слайды ещё не готовы.",
+        "visualReadiness": "cover_reference_approved_package_incomplete"
+      }
     },
     {
       "id": "r05",
@@ -454,7 +570,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "ОСТАТОК"
+      "directKeyword": "ОСТАТОК",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-08T19:30:00+06:00",
+        "includeReelInMainGrid": true,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-08T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-08T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-08T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 6,
+        "coverBrief": "Крупная деталь товара и читаемый фрагмент журнала; не обещать автоматический поиск потерь.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "s06",
@@ -495,7 +640,36 @@
       "claimSources": ["landing", "planCatalog"],
       "durationSeconds": null,
       "ctaMode": "signup",
-      "directKeyword": null
+      "directKeyword": null,
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": null,
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-09T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-09T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-09T12:30:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "link_sticker",
+        "gridPositionAfterDay14": null,
+        "coverBrief": null,
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "s07",
@@ -536,7 +710,36 @@
       "claimSources": ["landing", "planCatalog"],
       "durationSeconds": null,
       "ctaMode": "question",
-      "directKeyword": null
+      "directKeyword": null,
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": null,
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-10T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-10T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-10T12:30:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "question_or_reply",
+        "gridPositionAfterDay14": null,
+        "coverBrief": null,
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "r08",
@@ -625,7 +828,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "МАГАЗИНЫ"
+      "directKeyword": "МАГАЗИНЫ",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-11T19:30:00+06:00",
+        "includeReelInMainGrid": true,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-11T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-11T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-11T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 5,
+        "coverBrief": "Две группы товаров и переключение реальных магазинов; без выдуманного интерфейса.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "p09",
@@ -714,7 +946,36 @@
         ]
       },
       "ctaMode": "signup",
-      "directKeyword": null
+      "directKeyword": null,
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-12T19:30:00+06:00",
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-12T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-12T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-12T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "link_sticker",
+        "gridPositionAfterDay14": 4,
+        "coverBrief": "Одна точка и понятное начало; светлая предметная сцена без обещания скорости внедрения.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "r10",
@@ -803,7 +1064,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "ОТЧЁТ"
+      "directKeyword": "ОТЧЁТ",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-13T19:30:00+06:00",
+        "includeReelInMainGrid": true,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-13T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-13T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-13T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 3,
+        "coverBrief": "Реальный читаемый отчёт; BUSINESS/ENTERPRISE рядом с обещанием аналитики.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "p11",
@@ -892,7 +1182,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "ТАРИФ"
+      "directKeyword": "ТАРИФ",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-14T19:30:00+06:00",
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-14T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-14T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-14T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 2,
+        "coverBrief": "Светлая предметная сцена; сравнение тарифов внутри, не мелкая таблица на обложке.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "r12",
@@ -981,7 +1300,36 @@
         ]
       },
       "ctaMode": "demo",
-      "directKeyword": "ПОКАЗ"
+      "directKeyword": "ПОКАЗ",
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": "2026-11-15T19:30:00+06:00",
+        "includeReelInMainGrid": true,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-15T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-15T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-15T19:45:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "reply_or_direct",
+        "gridPositionAfterDay14": 1,
+        "coverBrief": "Рабочая сцена с реальным читаемым экраном, приглашение посмотреть продукт.",
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "s13",
@@ -1022,7 +1370,36 @@
       "claimSources": ["landing", "planCatalog"],
       "durationSeconds": null,
       "ctaMode": "question",
-      "directKeyword": null
+      "directKeyword": null,
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": null,
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-16T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-16T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-16T12:30:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "question_or_reply",
+        "gridPositionAfterDay14": null,
+        "coverBrief": null,
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     },
     {
       "id": "s14",
@@ -1063,7 +1440,36 @@
       "claimSources": ["landing", "planCatalog"],
       "durationSeconds": null,
       "ctaMode": "signup",
-      "directKeyword": null
+      "directKeyword": null,
+      "distribution": {
+        "status": "planned_only_not_scheduled",
+        "primaryLocale": "ru",
+        "alternateLocale": "kg_after_editorial_review",
+        "publishBothLocalesInSameSlot": false,
+        "feedAt": null,
+        "includeReelInMainGrid": null,
+        "storyFrames": [
+          {
+            "frame": 1,
+            "at": "2026-11-17T12:30:00+06:00",
+            "role": "situation"
+          },
+          {
+            "frame": 2,
+            "at": "2026-11-17T12:30:00+06:00",
+            "role": "proof"
+          },
+          {
+            "frame": 3,
+            "at": "2026-11-17T12:30:00+06:00",
+            "role": "action"
+          }
+        ],
+        "nativeAction": "link_sticker",
+        "gridPositionAfterDay14": null,
+        "coverBrief": null,
+        "visualReadiness": "not_produced_in_approved_style"
+      }
     }
   ],
   "ads": [
@@ -1315,7 +1721,10 @@
       "https://www.instagram.com/bazaar.pos/p/DU1as05gmgx6NHhddp5LSoCiFUN3epI18Q_yQs0/"
     ],
     "sequence": "Товары → поступления → история остатков → магазины → начало работы → отчёты → выбор тарифа → показ",
-    "design": "Новый дизайн через Canva. Название BAZAAR не переводится; POS — только в @bazaar.pos. Старые декоративные знаки не являются частью бренда. Не копировать старый пост; подобрать стильную типографику с кириллицей и кыргызскими буквами."
+    "design": "Approved owner reference governs the complete series. No fake CTA buttons, footer URLs, old slash marks or translated BAZAAR.",
+    "distributionPlan": "docs/marketing/instagram-2026-11/DISTRIBUTION-AND-GRID.md",
+    "languagePolicy": "One primary RU package per slot; KG alternatives after native editorial review and explicit slot selection. Do not automatically double-post.",
+    "scheduleStatus": "Draft only, never schedule until complete package approval and separate publication authorization. Shift all dates if start is missed; no catch-up bulk posts."
   },
   "brandRules": {
     "name": "BAZAAR",
@@ -1327,14 +1736,14 @@
       "two diagonal symbols from old post",
       "literal reconstruction of old post"
     ],
-    "typography": "Research-backed candidates for comparison: Oswald Medium/Semibold + PT Sans Regular; alternative Cormorant Garamond Semibold + PT Sans Regular. All found in connected Canva. Verify actual Canva glyphs and mobile legibility before approval. Set real font families in Canva; an ImageGen font-name prompt is not font verification.",
+    "typography": "Preserve letterforms, dense clean sans-serif character and sizes from owner-approved-stock-cover.png. Font family of raster source is unverified. Cormorant Garamond and Oswald trials rejected; no new typeface experiment in production series.",
     "rendering": "Specialised design application only. Local code-based post generator is stopped.",
     "logo": "Use the original public/brand/logo.png asset at the top instead of typeset BAZAAR. Never redraw or translate the logo.",
     "posterFooter": "No bazaar.kg footer on artwork. Tracking links stay in profile, Story links and ad destinations.",
     "copy": "Use concrete shop situations and plain language. No internal material IDs in public Direct keywords. Every slide must add information.",
-    "composition": "Use the owner-supplied larger-type reference, not the later undersized proof. Keep the successful photograph; balance headline, supporting copy and image together. Do not solve layout issues by shrinking all text.",
+    "composition": "Preserve owner-approved hierarchy, scale, margins, blue/white photographic composition. Vary relevant photo subjects and product demonstrations within this direction; never shrink all text to make copy fit.",
     "artworkCta": "No simulated clickable buttons in PNGs. Organic cover may omit CTA; last slide/caption gives one Direct or profile instruction. Stories reserve room for a real link sticker or reply. Paid ads use native CTA only after budget approval.",
-    "referenceFile": "artifacts/instagram-canva-20261103/reference-stock-owner-20261103.png",
+    "referenceFile": "docs/marketing/instagram-2026-11/references/owner-approved-stock-cover.png",
     "researchBrief": "docs/marketing/instagram-2026-11/DESIGN-RESEARCH.md"
   }
 }
