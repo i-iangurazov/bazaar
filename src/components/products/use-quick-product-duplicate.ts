@@ -15,7 +15,11 @@ export const useQuickProductDuplicate = () => {
   const router = useRouter();
   const trpcUtils = trpc.useUtils();
   const { toast } = useToast();
-  const operationRef = useRef<{ productId: string; storeId?: string; idempotencyKey: string } | null>(null);
+  const operationRef = useRef<{
+    productId: string;
+    storeId?: string;
+    idempotencyKey: string;
+  } | null>(null);
   const requestInFlightRef = useRef(false);
 
   const mutation = trpc.products.duplicate.useMutation({
@@ -43,6 +47,7 @@ export const useQuickProductDuplicate = () => {
     },
   });
 
+  const { mutate } = mutation;
   const duplicateProduct = useCallback(
     (productId: string, storeId?: string) => {
       if (!productId || requestInFlightRef.current) {
@@ -55,9 +60,9 @@ export const useQuickProductDuplicate = () => {
           ? current.idempotencyKey
           : crypto.randomUUID();
       operationRef.current = { productId, storeId, idempotencyKey };
-      mutation.mutate(buildQuickProductDuplicateInput({ productId, storeId, idempotencyKey }));
+      mutate(buildQuickProductDuplicateInput({ productId, storeId, idempotencyKey }));
     },
-    [mutation],
+    [mutate],
   );
 
   return {

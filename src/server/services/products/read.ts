@@ -1280,7 +1280,7 @@ export const listProducts = async ({
   };
 };
 
-export const getProductsBootstrap = async ({
+export const getProductsListContext = async ({
   prisma,
   organizationId,
   user,
@@ -1341,17 +1341,6 @@ export const getProductsBootstrap = async ({
     });
   }
 
-  const list = await listProducts({
-    prisma,
-    organizationId,
-    user,
-    input: {
-      ...input,
-      storeId: selectedStoreId ?? undefined,
-    },
-    logger,
-  });
-
   return {
     stores: stores.map((store) => ({
       ...store,
@@ -1359,6 +1348,43 @@ export const getProductsBootstrap = async ({
     })),
     categories,
     selectedStoreId,
+  };
+};
+
+export const getProductsBootstrap = async ({
+  prisma,
+  organizationId,
+  user,
+  input,
+  logger,
+}: {
+  prisma: PrismaDbClient;
+  organizationId: string;
+  user?: StoreAccessUser;
+  input: ProductBootstrapInput;
+  logger?: Logger;
+}) => {
+  const context =
+    input?.includeContext === false
+      ? {
+          stores: [],
+          categories: [] as string[],
+          selectedStoreId: input.storeId === "all" ? null : input.storeId ?? null,
+        }
+      : await getProductsListContext({ prisma, organizationId, user, input, logger });
+  const list = await listProducts({
+    prisma,
+    organizationId,
+    user,
+    input: {
+      ...input,
+      storeId: context.selectedStoreId ?? undefined,
+    },
+    logger,
+  });
+
+  return {
+    ...context,
     list,
   };
 };

@@ -126,7 +126,17 @@ export const productListInputSchema = z
   })
   .optional();
 
-export const productBootstrapInputSchema = productListInputSchema;
+export const productBootstrapInputSchema = productListInputSchema
+  .unwrap()
+  .extend({
+    // Existing clients keep the complete bootstrap response by default.
+    includeContext: z.boolean().optional(),
+  })
+  .refine((input) => input.includeContext !== false || Boolean(input.storeId?.trim()), {
+    path: ["storeId"],
+    message: "storeRequired",
+  })
+  .optional();
 
 export const productListIdsInputSchema = z
   .object({

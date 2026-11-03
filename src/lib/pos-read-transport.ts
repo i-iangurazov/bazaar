@@ -3,6 +3,7 @@ export const isInteractivePosRead = (type: string, path: string) =>
   type === "query" &&
   (path.startsWith("pos.") ||
     path === "products.list" ||
+    path === "products.bootstrap" ||
     path === "products.lookupScan" ||
     path === "products.searchQuick");
 

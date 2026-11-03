@@ -11,11 +11,12 @@ type SearchInputProps = Omit<InputProps, "value" | "onChange" | "type"> & {
   value: string;
   onValueChange: (value: string) => void;
   cameraScan?: boolean;
+  onScan?: (value: string) => void;
 };
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
   (
-    { value, onValueChange, className, disabled, onKeyDown, cameraScan = false, ...props },
+    { value, onValueChange, className, disabled, onKeyDown, cameraScan = false, onScan, ...props },
     forwardedRef,
   ) => {
     const t = useTranslations("common");
@@ -69,7 +70,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           <CameraScanButton
             iconOnly
             disabled={disabled}
-            onScan={onValueChange}
+            onScan={onScan ?? onValueChange}
             className="absolute right-0 top-0 h-full w-11 rounded-l-none border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground"
           />
         ) : null}

@@ -9,7 +9,9 @@ it("isolates critical reads without timing out writes", () => {
   expect(isInteractivePosRead("query", "products.lookupScan")).toBe(true);
   expect(isInteractivePosRead("query", "products.list")).toBe(true);
   expect(isInteractivePosRead("mutation", "pos.sales.complete")).toBe(false);
-  expect(isInteractivePosRead("query", "products.bootstrap")).toBe(false);
+  expect(isInteractivePosRead("query", "products.bootstrap")).toBe(true);
+  expect(isInteractivePosRead("mutation", "products.bootstrap")).toBe(false);
+  expect(isInteractivePosRead("query", "products.listContext")).toBe(false);
 });
 it("aborts a stalled read and clears the timer after success", async () => {
   vi.useFakeTimers();

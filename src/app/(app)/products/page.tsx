@@ -18,7 +18,8 @@ import {
 
 import { commonListFields, useScopedListState } from "@/lib/useScopedListState";
 import { cn } from "@/lib/utils";
-import { ListViewOptions, ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
+import { ListViewOptions, ListToolbar, FilterField } from "@/components/list-toolbar";
+import { ProductListSearch } from "@/components/products/product-list-search";
 import { PageHeader } from "@/components/page-header";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
 import {
@@ -356,6 +357,9 @@ const ProductsPage = () => {
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
+  const productsBootstrapUtils = useMemo(() => trpcUtils.products.bootstrap, [trpcUtils]);
+  const productsListUtils = useMemo(() => trpcUtils.products.list, [trpcUtils]);
+  const inventoryListUtils = useMemo(() => trpcUtils.inventory.list, [trpcUtils]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [categoryInputValue, setCategoryInputValue] = useState("");
@@ -634,6 +638,11 @@ const ProductsPage = () => {
     ],
     [t, tInventory],
   );
+  const productsContextQuery = trpc.products.listContext.useQuery(
+    { storeId: rawStoreId || undefined },
+    { enabled: productsTableStateReady, staleTime: 60_000, trpc: { abortOnUnmount: true } },
+  );
+  const resolvedStoreId = productsContextQuery.data?.selectedStoreId;
   const productsBootstrapInput = useMemo(
     () => ({
       search: search || undefined,
@@ -641,7 +650,8 @@ const ProductsPage = () => {
       type: productType,
       includeArchived: canManageProducts ? showArchived : undefined,
       readiness: readiness === "all" ? undefined : readiness,
-      storeId: rawStoreId || undefined,
+      storeId: resolvedStoreId || "all",
+      includeContext: false,
       page: productsPage,
       pageSize: productsPageSize,
       sortKey: productSort.key,
@@ -658,18 +668,21 @@ const ProductsPage = () => {
       productsPageSize,
       search,
       showArchived,
-      rawStoreId,
+      resolvedStoreId,
     ],
   );
   const productsBootstrapQuery = trpc.products.bootstrap.useQuery(productsBootstrapInput, {
-    enabled: productsTableStateReady,
+    enabled: productsTableStateReady && productsContextQuery.isSuccess,
     keepPreviousData: true,
+    trpc: { abortOnUnmount: true },
   });
-  const storeId =
-    rawStoreId === "all" ? "" : rawStoreId || productsBootstrapQuery.data?.selectedStoreId || "";
+  const storeId = resolvedStoreId ?? (rawStoreId === "all" ? "" : rawStoreId);
+  const listMatchesStore = productsContextQuery.isSuccess && productsBootstrapQuery.data?.selectedStoreId === (storeId || null);
+  const productsError = productsContextQuery.error ?? productsBootstrapQuery.error;
+  const productsLoading = !productsError && (productsContextQuery.isLoading || productsBootstrapQuery.isLoading || !listMatchesStore);
   const stores = useMemo(
-    () => productsBootstrapQuery.data?.stores ?? [],
-    [productsBootstrapQuery.data?.stores],
+    () => productsContextQuery.data?.stores ?? [],
+    [productsContextQuery.data?.stores],
   );
   const selectedStore = useMemo(
     () => stores.find((store) => store.id === storeId) ?? null,
@@ -741,10 +754,11 @@ const ProductsPage = () => {
     () => new Set(selectedExportColumns),
     [selectedExportColumns],
   );
+  const visibleColumnSignature = visibleProductColumns.join("|");
   const visibleProductColumnSet = useMemo(
     () =>
       new Set<ProductVisibleColumnKey>(
-        visibleProductColumns.filter((column) => {
+        (visibleColumnSignature.split("|") as ProductVisibleColumnKey[]).filter((column) => {
           if (column === "wholesalePrice") return wholesalePricesEnabled;
           if (column === "sku") {
             return enableSku;
@@ -755,7 +769,7 @@ const ProductsPage = () => {
           return true;
         }),
       ),
-    [enableBarcode, enableSku, visibleProductColumns, wholesalePricesEnabled],
+    [enableBarcode, enableSku, visibleColumnSignature, wholesalePricesEnabled],
   );
   useEffect(() => {
     if (!enableBarcode && readiness === "missingBarcode") {
@@ -779,8 +793,8 @@ const ProductsPage = () => {
   );
   const printProfileSettings = printProfileQuery.data?.settings;
   const products = useMemo(
-    () => productsBootstrapQuery.data?.list.items ?? [],
-    [productsBootstrapQuery.data?.list.items],
+    () => listMatchesStore ? productsBootstrapQuery.data?.list.items ?? [] : [],
+    [listMatchesStore, productsBootstrapQuery.data?.list.items],
   );
   useEffect(() => {
     if (
@@ -812,7 +826,7 @@ const ProductsPage = () => {
     productsReturnStateStorageKey,
     productsTableStateReady,
   ]);
-  const productsTotal = productsBootstrapQuery.data?.list.total ?? 0;
+  const productsTotal = listMatchesStore ? productsBootstrapQuery.data?.list.total ?? 0 : 0;
   const hasProductFilters = Boolean(
     search || category || readiness !== "all" || productType !== "all" || showArchived,
   );
@@ -834,8 +848,8 @@ const ProductsPage = () => {
     onSuccess: async (result) => {
       await Promise.all([
         productsBootstrapQuery.refetch(),
-        trpcUtils.products.bootstrap.invalidate(),
-        trpcUtils.products.list.invalidate(),
+        productsBootstrapUtils.invalidate(),
+        productsListUtils.invalidate(),
       ]);
       toast({
         variant: "success",
@@ -854,7 +868,7 @@ const ProductsPage = () => {
   });
   const patchProductArchiveState = useCallback(
     (productId: string, isDeleted: boolean) => {
-      trpcUtils.products.bootstrap.setData(productsBootstrapInput, (current) => {
+      productsBootstrapUtils.setData(productsBootstrapInput, (current) => {
         if (!current) {
           return current;
         }
@@ -883,18 +897,19 @@ const ProductsPage = () => {
         };
       });
     },
-    [productsBootstrapInput, showArchived, trpcUtils.products.bootstrap],
+    [productsBootstrapInput, showArchived, productsBootstrapUtils],
   );
   const storeVisibilityMutation = trpc.products.setStoreVisibility.useMutation();
+  const { mutateAsync: setStoreVisibility, isLoading: changingStoreVisibility } = storeVisibilityMutation;
   const changeStoreVisibility = useCallback(async (productIds: string[], hidden: boolean) => {
-    if (!storeId || !productIds.length || storeVisibilityMutation.isLoading) return;
+    if (!storeId || !productIds.length || changingStoreVisibility) return;
     if (!(await confirm({ description: t(hidden ? "confirmHideInStore" : "confirmShowInStore", {
       store: selectedStore?.name ?? storeId, count: productIds.length,
     }) }))) return;
     try {
       for (let index = 0; index < productIds.length; index += 500) {
         const batch = productIds.slice(index, index + 500);
-        await storeVisibilityMutation.mutateAsync({ storeId, productIds: batch, hidden });
+        await setStoreVisibility({ storeId, productIds: batch, hidden });
         setSelectedIds((current) => new Set([...current].filter((id) => !batch.includes(id))));
       }
       toast({ variant: "success", description: t(hidden ? "hiddenInStoreSuccess" : "shownInStoreSuccess") });
@@ -902,15 +917,15 @@ const ProductsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
     } finally {
       await Promise.all([
-        trpcUtils.products.bootstrap.invalidate(), trpcUtils.products.list.invalidate(),
+        productsBootstrapUtils.invalidate(), productsListUtils.invalidate(),
         trpcUtils.products.byIds.invalidate(), trpcUtils.inventory.searchProducts.invalidate(),
       ]);
     }
-  }, [confirm, selectedStore?.name, storeId, storeVisibilityMutation, t, tErrors, toast, trpcUtils]);
+  }, [confirm, selectedStore?.name, storeId, setStoreVisibility, changingStoreVisibility, t, tErrors, toast, trpcUtils, productsBootstrapUtils, productsListUtils]);
   const archiveMutation = trpc.products.archive.useMutation({
     onMutate: async ({ productId }) => {
-      await trpcUtils.products.bootstrap.cancel(productsBootstrapInput);
-      const previous = trpcUtils.products.bootstrap.getData(productsBootstrapInput);
+      await productsBootstrapUtils.cancel(productsBootstrapInput);
+      const previous = productsBootstrapUtils.getData(productsBootstrapInput);
       patchProductArchiveState(productId, true);
       return { previous };
     },
@@ -919,22 +934,22 @@ const ProductsPage = () => {
     },
     onError: (error, _variables, context) => {
       if (context?.previous) {
-        trpcUtils.products.bootstrap.setData(productsBootstrapInput, context.previous);
+        productsBootstrapUtils.setData(productsBootstrapInput, context.previous);
       }
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
     onSettled: () => {
       void Promise.all([
-        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
-        trpcUtils.products.list.invalidate(),
+        productsBootstrapUtils.invalidate(productsBootstrapInput),
+        productsListUtils.invalidate(),
         trpcUtils.inventory.searchProducts.invalidate(),
       ]);
     },
   });
   const restoreMutation = trpc.products.restore.useMutation({
     onMutate: async ({ productId }) => {
-      await trpcUtils.products.bootstrap.cancel(productsBootstrapInput);
-      const previous = trpcUtils.products.bootstrap.getData(productsBootstrapInput);
+      await productsBootstrapUtils.cancel(productsBootstrapInput);
+      const previous = productsBootstrapUtils.getData(productsBootstrapInput);
       patchProductArchiveState(productId, false);
       return { previous };
     },
@@ -943,14 +958,14 @@ const ProductsPage = () => {
     },
     onError: (error, _variables, context) => {
       if (context?.previous) {
-        trpcUtils.products.bootstrap.setData(productsBootstrapInput, context.previous);
+        productsBootstrapUtils.setData(productsBootstrapInput, context.previous);
       }
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
     onSettled: () => {
       void Promise.all([
-        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
-        trpcUtils.products.list.invalidate(),
+        productsBootstrapUtils.invalidate(productsBootstrapInput),
+        productsListUtils.invalidate(),
         trpcUtils.inventory.searchProducts.invalidate(),
       ]);
     },
@@ -985,6 +1000,7 @@ const ProductsPage = () => {
     onSuccess: async () => {
       await Promise.all([
         productsBootstrapQuery.refetch(),
+        productsContextQuery.refetch(),
         trpcUtils.productCategories.listForStore.invalidate(),
         trpcUtils.productCategories.list.invalidate(),
       ]);
@@ -1050,6 +1066,7 @@ const ProductsPage = () => {
     onSuccess: async (_result, input) => {
       await Promise.all([
         productsBootstrapQuery.refetch(),
+        productsContextQuery.refetch(),
         trpcUtils.productCategories.listForStore.invalidate(),
         trpcUtils.productCategories.list.invalidate(),
       ]);
@@ -1124,8 +1141,8 @@ const ProductsPage = () => {
       onSuccess: async (job) => {
         setDescriptionGenerationJobId(job.id);
         await Promise.all([
-          trpcUtils.products.bootstrap.invalidate(),
-          trpcUtils.products.list.invalidate(),
+          productsBootstrapUtils.invalidate(),
+          productsListUtils.invalidate(),
         ]);
       },
       onError: (error) => {
@@ -1140,8 +1157,8 @@ const ProductsPage = () => {
       onSuccess: async (job) => {
         if (!isDescriptionGenerationJobRunning(job.status)) {
           await Promise.all([
-            trpcUtils.products.bootstrap.invalidate(),
-            trpcUtils.products.list.invalidate(),
+            productsBootstrapUtils.invalidate(),
+            productsListUtils.invalidate(),
           ]);
           if (job.status === ProductDescriptionGenerationJobStatus.DONE && job.failedCount === 0) {
             setSelectedIds(new Set());
@@ -1238,7 +1255,7 @@ const ProductsPage = () => {
 
   const categories = useMemo(() => {
     const set = new Set<string>();
-    (productsBootstrapQuery.data?.categories ?? []).forEach((value) => {
+    (productsContextQuery.data?.categories ?? []).forEach((value) => {
       if (value) {
         set.add(value);
       }
@@ -1249,7 +1266,7 @@ const ProductsPage = () => {
       }
     });
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
-  }, [getProductCategories, products, productsBootstrapQuery.data?.categories]);
+  }, [getProductCategories, products, productsContextQuery.data?.categories]);
   const categoryInputKey = normalizeProductCategoryKey(categoryInputValue);
   const categoryAlreadyExists = Boolean(
     categoryInputKey &&
@@ -1287,7 +1304,7 @@ const ProductsPage = () => {
 
   const applyProductListPatch = useCallback(
     (productId: string, patch: (item: ProductRow) => ProductRow) => {
-      trpcUtils.products.bootstrap.setData(productsBootstrapInput, (current) => {
+      productsBootstrapUtils.setData(productsBootstrapInput, (current) => {
         if (!current) {
           return current;
         }
@@ -1300,14 +1317,18 @@ const ProductsPage = () => {
         };
       });
     },
-    [productsBootstrapInput, trpcUtils.products.bootstrap],
+    [productsBootstrapInput, productsBootstrapUtils],
   );
 
+  const updateInlineProduct = inlineProductMutation.mutateAsync;
+  const updateInlineCategory = inlineCategoryMutation.mutateAsync;
+  const updateInlineStorePrice = inlineStorePriceMutation.mutateAsync;
+  const updateInlineInventory = inlineInventoryAdjustMutation.mutateAsync;
   const executeInlineProductMutation = useCallback(
     async (operation: InlineMutationOperation) => {
-      const previous = trpcUtils.products.bootstrap.getData(productsBootstrapInput);
+      const previous = productsBootstrapUtils.getData(productsBootstrapInput);
       const rollback = () => {
-        trpcUtils.products.bootstrap.setData(productsBootstrapInput, previous);
+        productsBootstrapUtils.setData(productsBootstrapInput, previous);
       };
 
       if (operation.route === "products.inlineUpdate") {
@@ -1326,12 +1347,12 @@ const ProductsPage = () => {
           };
         });
         try {
-          await inlineProductMutation.mutateAsync(operation.input);
+          await updateInlineProduct(operation.input);
         } catch (error) {
           rollback();
           throw error;
         }
-        await trpcUtils.products.bootstrap.invalidate(productsBootstrapInput);
+        await productsBootstrapUtils.invalidate(productsBootstrapInput);
         return;
       }
 
@@ -1357,12 +1378,12 @@ const ProductsPage = () => {
           };
         });
         try {
-          await inlineCategoryMutation.mutateAsync(operation.input);
+          await updateInlineCategory(operation.input);
         } catch (error) {
           rollback();
           throw error;
         }
-        await trpcUtils.products.bootstrap.invalidate(productsBootstrapInput);
+        await productsBootstrapUtils.invalidate(productsBootstrapInput);
         return;
       }
 
@@ -1372,23 +1393,23 @@ const ProductsPage = () => {
           ? { ...item, wholesalePriceKgs: input.wholesalePriceKgs }
           : { ...item, effectivePriceKgs: input.priceKgs, priceOverridden: true });
         try {
-          await inlineStorePriceMutation.mutateAsync(operation.input);
+          await updateInlineStorePrice(operation.input);
         } catch (error) {
           rollback();
           throw error;
         }
-        await trpcUtils.products.bootstrap.invalidate(productsBootstrapInput);
+        await productsBootstrapUtils.invalidate(productsBootstrapInput);
         return;
       }
 
       if (operation.route === "inventory.setOnHand") {
         try {
-          await inlineInventoryAdjustMutation.mutateAsync(operation.input);
+          await updateInlineInventory(operation.input);
         } finally {
           await Promise.all([
-            trpcUtils.products.bootstrap.invalidate(),
-            trpcUtils.products.list.invalidate(),
-            trpcUtils.inventory.list.invalidate(),
+            productsBootstrapUtils.invalidate(),
+            productsListUtils.invalidate(),
+            inventoryListUtils.invalidate(),
           ]);
         }
         return;
@@ -1399,15 +1420,15 @@ const ProductsPage = () => {
     [
       applyProductListPatch,
       getProductCategories,
-      inlineCategoryMutation,
-      inlineInventoryAdjustMutation,
-      inlineProductMutation,
-      inlineStorePriceMutation,
+      updateInlineCategory,
+      updateInlineInventory,
+      updateInlineProduct,
+      updateInlineStorePrice,
       productsBootstrapInput,
       showEffectivePrice,
-      trpcUtils.products.bootstrap,
-      trpcUtils.products.list,
-      trpcUtils.inventory.list,
+      productsBootstrapUtils,
+      productsListUtils,
+      inventoryListUtils,
     ],
   );
 
@@ -1418,7 +1439,7 @@ const ProductsPage = () => {
     "assortment.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
     "pricing.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
     "inventory.updated": () => {
-      void trpcUtils.products.bootstrap.invalidate(undefined, undefined, liveQueryRefreshOptions);
+      void productsBootstrapUtils.invalidate(undefined, undefined, liveQueryRefreshOptions);
     },
   });
 
@@ -2333,6 +2354,9 @@ const ProductsPage = () => {
       trpcUtils.products.byIds,
     ],
   );
+  const archiveProduct = archiveMutation.mutate;
+  const restoreProduct = restoreMutation.mutate;
+  const { duplicateProduct, isLoading: duplicatingProduct } = quickDuplicate;
   const getProductActions = useCallback(
     (product: ProductRow) => {
       if (!canManageProducts) {
@@ -2366,7 +2390,7 @@ const ProductsPage = () => {
                 ) {
                   return;
                 }
-                restoreMutation.mutate({ productId: product.id });
+                restoreProduct({ productId: product.id });
               },
             },
           ]
@@ -2399,13 +2423,13 @@ const ProductsPage = () => {
               key: "duplicate",
               label: t("duplicate"),
               icon: CopyIcon,
-              disabled: quickDuplicate.isLoading,
+              disabled: duplicatingProduct,
               onSelect: () => {
                 if (!storeId) {
                   setDuplicateTarget({ id: product.id, name: product.name });
                   return;
                 }
-                quickDuplicate.duplicateProduct(product.id, storeId);
+                duplicateProduct(product.id, storeId);
               },
             },
             {
@@ -2432,7 +2456,7 @@ const ProductsPage = () => {
                 ) {
                   return;
                 }
-                archiveMutation.mutate({ productId: product.id });
+                archiveProduct({ productId: product.id });
               },
             },
           ];
@@ -2440,7 +2464,7 @@ const ProductsPage = () => {
       return role === "ADMIN" ? [...managementActions, { key: "delete-permanent", label: t("deletePermanent"), icon: DeleteIcon, variant: "danger" as const, onSelect: () => setDeleteTarget(product.id) }] : managementActions;
     },
     [
-      archiveMutation,
+      archiveProduct,
       changeStoreVisibility,
       storeVisibilityMutation.isLoading,
       buildProductListLaunchedHref,
@@ -2450,8 +2474,8 @@ const ProductsPage = () => {
       enableBarcode,
       openPrintForProducts,
       persistProductsReturnState,
-      quickDuplicate,
-      restoreMutation,
+      duplicateProduct, duplicatingProduct,
+      restoreProduct,
       storeId,
       t,
       tCommon,
@@ -3037,8 +3061,8 @@ const ProductsPage = () => {
       });
       result.succeededIds.forEach((id) => patchProductArchiveState(id, archived));
       await Promise.all([
-        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
-        trpcUtils.products.list.invalidate(),
+        productsBootstrapUtils.invalidate(productsBootstrapInput),
+        productsListUtils.invalidate(),
         trpcUtils.products.byIds.invalidate(),
         trpcUtils.inventory.searchProducts.invalidate(),
       ]);
@@ -3537,7 +3561,7 @@ const ProductsPage = () => {
       />
       <ListToolbar
         total={productsTotal}
-        loading={!productsTableStateReady || productsBootstrapQuery.isFetching}
+        loading={!productsTableStateReady || productsContextQuery.isFetching || productsBootstrapQuery.isFetching}
         filters={[
           ...(search
             ? [
@@ -3641,7 +3665,8 @@ const ProductsPage = () => {
           </>
         }
       >
-        <ListSearch
+        <ProductListSearch
+          scopeKey={JSON.stringify([productsTableStorageKey, storeId, category, productType, readiness, showArchived, productsPage, productsPageSize, productSort.key, productSort.direction])}
           dataTour="products-search"
           id="products-search"
           label={tCommon("search")}
@@ -4098,7 +4123,7 @@ const ProductsPage = () => {
                       columns={productColumns}
                       data={visibleItems}
                       getRowId={(product) => product.id}
-                      isLoading={productsBootstrapQuery.isLoading}
+                      isLoading={productsLoading}
                       sorting={productSorting}
                       onSortingChange={handleProductSortingChange}
                       manualSorting
@@ -4566,12 +4591,12 @@ const ProductsPage = () => {
               }}
             />
           </InlineEditTableProvider>
-          {productsBootstrapQuery.isLoading ? (
+          {productsLoading ? (
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-          ) : productsTotal === 0 && !productsBootstrapQuery.isError ? (
+          ) : productsTotal === 0 && !productsError ? (
             selectedStore && !hasProductFilters ? (
               <EmptyState
                 icon={<EmptyIcon className="h-6 w-6" aria-hidden />}
@@ -4641,14 +4666,14 @@ const ProductsPage = () => {
               />
             )
           ) : null}
-          {productsBootstrapQuery.error ? (
+          {productsError ? (
             <Alert variant="destructive" className="mt-4 flex flex-wrap items-center gap-2">
-              <span>{translateError(tErrors, productsBootstrapQuery.error)}</span>
+              <span>{translateError(tErrors, productsError)}</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => productsBootstrapQuery.refetch()}
+                onClick={() => { if (productsContextQuery.isError) void productsContextQuery.refetch(); else void productsBootstrapQuery.refetch(); }}
               >
                 {tErrors("tryAgain")}
               </Button>
@@ -5302,14 +5327,14 @@ const ProductsPage = () => {
                 </Badge>
               ) : null}
             </div>
-            {productsBootstrapQuery.isLoading ? (
+            {productsLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner className="h-4 w-4" />
                 {tCommon("loading")}
               </div>
-            ) : productsBootstrapQuery.error ? (
+            ) : productsError ? (
               <p className="text-sm text-danger">
-                {translateError(tErrors, productsBootstrapQuery.error)}
+                {translateError(tErrors, productsError)}
               </p>
             ) : categories.length ? (
               <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">

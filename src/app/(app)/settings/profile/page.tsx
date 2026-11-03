@@ -346,6 +346,7 @@ const ProfilePage = () => {
         businessQuery.refetch(),
         trpcUtils.stores.list.invalidate(),
         trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.listContext.invalidate(),
         trpcUtils.products.getById.invalidate(),
         trpcUtils.products.storePricing.invalidate(),
         trpcUtils.products.searchQuick.invalidate(),
