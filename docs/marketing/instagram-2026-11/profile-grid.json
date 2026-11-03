@@ -26,7 +26,7 @@
     "existing_3"
   ],
   "requiresBeforeRelease": [
-    "10 final cover exports",
+    "Four carousel cover exports to 1080x1350; six ImageGen Reel cover drafts already pass intake",
     "Current personal Instagram profile order and crop",
     "Main grid and mobile-size visual inspection",
     "Full package approval and explicit publication authorization"
@@ -58,5 +58,12 @@
     "pinBadges": "None visible; manual reordering not inspected",
     "publicationRights": "Not verified",
     "profileMutated": false
+  },
+  "reviewStages": {
+    "gallery": "artifacts/instagram-canva-20261103/review-p04-v4/index.html",
+    "available": ["start", "week1", "week2"],
+    "cellCounts": [3, 8, 13],
+    "default": "week2",
+    "orderCheck": "Passed against campaign calendar; actual browser layout not yet checked"
   }
 }
