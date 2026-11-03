@@ -11,7 +11,8 @@
     "Use one existing thumbnail presentation across source lists and selected rows; recover image failure state when URL changes.",
     "Refresh selected photo/SKU/barcode after restored drafts, window focus and product SSE events; debounce event bursts.",
     "Show localized read-error/retry notice without clearing inputs or blocking an otherwise valid document.",
-    "Preserve historical read access on expired subscriptions while stock writes retain their existing subscription gates."
+    "Preserve historical read access on expired subscriptions while stock writes retain their existing subscription gates.",
+    "Lazy-load source/selected thumbnails: a real 500-line browser check reduced initial image requests from 500 to 100; scrolling loads the final photo."
   ],
   "preserved": [
     "Customer-requested two-column operational layouts, proportions and product picker",
@@ -83,7 +84,25 @@
     },
     "environmentRecovery": "An earlier build exhausted local disk and the disposable test PostgreSQL stopped; that run was discarded. Only inactive temporary build copies were removed. The isolated cluster recovered; all accepted checks were rerun. A 2 GiB build heap was insufficient; the accepted production build used 4 GiB.",
     "evidenceDirectory": "/private/tmp/bazaar-document-photos-20261103",
-    "ci": "Require successful checks and production smoke on the exact published SHA; final run URLs are recorded in the delivery message."
+    "ci": "Require successful checks and production smoke on the exact published SHA; final run URLs are recorded in the delivery message.",
+    "largeDocumentBrowser": {
+      "before": {
+        "lines": 500,
+        "initialImageRequests": 500,
+        "readyMs": 1637,
+        "lazyImages": 0
+      },
+      "after": {
+        "lines": 500,
+        "initialImageRequests": 100,
+        "readyMs": 1513,
+        "lazyImages": 500,
+        "requestsAfterScroll": 119,
+        "lastPhotoLoaded": true
+      },
+      "note": "Synthetic image URLs, actual authenticated transfer form. Network-byte and real-world latency claims are intentionally not inferred from this fixture."
+    },
+    "latestAcceptance": "Production/standalone rebuild, all 13 browser scenarios and unchanged business hashes repeated after adding lazy image loading."
   },
   "reference": {
     "url": "https://github.com/frappe/erpnext/blob/develop/erpnext/stock/doctype/stock_entry/stock_entry.py",
