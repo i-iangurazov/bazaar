@@ -126,9 +126,10 @@
         "nativeAction": "link_sticker",
         "gridPositionAfterDay14": 10,
         "coverBrief": "Утверждённая светлая сине-белая предметная фотография. Крупный заголовок и исходный логотип; без выдуманного интерфейса.",
-        "visualReadiness": "native_canva_mp4_cover_and_three_story_images_prepared_not_approved",
+        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
         "canvaVideoDesignId": "DAHZ2tbDPeE",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ2tbDPeE", "DAHZ3IgIN5k"]
       },
       "storyInteractions": [
         {
@@ -299,8 +300,9 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 9,
         "coverBrief": "Варианты одного товара; размеры/цвета видны в фотографии, без мелкой таблицы.",
-        "visualReadiness": "four_slide_and_three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_carousel_and_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
       },
       "coverCopy": {
         "ru": {
@@ -465,9 +467,10 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 8,
         "coverBrief": "Новая поставка: коробка и товары, ракурс отличается от P04.",
-        "visualReadiness": "native_canva_mp4_cover_and_three_story_images_prepared_not_approved",
+        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
         "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
       },
       "coverCopy": {
         "ru": {
@@ -631,8 +634,9 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 7,
         "coverBrief": "Точная утверждённая обложка references/owner-approved-stock-cover.png; три продолжения с проверкой продаж, движений и обращением в Direct.",
-        "visualReadiness": "four_slide_and_three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_carousel_and_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
       },
       "artworkSources": {
         "cover": "p04_ru_01",
@@ -784,9 +788,10 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 6,
         "coverBrief": "Утверждённая светлая сине-белая предметная фотография. Крупный заголовок и исходный логотип; без выдуманного интерфейса.",
-        "visualReadiness": "native_canva_mp4_cover_and_three_story_images_prepared_not_approved",
+        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
         "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
       },
       "coverCopy": {
         "ru": {
@@ -902,8 +907,9 @@
         "nativeAction": "link_sticker",
         "gridPositionAfterDay14": null,
         "coverBrief": null,
-        "visualReadiness": "three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
       },
       "artworkSources": {
         "frames": [],
@@ -1006,8 +1012,9 @@
         "nativeAction": "question_or_reply",
         "gridPositionAfterDay14": null,
         "coverBrief": null,
-        "visualReadiness": "three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
       },
       "artworkSources": {
         "frames": [],
@@ -1157,9 +1164,10 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 5,
         "coverBrief": "Утверждённая светлая сине-белая предметная фотография. Крупный заголовок и исходный логотип; без выдуманного интерфейса.",
-        "visualReadiness": "native_canva_mp4_cover_and_three_story_images_prepared_not_approved",
+        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
         "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
       },
       "coverCopy": {
         "ru": {
@@ -1323,8 +1331,9 @@
         "nativeAction": "link_sticker",
         "gridPositionAfterDay14": 4,
         "coverBrief": "Одна точка и понятное начало; светлая предметная сцена без обещания скорости внедрения.",
-        "visualReadiness": "four_slide_and_three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_carousel_and_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
       },
       "coverCopy": {
         "ru": {
@@ -1482,9 +1491,10 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 3,
         "coverBrief": "Реальный читаемый отчёт; BUSINESS/ENTERPRISE рядом с обещанием аналитики.",
-        "visualReadiness": "native_canva_mp4_cover_and_three_story_images_prepared_not_approved",
+        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
         "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
       },
       "coverCopy": {
         "ru": {
@@ -1648,8 +1658,9 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 2,
         "coverBrief": "Светлая предметная сцена; сравнение тарифов внутри, не мелкая таблица на обложке.",
-        "visualReadiness": "four_slide_and_three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_carousel_and_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
       },
       "coverCopy": {
         "ru": {
@@ -1807,9 +1818,10 @@
         "nativeAction": "reply_or_direct",
         "gridPositionAfterDay14": 1,
         "coverBrief": "Рабочая сцена с реальным читаемым экраном, приглашение посмотреть продукт.",
-        "visualReadiness": "native_canva_mp4_cover_and_three_story_images_prepared_not_approved",
+        "visualReadiness": "complete_native_canva_video_cover_and_story_draft_package",
         "canvaVideoDesignId": "DAHZ24dI8do",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ24dI8do", "DAHZ3IgIN5k"]
       },
       "coverCopy": {
         "ru": {
@@ -1925,8 +1937,9 @@
         "nativeAction": "question_or_reply",
         "gridPositionAfterDay14": null,
         "coverBrief": null,
-        "visualReadiness": "three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
       },
       "artworkSources": {
         "frames": [],
@@ -2028,8 +2041,9 @@
         "nativeAction": "link_sticker",
         "gridPositionAfterDay14": null,
         "coverBrief": null,
-        "visualReadiness": "three_story_artworks_created_native_export_pending",
-        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim."
+        "visualReadiness": "complete_native_story_draft_package",
+        "visualEvidence": "Illustrative AI retail still life; no product screen recording and no customer result claim.",
+        "canvaSourceDesignIds": ["DAHZ2-vrRbI"]
       },
       "artworkSources": {
         "frames": [],
@@ -2155,8 +2169,9 @@
         "primaryLocale": "ru",
         "nativeAction": "send_instagram_message",
         "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "feed_and_vertical_source_artwork_mapped_native_exports_pending",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown."
+        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
+        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI"]
       }
     },
     {
@@ -2247,8 +2262,9 @@
         "primaryLocale": "ru",
         "nativeAction": "send_instagram_message",
         "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "feed_and_vertical_source_artwork_mapped_native_exports_pending",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown."
+        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
+        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI", "DAHZ24dI8do"]
       }
     },
     {
@@ -2339,8 +2355,9 @@
         "primaryLocale": "ru",
         "nativeAction": "send_instagram_message",
         "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "feed_and_vertical_source_artwork_mapped_native_exports_pending",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown."
+        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
+        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI", "DAHZ24dI8do"]
       }
     },
     {
@@ -2431,8 +2448,9 @@
         "primaryLocale": "ru",
         "nativeAction": "send_instagram_message",
         "nativeCtaLabel": "Отправить сообщение",
-        "visualReadiness": "feed_and_vertical_source_artwork_mapped_native_exports_pending",
-        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown."
+        "visualReadiness": "native_feed_and_vertical_exports_complete_not_approved",
+        "attribution": "Use Meta ad referral/ad ID evidence for paid Direct attribution. A keyword shared with organic content is not evidence of paid acquisition. If unavailable, record source as unknown.",
+        "canvaSourceDesignIds": ["DAHZ3IgIN5k", "DAHZ2-vrRbI", "DAHZ24dI8do"]
       }
     }
   ],

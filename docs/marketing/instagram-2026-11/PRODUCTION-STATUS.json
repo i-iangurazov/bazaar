@@ -1,6 +1,6 @@
 {
   "date": "2026-11-03",
-  "stage": "final_exports_pending",
+  "stage": "revision_4_in_progress",
   "fullGoalComplete": false,
   "branch": "main",
   "primaryReleaseLanguage": "ru",
@@ -13,31 +13,53 @@
     "carouselSlideArtwork": 16,
     "canvaReels": 6,
     "storyArtwork": 42,
-    "nativeStoryFrames1080x1920": 18,
+    "nativeStoryFrames1080x1920": 42,
     "adConceptsWithBothFormatArtworkMapped": 4,
     "adVisualAssignments": 24,
-    "uniqueSourceImages": 75
+    "uniqueSourceImages": 75,
+    "nativeFeedImages1080x1350": 26
   },
   "target": {
     "feedCovers": 10,
-    "carouselSlides": 16,
+    "carouselSlides": 18,
     "reels": 6,
     "storyFrames": 42,
     "adConcepts": 4,
     "adFramesPerFormat": 3,
     "adFormats": ["feed", "vertical"]
   },
-  "completeFilePackages": ["r01_ru", "r03_ru", "r05_ru", "r08_ru", "r10_ru", "r12_ru"],
+  "completeFilePackages": [
+    "r01_ru",
+    "r03_ru",
+    "r05_ru",
+    "r08_ru",
+    "r10_ru",
+    "r12_ru",
+    "p02_ru",
+    "p04_ru",
+    "s06_ru",
+    "s07_ru",
+    "p09_ru",
+    "p11_ru",
+    "s13_ru",
+    "s14_ru",
+    "ad01_ru",
+    "ad02_ru",
+    "ad03_ru",
+    "ad04_ru"
+  ],
   "approvedPackages": 0,
   "reviewGallery": "artifacts/instagram-canva-20261103/review-p04-v4/index.html",
   "gridPreview": "artifacts/instagram-canva-20261103/production/qa/planned-grid-3x4.png",
   "generationEvidence": "artifacts/instagram-canva-20261103/production/assets.json",
   "remaining": [
-    "Native export of 16 carousel cards to 1080x1350; source p02_ru_04 is 1092x1440.",
-    "Native export of 24 non-Reel Story frames to 1080x1920 from the 120-second Canva timeline.",
-    "Complete final 12 feed / 12 vertical ad placements; 7 vertical placements already map to verified native Reel frames.",
-    "Verify the final full gallery in desktop/mobile browser, actual Instagram crop and sticker overlays.",
-    "Re-import remaining packages after native exports, final owner review and complete archive."
+    "Retain current accepted font appearance and normalize illustrated headline weight and scale.",
+    "Use Новичок, Бизнесмен and Монополист unchanged, with store, product and active-user limits plus actual features.",
+    "Produce varied retail scenes and the broader module sequence in revision-plan.json.",
+    "Place real screenshots only on separate clean slides, Story frames and Reel scenes. Never over an illustration.",
+    "Finish native exports and verification of the revised 6 Reels, 4 carousels (18 slides), 42 Stories and 4 ad concepts.",
+    "Re-ingest revised packages, verify the chronological and profile views on desktop/mobile, and build the full review archive.",
+    "Obtain complete-package review. Publication remains disabled; paid budget is null."
   ],
   "canvaCapabilityNote": "Current new video timeline works in personal Canva UI. MCP start-editing exposes no fills despite real 4-scene video; inspection transaction cancelled without changes. Do not claim video bulk-edit automation through this API works.",
   "profileAudit": "profile-grid.json",
@@ -150,12 +172,12 @@
     {
       "id": "DAHZ2-vrRbI",
       "url": "https://www.canva.com/d/fkFylJl83ix9_Ag",
-      "purpose": "24 non-Reel Stories; native 120-second timeline assembled, download still pending"
+      "purpose": "Native revision-3 Stories exported and verified; revised standalone application frames pending."
     },
     {
       "id": "DAHZ3IgIN5k",
       "url": "https://www.canva.com/d/XdfrSQA5elzN82u",
-      "purpose": "1080x1350 feed exports; 7 native pages confirmed, last page requires inspection; project incomplete"
+      "purpose": "26 native revision-3 feed PNGs exported and verified; current editorial revision is not yet complete."
     }
   ],
   "figmaSourceBoard": {
@@ -171,10 +193,56 @@
   },
   "browserAccess": {
     "profile": "Personal Chrome Ilias only",
-    "lastCheck": "Local browser use is disabled in Work settings",
-    "userReport": "Chrome connected; Manage visible; user explicitly selected @Chrome in this chat",
-    "nextStep": "Restart Codex and return to this chat. Do not switch browser/profile or bypass the restriction."
+    "browserId": "3",
+    "lastCheck": "Working through cua_repl; native Canva downloads completed.",
+    "nextStep": "Continue in the same personal browser. Do not switch profile."
   },
   "nativePlacementVerification": "Not performed in Instagram; publication disabled.",
-  "visualEvidence": "Illustrative AI still life; silent four-card Reels assembled in Canva. No product screen recording or fabricated client results."
+  "visualEvidence": "Revision 3: illustrative AI photos and six Canva MP4s. Revision 4: real current-app screenshots are being added on separate clean frames, using an isolated synthetic business; not screen recordings.",
+  "activeEditorialRevision": "revision-plan.json",
+  "releaseReady": false,
+  "previousRevision": {
+    "revision": 3,
+    "completeFilePackages": [
+      "r01_ru",
+      "r03_ru",
+      "r05_ru",
+      "r08_ru",
+      "r10_ru",
+      "r12_ru",
+      "p02_ru",
+      "p04_ru",
+      "s06_ru",
+      "s07_ru",
+      "p09_ru",
+      "p11_ru",
+      "s13_ru",
+      "s14_ru",
+      "ad01_ru",
+      "ad02_ru",
+      "ad03_ru",
+      "ad04_ru"
+    ],
+    "count": 18,
+    "status": "Superseded for final release by current owner instructions; none approved."
+  },
+  "rejectedOverlay": {
+    "designId": "DAHZ3o7bSyY",
+    "transactionId": "5354175080281234914",
+    "transactionStatus": "cancelled",
+    "designStatus": "archived in FAHZ1thu7x8",
+    "rule": "Owner forbids screenshots over illustrations. Do not reuse overlay preview."
+  },
+  "revision4Preview": "revision-preview.json",
+  "appScreens": "app-screen-evidence.json",
+  "imageStudioVerification": "One actual successful UI job in isolated media-production environment; output manually reviewed; not saved to production.",
+  "standaloneScreenshots": "P02, P04 and P09 saved with separate native application pages. All 12 actual PNG exports are 1080×1350 and were inspected in the sequence. No screenshot over an illustrated card.",
+  "revision4": {
+    "savedNativeCarousels": ["p02", "p04", "p09"],
+    "savedNativeCarouselPages": 12,
+    "saveApproval": "Explicit owner approval after full-sequence previews",
+    "fullCampaignApproval": false,
+    "fullRevisedFilePackages": 0,
+    "next": "Complete P11, six Reels, all revised Stories and ad adaptations; then atomically replace campaign/media packages."
+  }
 }

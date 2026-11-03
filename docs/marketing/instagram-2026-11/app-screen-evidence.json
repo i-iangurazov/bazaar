@@ -1,0 +1,317 @@
+{
+  "date": "2026-11-03",
+  "sourceRevision": "7f842153ecde5a9ed1e8b756660add94e8c4bf78",
+  "source": "Real current application in a separate source copy; native personal Chrome screenshots. No generated or retouched UI.",
+  "environment": {
+    "database": "bazaar_instagram_demo_20261103",
+    "databaseHost": "127.0.0.1:55440",
+    "url": "http://instagram-demo.localhost:3124",
+    "syntheticDataClonedFrom": "bazaar_espresso_ui",
+    "originalTestDatabaseChanged": false,
+    "customerDatabaseUsed": false,
+    "externalProviders": "disabled",
+    "studioWork": {
+      "url": "http://instagram-demo.localhost:3125",
+      "database": "bazaar_instagram_demo_20261103",
+      "providerMode": "Existing image connection only; one manually initiated media-production job. Other providers disabled.",
+      "automatedTest": false
+    }
+  },
+  "captureRule": "Standalone slides/frames/scenes only. The earlier overlay trial was cancelled and archived.",
+  "captured": [
+    "POS barcode search and current synthetic draft",
+    "catalog product and variant stock",
+    "completed sale in movements",
+    "posted write-off",
+    "receiving input and posted document",
+    "stock-count line and unapplied summary",
+    "customer-order summary and positions",
+    "analytics revenue and gross profit",
+    "actual BAAM October answer",
+    "actual successful image-studio original and result"
+  ],
+  "baamVerification": {
+    "prompt": "Покажи топ-7 товаров за октябрь 2026 года",
+    "result": "Actual product ranking and linked product returned on synthetic data.",
+    "mode": "Basic local commands; external AI connection not configured or tested."
+  },
+  "imageStudio": {
+    "database": "bazaar_instagram_demo_20261103",
+    "productionChanged": false,
+    "mode": "one manually initiated media-production job through actual BAZAAR UI; existing image connection only",
+    "jobs": [
+      {
+        "id": "7f036b7f-a6df-4d03-a625-c7af86d66f77",
+        "status": "SUCCEEDED",
+        "attemptCount": 1,
+        "productId": null,
+        "backgroundMode": "WHITE",
+        "softShadow": true,
+        "savedAt": null,
+        "startedAt": "2026-11-03T15:39:24.193Z",
+        "completedAt": "2026-11-03T15:39:42.012Z",
+        "sourceImageBytes": 2778199,
+        "outputImageBytes": 170960
+      }
+    ],
+    "input": {
+      "file": "artifacts/instagram-canva-20261103/production/studio-demo/input-photo.png",
+      "origin": "AI-generated non-sensitive demonstration product photograph, not a customer photo",
+      "sha256": "62b8b22cb1e31fb2de4bde3a350bc4a49e7509c713b1054963e3b4989c8581f3"
+    },
+    "output": {
+      "file": "artifacts/instagram-canva-20261103/production/studio-demo/actual-bazaar-result.jpg",
+      "origin": "Actual BAZAAR image-studio output from the successful UI job",
+      "sha256": "f81a14f884c2c3b7e7e3e0ce2572b0cfcd941a6be27625405893c66fa1e14580"
+    },
+    "review": "Original and result inspected together. Color, form, laces and stitching reviewed; no claim of guaranteed perfect preservation. Not saved to a production product."
+  },
+  "canvaAssets": {
+    "catalog": "MAHZ3lFZWtQ",
+    "movements": "MAHZ3uurxEs",
+    "writeOff": "MAHZ31DiGB4",
+    "cleanCatalogShirt": "MAHZ4Gonpho",
+    "catalogVariantStock": "MAHZ4IlXFMo",
+    "studioOriginalMobile": "MAHZ4I7K1zE",
+    "studioResultMobile": "MAHZ4N5nx90"
+  },
+  "files": [
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/analytics-context.jpg",
+      "sha256": "07c5567206528252a906e1383c53b1da14fd14ebd70d916d40fdf3fd38d6bbcf",
+      "bytes": 100841,
+      "size": [1710, 929],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/analytics-gross-profit.jpg",
+      "sha256": "2def1d87cc251c5a08dd041662c38f7457d1d6cd7579df85904dbacdd3d1b3b4",
+      "bytes": 7513,
+      "size": [331, 214],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/analytics-revenue.jpg",
+      "sha256": "4708c319aad715b3df4c020dcb4d978962a16bcdcf31443b54d2ea17da3623e2",
+      "bytes": 9525,
+      "size": [331, 214],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/baam-october-context.jpg",
+      "sha256": "9fc3beebe3020ce87ec8ec6babf2ede477d4205c006dfa7ce4c8cfd636a91493",
+      "bytes": 109873,
+      "size": [1710, 929],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/baam-product-ranking.jpg",
+      "sha256": "c03f9ee760477b26835aaeda993004e27b0d2e6b3c8f830f17cd2f22aa9111c0",
+      "bytes": 8863,
+      "size": [449, 193],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-product-mobile-context.jpg",
+      "sha256": "148ee11e4e27eb69144ccf4588fab77f4c21abd1dafd33c52e502ee92821d0d4",
+      "bytes": 23735,
+      "size": [390, 844],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-product-mobile.jpg",
+      "sha256": "76d8ccee87e9f909e04fd0e9357afe083b611623e92e5f62b32a54465508e8e6",
+      "bytes": 12022,
+      "size": [356, 350],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-shirt-mobile-v2.jpg",
+      "sha256": "224740d50fa533f4af9dee973312927d3662c59ff67473500794c40da3ff123b",
+      "bytes": 10711,
+      "size": [356, 350],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-shirt-mobile.jpg",
+      "sha256": "f618adac90cc160e9bc9285dbe0498d8db743a48656fef79b2cd0e69166615c1",
+      "bytes": 11497,
+      "size": [356, 350],
+      "purpose": "rejected_fixed_navigation_overlap"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-variant-stock-mobile.jpg",
+      "sha256": "010fe003aecd86a0edd6abfd850fb7d7ce8e5bfd5be912460091cec9489e0891",
+      "bytes": 6051,
+      "size": [298, 287],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/catalog-variants-mobile.jpg",
+      "sha256": "16ce4ae08a04968c7b43c346e65dfe3f4a01785573cdd2e0ae7d9ee183d87a0c",
+      "bytes": 13124,
+      "size": [324, 568],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/order-lines-mobile.jpg",
+      "sha256": "61d7503638dc026d87c17344ea929e9ec0d5d641ed6007e00e6cde74de28f339",
+      "bytes": 11441,
+      "size": [358, 303],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/order-summary-mobile.jpg",
+      "sha256": "21548e775b0bec63adea5a7cc01d72bf2752b516721ec60e55d1ba2496028c5a",
+      "bytes": 9945,
+      "size": [358, 335],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/pos-barcode-search-mobile.jpg",
+      "sha256": "928b36c09b484018435e08107d6c908dbdf46ebd8c3481f5904a90f66fe104d6",
+      "bytes": 14746,
+      "size": [390, 302],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/pos-current-check-mobile.jpg",
+      "sha256": "65aeeaeb13af09272e9d15d3725f64c848c2a591effb9dbbba65e6edb4331c56",
+      "bytes": 25849,
+      "size": [390, 620],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/receiving-context.jpg",
+      "sha256": "8b4f548c4576873078c950ca9090bdccc49cc8fd70dfce001ea5d88f59cd827d",
+      "bytes": 26604,
+      "size": [390, 844],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/receiving-form-context.jpg",
+      "sha256": "912fa0d54db23f350551bc0f4325b0139584e241ab043c23a6ce93cd4cb08d8f",
+      "bytes": 3424,
+      "size": [390, 212],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/receiving-line-input-mobile.jpg",
+      "sha256": "869efc9ab1e2a653ec4b52fbceabeac3fd8037e91dd40726a97eca64734af753",
+      "bytes": 9326,
+      "size": [324, 378],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/receiving-summary-mobile.jpg",
+      "sha256": "99783d2931e09c422b45d473d58a6a28bf99b0535ea662b9e6f0534f8dc2d7db",
+      "bytes": 22687,
+      "size": [358, 702],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-count-context.jpg",
+      "sha256": "0483d69a272d289c9e2dbd47943da5e2e90d16e0167c57ac1a19f12701088da5",
+      "bytes": 28582,
+      "size": [390, 844],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-count-line-mobile.jpg",
+      "sha256": "c395be16249a3f41874f10321177b0227b8b1a89a7de4a9bc843bf8ac8ca8b08",
+      "bytes": 7166,
+      "size": [324, 172],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-count-summary-mobile.jpg",
+      "sha256": "42fda6addbab7aa3474754ebde26596ec9ed6439a19810a10c625c86314730ab",
+      "bytes": 8008,
+      "size": [358, 271],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-sale-mobile-context.jpg",
+      "sha256": "9886a1b3c430f60f2f3fa72874f7df97d435408b27b09ea2d1d02c27af69525b",
+      "bytes": 16148,
+      "size": [390, 438],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-sale-mobile.jpg",
+      "sha256": "163929b0b329ae0d70b4e4ebc322e1640a3a078953589818c74a6b7d93a088a3",
+      "bytes": 14170,
+      "size": [324, 363],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-writeoff-context.jpg",
+      "sha256": "4b56556925d9de95d84de2cb962930ac150a15fc65a9b688b07a162f6be6956f",
+      "bytes": 3231,
+      "size": [390, 212],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/stock-writeoff-mobile.jpg",
+      "sha256": "16f3a21302acde9a11f439eab611097dbfc0272a978923e863a968f132ba95da",
+      "bytes": 15408,
+      "size": [324, 361],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-comparison-desktop.jpg",
+      "sha256": "da587c8a437b7cbed420498269f85ea366c63af7acc3e8220efc7ea69054a180",
+      "bytes": 38457,
+      "size": [1320, 382],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-original-mobile.jpg",
+      "sha256": "eaaa5937d314e0df514f4d98f548166dcbda0d720cc3232eff50be9f73db60d9",
+      "bytes": 18606,
+      "size": [324, 378],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-original-panel.jpg",
+      "sha256": "fc1baf8e62ed648c91d3b6f60bc85f793a9e272bbd6993ac28baa36ba07299c1",
+      "bytes": 21803,
+      "size": [647, 382],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-result-mobile.jpg",
+      "sha256": "fb1a8037b9db11f11d8d308a060750e936e104119fd76b11c52c0c9fea11bdc0",
+      "bytes": 14250,
+      "size": [324, 378],
+      "purpose": "release_candidate"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-result-panel.jpg",
+      "sha256": "32604f0ad09ae5700f62a0818ad54c9b49c75793bfcc78a8b64770332500081a",
+      "bytes": 16297,
+      "size": [647, 382],
+      "purpose": "qa_context"
+    },
+    {
+      "file": "artifacts/instagram-canva-20261103/production/app-screens/studio-success-context.jpg",
+      "sha256": "ff5349d40f2c66df6023775f049e91a1d62b832a287cf3148f19f5609eeb16ba",
+      "bytes": 108858,
+      "size": [1710, 929],
+      "purpose": "qa_context"
+    }
+  ],
+  "nativeExportEvidence": [
+    "artifacts/instagram-canva-20261103/production/feed-native-verification.json",
+    "artifacts/instagram-canva-20261103/production/stories-series-verification.json",
+    "artifacts/instagram-canva-20261103/production/ad01-vertical-verification.json"
+  ],
+  "notIncluded": "No customer data from the authenticated production dashboard is included in these screenshots.",
+  "demoOperations": "artifacts/instagram-canva-20261103/demo-fixture.json",
+  "rejectedCaptures": [
+    {
+      "file": "catalog-shirt-mobile.jpg",
+      "reason": "Fixed app navigation obscures the product card. Replaced with clean version 2 after viewport-boundary check."
+    }
+  ]
+}

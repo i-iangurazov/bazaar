@@ -1,0 +1,1037 @@
+{
+  "revision": 4,
+  "date": "2026-11-03",
+  "status": "copy_and_structure_draft_visual_production_in_progress",
+  "supersedes": "The 18 native version-3 file packages remain source material, not the final release after the owner's latest corrections.",
+  "publicationEnabled": false,
+  "paidBudget": null,
+  "schedule": {
+    "mode": "relative_days_until_full_release_approval",
+    "timezone": "Asia/Bishkek",
+    "feedHypothesis": "19:30",
+    "storiesHypothesis": ["12:30", "12:30", "19:45"],
+    "storyOnlyDays": "Three frames at 12:30",
+    "rule": "Move all 14 days together. No backfilling missed dates with mass posting; times are hypotheses pending account Insights."
+  },
+  "protectedBrand": {
+    "name": "BAZAAR",
+    "logo": "public/brand/logo.png",
+    "logoRule": "Original asset in Latin, unchanged proportions. No translated or regenerated wordmark.",
+    "typeRule": "Keep the currently accepted clean dense sans-serif letterforms. Normalize headline weight and scale; do not introduce another font family. Inspect at equal canvas width and in the whole grid.",
+    "fontFamilyStatus": "Unknown in the original raster. Canva's automatic DM Sans reconstruction was visually different and is excluded.",
+    "reference": "references/owner-approved-stock-cover.png",
+    "secondaryTypeAppearanceReference": "artifacts/instagram-canva-20261103/production/feed-native/r05_ru_cover.png",
+    "noDrawnCtaButton": true,
+    "noDomainFooter": true,
+    "screenshotsOnIllustration": "forbidden_by_owner",
+    "screenshotPlacement": "Separate carousel slides, separate Story frames and separate Reel scenes. No interface screenshot over an illustrated or photographic card.",
+    "posOnlyInInstagramUsername": true,
+    "screenshotTypography": "Preserve real application typography. Do not retype, regenerate or retouch interface labels, statuses or values. Marketing headline consistency applies to illustrated cards."
+  },
+  "plans": [
+    {
+      "code": "STARTER",
+      "displayName": "Новичок",
+      "translateDisplayName": false,
+      "maxStores": 1,
+      "maxProducts": 1000,
+      "maxActiveUsers": 5,
+      "features": ["Касса", "Каталог", "Заказы покупателей", "Ценники"],
+      "excluded": ["Инвентаризация", "Аналитика", "Импорт", "Экспорт"]
+    },
+    {
+      "code": "BUSINESS",
+      "displayName": "Бизнесмен",
+      "translateDisplayName": false,
+      "maxStores": 5,
+      "maxProducts": 5000,
+      "maxActiveUsers": 10,
+      "features": [
+        "Всё из тарифа «Новичок»",
+        "Инвентаризация",
+        "Аналитика",
+        "Импорт и экспорт",
+        "Цены по магазинам",
+        "Комплекты",
+        "Партии со сроками годности",
+        "Закрытие периода"
+      ]
+    },
+    {
+      "code": "ENTERPRISE",
+      "displayName": "Монополист",
+      "translateDisplayName": false,
+      "maxStores": 15,
+      "maxProducts": 20000,
+      "maxActiveUsers": 20,
+      "features": [
+        "Всё из тарифа «Бизнесмен»",
+        "Комплаенс",
+        "Инструменты поддержки",
+        "Модуль ККМ при отдельной настройке"
+      ]
+    }
+  ],
+  "planEvidence": ["messages/ru.json:billing.plans", "src/server/billing/planCatalog.ts"],
+  "editorialRules": [
+    "One everyday task, an actual product example and one main next step per item.",
+    "Distinct concepts and industries, not a new heading over the same cosmetic still life.",
+    "Application screenshots are standalone slides/frames/scenes, never overlays on an illustration. Keep the illustrated card intact. Show large relevant application views on a separate clean page; never squeeze a whole desktop table into a phone-sized panel.",
+    "Screens come from the real current application using an isolated synthetic business. Label demonstration data in the material or accompanying caption.",
+    "AI photography is illustrative. Never present it as a client photo, actual testimonial or application result.",
+    "Do not invent successful AI processing, connected marketplaces, automatic fiscalization or business results.",
+    "Every carousel opening establishes the question, each middle slide adds information, and the final slide gives one next step.",
+    "Keep an intentional mix of photographic covers, actual product evidence and readable comparisons. Do not enforce a split-image puzzle or a checkerboard at the expense of each post."
+  ],
+  "research": [
+    {
+      "url": "https://www.canva.com/design-school/resources/how-to-create-instagram-carousels-worth-swiping-for/",
+      "checked": "2026-11-03",
+      "sourceUpdated": "2026-10-08",
+      "application": "One idea per slide, clear sequence, consistent typography, variation of layout and emphasis, mobile and profile-crop review."
+    },
+    {
+      "url": "https://about.fb.com/news/2024/10/best-practices-education-hub-creators-instagram/",
+      "checked": "2026-11-03",
+      "application": "Use account-specific guidance and Insights to evaluate posting frequency, attention and engagement. Do not present a universal best posting time."
+    },
+    {
+      "url": "https://about.fb.com/br/news/2023/06/explore-todo-o-potencial-de-sua-empresa-com-o-novo-performance-5/",
+      "checked": "2026-11-03",
+      "application": "Different creative concepts, simple paid structure and measured outcomes. No budget or paid launch inferred."
+    },
+    {
+      "url": "https://www.figma.com/resource-library/font-pairings/",
+      "application": "Use hierarchy and restrained font roles; the owner's current font choice takes precedence over choosing a new pairing."
+    }
+  ],
+  "items": [
+    {
+      "id": "r01",
+      "day": 1,
+      "format": "reel",
+      "pillar": "checkout",
+      "industry": "grocery",
+      "title": "От товара до чека",
+      "keyword": "КАССА",
+      "cover": {
+        "title": "От товара\nдо чека",
+        "body": "Поиск, цена и текущий чек —\nв кассе BAZAAR.",
+        "visual": "A scanner and a grocery purchase: tea, coffee and a chocolate bar. Natural packaging colors, blue-white setting. Actual POS fragment on an inner scene; no cream jars or towels."
+      },
+      "scenes": [
+        {
+          "title": "Найдите\nнужный товар",
+          "body": "Штрихкод или поиск —\nв кассе BAZAAR.",
+          "proof": "Actual POS search and selected product."
+        },
+        {
+          "title": "Проверьте\nтекущий чек",
+          "body": "Товар, цена\nи количество.",
+          "proof": "Actual receipt lines; do not finalize an operation in production for filming."
+        },
+        {
+          "title": "Продажа —\nв истории",
+          "body": "Завершённый чек\nможно найти снова.",
+          "proof": "Existing completed synthetic receipt."
+        },
+        {
+          "title": "Покажем\nработу кассы",
+          "body": "Напишите «КАССА»\nв Direct.",
+          "proof": "One clear text action, no drawn button."
+        }
+      ],
+      "caption": "Покупатель уже у кассы. Найдите товар по штрихкоду или через поиск, проверьте цену и количество в текущем чеке. Завершённую продажу можно открыть в истории.\n\nВ ролике — интерфейс BAZAAR и демонстрационные данные.\n\nХотите посмотреть кассу на ассортименте своего магазина? Напишите «КАССА» в Direct.",
+      "stories": [
+        {
+          "title": "Как находите\nтовар на кассе?",
+          "body": "Штрихкодом\nили через поиск?",
+          "interaction": {
+            "type": "poll",
+            "answers": ["Штрихкод", "Поиск"]
+          }
+        },
+        {
+          "title": "Товар, цена,\nколичество",
+          "body": "Проверьте текущий чек\nперед оплатой.",
+          "proof": "POS receipt fragment"
+        },
+        {
+          "title": "Посмотрите\nкассу в работе",
+          "body": "Напишите «КАССА»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "КАССА"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "p02",
+      "day": 2,
+      "format": "carousel",
+      "pillar": "catalog",
+      "industry": "clothing",
+      "title": "Каталог без путаницы",
+      "keyword": "КАТАЛОГ",
+      "cover": {
+        "title": "Каталог\nбез путаницы",
+        "body": "Размеры, цвета и поиск —\nв BAZAAR.",
+        "visual": "Clothing, visible fabric and different colors; retain the good existing clothing cover after type review. Actual catalog examples inside."
+      },
+      "slides": [
+        {
+          "title": "Каталог\nбез путаницы",
+          "body": "Размеры, цвета и поиск —\nв BAZAAR."
+        },
+        {
+          "title": "Найдите\nнужную позицию",
+          "body": "Название, SKU\nили штрихкод.",
+          "proof": "Actual product search and readable product card."
+        },
+        {
+          "title": "Варианты —\nпо отдельности",
+          "body": "Размер и цвет помогают\nразличать товар.",
+          "proof": "Actual variant fields and separate variant stock; capture a valid synthetic clothing example."
+        },
+        {
+          "title": "Покажем\nна вашем примере",
+          "body": "Напишите «КАТАЛОГ»\nв Direct."
+        }
+      ],
+      "caption": "Белая футболка размера M и синяя размера L — разные варианты, которые важно различать при продаже и проверке остатков. В BAZAAR нужную позицию можно искать по названию, SKU или штрихкоду.\n\nВнутри карусели — реальные экраны с демонстрационными данными.\n\nНапишите «КАТАЛОГ» в Direct — разберём, как организовать ваш ассортимент.",
+      "stories": [
+        {
+          "title": "Одна модель.\nРазные размеры.",
+          "body": "Как различаете варианты\nв своём каталоге?"
+        },
+        {
+          "title": "Цена и остаток —\nрядом",
+          "body": "Откройте нужный товар\nв выбранном магазине.",
+          "proof": "Actual product card"
+        },
+        {
+          "title": "Разберём\nваш ассортимент",
+          "body": "Напишите «КАТАЛОГ»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "КАТАЛОГ"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "r03",
+      "day": 3,
+      "format": "reel",
+      "pillar": "receiving",
+      "industry": "phone_accessories",
+      "title": "Приехала новая поставка?",
+      "keyword": "ПОСТАВКА",
+      "cover": {
+        "title": "Приехала\nновая поставка?",
+        "body": "Товары, количество\nи себестоимость.",
+        "visual": "A delivery of USB-C cables and phone accessories with an open carton. Actual receiving form and posted document are on separate scenes. No cosmetic jars or towels."
+      },
+      "scenes": [
+        {
+          "title": "Выберите\nмагазин",
+          "body": "Укажите, куда\nпоступает товар.",
+          "proof": "Actual receiving store and date fields"
+        },
+        {
+          "title": "Добавьте\nполученные товары",
+          "body": "Количество\nи себестоимость.",
+          "proof": "Actual receiving lines"
+        },
+        {
+          "title": "Проверьте\nдокумент",
+          "body": "Проведение обновит\nостатки магазина.",
+          "proof": "Actual document preview/status, not a simulated successful operation"
+        },
+        {
+          "title": "Покажем\nприёмку товара",
+          "body": "Напишите «ПОСТАВКА»\nв Direct."
+        }
+      ],
+      "caption": "Привезли партию кабелей для телефона. Важно записать, что именно приехало, сколько единиц вы получили и по какой себестоимости.\n\nВ оприходовании BAZAAR выберите магазин, добавьте товары и проверьте документ. После проведения количество отразится в остатках. На экране — учебный пример.\n\nНапишите «ПОСТАВКА» в Direct — покажем этот сценарий на вашем примере.",
+      "stories": [
+        {
+          "title": "Поставка\nуже приехала?",
+          "body": "Запишите количество\nи себестоимость."
+        },
+        {
+          "title": "Поступление —\nв документе",
+          "body": "Проверьте магазин\nи строки товаров.",
+          "proof": "Actual receiving fragment"
+        },
+        {
+          "title": "Покажем\nприёмку товара",
+          "body": "Напишите «ПОСТАВКА»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ПОСТАВКА"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "p04",
+      "day": 4,
+      "format": "carousel",
+      "pillar": "stock_movements",
+      "industry": "household",
+      "title": "Почему товара стало меньше?",
+      "keyword": "ОСТАТОК",
+      "cover": {
+        "title": "Почему товара\nстало меньше?",
+        "body": "Продажи и списания —\nв журнале BAZAAR.",
+        "visual": "Keep the owner-approved carton cover. Do not multiply its cream, pump-bottle and towel scene across other topics."
+      },
+      "slides": [
+        {
+          "title": "Почему товара\nстало меньше?",
+          "body": "Продажи и списания —\nв журнале BAZAAR."
+        },
+        {
+          "title": "Проверьте\nпродажи",
+          "body": "Магазин, дата\nи количество.",
+          "proof": "Actual completed sale in movements: stock-sale-mobile.jpg"
+        },
+        {
+          "title": "Не только\nпродажи",
+          "body": "Перемещения и списания\nтоже меняют остаток.",
+          "proof": "Actual native write-off card: stock-writeoff-mobile.jpg. Separate white page, no illustration underneath."
+        },
+        {
+          "title": "Покажем\nна примере",
+          "body": "Напишите «ОСТАТОК»\nв Direct."
+        }
+      ],
+      "caption": "На полке товара стало меньше. Причину стоит искать в операциях: продажах, перемещениях и списаниях.\n\nОткройте журнал движения BAZAAR, выберите магазин и период, затем проверьте нужный документ. Карусель показывает реальные экраны на учебных данных.\n\nНапишите «ОСТАТОК» в Direct — покажем, где искать историю товара.",
+      "stories": [
+        {
+          "title": "Почему товара\nстало меньше?",
+          "body": "Начните с истории\nопераций."
+        },
+        {
+          "title": "Продажа, списание\nили перемещение?",
+          "body": "Проверьте документ\nи количество.",
+          "proof": "Actual movement card"
+        },
+        {
+          "title": "Покажем,\nгде проверить",
+          "body": "Напишите «ОСТАТОК»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ОСТАТОК"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "r05",
+      "day": 5,
+      "format": "reel",
+      "pillar": "stock_counts",
+      "industry": "stationery",
+      "title": "На полке одно. В учёте другое?",
+      "keyword": "СВЕРКА",
+      "cover": {
+        "title": "На полке одно.\nВ учёте другое?",
+        "body": "Сверьте количество\nв инвентаризации.",
+        "visual": "Notebooks, pencils and pen packs being counted by hands. Retain the accepted current headline letterforms; replace the repeated cosmetic jars."
+      },
+      "scenes": [
+        {
+          "title": "Откройте\nинвентаризацию",
+          "body": "Выберите магазин\nи товары для сверки.",
+          "proof": "Actual count document"
+        },
+        {
+          "title": "Посчитайте\nто, что на полке",
+          "body": "Внесите фактическое\nколичество.",
+          "proof": "Actual book and counted quantity fields"
+        },
+        {
+          "title": "Проверьте\nрасхождения",
+          "body": "До проведения\nдокумента.",
+          "proof": "Actual variance and summary; no invented stock result"
+        },
+        {
+          "title": "Разберём\nвашу сверку",
+          "body": "Напишите «СВЕРКА»\nв Direct."
+        }
+      ],
+      "caption": "По учёту — 13 блокнотов. А сколько их на полке? Инвентаризация нужна, чтобы сравнить записанное и фактическое количество.\n\nВ BAZAAR выберите магазин и товары, внесите результат подсчёта, проверьте расхождения перед проведением. В ролике — учебный пример. Инвентаризация доступна на тарифах «Бизнесмен» и «Монополист».\n\nНапишите «СВЕРКА» в Direct — покажем, как устроен пересчёт.",
+      "stories": [
+        {
+          "title": "Когда сверяли\nостатки?",
+          "body": "Начните с одной\nгруппы товаров."
+        },
+        {
+          "title": "Учётное\nи фактическое",
+          "body": "Внесите подсчёт\nи проверьте разницу.",
+          "proof": "Actual stock-count fields"
+        },
+        {
+          "title": "Покажем\nинвентаризацию",
+          "body": "Напишите «СВЕРКА»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "СВЕРКА"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "s06",
+      "day": 6,
+      "format": "stories",
+      "pillar": "baam",
+      "industry": "cross_retail",
+      "title": "Спросите BAAM о продажах",
+      "keyword": "BAAM",
+      "stories": [
+        {
+          "title": "Спросите BAAM\nо продажах",
+          "body": "Например: топ товаров\nза октябрь.",
+          "proof": "Actual question entered into BAAM"
+        },
+        {
+          "title": "Период. Магазин.\nДанные.",
+          "body": "Проверьте, на чём\nоснован ответ.",
+          "proof": "Actual successful local BAAM product ranking on synthetic October data. Do not call this a tested external AI-provider response."
+        },
+        {
+          "title": "Посмотрите\nBAAM в работе",
+          "body": "Напишите «BAAM»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "BAAM"
+          }
+        }
+      ],
+      "caption": "Пример запроса BAAM: «Покажи топ-7 товаров за октябрь 2026 года». В учебном бизнесе помощник вернул фактический рейтинг и ссылку на товар. Проверяйте магазин, период и источник ответа. Базовые команды и подключённый ИИ — разные режимы; работу внешнего ИИ-провайдера этим примером не подтверждаем.",
+      "layoutSequence": [],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "s07",
+      "day": 7,
+      "format": "stories",
+      "pillar": "customer_orders",
+      "industry": "phone_accessories",
+      "title": "Заказ покупателя — в системе",
+      "keyword": "ЗАКАЗ",
+      "stories": [
+        {
+          "title": "Покупатель\nзаказал товар?",
+          "body": "Сохраните заказ\nи состав покупки."
+        },
+        {
+          "title": "Заказ —\nперед глазами",
+          "body": "Проверьте товары\nи текущий статус.",
+          "proof": "Actual synthetic customer order, without personal contacts"
+        },
+        {
+          "title": "Покажем\nработу с заказами",
+          "body": "Напишите «ЗАКАЗ»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ЗАКАЗ"
+          }
+        }
+      ],
+      "caption": "Пример магазина аксессуаров: чехол и кабель в заказе покупателя. Использовать фактический статус документа; не обещать автоматическое резервирование или оплату без отдельной проверки сценария.",
+      "layoutSequence": [],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "r08",
+      "day": 8,
+      "format": "reel",
+      "pillar": "multi_store",
+      "industry": "hardware",
+      "title": "В каком магазине есть товар?",
+      "keyword": "МАГАЗИНЫ",
+      "cover": {
+        "title": "Где есть\nнужный товар?",
+        "body": "Проверьте остаток\nв нужном магазине.",
+        "visual": "Tape measure, screwdriver and boxed fasteners in two clearly separate retail bins; original product colors. Actual store switcher and transfer evidence inside."
+      },
+      "scenes": [
+        {
+          "title": "Выберите\nмагазин",
+          "body": "Остатки относятся\nк выбранной точке.",
+          "proof": "Actual store selector"
+        },
+        {
+          "title": "Найдите\nнужный товар",
+          "body": "Проверьте количество\nв этом магазине.",
+          "proof": "Actual store-specific product stock"
+        },
+        {
+          "title": "Нужно\nперемещение?",
+          "body": "Проверьте отправителя\nи получателя.",
+          "proof": "Actual transfer document"
+        },
+        {
+          "title": "Покажем работу\nс магазинами",
+          "body": "Напишите «МАГАЗИНЫ»\nв Direct."
+        }
+      ],
+      "caption": "В одной точке товар закончился, в другой он есть. В BAZAAR остаток проверяется по выбранному магазину, а перемещение оформляется отдельным документом с отправителем и получателем.\n\nЛимит магазинов зависит от тарифа. На экране — демонстрационные данные.\n\nНапишите «МАГАЗИНЫ» в Direct и укажите количество точек — подберём сценарий показа.",
+      "stories": [
+        {
+          "title": "В какой точке\nесть товар?",
+          "body": "Начните с выбора\nмагазина."
+        },
+        {
+          "title": "Остатки —\nпо магазинам",
+          "body": "Сравните нужную позицию\nв двух точках.",
+          "proof": "Actual stock by store"
+        },
+        {
+          "title": "Сколько у вас\nмагазинов?",
+          "body": "Напишите «МАГАЗИНЫ»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "МАГАЗИНЫ"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "p09",
+      "day": 9,
+      "format": "carousel",
+      "pillar": "image_studio",
+      "industry": "footwear",
+      "title": "Фото товара для каталога",
+      "keyword": "ФОТО",
+      "cover": {
+        "title": "Фото товара\nдля каталога",
+        "body": "Студия картинок\nв BAZAAR.",
+        "visual": "One colored fabric sneaker as a product-photo subject, visible texture and a camera/capture context. No repeated cosmetic jars. Do not fabricate a studio before/after result."
+      },
+      "slides": [
+        {
+          "title": "Фото товара\nдля каталога",
+          "body": "Студия картинок\nв BAZAAR."
+        },
+        {
+          "title": "Начните\nс исходного фото",
+          "body": "Оригинал сохраняется\nотдельно.",
+          "proof": "Actual source upload and product selection UI"
+        },
+        {
+          "title": "Сравните\nперед сохранением",
+          "body": "Форма, цвет\nи детали товара.",
+          "proof": "Actual studio preview UI. A generated result can only be shown after a real successful studio job; otherwise this slide explains the workflow, without a fake result."
+        },
+        {
+          "title": "Покажем\nстудию картинок",
+          "body": "Напишите «ФОТО»\nв Direct."
+        }
+      ],
+      "caption": "Фото для каталога начинается с вашего товара. В студии BAZAAR можно загрузить исходник, выбрать светлый фон и сравнить результат перед сохранением в карточку. Оригинал хранится отдельно.\n\nПеред сохранением проверьте форму, цвет, надписи и мелкие детали товара. Обработка работает при подключённом сервисе генерации; финальный результат всегда требует просмотра человеком.\n\nНапишите «ФОТО» в Direct — покажем, как устроен процесс.",
+      "stories": [
+        {
+          "title": "Фото\nдля каталога",
+          "body": "Начните с реального\nснимка товара."
+        },
+        {
+          "title": "Оригинал\nостаётся у вас",
+          "body": "Проверьте результат\nперед сохранением.",
+          "proof": "Actual image-studio UI; do not fake a successful job"
+        },
+        {
+          "title": "Покажем\nстудию картинок",
+          "body": "Напишите «ФОТО»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ФОТО"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "r10",
+      "day": 10,
+      "format": "reel",
+      "pillar": "analytics",
+      "industry": "books",
+      "title": "Что показали продажи?",
+      "keyword": "ОТЧЁТ",
+      "cover": {
+        "title": "Что показали\nпродажи?",
+        "body": "Выручка, себестоимость\nи валовая прибыль.",
+        "visual": "Bookshop still life only: different books and a receipt in the accepted blue-white photographic setting. Real revenue and gross-profit screens belong to separate scenes, never over the cover."
+      },
+      "scenes": [
+        {
+          "title": "Выберите\nмагазин и период",
+          "body": "Сравнивайте данные\nв нужных границах.",
+          "proof": "Actual analytics filters"
+        },
+        {
+          "title": "Выручка\nпосле возвратов",
+          "body": "Посмотрите результат\nза выбранный период.",
+          "proof": "analytics-revenue.jpg"
+        },
+        {
+          "title": "Валовая\nприбыль",
+          "body": "Продажи минус себестоимость.\nДо расходов бизнеса.",
+          "proof": "analytics-gross-profit.jpg"
+        },
+        {
+          "title": "Разберём\nваш отчёт",
+          "body": "Напишите «ОТЧЁТ»\nв Direct."
+        }
+      ],
+      "caption": "Выручка и прибыль отвечают на разные вопросы. В аналитике BAZAAR выберите магазин и период, посмотрите продажи после возвратов, себестоимость и валовую прибыль. Это ещё не чистая прибыль: расходы бизнеса нужно учитывать отдельно.\n\nВ ролике — реальные показатели учебного бизнеса, а не результаты клиента. Аналитика доступна на тарифах «Бизнесмен» и «Монополист».\n\nНапишите «ОТЧЁТ» в Direct — покажем, как читать эти показатели.",
+      "stories": [
+        {
+          "title": "Выручка —\nещё не прибыль",
+          "body": "Проверьте себестоимость\nи возвраты."
+        },
+        {
+          "title": "Валовая\nприбыль",
+          "body": "До расходов\nвашего бизнеса.",
+          "proof": "Actual gross-profit KPI"
+        },
+        {
+          "title": "Разберём\nваш отчёт",
+          "body": "Напишите «ОТЧЁТ»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ОТЧЁТ"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "p11",
+      "day": 11,
+      "format": "carousel",
+      "pillar": "plans",
+      "industry": "cross_retail",
+      "title": "Тариф под ваш магазин",
+      "keyword": "ТАРИФ",
+      "cover": {
+        "title": "Тариф под\nваш магазин",
+        "body": "Сравните лимиты\nи рабочие возможности.",
+        "visual": "Retain the good blue-white bag composition as one cover. Inner cards use readable quota and module information, not repeated still-life variations."
+      },
+      "slides": [
+        {
+          "title": "Тариф под\nваш магазин",
+          "body": "Магазины, товары,\nпользователи и модули."
+        },
+        {
+          "title": "Новичок",
+          "body": "1 магазин\nДо 1 000 товаров\nДо 5 пользователей",
+          "features": "Касса, каталог,\nзаказы и ценники."
+        },
+        {
+          "title": "Бизнесмен",
+          "body": "До 5 магазинов\nДо 5 000 товаров\nДо 10 пользователей",
+          "features": "Всё из тарифа «Новичок».\nИнвентаризация и аналитика.\nИмпорт и экспорт."
+        },
+        {
+          "title": "Монополист",
+          "body": "До 15 магазинов\nДо 20 000 товаров\nДо 20 пользователей",
+          "features": "Всё из тарифа «Бизнесмен».\nКомплаенс и инструменты поддержки.\nККМ — при отдельной настройке."
+        },
+        {
+          "title": "Что важно\nдля выбора?",
+          "body": "Сколько магазинов?\nСколько товаров?\nСколько сотрудников?\nКакие нужны модули?",
+          "proof": "Qualification questions on a clean information slide, not a generated application screenshot. The three preceding plan pages carry verified limits and features."
+        },
+        {
+          "title": "Подберём\nпод вашу задачу",
+          "body": "Напишите «ТАРИФ»\nв Direct."
+        }
+      ],
+      "caption": "Тариф выбирают по задачам и масштабу магазина.\n\n«Новичок»: 1 магазин, до 1 000 товаров и 5 активных пользователей. Касса, каталог, заказы покупателей и ценники.\n\n«Бизнесмен»: до 5 магазинов, 5 000 товаров и 10 активных пользователей. Добавляются аналитика, импорт и экспорт, инвентаризация, цены по магазинам, комплекты, партии со сроками годности и закрытие периода.\n\n«Монополист»: до 15 магазинов, 20 000 товаров и 20 активных пользователей. Возможности «Бизнесмен», комплаенс, инструменты поддержки и модуль ККМ при отдельной настройке. Подключение оборудования и внешних сервисов не происходит автоматически.\n\nНапишите «ТАРИФ» в Direct: сколько у вас магазинов, примерно сколько товаров и какие задачи хотите решить?",
+      "stories": [
+        {
+          "title": "Новичок",
+          "body": "1 магазин · до 1 000 товаров\nДо 5 активных пользователей",
+          "proof": "Readable marketing plan-information page, verified against server-enforced limits; not a screenshot or a live production price quote."
+        },
+        {
+          "title": "Бизнесмен",
+          "body": "До 5 магазинов · до 5 000 товаров\nДо 10 активных пользователей",
+          "proof": "Readable marketing plan-information page, verified against server-enforced limits; not a screenshot or a live production price quote."
+        },
+        {
+          "title": "Монополист",
+          "body": "До 15 магазинов · до 20 000 товаров\nДо 20 активных пользователей",
+          "proof": "Readable marketing plan-information page, verified against server-enforced limits; not a screenshot or a live production price quote.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "ТАРИФ"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_plan_information",
+        "standalone_plan_information",
+        "standalone_plan_information",
+        "standalone_plan_information",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "standalone_plan_information",
+        "standalone_plan_information",
+        "standalone_plan_information"
+      ]
+    },
+    {
+      "id": "r12",
+      "day": 12,
+      "format": "reel",
+      "pillar": "integrations",
+      "industry": "cross_retail",
+      "title": "Ваш каталог. Ваши каналы.",
+      "keyword": "КАНАЛЫ",
+      "cover": {
+        "title": "Ваш каталог.\nВаши каналы.",
+        "body": "Интеграции\nв BAZAAR.",
+        "visual": "Illustrative parcel preparation with books and accessories, in the accepted blue-white setting. No UI or third-party logos in the illustration. Actual integration tiles occupy separate scenes."
+      },
+      "scenes": [
+        {
+          "title": "Откройте\nинтеграции",
+          "body": "Посмотрите доступные\nсценарии подключения.",
+          "proof": "Actual integrations overview"
+        },
+        {
+          "title": "Выберите\nнужный канал",
+          "body": "M-Market, Bakai Store\nили O! Market.",
+          "proof": "Actual named integration settings; verify each exchange capability separately."
+        },
+        {
+          "title": "Подключение —\nпод вашу задачу",
+          "body": "Bazaar API и обмены\nнастраиваются отдельно.",
+          "proof": "Actual safe overview; no credentials, private keys or unperformed successful sync."
+        },
+        {
+          "title": "Разберём\nваш канал продаж",
+          "body": "Напишите «КАНАЛЫ»\nв Direct."
+        }
+      ],
+      "caption": "Каталог магазина и внешние каналы должны работать по понятной схеме. В BAZAAR есть раздел интеграций: M-Market, Bakai Store, O! Market и Bazaar API.\n\nПодключение, состав передаваемых данных и режим обмена зависят от выбранной интеграции и её настроек. В ролике показываем реальные экраны. Каждое подключение настраивается под магазин.\n\nНапишите «КАНАЛЫ» в Direct и расскажите, где продаёте сейчас — обсудим подходящий сценарий.",
+      "stories": [
+        {
+          "title": "Где ещё\nпродаёте товары?",
+          "body": "Кроме своего\nмагазина?",
+          "interaction": {
+            "type": "question_sticker",
+            "question": "Какой канал хотите подключить?"
+          }
+        },
+        {
+          "title": "Интеграции —\nв одном разделе",
+          "body": "Каждое подключение\nнастраивается отдельно.",
+          "proof": "Actual integration tiles"
+        },
+        {
+          "title": "Разберём\nваш канал продаж",
+          "body": "Напишите «КАНАЛЫ»\nв Direct.",
+          "interaction": {
+            "type": "direct_reply",
+            "keyword": "КАНАЛЫ"
+          }
+        }
+      ],
+      "layoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "standalone_application_screen",
+        "illustrated_card"
+      ],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "s13",
+      "day": 13,
+      "format": "stories",
+      "pillar": "objections",
+      "industry": "cross_retail",
+      "title": "Что важно перед подключением?",
+      "keyword": "ВОПРОС",
+      "stories": [
+        {
+          "title": "Что важно\nперед подключением?",
+          "body": "Касса, остатки\nили перенос каталога?",
+          "interaction": {
+            "type": "question_sticker",
+            "question": "Что хотите разобрать?"
+          }
+        },
+        {
+          "title": "Начните\nсо своей задачи",
+          "body": "Под неё подбирают\nмодули и тариф.",
+          "proof": "A real product context matching one collected question; no invented testimonial."
+        },
+        {
+          "title": "Задайте\nсвой вопрос",
+          "body": "Ответьте на Stories\nили напишите в Direct.",
+          "interaction": {
+            "type": "direct_reply"
+          }
+        }
+      ],
+      "caption": "Отвечать по реальным обращениям. Не выдумывать вопросы от клиентов и не превращать ответы в массовую рассылку. Для импорта и аналитики учитывать «Бизнесмен» / «Монополист».",
+      "layoutSequence": [],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    },
+    {
+      "id": "s14",
+      "day": 14,
+      "format": "stories",
+      "pillar": "onboarding",
+      "industry": "cross_retail",
+      "title": "Начните со своего магазина",
+      "cta": "signup",
+      "stories": [
+        {
+          "title": "Начните\nсо своего магазина",
+          "body": "Создайте аккаунт\nBAZAAR.",
+          "proof": "Actual signup screen, no personal data entered for the screenshot"
+        },
+        {
+          "title": "Подготовьте\nпервый каталог",
+          "body": "Товары, остатки\nи доступы команды.",
+          "proof": "Actual setup/product context"
+        },
+        {
+          "title": "Создайте\nаккаунт BAZAAR",
+          "body": "Ссылка —\nв стикере Stories.",
+          "interaction": {
+            "type": "link_sticker",
+            "text": "Создать аккаунт",
+            "utmContent": "s14_ru"
+          }
+        }
+      ],
+      "caption": "Ссылка ведёт на существующий путь регистрации. Не обещать доступность всех модулей стартового тарифа, бесплатную миграцию или автоматическое подключение интеграций. Новая серверная атрибуция пока не развёрнута в production.",
+      "layoutSequence": [],
+      "storyLayoutSequence": [
+        "illustrated_card",
+        "standalone_application_screen",
+        "illustrated_card"
+      ]
+    }
+  ],
+  "ads": [
+    {
+      "id": "ad01",
+      "concept": "checkout",
+      "audienceHypothesis": "Owner or manager of an operating retail store in Kyrgyzstan",
+      "headline": "Касса, товары и чек в BAZAAR",
+      "primaryText": "Найдите товар, проверьте цену и соберите чек. Посмотрите кассу BAZAAR на ассортименте своего магазина. Напишите «КАССА» — согласуем показ.",
+      "keyword": "КАССА",
+      "proof": "Actual POS / receipt; varied grocery assortment",
+      "nativeCta": "Send message",
+      "status": "draft_no_budget_no_launch",
+      "layoutSequence": ["illustrated_card", "standalone_application_screen", "illustrated_card"]
+    },
+    {
+      "id": "ad02",
+      "concept": "stock_control",
+      "audienceHypothesis": "Retail owner with repeated stock discrepancies",
+      "headline": "На полке одно. В учёте другое?",
+      "primaryText": "Проверьте историю операций и разберите пересчёт в BAZAAR. Инвентаризация — на тарифах «Бизнесмен» и «Монополист». Напишите «СВЕРКА» — покажем на учебном примере.",
+      "keyword": "СВЕРКА",
+      "proof": "Actual movements / stock-count document; stationery",
+      "nativeCta": "Send message",
+      "status": "draft_no_budget_no_launch",
+      "layoutSequence": ["illustrated_card", "standalone_application_screen", "illustrated_card"]
+    },
+    {
+      "id": "ad03",
+      "concept": "owner_reporting",
+      "audienceHypothesis": "Owner needing to understand sales and cost by store",
+      "headline": "Что показали продажи?",
+      "primaryText": "Выручка, себестоимость и валовая прибыль в отчёте BAZAAR. Аналитика — на тарифах «Бизнесмен» и «Монополист». Напишите «ОТЧЁТ» — разберём, какие показатели нужны вашему магазину.",
+      "keyword": "ОТЧЁТ",
+      "proof": "Actual analytics with clearly marked demonstration data; no client-performance claims",
+      "nativeCta": "Send message",
+      "status": "draft_no_budget_no_launch",
+      "layoutSequence": ["illustrated_card", "standalone_application_screen", "illustrated_card"]
+    },
+    {
+      "id": "ad04",
+      "concept": "connected_store_workflow",
+      "audienceHypothesis": "Retail owner evaluating a system for daily operations",
+      "headline": "Покажем BAZAAR под вашу задачу",
+      "primaryText": "Касса, поступления, остатки и отчёты — начнём с того, что важно вашему магазину. Напишите «ПОКАЗ» и расскажите, что продаёте и сколько у вас точек.",
+      "keyword": "ПОКАЗ",
+      "proof": "Actual application modules; no generic repeated cosmetic still life",
+      "nativeCta": "Send message",
+      "status": "draft_no_budget_no_launch",
+      "layoutSequence": ["illustrated_card", "standalone_application_screen", "illustrated_card"]
+    }
+  ],
+  "profileGrid": {
+    "model": "New posts appear newest first; existing three posts remain in place. No assumption of pinned/reorder permissions.",
+    "week1": ["r05", "p04", "r03", "p02", "r01", "existing-1", "existing-2", "existing-3"],
+    "week2": [
+      "r12",
+      "p11",
+      "r10",
+      "p09",
+      "r08",
+      "r05",
+      "p04",
+      "r03",
+      "p02",
+      "r01",
+      "existing-1",
+      "existing-2",
+      "existing-3"
+    ],
+    "rhythm": "Keep the same original logo, blue-white setting and current headline style. Alternate photographic context, product evidence and comparison layouts. Inspect 4:5 files, 3:4 profile crops and mobile readability; do not use a fake grid as proof of publication."
+  },
+  "measurement": {
+    "primary": [
+      "Qualified inbound retail leads",
+      "Cost per qualified lead after an approved paid test",
+      "Registered businesses",
+      "Cost per registered business"
+    ],
+    "secondary": [
+      "Scheduled and attended demonstrations",
+      "Link-sticker visits",
+      "Video retention and saves as content diagnostics"
+    ],
+    "qualification": [
+      "Operating retail business in Kyrgyzstan",
+      "Decision maker or person involved in choosing the system",
+      "Task and store/product scale understood",
+      "Agreed next step"
+    ],
+    "sourcePolicy": "A Direct keyword is not proof of a paid source. Use Meta referral/ad ID when available, record self-report separately, and keep unknown attribution unknown.",
+    "paidTest": "Prepare distinct checkout and stock-control concepts first. Do not launch, reserve spend or set a positive budget without owner approval.",
+    "iteration": "Review qualified conversations, demonstrations and business registrations after week one. Change the second-week mix using evidence; do not infer a winner from followers or one day of low-volume data."
+  },
+  "productionGates": [
+    "New plan names and product/user quotas must appear consistently in text and images.",
+    "Current fonts retained; headline weight and scale visually consistent across all selected release materials.",
+    "All requested real product screenshots captured and large enough to read on a phone.",
+    "No screenshot is placed over an illustration. Review each carousel, Story sequence and Reel timeline for separate illustrated and application-only frames.",
+    "No repeated cosmetic still life across distinct modules; product variety and layout rhythm checked in chronological and profile views.",
+    "Actual external studio generation must be tested before showing a successful studio output; otherwise present only the verified interface and workflow.",
+    "New or changed assets exported natively, fully re-ingested, and approval hashes recomputed. Old version-3 approval cannot carry over.",
+    "Owner review of the complete revised package. No Instagram publication or paid launch implied."
+  ]
+}

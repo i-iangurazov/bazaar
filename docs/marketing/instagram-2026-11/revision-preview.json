@@ -1,0 +1,178 @@
+{
+  "revision": 4,
+  "status": "canva_saved_native_png_verified",
+  "publicationEnabled": false,
+  "designId": "DAHZ38NQyrc",
+  "transactionId": "7066668845857718282",
+  "fullPackageReady": false,
+  "pages": [
+    {
+      "number": 1,
+      "file": "artifacts/instagram-canva-20261103/production/revision4/p04/p04_ru_01.png",
+      "sha256": "bb38d6b2dec3bb510309457d4b9201b9328fbbbbb053c190c03ebb9ddbc10f43",
+      "layout": "illustrated_card",
+      "label": "1 · Иллюстрированная обложка",
+      "size": [1080, 1350]
+    },
+    {
+      "number": 2,
+      "file": "artifacts/instagram-canva-20261103/production/revision4/p04/p04_ru_02.png",
+      "sha256": "f55fa03b65654c81f1ef3a417c057113ac9063249cd5661e21e5fd221f164c28",
+      "layout": "standalone_application_screen",
+      "label": "2 · Отдельный экран продажи",
+      "size": [1080, 1350]
+    },
+    {
+      "number": 3,
+      "file": "artifacts/instagram-canva-20261103/production/revision4/p04/p04_ru_03.png",
+      "sha256": "2836f624c87de2a478e5dd21f9a46664374c51c96fa48431d694d6e0e3dcff5c",
+      "layout": "standalone_application_screen",
+      "label": "3 · Отдельный экран списания",
+      "size": [1080, 1350]
+    },
+    {
+      "number": 4,
+      "file": "artifacts/instagram-canva-20261103/production/revision4/p04/p04_ru_04.png",
+      "sha256": "19bce4647acb0974fb07a863e1486e36c26d8746b601d426a37b95f3f3aa0ccc",
+      "layout": "illustrated_card",
+      "label": "4 · Следующий шаг",
+      "size": [1080, 1350]
+    }
+  ],
+  "pageStructureVerification": {
+    "source": "Actual Canva transaction response after editing",
+    "nativeCanvas": [1080, 1350],
+    "imageFillsPerPage": [1, 1, 1, 1],
+    "illustratedBackgroundOnApplicationPages": false,
+    "applicationPagesBackground": "plain white",
+    "unmodifiedCover": true,
+    "unmodifiedFinalCard": true
+  },
+  "note": "Four actual native Canva PNG files, each 1080×1350. Approval covers saving these carousel pages, not the full campaign or publication.",
+  "ownerApproval": "Explicit reply: Сохранить эту карусель",
+  "additionalCarousels": [
+    {
+      "status": "canva_saved_native_png_verified",
+      "fullPackageReady": false,
+      "publicationEnabled": false,
+      "id": "p02",
+      "title": "Каталог без путаницы",
+      "designId": "DAHZ4AhYA_I",
+      "transactionId": "8497687628223794675",
+      "editUrl": "https://www.canva.com/d/I0HTuwlEY5mv6EW",
+      "pages": [
+        {
+          "number": 1,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p02/p02_ru_01.png",
+          "sha256": "f2bcd3ab772c86fa4e67ceb637312cff88815af8ab187e08b7299ebc785ca11c",
+          "layout": "illustrated_card",
+          "label": "1 · Иллюстрированная обложка",
+          "size": [1080, 1350]
+        },
+        {
+          "number": 2,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p02/p02_ru_02.png",
+          "sha256": "b73a23d8241d816915345c94ca19c790d6819ccc40251ba9302485759cd45867",
+          "layout": "standalone_application_screen",
+          "label": "2 · Отдельный экран товара",
+          "size": [1080, 1350]
+        },
+        {
+          "number": 3,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p02/p02_ru_03.png",
+          "sha256": "e4c11c34481a997eed8e9ada1fe76a6174720d179f5530fcaaa0f8de986d249e",
+          "layout": "standalone_application_screen",
+          "label": "3 · Отдельный экран вариантов",
+          "size": [1080, 1350]
+        },
+        {
+          "number": 4,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p02/p02_ru_04.png",
+          "sha256": "664d387137d286428920b951575bae67b3d4433e78401f021fbdd56f847a8c1b",
+          "layout": "illustrated_card",
+          "label": "4 · Следующий шаг",
+          "size": [1080, 1350]
+        }
+      ],
+      "pageStructureVerification": {
+        "source": "Actual Canva transaction state",
+        "nativeCanvas": [1080, 1350],
+        "imageFillsPerPage": [1, 1, 1, 1],
+        "applicationPages": [2, 3],
+        "illustratedBackgroundOnApplicationPages": false,
+        "applicationImageAssets": {
+          "2": "MAHZ4Gonpho",
+          "3": "MAHZ4IlXFMo"
+        },
+        "cleanProductCapture": "app-screens/catalog-shirt-mobile-v2.jpg"
+      },
+      "ownerApproval": "Explicit reply: Сохранить обе карусели"
+    },
+    {
+      "status": "canva_saved_native_png_verified",
+      "fullPackageReady": false,
+      "publicationEnabled": false,
+      "id": "p09",
+      "title": "Фото товара для каталога",
+      "designId": "DAHZ4LfpgUI",
+      "transactionId": "2785997400849574635",
+      "editUrl": "https://www.canva.com/d/aeQsuuvS5dmEmJA",
+      "pages": [
+        {
+          "number": 1,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p09/p09_ru_01.png",
+          "sha256": "b7078badb7fae4b706eabf900c65ec1c65c075229de9e71e9432f2dbcd0e02aa",
+          "layout": "illustrated_card",
+          "label": "1 · Иллюстрированная обложка",
+          "size": [1080, 1350]
+        },
+        {
+          "number": 2,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p09/p09_ru_02.png",
+          "sha256": "8e00f030afb7bc2aa8b9c65ef39627fe84bb8b5763acd8285a11fab35d813ff6",
+          "layout": "standalone_application_screen",
+          "label": "2 · Исходник: отдельный экран",
+          "size": [1080, 1350]
+        },
+        {
+          "number": 3,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p09/p09_ru_03.png",
+          "sha256": "87c1d44afe6b31ee23b89ab2e5c2bc0745b7d420c7e02dd69249ec981f2cf04f",
+          "layout": "standalone_application_screen",
+          "label": "3 · Результат: отдельный экран",
+          "size": [1080, 1350]
+        },
+        {
+          "number": 4,
+          "file": "artifacts/instagram-canva-20261103/production/revision4/p09/p09_ru_04.png",
+          "sha256": "beb316d170b4fb79376d2b36fa968af268dd5548e836affc29e37cc1de9f7172",
+          "layout": "illustrated_card",
+          "label": "4 · Следующий шаг",
+          "size": [1080, 1350]
+        }
+      ],
+      "pageStructureVerification": {
+        "source": "Actual Canva transaction state",
+        "nativeCanvas": [1080, 1350],
+        "imageFillsPerPage": [2, 1, 1, 2],
+        "applicationPages": [2, 3],
+        "illustratedBackgroundOnApplicationPages": false,
+        "originalLogoAsset": "MAHZ2eLDa-o",
+        "applicationImageAssets": {
+          "2": "MAHZ4I7K1zE",
+          "3": "MAHZ4N5nx90"
+        }
+      },
+      "imageStudioJob": "7f036b7f-a6df-4d03-a625-c7af86d66f77",
+      "imageStudioStatus": "SUCCEEDED",
+      "inputDisclosure": "The source photo is AI-generated demonstration imagery, not a customer photo; the result is actual BAZAAR processing.",
+      "ownerApproval": "Explicit reply: Сохранить обе карусели"
+    }
+  ],
+  "rejectedPreviews": [
+    {
+      "file": "artifacts/instagram-canva-20261103/production/qa/p02-slide-2-preview.png",
+      "reason": "Fixed app navigation obscures the product card. Recaptured, replaced with v2; not part of current preview."
+    }
+  ]
+}

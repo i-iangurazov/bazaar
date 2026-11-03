@@ -1,53 +1,59 @@
 {
+  "revision": 4,
   "date": "2026-11-03",
   "branch": "main",
-  "attributionCommit": "39efff5",
+  "applicationCodeChanged": false,
+  "publicationEnabled": false,
+  "paidBudget": null,
+  "fullGoalComplete": false,
   "checks": {
     "scriptSyntax": "passed",
-    "preparedContentBriefs": 36,
-    "reelsScriptsPerLanguage": 6,
-    "carouselsPerLanguage": 4,
-    "storySeriesPerLanguage": 14,
-    "adBriefsPerLanguage": 4,
-    "workflowUnitTests": 5,
-    "acquisitionUnitTests": 12,
-    "incompleteCanvaImport": "rejected; manifest unchanged",
-    "approvedQueue": 0,
-    "typecheck": "passed",
-    "lint": "passed",
-    "i18n": "passed",
-    "completeNativeCanvaReelPackages": 6,
-    "sourceImageHashesVerified": 75,
-    "storyArtwork": 42,
-    "nativeStoryImages": 18,
-    "adImageAssignments": 24,
-    "copyMatchesSourceRegistry": true,
-    "newGalleryStaticReferences": "251 references resolved; 6 videos; start/week1/week2 grid stages have 3/8/13 cells in calendar order",
-    "newGalleryBrowserLayout": "pending; browser access unavailable"
+    "reviewScriptEslint": "passed",
+    "workflowUnitTests": {
+      "passed": 5,
+      "command": "node node_modules/vitest/vitest.mjs run tests/unit/instagram-workflow.test.ts"
+    },
+    "typecheck": {
+      "result": "passed",
+      "command": "node node_modules/typescript/bin/tsc --noEmit"
+    },
+    "lint": {
+      "result": "passed",
+      "command": "node node_modules/next/dist/bin/next lint"
+    },
+    "i18n": {
+      "result": "passed",
+      "command": "node --import tsx scripts/i18n-check.ts"
+    },
+    "productionBuild": "not repeated: no production application code changed",
+    "revisedCalendarDays": 14,
+    "revisedStoryFramesPlanned": 42,
+    "savedNativeCarousels": 3,
+    "verifiedNativeCarouselPNGs": 12,
+    "carouselSize": [1080, 1350],
+    "currentGalleryLocalReferencesResolved": 230,
+    "missingGalleryReferences": [],
+    "desktopReview": "Full four-slide P02/P04/P09 sequences inspected; P02 fixed-navigation overlap detected and replaced before owner approval.",
+    "mobileReview": "P04 review at 390×844; horizontal carousel navigation checked. Native Instagram composer crop/stickers remain unverified."
   },
   "externalChecks": {
     "canvaConnected": true,
-    "canvaEditableImports": ["RU", "KG"],
-    "canvaResize": ["1080x1350", "1080x1920"],
-    "templateFields": "saved after explicit owner approval; headline, supporting_line, cta verified",
-    "autofill": "tested; current plan rejects generation",
-    "instagramPublication": "disabled",
+    "browser": "Personal Chrome Ilias, browser 3; working",
+    "canvaSavedDesigns": ["DAHZ4AhYA_I", "DAHZ38NQyrc", "DAHZ4LfpgUI"],
+    "imageStudio": "One actual successful job via BAZAAR UI in isolated media-production database; native original/result reviewed",
+    "instagramPublication": "disabled by owner",
     "paidAds": "not created",
     "productionAttribution": "not deployed",
-    "copyEditFallback": "copy + text replacement verified in draft; layout inspected and corrected; test cancelled and archived",
-    "canvaRealVideoExports": "R01: 20 seconds; R03-R12 series: 100 seconds; five 20-second segments extracted and verified",
-    "figmaSourceImagesUploaded": 75,
-    "figmaNativeDownloadsCompleted": 0,
-    "figmaExportLimitation": "Starter MCP call limit; no plan purchase",
-    "chrome": "Explicitly selected by owner; runtime still returns Local browser use is disabled in Work settings"
+    "canvaAutofill": "Current plan restriction observed previously; no upgrade purchased"
   },
-  "limitations": [
-    "Full native card export and final archive are not complete.",
-    "24 non-Reel Story images and 16 carousel cards still need native export in target sizes.",
-    "All six Reels are silent illustrated four-card videos, not product screen recordings.",
-    "Native Instagram crop/sticker overlays and refreshed gallery desktop/mobile layout remain unverified.",
-    "KG text is unselected and requires resynchronisation plus native editorial review.",
-    "Canva autofill is unavailable on the current plan; no upgrade purchased.",
-    "Instagram publication is disabled, paid budget is null, production attribution is not deployed."
+  "priorAttributionVerification": {
+    "commit": "39efff5",
+    "note": "Earlier unit, auth and disposable-database integration checks passed; no attribution code changed in this revision."
+  },
+  "remaining": [
+    "Complete and save P11 after full preview.",
+    "Finish revised Reels, 42 Stories and ad adaptations; verify actual native exports and new profile grid.",
+    "Atomically replace campaign packages and prepare the full review archive.",
+    "KG alternatives require synchronisation/editorial review; account publication remains disabled."
   ]
 }

@@ -7,7 +7,10 @@
     "pos": "only @bazaar.pos username",
     "forbiddenMarks": "old pair of diagonal symbols",
     "logo": "public/brand/logo.png; original asset, no redraw",
-    "artworkDomainFooter": false
+    "artworkDomainFooter": false,
+    "publicPlanNames": ["Новичок", "Бизнесмен", "Монополист"],
+    "translatePlanNames": false,
+    "screenshotPlacement": "Separate clean pages/scenes only; overlays on illustrations forbidden."
   },
   "workflow": "Approved owner raster reference → specialist image tool for new photographic scenes → Canva only where native editing preserves accepted typography → factual and visual review → explicit package approval. Publication disabled.",
   "publication": "disabled by user",
@@ -74,7 +77,7 @@
       "publication": false
     }
   },
-  "fullTwoWeekPack": "75 source artworks; six verified 20-second Canva Reels and 18 native Story frames. Six complete draft packages imported, none approved. Remaining native card exports and full gallery/mobile review pending.",
+  "fullTwoWeekPack": "18 complete native revision-3 drafts exist; none approved. Revision 4 is in progress: current fonts, varied industries and modules, exact plan names/limits, standalone real screens. Not final.",
   "promptSet": {
     "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
     "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
@@ -87,7 +90,7 @@
   },
   "localPipeline": {
     "briefs": "artifacts/instagram-canva-20261103/briefs.json",
-    "completePackages": 6,
+    "completePackages": 18,
     "approvedPackages": 0,
     "incompleteImportRejection": "verified; manifest unchanged",
     "selfDrawingCode": "moved to ignored rejected-generator archive; not in active scripts",
@@ -172,5 +175,20 @@
       "purpose": "1080x1350 feed exports; 7 native pages confirmed, last page requires inspection; project incomplete"
     }
   ],
-  "historicalTrialsNote": "newVisuals, promptSet, currentReview and exportedProof record earlier experiments, not selected production artwork. latestDirection and productionRegistry govern this release."
+  "historicalTrialsNote": "newVisuals, promptSet, currentReview and exportedProof record earlier experiments, not selected production artwork. latestDirection and productionRegistry govern this release.",
+  "activeEditorialRevision": "revision-plan.json",
+  "rejectedOverlay": {
+    "designId": "DAHZ3o7bSyY",
+    "transactionId": "5354175080281234914",
+    "transactionStatus": "cancelled",
+    "designStatus": "archived in FAHZ1thu7x8",
+    "rule": "Owner forbids screenshots over illustrations. Do not reuse overlay preview."
+  },
+  "revision4NativeCarousels": {
+    "saved": ["p02", "p04", "p09"],
+    "pages": 12,
+    "originalLogoOnNewStudioArtwork": "Native Canva image asset MAHZ2eLDa-o",
+    "applicationPlacement": "Own clean page; no illustration underneath",
+    "approvalScope": "Save carousel artwork, not complete campaign or publication"
+  }
 }
