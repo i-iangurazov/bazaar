@@ -1,0 +1,75 @@
+{
+  "date": "2026-11-03",
+  "branch": "main",
+  "brand": {
+    "name": "BAZAAR",
+    "translate": false,
+    "pos": "only @bazaar.pos username",
+    "forbiddenMarks": "old pair of diagonal symbols"
+  },
+  "workflow": "ImageGen → Canva → factual/visual review → approval → scheduling after publication authorization",
+  "publication": "disabled by user",
+  "paidBudget": null,
+  "oldVisuals": "rejected; local renderer and gallery stopped",
+  "newVisuals": [
+    {
+      "id": "catalog_ru",
+      "tool": "built-in image_gen",
+      "source": "artifacts/instagram-canva-20261103/bazaar-catalog-ru-v1.png",
+      "canvaDesignId": "DAHZ1uIVCtE",
+      "canvaEditUrl": "https://www.canva.com/d/CdFRRoJKF86BB5W",
+      "status": "created; native Canva editor visually inspected"
+    },
+    {
+      "id": "catalog_kg",
+      "tool": "built-in image_gen edit using RU reference",
+      "source": "artifacts/instagram-canva-20261103/bazaar-catalog-kg-v1.png",
+      "canvaDesignId": "DAHZ1oethcQ",
+      "canvaEditUrl": "https://www.canva.com/d/sIhNgqaNsaQTsjs",
+      "status": "created; rich text checked"
+    },
+    {
+      "id": "catalog_ru_feed",
+      "canvaDesignId": "DAHZ1lf4spg",
+      "canvaEditUrl": "https://www.canva.com/d/_Yp1-WJHtsMSxL6",
+      "size": [1080, 1350],
+      "status": "autofill field draft awaits explicit preview approval",
+      "fields": ["headline", "supporting_line", "cta"],
+      "transactionId": "625395437710687910"
+    },
+    {
+      "id": "catalog_ru_story",
+      "canvaDesignId": "DAHZ1ldFMlc",
+      "canvaEditUrl": "https://www.canva.com/d/GUx0eQUV7rRfVW5",
+      "size": [1080, 1920],
+      "status": "resize test; composition/safe zones not accepted as final"
+    }
+  ],
+  "canva": {
+    "connected": true,
+    "brandKitsFound": 0,
+    "brandTemplatesFound": 0,
+    "existingVideoDesign": "DAHBifS1iOc",
+    "resizeTrialUsesRemaining": 0,
+    "autofill": "not yet verified; awaiting template save approval",
+    "widget": "did not appear; use direct tools"
+  },
+  "fullTwoWeekPack": "not completed in new visual direction; scripts and calendar remain prepared",
+  "promptSet": {
+    "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
+    "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
+  },
+  "rejectedCanvaDesign": {
+    "designId": "DAHZ1la9O24",
+    "draftTransaction": "cancelled",
+    "folderId": "FAHZ1thu7x8",
+    "status": "archived separately; do not use"
+  },
+  "localPipeline": {
+    "briefs": "artifacts/instagram-canva-20261103/briefs.json",
+    "completePackages": 0,
+    "approvedPackages": 0,
+    "incompleteImportRejection": "verified; manifest unchanged",
+    "selfDrawingCode": "moved to ignored rejected-generator archive; not in active scripts"
+  }
+}

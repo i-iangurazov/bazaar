@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-03",
+  "branch": "main",
+  "attributionCommit": "39efff5",
+  "checks": {
+    "scriptSyntax": "passed",
+    "preparedContentBriefs": 36,
+    "reelsScriptsPerLanguage": 6,
+    "carouselsPerLanguage": 4,
+    "storySeriesPerLanguage": 14,
+    "adBriefsPerLanguage": 4,
+    "workflowUnitTests": 5,
+    "acquisitionUnitTests": 12,
+    "incompleteCanvaImport": "rejected; manifest unchanged",
+    "approvedQueue": 0,
+    "typecheck": "passed",
+    "lint": "passed",
+    "i18n": "passed"
+  },
+  "externalChecks": {
+    "canvaConnected": true,
+    "canvaEditableImports": [
+      "RU",
+      "KG"
+    ],
+    "canvaResize": [
+      "1080x1350",
+      "1080x1920"
+    ],
+    "templateFields": "draft pending explicit save approval",
+    "autofill": "not verified",
+    "instagramPublication": "disabled",
+    "paidAds": "not created",
+    "productionAttribution": "not deployed"
+  },
+  "limitations": [
+    "Full new visual pack is not complete.",
+    "Reels scripts are not finished video exports.",
+    "Only first new RU/KG catalog posters have been generated with specialised tools.",
+    "Resized Story composition is not accepted as final.",
+    "Canva resize trial uses are exhausted; no subscription started."
+  ]
+}
