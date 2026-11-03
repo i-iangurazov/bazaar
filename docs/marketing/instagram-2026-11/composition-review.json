@@ -1,0 +1,33 @@
+{
+  "tool": "built-in image_gen edit, followed by native Canva text sizing and original-logo insertion",
+  "status": "saved in Canva after explicit owner approval",
+  "sourceImage": "/Users/ilias_iangurazov/.codex/generated_images/01a19fdb-5508-7f21-b9a4-daf0a00f4c76/exec-5c00b478-22db-49f0-ab99-b4f2e78717a6.png",
+  "imageGenRevision": "artifacts/instagram-canva-20261103/bazaar-stock-copy-revision-v2.png",
+  "prompt": "Use case: ads-marketing edit. The attached image is the EDIT TARGET: a BAZAAR retail software Instagram poster. Keep its successful exact photographic scene, carton and barcode, blue basket, towels, bottles, studio lighting and blue/white brand palette; preserve the photographic realism and do not add objects. Redesign ONLY the editorial text and its spacing to fix poor composition: the existing headline, brand and body are far too oversized and too close to edges. Remove the old sentence completely. Create a calm, polished contemporary editorial hierarchy with a Manrope/Onest-style Cyrillic typeface, tasteful medium/semibold weight, not extra-black. 4:5 portrait. Consistent optical left alignment and generous equal side margins about 8% of canvas width. Small BAZAAR wordmark at top, about 3.4% of width in cap height, leave breathing space. Main blue headline about 5.7% of canvas width in font size, only two lines, no enormous edge-to-edge type. Exact headline: 'Почему товара\\nстало меньше?' Smaller near-black supporting copy, about 3% of width font size, two lines: 'Продажи и списания —\\nв журнале BAZAAR.' Keep ample separation between headline, body and photo. The successful photo must remain the main visual, about the lower half of the poster. One restrained blue button below the carton, about 38% of canvas width and 5% of canvas height, modest rounded corners, exact white text 'Записаться на показ' in a readable smaller size. Small footer 'bazaar.kg', with generous bottom margin, not touching button or edge. BAZAAR remains LATIN uppercase, never transliterate, no POS, no old slash symbols, no decorative new shapes. Exact text only, spell Cyrillic correctly. Professional optical spacing, comfortable mobile reading, no invented interface, metrics or claims. Produce one revised finished poster.",
+  "subsequentOwnerCorrections": [
+    "Remove bazaar.kg artwork footer",
+    "Replace typeset top brand with original public/brand/logo.png"
+  ],
+  "canvaDesignId": "DAHZ2Hj1ljY",
+  "canvaTransactionId": "6478949065009447064",
+  "canvaDraftUrl": "https://www.canva.com/d/tzMhgE7G2o0iCIU",
+  "logoAssetId": "MAHZ2eLDa-o",
+  "visualCheck": "Native 480×600 Canva preview inspected in personal Chrome Ilias; logo inserted, domain removed, title reduced to 64, body 32; source photograph retained.",
+  "approval": "Сохранить этот вариант",
+  "verification": {
+    "workflowTests": "5 passed",
+    "briefs": "36 regenerated; transcripts synchronized with slide copy",
+    "approvedQueue": "empty",
+    "productionChanges": false,
+    "nativeEditor": "Reloaded after commit: original logo and no domain footer visually confirmed."
+  },
+  "canvaTransactionStatus": "committed",
+  "savedDesignUrl": "https://www.canva.com/design/DAHZ2Hj1ljY/siiGtUNt9oltBBPzsFFjdQ/edit",
+  "exportedProof": {
+    "path": "artifacts/instagram-canva-20261103/bazaar-stock-approved-ru-v3.png",
+    "size": [1122, 1402],
+    "sha256": "22b450298ec397eca2a1e8eaf1825cd28938342aecac4fc20b1e89affa187e09",
+    "source": "Native Canva PNG download after commit",
+    "visualCheck": "Full-resolution PNG inspected: original logo, no domain footer, corrected copy and smaller typography."
+  }
+}

@@ -5,7 +5,9 @@
     "name": "BAZAAR",
     "translate": false,
     "pos": "only @bazaar.pos username",
-    "forbiddenMarks": "old pair of diagonal symbols"
+    "forbiddenMarks": "old pair of diagonal symbols",
+    "logo": "public/brand/logo.png; original asset, no redraw",
+    "artworkDomainFooter": false
   },
   "workflow": "ImageGen → Canva → factual/visual review → approval → scheduling after publication authorization",
   "publication": "disabled by user",
@@ -32,16 +34,9 @@
       "id": "catalog_ru_feed",
       "canvaDesignId": "DAHZ1lf4spg",
       "canvaEditUrl": "https://www.canva.com/d/ewcuvq1ktNjlrzB",
-      "size": [
-        1080,
-        1350
-      ],
+      "size": [1080, 1350],
       "status": "saved after explicit owner approval; dataset fields verified",
-      "fields": [
-        "headline",
-        "supporting_line",
-        "cta"
-      ],
+      "fields": ["headline", "supporting_line", "cta"],
       "ownerApproval": "Сохранить и проверить",
       "approvalScope": "Save template and test generation; no Instagram publication or ad launch"
     },
@@ -49,10 +44,7 @@
       "id": "catalog_ru_story",
       "canvaDesignId": "DAHZ1ldFMlc",
       "canvaEditUrl": "https://www.canva.com/d/GUx0eQUV7rRfVW5",
-      "size": [
-        1080,
-        1920
-      ],
+      "size": [1080, 1920],
       "status": "resize test; composition/safe zones not accepted as final"
     }
   ],
@@ -82,7 +74,7 @@
       "publication": false
     }
   },
-  "fullTwoWeekPack": "not completed in new visual direction; scripts and calendar remain prepared",
+  "fullTwoWeekPack": "not completed; revised source layout saved and verified after owner approval; remaining packages not generated in this layout",
   "promptSet": {
     "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
     "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
@@ -99,5 +91,33 @@
     "approvedPackages": 0,
     "incompleteImportRejection": "verified; manifest unchanged",
     "selfDrawingCode": "moved to ignored rejected-generator archive; not in active scripts"
+  },
+  "currentReview": {
+    "designId": "DAHZ2Hj1ljY",
+    "transactionId": "6478949065009447064",
+    "editUrl": "https://www.canva.com/design/DAHZ2Hj1ljY/siiGtUNt9oltBBPzsFFjdQ/edit",
+    "status": "saved after owner explicitly approved the revised preview; native Canva editor reloaded and visually verified",
+    "headline": "Почему товара стало меньше?",
+    "body": "Продажи и списания — в журнале BAZAAR.",
+    "cta": "Записаться на показ",
+    "logoAssetId": "MAHZ2eLDa-o",
+    "logoSource": "public/brand/logo.png",
+    "layout": {
+      "size": [1122, 1402],
+      "textLeft": 104,
+      "headlineFontSize": 64,
+      "bodyFontSize": 32,
+      "logoBox": [104, 88, 300, 75]
+    },
+    "scope": "No publication, paid campaign or template multiplication.",
+    "ownerApproval": "Сохранить этот вариант",
+    "transactionStatus": "committed"
+  },
+  "exportedProof": {
+    "path": "artifacts/instagram-canva-20261103/bazaar-stock-approved-ru-v3.png",
+    "size": [1122, 1402],
+    "sha256": "22b450298ec397eca2a1e8eaf1825cd28938342aecac4fc20b1e89affa187e09",
+    "source": "Native Canva PNG download after commit",
+    "visualCheck": "Full-resolution PNG inspected: original logo, no domain footer, corrected copy and smaller typography."
   }
 }
