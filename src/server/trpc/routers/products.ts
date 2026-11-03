@@ -30,6 +30,7 @@ import {
   getProductDuplicateDiagnosticsQuery,
   getProductById,
   getProductsBootstrap,
+  getProductsListContext,
   getProductPricing,
   getProductsByIds,
   getProductStorePricing,
@@ -202,6 +203,18 @@ export const productsRouter = router({
         query: input.q,
         storeId: input.storeId,
         limit: input.limit,
+      }),
+    ),
+
+  listContext: protectedProcedure
+    .input(z.object({ storeId: z.string().optional() }).optional())
+    .query(({ ctx, input }) =>
+      getProductsListContext({
+        prisma: ctx.prisma,
+        logger: ctx.logger,
+        organizationId: ctx.user.organizationId,
+        user: ctx.user,
+        input,
       }),
     ),
 

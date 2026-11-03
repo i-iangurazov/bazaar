@@ -1,5 +1,5 @@
 "use client";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, type ComponentProps, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { CloseIcon, AdjustIcon, ChevronDownIcon } from "@/components/icons";
 import { Button } from "./ui/button";
@@ -185,6 +185,7 @@ export function ListSearch({
   id: providedId,
   dataTour,
   cameraScan,
+  ...inputEvents
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -195,12 +196,16 @@ export function ListSearch({
   id?: string;
   dataTour?: string;
   cameraScan?: boolean;
-}) {
+} & Pick<
+  ComponentProps<typeof SearchInput>,
+  "onKeyDown" | "onBlur" | "onCompositionStart" | "onCompositionEnd" | "onScan"
+>) {
   const generated = useId();
   const id = providedId ?? generated;
   return (
     <FilterField id={id} label={label} className={cn("basis-64", className)}>
       <SearchInput
+        {...inputEvents}
         id={id}
         data-tour={dataTour}
         value={value}

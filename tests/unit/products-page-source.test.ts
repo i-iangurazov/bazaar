@@ -236,7 +236,7 @@ describe("index page source layout", () => {
     expect(listQuickAction).toBeGreaterThan(-1);
     expect(listSelectiveAction).toBeGreaterThan(listQuickAction);
     expect(listSource.slice(listQuickAction, listSelectiveAction)).toContain(
-      "quickDuplicate.duplicateProduct(product.id, storeId)",
+      "duplicateProduct(product.id, storeId)",
     );
     expect(listSource.slice(listQuickAction, listSelectiveAction)).toContain("if (!storeId)");
     expect(listSource.slice(listQuickAction, listSelectiveAction)).toContain("setDuplicateTarget");
@@ -269,8 +269,8 @@ describe("index page source layout", () => {
     expect(source).toContain("const patchProductArchiveState = useCallback");
     expect(source).toContain("items: current.list.items.filter((item) => item.id !== productId)");
     expect(source).toContain("onMutate: async ({ productId }) =>");
-    expect(source).toContain("trpcUtils.products.bootstrap.cancel(productsBootstrapInput)");
-    expect(source).toContain("trpcUtils.products.bootstrap.invalidate(productsBootstrapInput)");
+    expect(source).toContain("productsBootstrapUtils.cancel(productsBootstrapInput)");
+    expect(source).toContain("productsBootstrapUtils.invalidate(productsBootstrapInput)");
     expect(source).toContain("trpcUtils.inventory.searchProducts.invalidate()");
     expect(detailSource).toContain("onSuccess: async () =>");
     expect(detailSource).toContain("trpcUtils.products.bootstrap.invalidate()");
