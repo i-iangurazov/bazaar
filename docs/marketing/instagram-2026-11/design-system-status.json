@@ -74,7 +74,7 @@
       "publication": false
     }
   },
-  "fullTwoWeekPack": "Not completed. One visual reference approved. All 8 serif carousel draft transactions and the unreviewed Nunito trial cancelled; no finished complete package approved.",
+  "fullTwoWeekPack": "75 source artworks; six verified 20-second Canva Reels and 18 native Story frames. Six complete draft packages imported, none approved. Remaining native card exports and full gallery/mobile review pending.",
   "promptSet": {
     "ru": "New professional portrait 4:5 BAZAAR retail poster, royal blue/white, contemporary Cyrillic typography, photographic still life of milk, jam and coffee. Exact editorial copy: BAZAAR / Товары, цены, остатки. / В одном каталоге. / Посмотреть сервис / bazaar.kg. No POS, no old slash marks, no invented UI or result claims.",
     "kg": "Edit RU poster, preserving composition and BAZAAR. Replace editorial copy with Товарлар, баалар, калдыктар. / Бир каталогдо. / Сервис менен таанышуу. Packaging labels remain unchanged."
@@ -87,10 +87,11 @@
   },
   "localPipeline": {
     "briefs": "artifacts/instagram-canva-20261103/briefs.json",
-    "completePackages": 0,
+    "completePackages": 6,
     "approvedPackages": 0,
     "incompleteImportRejection": "verified; manifest unchanged",
-    "selfDrawingCode": "moved to ignored rejected-generator archive; not in active scripts"
+    "selfDrawingCode": "moved to ignored rejected-generator archive; not in active scripts",
+    "reviewGallery": "artifacts/instagram-canva-20261103/review-p04-v4/index.html"
   },
   "currentReview": {
     "designId": "DAHZ2Hj1ljY",
@@ -136,5 +137,40 @@
     ],
     "rejectedTrials": ["Cormorant Garamond + PT Sans", "Oswald + PT Sans"],
     "scope": "Visual reference only. Not approval of a full carousel, translations, scheduling, Instagram publication, or paid ads."
-  }
+  },
+  "productionRegistry": "PRODUCTION-STATUS.json",
+  "sourceBoard": {
+    "fileKey": "AtLlLGuYtMYAtodNHuQcG7",
+    "url": "https://www.figma.com/design/AtLlLGuYtMYAtodNHuQcG7",
+    "imagesUploaded": 75,
+    "exportFrameSizes": [
+      [1080, 1350],
+      [1080, 1920]
+    ],
+    "localPngExportsCompleted": 0,
+    "limitation": "Starter MCP tool call limit reached; no upgrade or bypass. Returned references did not yield PNG downloads."
+  },
+  "productionProjects": [
+    {
+      "id": "DAHZ2tbDPeE",
+      "url": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
+      "purpose": "R01; actual 20-second MP4 downloaded and verified"
+    },
+    {
+      "id": "DAHZ24dI8do",
+      "url": "https://www.canva.com/d/EedbigQsHHc0PPK",
+      "purpose": "Five Reels; 100-second native MP4 downloaded, five exact 20-second segments encoded and verified"
+    },
+    {
+      "id": "DAHZ2-vrRbI",
+      "url": "https://www.canva.com/d/fkFylJl83ix9_Ag",
+      "purpose": "24 non-Reel Stories; native 120-second timeline assembled, download still pending"
+    },
+    {
+      "id": "DAHZ3IgIN5k",
+      "url": "https://www.canva.com/d/XdfrSQA5elzN82u",
+      "purpose": "1080x1350 feed exports; 7 native pages confirmed, last page requires inspection; project incomplete"
+    }
+  ],
+  "historicalTrialsNote": "newVisuals, promptSet, currentReview and exportedProof record earlier experiments, not selected production artwork. latestDirection and productionRegistry govern this release."
 }

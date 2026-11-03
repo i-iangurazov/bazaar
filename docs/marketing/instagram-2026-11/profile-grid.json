@@ -1,14 +1,13 @@
 {
   "date": "2026-11-03",
-  "status": "layout_plan_not_final_visual_preview",
+  "status": "real_new_cover_preview_with_existing_profile_captures_not_published",
   "reference": "references/owner-approved-stock-cover.png",
   "publicationEnabled": false,
   "paidBudget": null,
   "assumptions": [
-    "No pinned posts or manual reordering assumed; actual state unverified",
+    "New records precede the current visible three; check at authorized publication",
     "All six Reels included in main grid",
-    "One primary language per slot",
-    "Existing three posts preserved; exact current order unverified"
+    "One language per slot"
   ],
   "afterWeekOne": ["r05", "p04", "r03", "p02", "r01", "existing_1", "existing_2", "existing_3"],
   "afterWeekTwo": [
@@ -31,5 +30,33 @@
     "Current personal Instagram profile order and crop",
     "Main grid and mobile-size visual inspection",
     "Full package approval and explicit publication authorization"
-  ]
+  ],
+  "currentProfileAudit": {
+    "date": "2026-11-03",
+    "browser": "Personal Chrome Ilias; viewer roksosh",
+    "url": "https://www.instagram.com/bazaar.pos/",
+    "posts": 3,
+    "observedTileSizeCssPx": [315.34375, 420.453125],
+    "observedAspectRatio": "3:4",
+    "existingOrder": [
+      {
+        "id": "existing_1",
+        "title": "Кассы и смены в BAZAAR POS",
+        "url": "https://www.instagram.com/bazaar.pos/p/DU1as05gmgx/"
+      },
+      {
+        "id": "existing_2",
+        "title": "BAZAAR POS на двух языках",
+        "url": "https://www.instagram.com/bazaar.pos/p/DU1adr9gvYA/"
+      },
+      {
+        "id": "existing_3",
+        "title": "Что такое BAZAAR POS?",
+        "url": "https://www.instagram.com/bazaar.pos/p/DU1Z4sdApKw/"
+      }
+    ],
+    "pinBadges": "None visible; manual reordering not inspected",
+    "publicationRights": "Not verified",
+    "profileMutated": false
+  }
 }

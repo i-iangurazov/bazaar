@@ -41,21 +41,27 @@ for (const source of input.packages) {
     throw new Error(`Incomplete frame/story export: ${id}`);
   if ((brief.type === "reel") !== Boolean(source.video))
     throw new Error(`Reels require a finished video: ${id}`);
+  if (brief.type === "reel" && !source.cover)
+    throw new Error(`Reels require a separately reviewed profile cover: ${id}`);
+  if (source.cover && (brief.type !== "reel" || !["canva", "imagegen"].includes(source.coverTool)))
+    throw new Error(`Record the actual cover tool for a Reel: ${id}`);
   const assets = [];
-  const addImage = async (file, suffix, tall) => {
+  const addImage = async (file, suffix, tall, cover = false) => {
     if (typeof file !== "string" || !path.isAbsolute(file))
       throw new Error("Use an absolute local export path");
     const info = await sharp(file).metadata();
-    if (
-      info.width !== 1080 ||
-      info.height !== (tall ? 1920 : 1350) ||
-      !["png", "jpeg", "webp"].includes(info.format)
-    )
+    const validSize = cover
+      ? info.width >= 1080 &&
+        info.height >= 1350 &&
+        Math.abs(info.width / info.height - 4 / 5) < 0.005
+      : info.width === 1080 && info.height === (tall ? 1920 : 1350);
+    if (!validSize || !["png", "jpeg", "webp"].includes(info.format))
       throw new Error(`Wrong export size or format: ${file}`);
     const ext = { png: "png", jpeg: "jpg", webp: "webp" }[info.format];
     const bytes = await readFile(file);
     assets.push({ file: `${id}${suffix}.${ext}`, sha256: digest(bytes), source: file });
   };
+  if (source.cover) await addImage(source.cover, "-cover", false, true);
   for (const [n, file] of (source.frames ?? []).entries())
     await addImage(file, `-${n + 1}`, brief.type === "reel");
   for (const [n, file] of (source.stories ?? []).entries())
@@ -98,6 +104,7 @@ for (const source of input.packages) {
     status: "draft",
     campaignHash: digest(campaignText),
     canvaDesignIds: source.canvaDesignIds,
+    ...(source.cover ? { coverTool: source.coverTool } : {}),
     files: assets.map(({ file, sha256 }) => ({ file, sha256 })),
   };
   prepared.push({ row: { ...row, approvalHash: digest(JSON.stringify(row)) }, assets });

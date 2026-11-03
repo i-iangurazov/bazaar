@@ -37,7 +37,12 @@ for (const item of [...campaign.items, ...campaign.ads])
       title: item.title[locale],
       caption: item.caption[locale],
       slides: item.slides?.[locale] ?? [],
+      verticalSlides: item.verticalSlides?.[locale] ?? [],
       stories: item.stories?.[locale] ?? [],
+      storyInteractions: item.storyInteractions ?? [],
+      ctaMode: item.ctaMode,
+      directKeyword: item.directKeyword ?? null,
+      artworkSources: item.artworkSources ?? null,
       brandRules: campaign.brandRules,
       landingUrl: landing.href,
       demoUrl: demo.href,
@@ -46,7 +51,7 @@ for (const item of [...campaign.items, ...campaign.ads])
     briefs.push(brief);
     await writeFile(
       `${dir}/${id}-copy.txt`,
-      `${brief.caption}\n\n${brief.slides.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n")}\n\nStories:\n${brief.stories.join("\n")}\n\nStory / ad link: ${brief.landingUrl}\nWhatsApp demo: ${brief.demoUrl}\n`,
+      `${brief.caption}\n\n${brief.slides.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n")}\n\n${brief.verticalSlides.length ? `Vertical ad artwork:\n${brief.verticalSlides.map((s, i) => `${i + 1}. ${s.title}\n${s.body}`).join("\n\n")}\n\n` : ""}Stories:\n${brief.stories.join("\n")}\n\nNative Story interactions (add in Instagram, never bake into the image):\n${JSON.stringify(brief.storyInteractions, null, 2)}\n\nStory / ad link: ${brief.landingUrl}\nWhatsApp demo: ${brief.demoUrl}\n`,
     );
     if (item.format === "reel") {
       const srt = item.frames[locale]

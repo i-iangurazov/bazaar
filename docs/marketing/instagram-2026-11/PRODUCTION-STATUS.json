@@ -1,0 +1,180 @@
+{
+  "date": "2026-11-03",
+  "stage": "final_exports_pending",
+  "fullGoalComplete": false,
+  "branch": "main",
+  "primaryReleaseLanguage": "ru",
+  "kgAlternatives": "Text drafts retained; native editorial review required before use",
+  "reference": "references/owner-approved-stock-cover.png",
+  "publicationEnabled": false,
+  "paidBudget": null,
+  "created": {
+    "feedCoverArtwork": 10,
+    "carouselSlideArtwork": 16,
+    "canvaReels": 6,
+    "storyArtwork": 42,
+    "nativeStoryFrames1080x1920": 18,
+    "adConceptsWithBothFormatArtworkMapped": 4,
+    "adVisualAssignments": 24,
+    "uniqueSourceImages": 75
+  },
+  "target": {
+    "feedCovers": 10,
+    "carouselSlides": 16,
+    "reels": 6,
+    "storyFrames": 42,
+    "adConcepts": 4,
+    "adFramesPerFormat": 3,
+    "adFormats": ["feed", "vertical"]
+  },
+  "completeFilePackages": ["r01_ru", "r03_ru", "r05_ru", "r08_ru", "r10_ru", "r12_ru"],
+  "approvedPackages": 0,
+  "reviewGallery": "artifacts/instagram-canva-20261103/review-p04-v4/index.html",
+  "gridPreview": "artifacts/instagram-canva-20261103/production/qa/planned-grid-3x4.png",
+  "generationEvidence": "artifacts/instagram-canva-20261103/production/assets.json",
+  "remaining": [
+    "Native export of 16 carousel cards to 1080x1350; source p02_ru_04 is 1092x1440.",
+    "Native export of 24 non-Reel Story frames to 1080x1920 from the 120-second Canva timeline.",
+    "Complete final 12 feed / 12 vertical ad placements; 7 vertical placements already map to verified native Reel frames.",
+    "Verify the final full gallery in desktop/mobile browser, actual Instagram crop and sticker overlays.",
+    "Re-import remaining packages after native exports, final owner review and complete archive."
+  ],
+  "canvaCapabilityNote": "Current new video timeline works in personal Canva UI. MCP start-editing exposes no fills despite real 4-scene video; inspection transaction cancelled without changes. Do not claim video bulk-edit automation through this API works.",
+  "profileAudit": "profile-grid.json",
+  "videos": [
+    {
+      "designId": "DAHZ2tbDPeE",
+      "editUrl": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
+      "path": "artifacts/instagram-canva-20261103/production/r01_ru.mp4",
+      "size": [1080, 1920],
+      "seconds": 20,
+      "fps": 30,
+      "codec": "H264",
+      "audio": "none",
+      "fullDecode": "passed",
+      "visualFramesCheckedAtSeconds": [2, 7, 12, 17],
+      "sha256": "9b3666108ed6aba50efccb5f513e0f85ecef797d66a916b4c726d3be2671a133"
+    },
+    {
+      "id": "r03_ru",
+      "canvaDesignId": "DAHZ24dI8do",
+      "sourceTimelineSeconds": [0, 20],
+      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+      "file": "artifacts/instagram-canva-20261103/production/r03_ru.mp4",
+      "sha256": "131841d35fba5918eca4d95eb0b01913f8bd1a324e0b4e7a89fa1369161cf7a1",
+      "size": [1080, 1920],
+      "seconds": 20,
+      "fps": 30,
+      "audio": "none",
+      "fullDecode": "passed",
+      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+    },
+    {
+      "id": "r05_ru",
+      "canvaDesignId": "DAHZ24dI8do",
+      "sourceTimelineSeconds": [20, 40],
+      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+      "file": "artifacts/instagram-canva-20261103/production/r05_ru.mp4",
+      "sha256": "0fbab9d7af15690b56d6656a98ee18b73cf8a8d5f5b6e6a49d727a347a3760dd",
+      "size": [1080, 1920],
+      "seconds": 20,
+      "fps": 30,
+      "audio": "none",
+      "fullDecode": "passed",
+      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+    },
+    {
+      "id": "r08_ru",
+      "canvaDesignId": "DAHZ24dI8do",
+      "sourceTimelineSeconds": [40, 60],
+      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+      "file": "artifacts/instagram-canva-20261103/production/r08_ru.mp4",
+      "sha256": "82e33cebcf64afaed11a93fab6ae9d7c57e9962ae17217321172885faa58bcc2",
+      "size": [1080, 1920],
+      "seconds": 20,
+      "fps": 30,
+      "audio": "none",
+      "fullDecode": "passed",
+      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+    },
+    {
+      "id": "r10_ru",
+      "canvaDesignId": "DAHZ24dI8do",
+      "sourceTimelineSeconds": [60, 80],
+      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+      "file": "artifacts/instagram-canva-20261103/production/r10_ru.mp4",
+      "sha256": "be03ee766391fe8a9de846c0fa674d178aae9c194d7cc4f46d7781a9b17aba74",
+      "size": [1080, 1920],
+      "seconds": 20,
+      "fps": 30,
+      "audio": "none",
+      "fullDecode": "passed",
+      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+    },
+    {
+      "id": "r12_ru",
+      "canvaDesignId": "DAHZ24dI8do",
+      "sourceTimelineSeconds": [80, 100],
+      "sourceSha256": "81af7e7a56eb6901543b30ffe92bde60a82a197f7992ab8c314730363a5bf16d",
+      "file": "artifacts/instagram-canva-20261103/production/r12_ru.mp4",
+      "sha256": "1024110929f376aedbc06337a481975bbe96307e883de47598fce54602ae3156",
+      "size": [1080, 1920],
+      "seconds": 20,
+      "fps": 30,
+      "audio": "none",
+      "fullDecode": "passed",
+      "processing": "Exact video segment extraction and H264 encoding; no artwork, typography or scene edits",
+      "visualReview": "Four actual exported video frames inspected; text and logo readable, no CTA button or URL footer. Native Instagram overlays/mobile crop remain unverified.",
+      "visualFramesCheckedAtSeconds": [2, 7, 12, 17]
+    }
+  ],
+  "canvaProjects": [
+    {
+      "id": "DAHZ2tbDPeE",
+      "url": "https://www.canva.com/d/KWB0mlAQvGLI-Ss",
+      "purpose": "R01; actual 20-second MP4 downloaded and verified"
+    },
+    {
+      "id": "DAHZ24dI8do",
+      "url": "https://www.canva.com/d/EedbigQsHHc0PPK",
+      "purpose": "Five Reels; 100-second native MP4 downloaded, five exact 20-second segments encoded and verified"
+    },
+    {
+      "id": "DAHZ2-vrRbI",
+      "url": "https://www.canva.com/d/fkFylJl83ix9_Ag",
+      "purpose": "24 non-Reel Stories; native 120-second timeline assembled, download still pending"
+    },
+    {
+      "id": "DAHZ3IgIN5k",
+      "url": "https://www.canva.com/d/XdfrSQA5elzN82u",
+      "purpose": "1080x1350 feed exports; 7 native pages confirmed, last page requires inspection; project incomplete"
+    }
+  ],
+  "figmaSourceBoard": {
+    "fileKey": "AtLlLGuYtMYAtodNHuQcG7",
+    "url": "https://www.figma.com/design/AtLlLGuYtMYAtodNHuQcG7",
+    "imagesUploaded": 75,
+    "exportFrameSizes": [
+      [1080, 1350],
+      [1080, 1920]
+    ],
+    "localPngExportsCompleted": 0,
+    "limitation": "Starter MCP tool call limit reached; no upgrade or bypass. Returned references did not yield PNG downloads."
+  },
+  "browserAccess": {
+    "profile": "Personal Chrome Ilias only",
+    "lastCheck": "Local browser use is disabled in Work settings",
+    "userReport": "Chrome connected; Manage visible; user explicitly selected @Chrome in this chat",
+    "nextStep": "Restart Codex and return to this chat. Do not switch browser/profile or bypass the restriction."
+  },
+  "nativePlacementVerification": "Not performed in Instagram; publication disabled.",
+  "visualEvidence": "Illustrative AI still life; silent four-card Reels assembled in Canva. No product screen recording or fabricated client results."
+}
