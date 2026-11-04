@@ -671,57 +671,62 @@ export async function getCatalogProductOptions(
   );
 }
 
-export async function previewSelectedCatalogProducts(input: {
+export type SelectedCatalogProductsInput = {
   organizationId: string;
   actorId: string;
   storeId: string;
   selections: Array<{ productId: string; sourceKey: string }>;
-}) {
-  return prisma.$transaction(
-    async (tx) => {
-      const g = await graph(tx, input.organizationId);
-      const change = catalogSettingsSchema.parse(g.settings(input.storeId));
-      const selected = new Set(input.selections.map((s) => s.productId));
-      if (selected.size !== input.selections.length)
-        throw new AppError("invalidInput", "BAD_REQUEST", 400);
-      for (const item of input.selections) {
-        if (
-          g.assignments.some(
-            (a) => a.storeId === input.storeId && a.productId === item.productId && a.isHidden,
-          )
-        )
-          throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
-        const source = g.sources.get(item.sourceKey);
-        if (
-          !source ||
-          source.key === `store:${input.storeId}` ||
-          !source.productIds.includes(item.productId)
-        )
-          throw new AppError("productAccessDenied", "FORBIDDEN", 403);
-        let connection = change.connections.find((c) => c.key === source.key);
-        if (!connection) {
-          connection = { key: source.key, enabled: true, scope: "SELECTED", productIds: [] };
-          change.connections.push(connection);
-        } else if (!connection.enabled) {
-          // Re-enabling a disabled ALL source must never reopen its whole catalog.
-          connection.enabled = true;
-          connection.scope = "SELECTED";
-          connection.productIds = [];
-        }
-        if (connection.scope === "SELECTED")
-          connection.productIds = unique([...connection.productIds, item.productId]);
-      }
-      const r = await impact(tx, input.organizationId, change, g);
-      if (
-        r.removed.length ||
-        r.added.some((id) => !selected.has(id)) ||
-        r.summary.otherImpacts.length
+};
+
+/** Shared transaction layer for the explicitly reviewed transfer preparation. */
+export async function previewSelectedCatalogProductsTx(
+  tx: Tx,
+  input: SelectedCatalogProductsInput,
+) {
+  const g = await graph(tx, input.organizationId);
+  const change = catalogSettingsSchema.parse(g.settings(input.storeId));
+  const selected = new Set(input.selections.map((s) => s.productId));
+  if (selected.size !== input.selections.length)
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  for (const item of input.selections) {
+    if (
+      g.assignments.some(
+        (a) => a.storeId === input.storeId && a.productId === item.productId && a.isHidden,
       )
-        throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
-      return { change, ...catalogPreview(input.organizationId, input.actorId, r) };
-    },
-    { isolationLevel: "RepeatableRead", maxWait: 10_000, timeout: 30_000 },
-  );
+    )
+      throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
+    const source = g.sources.get(item.sourceKey);
+    if (
+      !source ||
+      source.key === `store:${input.storeId}` ||
+      !source.productIds.includes(item.productId)
+    )
+      throw new AppError("productAccessDenied", "FORBIDDEN", 403);
+    let connection = change.connections.find((c) => c.key === source.key);
+    if (!connection) {
+      connection = { key: source.key, enabled: true, scope: "SELECTED", productIds: [] };
+      change.connections.push(connection);
+    } else if (!connection.enabled) {
+      // Re-enabling a disabled ALL source must never reopen its whole catalog.
+      connection.enabled = true;
+      connection.scope = "SELECTED";
+      connection.productIds = [];
+    }
+    if (connection.scope === "SELECTED")
+      connection.productIds = unique([...connection.productIds, item.productId]);
+  }
+  const r = await impact(tx, input.organizationId, change, g);
+  if (r.removed.length || r.added.some((id) => !selected.has(id)) || r.summary.otherImpacts.length)
+    throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
+  return { change, ...catalogPreview(input.organizationId, input.actorId, r) };
+}
+
+export async function previewSelectedCatalogProducts(input: SelectedCatalogProductsInput) {
+  return prisma.$transaction((tx) => previewSelectedCatalogProductsTx(tx, input), {
+    isolationLevel: "RepeatableRead",
+    maxWait: 10_000,
+    timeout: 30_000,
+  });
 }
 export async function previewCatalogSettings(input: {
   organizationId: string;
@@ -755,6 +760,144 @@ async function materialize(tx: Tx, organizationId: string, source: Source) {
     });
   return catalog;
 }
+export type ApplyCatalogSettingsInput = {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  change: CatalogSettings;
+  token: string;
+};
+
+/** Caller owns the assortment lock, authorization and idempotency transaction. */
+export async function applyCatalogSettingsTx(tx: Tx, input: ApplyCatalogSettingsInput) {
+  const r = await impact(tx, input.organizationId, input.change);
+  const [expires, hash, signature] = input.token.split("."),
+    expected = sign(`${input.organizationId}:${input.actorId}:${expires}:${hash}`);
+  if (
+    !signature ||
+    signature.length !== expected.length ||
+    !timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) ||
+    Number(expires) < Date.now() ||
+    hash !== r.fingerprint
+  )
+    throw new AppError("assortmentPreviewStale", "CONFLICT", 409);
+  // Capture each old path before detaching, including disabled sources for later reconnection.
+  if (r.store.productCatalogId)
+    await materialize(
+      tx,
+      input.organizationId,
+      r.g.sources.get(`catalog:${r.store.productCatalogId}`)!,
+    );
+  for (const c of r.before.connections)
+    await materialize(tx, input.organizationId, r.g.sources.get(c.key)!);
+  await materialize(tx, input.organizationId, r.g.sources.get(`store:${r.store.id}`)!);
+  const connections = [];
+  for (const c of r.change.connections) {
+    const catalog = await materialize(tx, input.organizationId, r.g.sources.get(c.key)!);
+    connections.push({ ...c, catalogId: catalog.id });
+  }
+  await tx.assortmentRule.updateMany({
+    where: { organizationId: input.organizationId, targetStoreId: r.store.id },
+    data: { active: false },
+  });
+  await tx.store.update({
+    where: { id: r.store.id },
+    data: {
+      directedAssortment: true,
+      productCatalogId: null,
+      catalogSourcesConfigured: true,
+    },
+  });
+  await tx.storeCatalog.updateMany({
+    where: { storeId: r.store.id },
+    data: { enabled: false },
+  });
+  for (const c of connections)
+    await tx.storeCatalog.upsert({
+      where: { storeId_catalogId: { storeId: r.store.id, catalogId: c.catalogId } },
+      create: {
+        storeId: r.store.id,
+        catalogId: c.catalogId,
+        enabled: c.enabled,
+        scope: c.scope,
+        selectedProductIds: unique(c.productIds),
+      },
+      update: {
+        enabled: c.enabled,
+        scope: c.scope,
+        selectedProductIds: unique(c.productIds),
+      },
+    });
+  if (r.change.confirmProductIds.length)
+    await tx.storeProduct.updateMany({
+      where: {
+        organizationId: input.organizationId,
+        storeId: r.store.id,
+        productId: { in: r.change.confirmProductIds },
+      },
+      data: {
+        isDirect: true,
+        isHistorical: false,
+        isActive: true,
+        assignedById: input.actorId,
+      },
+    });
+  await tx.storeProduct.createMany({
+    data: r.desired.map((productId) => ({
+      organizationId: input.organizationId,
+      storeId: r.store.id,
+      productId,
+      isActive: true,
+      isDirect: false,
+      isHistorical: false,
+    })),
+    skipDuplicates: true,
+  });
+  const baselineIds = r.g.sources.get(`baseline:${r.store.id}`)?.memberIds ?? [];
+  await tx.storeProduct.updateMany({
+    where: {
+      storeId: r.store.id,
+      isDirect: false,
+      ...(baselineIds.length ? { productId: { notIn: baselineIds } } : {}),
+    },
+    data: { isActive: false, isHistorical: false },
+  });
+  // Retain the baseline's existing editing permissions. Configured stores
+  // derive visibility from enabled subscriptions, never this historical flag.
+  if (baselineIds.length)
+    await tx.storeProduct.updateMany({
+      where: {
+        storeId: r.store.id,
+        isDirect: false,
+        productId: { in: baselineIds },
+      },
+      data: { isActive: false },
+    });
+  // The BEFORE trigger computes the exact union from enabled catalogues on this update.
+  const actual = await tx.storeProduct.findMany({
+    where: {
+      storeId: r.store.id,
+      isActive: true,
+      product: { organizationId: input.organizationId, isDeleted: false },
+    },
+    select: { productId: true },
+  });
+  if (unique(actual.map((p) => p.productId)).join(",") !== unique(r.visibleIds).join(","))
+    throw new AppError("assortmentPreviewStale", "CONFLICT", 409);
+
+  await writeAuditLog(tx, {
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    requestId: input.requestId,
+    action: "CATALOG_SOURCES_SAVE",
+    entity: "StoreCatalogSettings",
+    entityId: r.store.id,
+    before: toJson(r.before),
+    after: toJson({ settings: r.change, summary: r.summary }),
+  });
+  return r.summary;
+}
+
 export async function saveCatalogSettings(input: {
   organizationId: string;
   actorId: string;
@@ -781,138 +924,7 @@ export async function saveCatalogSettings(input: {
               }) as Prisma.InputJsonValue,
             },
             async () => {
-              const r = await impact(tx, input.organizationId, input.change);
-              const [expires, hash, signature] = input.token.split("."),
-                expected = sign(`${input.organizationId}:${input.actorId}:${expires}:${hash}`);
-              if (
-                !signature ||
-                signature.length !== expected.length ||
-                !timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) ||
-                Number(expires) < Date.now() ||
-                hash !== r.fingerprint
-              )
-                throw new AppError("assortmentPreviewStale", "CONFLICT", 409);
-              // Capture each old path before detaching, including disabled sources for later reconnection.
-              if (r.store.productCatalogId)
-                await materialize(
-                  tx,
-                  input.organizationId,
-                  r.g.sources.get(`catalog:${r.store.productCatalogId}`)!,
-                );
-              for (const c of r.before.connections)
-                await materialize(tx, input.organizationId, r.g.sources.get(c.key)!);
-              await materialize(tx, input.organizationId, r.g.sources.get(`store:${r.store.id}`)!);
-              const connections = [];
-              for (const c of r.change.connections) {
-                const catalog = await materialize(
-                  tx,
-                  input.organizationId,
-                  r.g.sources.get(c.key)!,
-                );
-                connections.push({ ...c, catalogId: catalog.id });
-              }
-              await tx.assortmentRule.updateMany({
-                where: { organizationId: input.organizationId, targetStoreId: r.store.id },
-                data: { active: false },
-              });
-              await tx.store.update({
-                where: { id: r.store.id },
-                data: {
-                  directedAssortment: true,
-                  productCatalogId: null,
-                  catalogSourcesConfigured: true,
-                },
-              });
-              await tx.storeCatalog.updateMany({
-                where: { storeId: r.store.id },
-                data: { enabled: false },
-              });
-              for (const c of connections)
-                await tx.storeCatalog.upsert({
-                  where: { storeId_catalogId: { storeId: r.store.id, catalogId: c.catalogId } },
-                  create: {
-                    storeId: r.store.id,
-                    catalogId: c.catalogId,
-                    enabled: c.enabled,
-                    scope: c.scope,
-                    selectedProductIds: unique(c.productIds),
-                  },
-                  update: {
-                    enabled: c.enabled,
-                    scope: c.scope,
-                    selectedProductIds: unique(c.productIds),
-                  },
-                });
-              if (r.change.confirmProductIds.length)
-                await tx.storeProduct.updateMany({
-                  where: {
-                    organizationId: input.organizationId,
-                    storeId: r.store.id,
-                    productId: { in: r.change.confirmProductIds },
-                  },
-                  data: {
-                    isDirect: true,
-                    isHistorical: false,
-                    isActive: true,
-                    assignedById: input.actorId,
-                  },
-                });
-              await tx.storeProduct.createMany({
-                data: r.desired.map((productId) => ({
-                  organizationId: input.organizationId,
-                  storeId: r.store.id,
-                  productId,
-                  isActive: true,
-                  isDirect: false,
-                  isHistorical: false,
-                })),
-                skipDuplicates: true,
-              });
-              const baselineIds = r.g.sources.get(`baseline:${r.store.id}`)?.memberIds ?? [];
-              await tx.storeProduct.updateMany({
-                where: {
-                  storeId: r.store.id,
-                  isDirect: false,
-                  ...(baselineIds.length ? { productId: { notIn: baselineIds } } : {}),
-                },
-                data: { isActive: false, isHistorical: false },
-              });
-              // Retain the baseline's existing editing permissions. Configured stores
-              // derive visibility from enabled subscriptions, never this historical flag.
-              if (baselineIds.length)
-                await tx.storeProduct.updateMany({
-                  where: {
-                    storeId: r.store.id,
-                    isDirect: false,
-                    productId: { in: baselineIds },
-                  },
-                  data: { isActive: false },
-                });
-              // The BEFORE trigger computes the exact union from enabled catalogues on this update.
-              const actual = await tx.storeProduct.findMany({
-                where: {
-                  storeId: r.store.id,
-                  isActive: true,
-                  product: { organizationId: input.organizationId, isDeleted: false },
-                },
-                select: { productId: true },
-              });
-              if (
-                unique(actual.map((p) => p.productId)).join(",") !== unique(r.visibleIds).join(",")
-              )
-                throw new AppError("assortmentPreviewStale", "CONFLICT", 409);
-
-              await writeAuditLog(tx, {
-                organizationId: input.organizationId,
-                actorId: input.actorId,
-                requestId: input.requestId,
-                action: "CATALOG_SOURCES_SAVE",
-                entity: "StoreCatalogSettings",
-                entityId: r.store.id,
-                before: toJson(r.before),
-                after: toJson({ settings: r.change, summary: r.summary }),
-              });
-              return r.summary;
+              return applyCatalogSettingsTx(tx, input);
             },
           );
           return result.result;

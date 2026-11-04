@@ -133,6 +133,8 @@ export function TransferOutcome(props: {
               if (!open) setConnect(null);
             }}
             storeId={props.toStoreId}
+            fromStoreId={props.fromStoreId}
+            lines={props.lines.filter((line) => connect.includes(line.productId))}
             productIds={connect}
             onApplied={() => q.refetch()}
           />

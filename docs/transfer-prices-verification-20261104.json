@@ -1,0 +1,162 @@
+{
+  "date": "2026-11-04",
+  "feature": "Reviewed transfer assortment and missing selling prices",
+  "baseCommit": "76859174e1f1167047df4eae25ea688a8c71a035",
+  "behavior": [
+    "Prepare assortment and optionally fill only missing retail/wholesale prices in the existing transfer dialog.",
+    "Review before/after values; prices come from the actual sending store, catalog from the explicitly chosen original source.",
+    "Single transaction for catalog and price writes; no stock movement until separately posting the transfer.",
+    "Retain existing/zero prices, discounts, shared-price bindings, hidden cards, other stores and unselected variants.",
+    "Fresh role/store/tenant/subscription checks; signed stale-state protection, idempotency, reconciliation and browser recovery key.",
+    "Use existing UI components, preserve operational layouts; RU/KG/EN Help updated."
+  ],
+  "verification": {
+    "typecheck": "passed, tsc --noEmit --incremental false and production build",
+    "lint": "passed, next lint --no-cache and production build",
+    "translations": "passed, node --import tsx scripts/i18n-check.ts",
+    "productionBuild": "passed on the release checkout with synthetic settings; customer env files excluded",
+    "database": {
+      "passed": 129,
+      "failed": 0,
+      "newFeatureCases": 22,
+      "infrastructure": "Private PostgreSQL 16 cluster, port 55486, bazaar_hardening_ci. Providers disabled. No customer database access.",
+      "covers": [
+        "preview writes nothing",
+        "both kinds of prices",
+        "assortment only",
+        "source null and zero",
+        "destination zero and existing values",
+        "discounts",
+        "base and selected variants",
+        "shared bindings including empty shared values",
+        "wholesale off",
+        "USD destination and canonical KGS",
+        "actual warehouse vs original catalog",
+        "roles/tenant/store/plan/hidden card",
+        "stale source/target/product",
+        "full audit rollback",
+        "repeat and concurrent apply",
+        "reconciliation vs late apply",
+        "expired receipt recovery",
+        "500 products",
+        "transfer stock movements after preparation"
+      ]
+    },
+    "unit": {
+      "uniquePassed": 2266,
+      "failedAfterEnvironmentCorrection": 0,
+      "newFeatureCases": 7,
+      "initialReleaseCheckout": {
+        "passed": 2257,
+        "failed": 9,
+        "reason": "The unchanged persistent-runtime tests deliberately reject a checkout under /private/tmp."
+      },
+      "followUp": {
+        "suite": "tests/unit/local-runtime.test.ts",
+        "passed": 20,
+        "failed": 0,
+        "location": "persistent repository root; test and runtime files unchanged from remote main",
+        "environmentCorrections": [
+          "allowed local test port",
+          "removed only generated build cache/artifact to satisfy the free-space guard"
+        ]
+      }
+    },
+    "catalogTransactionExtraction": [
+      {
+        "oldName": "previewSelectedCatalogProducts",
+        "newName": "previewSelectedCatalogProductsTx",
+        "bodyIdenticalAfterFormatting": true
+      },
+      {
+        "oldName": "saveCatalogSettings",
+        "newName": "applyCatalogSettingsTx",
+        "bodyIdenticalAfterFormatting": true
+      }
+    ],
+    "browser": {
+      "results": [
+        {
+          "locale": "ru",
+          "width": 1440,
+          "review": true,
+          "overflow": false,
+          "confirmationReachable": true
+        },
+        {
+          "locale": "ru",
+          "width": 390,
+          "review": true,
+          "overflow": false,
+          "confirmationReachable": true
+        },
+        {
+          "locale": "kg",
+          "width": 390,
+          "review": true,
+          "overflow": false,
+          "confirmationReachable": true
+        },
+        {
+          "locale": "kg",
+          "width": 1440,
+          "review": true,
+          "overflow": false,
+          "confirmationReachable": true
+        },
+        {
+          "locale": "en",
+          "width": 1440,
+          "review": true,
+          "overflow": false,
+          "confirmationReachable": true
+        },
+        {
+          "locale": "en",
+          "width": 390,
+          "review": true,
+          "overflow": false,
+          "confirmationReachable": true
+        }
+      ],
+      "prices": {
+        "retail": 120,
+        "wholesale": 90
+      },
+      "stockUnchangedByPreparation": true,
+      "postedTransfer": {
+        "movements": 2,
+        "sourceStock": 9,
+        "destinationStock": 1
+      },
+      "errors": []
+    },
+    "releaseScope": "Non-JSON feature files identical between working tree and release; JSON changes compared by key and identical. Deferred local work excluded."
+  },
+  "publication": {
+    "target": "main",
+    "ci": "verify after push",
+    "deployment": "verify after push",
+    "legalDraftsAndDeferredMarketingMobileCommitsExcluded": true
+  },
+  "limits": [
+    "No automatic backfill or overwriting existing customer prices. Existing explicit product preparation remains available for old gaps.",
+    "Assortment/price preparation and stock posting remain separate reviewed actions.",
+    "Only base and variants selected in the transfer are priced.",
+    "No schema migration. Reverting code does not erase prices/assignments explicitly confirmed by users."
+  ],
+  "references": [
+    {
+      "url": "https://docs.frappe.io/erpnext/item-price",
+      "application": "Separate selling prices and shared price lists from stock movement."
+    },
+    {
+      "url": "https://docs.frappe.io/erpnext/stock-entry",
+      "application": "Move the same item identity between source and destination."
+    },
+    {
+      "url": "https://help.shopify.com/en/manual/inventory-and-locations/inventory-transfers/creating-and-processing-transfers",
+      "application": "Separate availability review and receiving quantities."
+    }
+  ]
+}

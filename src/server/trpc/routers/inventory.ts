@@ -1,8 +1,19 @@
+import {
+  getTransferAssortmentOptions,
+  previewTransferAssortmentPreparation,
+  applyTransferAssortmentPreparation,
+  reconcileTransferAssortmentPreparation,
+} from "@/server/services/transferAssortmentPreparation";
+import {
+  transferAssortmentPreparationSchema,
+  transferAssortmentPreparationApplySchema,
+} from "@/lib/transferAssortmentPreparation";
 import { TRPCError } from "@trpc/server";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import {
+  adminOrOrgOwnerProcedure,
   adminProcedure,
   managerProcedure,
   managerReadProcedure,
@@ -454,6 +465,69 @@ const inventoryListSnapshotSelect = {
 } satisfies Prisma.InventorySnapshotSelect;
 
 export const inventoryRouter = router({
+  transferAssortmentOptions: adminOrOrgOwnerProcedure
+    .input(
+      z
+        .object({
+          fromStoreId: z.string().min(1),
+          toStoreId: z.string().min(1),
+          productIds: z.array(z.string().min(1)).min(1).max(500),
+        })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await getTransferAssortmentOptions({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  previewTransferAssortment: adminOrOrgOwnerProcedure
+    .input(transferAssortmentPreparationSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await previewTransferAssortmentPreparation({
+          change: input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  applyTransferAssortment: adminOrOrgOwnerProcedure
+    .input(transferAssortmentPreparationApplySchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await applyTransferAssortmentPreparation({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  reconcileTransferAssortment: adminOrOrgOwnerProcedure
+    .input(transferAssortmentPreparationApplySchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await reconcileTransferAssortmentPreparation({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   list: protectedProcedure.input(inventoryListInputSchema).query(async ({ ctx, input }) => {
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 25;
