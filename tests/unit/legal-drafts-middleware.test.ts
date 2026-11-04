@@ -1,0 +1,53 @@
+import { NextRequest } from "next/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { middleware } from "@/middleware";
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe("unpublished legal HTTP responses", () => {
+  it.each([
+    "/legal",
+    "/legal/offer",
+    "/legal/refunds",
+    "/legal/requisites",
+    "/legal/payment",
+    "/ru/legal/offer",
+    "/kg/legal/refunds",
+    "/ky/legal/requisites",
+    "/en/legal/payment?preview=1",
+  ])("returns an empty uncached 404 before rendering %s in production", async (pathname) => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BAZAAR_LEGAL_PREVIEW", "1");
+    const response = await middleware(
+      new NextRequest(`http://localhost:3134${pathname}`, {
+        headers: { host: "localhost:3134", RSC: "1" },
+      }),
+    );
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    expect(await response.text()).toBe("");
+  });
+
+  it("allows explicitly enabled localhost development only", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("BAZAAR_LEGAL_PREVIEW", "1");
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("VERCEL", "0");
+    const response = await middleware(
+      new NextRequest("http://localhost:3134/legal/offer", {
+        headers: { host: "localhost:3134" },
+      }),
+    );
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it.each(["/", "/privacy", "/help", "/legal-advice"])(
+    "leaves the existing public route %s unaffected",
+    async (pathname) => {
+      vi.stubEnv("NODE_ENV", "production");
+      const response = await middleware(new NextRequest(`https://bazaar.test${pathname}`));
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    },
+  );
+});

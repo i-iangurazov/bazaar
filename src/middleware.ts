@@ -8,6 +8,7 @@ import {
   type Locale,
 } from "./lib/locales";
 import { canAccessAppRoute, getRoleHomePath } from "./lib/roleAccess";
+import { legalDraftPreviewAllowed } from "./lib/legalPreview";
 import {
   acquisitionCookieName,
   acquisitionFromSearch,
@@ -62,6 +63,21 @@ const resolveLocale = (request: NextRequest): Locale => {
 export const middleware = async (request: NextRequest) => {
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   const { pathname } = request.nextUrl;
+  // A page-level notFound can be streamed with HTTP 200 by the App Router.
+  // Reject unpublished legal drafts before rendering, including locale aliases.
+  if (
+    /^\/(?:ru\/|kg\/|ky\/|en\/)?legal(?:\/|$)/.test(pathname) &&
+    !legalDraftPreviewAllowed(process.env, request.headers.get("host"))
+  ) {
+    return new NextResponse(null, {
+      status: 404,
+      headers: {
+        "x-request-id": requestId,
+        "x-robots-tag": "noindex, nofollow, noarchive",
+        "cache-control": "private, no-store",
+      },
+    });
+  }
   const segments = pathname.split("/");
   const maybeLocale = segments[1];
   const pathLocale = normalizeLocale(maybeLocale);

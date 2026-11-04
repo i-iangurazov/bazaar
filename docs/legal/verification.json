@@ -1,0 +1,101 @@
+{
+  "date": "2026-11-04",
+  "timezone": "Asia/Bishkek",
+  "status": "DRAFTS_PREPARED_NOT_PUBLISHED",
+  "baseCommit": "aac99d9ec1047fa50fdf73cf3fffc972e9e77cd2",
+  "documents": ["offer", "refunds", "requisites", "payment"],
+  "locales": ["ru", "kg", "en"],
+  "publication": {
+    "pushPerformed": false,
+    "deploymentPerformed": false,
+    "publicNavigationChanged": false,
+    "paymentConfigurationChanged": false,
+    "sellerDetailsComplete": false,
+    "localPreviewOptInRequired": true,
+    "productionWithPreviewFlag": "404 without draft content",
+    "hostedPreview": "blocked by environment guard; unit-tested",
+    "localPreviewServerStopped": true
+  },
+  "checks": {
+    "unit": {
+      "result": "PASS",
+      "tests": 136,
+      "files": 8,
+      "databaseTestsRequired": false,
+      "reason": "No financial, inventory, database or subscription business logic changed; middleware/session/access regressions covered."
+    },
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "translationValidation": "PASS",
+    "localizedContentParity": "PASS",
+    "productionBuild": "PASS",
+    "gitDiffCheck": "PASS",
+    "browser": {
+      "result": "PASS",
+      "states": 48,
+      "widths": [390, 1440],
+      "themes": ["light", "dark"],
+      "errors": [],
+      "documentNavigation": "PASS",
+      "localeSwitching": "PASS",
+      "overflowChecks": "PASS"
+    },
+    "offlineHtml": {
+      "result": "PASS",
+      "files": 12,
+      "styles": "PASS",
+      "fileNavigation": "PASS"
+    },
+    "httpBoundary": {
+      "productionBlockedRequests": 16,
+      "localDefaultBlockedRequests": 16,
+      "publicControlRoutes": ["/privacy", "/login", "/sitemap.xml"],
+      "publicControlRoutesResult": "PASS in production and local development; no legal pages in sitemap"
+    }
+  },
+  "commands": [
+    "SKIP_DB_TESTS=1 RUN_DB_TESTS=0 ./node_modules/.bin/vitest run tests/unit/legal-drafts.test.tsx tests/unit/legal-drafts-middleware.test.ts tests/unit/middleware.test.ts tests/unit/middleware-session-cookie.test.ts tests/unit/acquisition.test.ts tests/unit/subscription-payment-protocol.test.ts tests/unit/subscription-payments-ui.test.tsx tests/unit/marketing-pricing.test.tsx",
+    "./node_modules/.bin/tsc --noEmit",
+    "./node_modules/.bin/next lint",
+    "node --import tsx scripts/i18n-check.ts",
+    "node scripts/qa/legal-drafts-runtime.mjs build",
+    "node --import tsx scripts/qa/legal-drafts-browser.tsx blocked production",
+    "node --import tsx scripts/qa/legal-drafts-browser.tsx blocked",
+    "node --import tsx scripts/qa/legal-drafts-browser.tsx preview",
+    "node --import tsx scripts/qa/legal-drafts-export.tsx",
+    "node --import tsx scripts/qa/legal-drafts-browser.tsx export",
+    "git diff --check"
+  ],
+  "evidenceDirectory": "/Users/ilias_iangurazov/Commercial/bazaar/.local/legal-drafts-20261104",
+  "screenshots": [
+    "ru-offer-1440-light.png",
+    "ru-offer-1440-dark.png",
+    "ru-refunds-390-light.png",
+    "kg-payment-390-light.png"
+  ],
+  "remainingBeforePublication": [
+    "Actual seller legal/contact/bank details",
+    "Owner approval of proposed 10-business-day review and 3-business-day refund submission targets, refund conditions and final legal/translation review",
+    "FreedomPay contract, merchant capabilities and website compliance approval",
+    "Privacy review under actual seller and processing arrangements",
+    "Explicit publication change, dated/versioned terms and real legal links; payment activation remains separate"
+  ],
+  "notPerformed": [
+    "Production deploy or push",
+    "Customer database writes or service migrations",
+    "Live merchant transactions or sandbox provider acceptance",
+    "Legal opinion certifying compliance"
+  ],
+  "sourceSha256": {
+    "src/app/legal/[document]/page.tsx": "199b34f0e738e9ba6f3227bf3569afd4455a7890b5d74e531814d0e9d017818c",
+    "src/components/legal/legal-document.tsx": "8eaa1da58b324d4e636dbe24de9ce914b8b9aca98973f3aee2c92220a8aede85",
+    "src/content/legal/en.ts": "99a727bb2399d4de9ec99e72d0ce3cbca11323e20c3882decd614778386a24a8",
+    "src/content/legal/index.ts": "b6817198778836ca271be95baf0deb1f1d0135c54a91f194b33f079eec16eaa6",
+    "src/content/legal/kg.ts": "20236063ac7112d44fe106600aa08c3914943d51034b6ee2e1186fd994e2d62f",
+    "src/content/legal/ru.ts": "865cb90724698f5e95d218b36064e9cbddcb2ec50c21f894b1c5cb83a6a7aec2",
+    "src/content/legal/seller.ts": "d8ea13a4d19d63ad1dd5f9f51be1c762b86b3da2ee5ec19da1aa918ed7cd6e80",
+    "src/content/legal/types.ts": "dee5b29de52a96fb826d35054eaf47f9a53b36340deccd2f0f94c96a60d9e33e",
+    "src/lib/legalPreview.ts": "d2dbfe44ead59d06a0a8a5ef70a30b4238e1056a370c3a0b3759de3a16e80b0d",
+    "src/middleware.ts": "5c4fc6e37e965d5759a31ef28fcaf55e1837bcb206f9cd07d131929a6b76b346"
+  }
+}
