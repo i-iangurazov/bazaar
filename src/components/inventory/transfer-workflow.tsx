@@ -1107,7 +1107,11 @@ export const InventoryTransfersPage = ({
             if (!open) setConnectingAssortment(null);
           }}
           storeId={toStoreId}
+          fromStoreId={fromStoreId}
           productIds={connectingAssortment}
+          lines={lines
+            .filter((line) => connectingAssortment.includes(line.productId))
+            .map((line) => ({ productId: line.productId, variantId: line.variantId }))}
           onApplied={() => {
             setInventoryOnlyApproval("");
             refreshTransferData();

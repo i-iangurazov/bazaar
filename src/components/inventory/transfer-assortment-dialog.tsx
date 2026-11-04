@@ -1,10 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
+import {
+  transferPreparationPendingKey,
+  readTransferPreparationPending,
+  saveTransferPreparationPending,
+  type PendingTransferPreparation,
+} from "@/lib/transferPreparationPending";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/trpc/routers/_app";
+import type { TransferAssortmentPreparation } from "@/lib/transferAssortmentPreparation";
+import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { Modal } from "@/components/ui/modal";
@@ -22,32 +31,61 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { Spinner } from "@/components/ui/spinner";
 
 type Outputs = inferRouterOutputs<AppRouter>;
-type Options = Outputs["stores"]["catalogProductOptions"];
-type Preview = Outputs["stores"]["previewSelectedCatalogProducts"];
+type Options = Outputs["inventory"]["transferAssortmentOptions"];
+type Preview = Outputs["inventory"]["previewTransferAssortment"];
 
 export function TransferAssortmentDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   storeId: string;
+  fromStoreId: string;
+  lines: TransferAssortmentPreparation["lines"];
   productIds: string[];
   onApplied: () => void;
 }) {
   const t = useTranslations("inventory.transferSafety"),
     common = useTranslations("common"),
-    errors = useTranslations("errors");
+    errors = useTranslations("errors"),
+    locale = useLocale();
   const utils = trpc.useUtils();
-  const optionsMutation = trpc.stores.catalogProductOptions.useMutation();
-  const previewMutation = trpc.stores.previewSelectedCatalogProducts.useMutation();
-  const saveMutation = trpc.stores.saveCatalogSettings.useMutation();
+  const { data: session } = useSession();
+  const pendingKey =
+    session?.user?.organizationId && session.user.id
+      ? transferPreparationPendingKey(
+          session.user.organizationId,
+          session.user.id,
+          props.fromStoreId,
+          props.storeId,
+        )
+      : "";
+  const [pending, setPending] = useState<PendingTransferPreparation | null>(null);
+  const optionsMutation = trpc.inventory.transferAssortmentOptions.useMutation();
+  const previewMutation = trpc.inventory.previewTransferAssortment.useMutation();
+  const saveMutation = trpc.inventory.applyTransferAssortment.useMutation();
+  const reconcileMutation = trpc.inventory.reconcileTransferAssortment.useMutation();
+  const [prices, setPrices] = useState<TransferAssortmentPreparation["prices"]>("MISSING");
   const [options, setOptions] = useState<Options>();
   const [selection, setSelection] = useState<Record<string, string>>({});
-  const [approval, setApproval] = useState<{ preview: Preview; key: string }>();
+  const [approval, setApproval] = useState<{
+    preview: Preview;
+    change: TransferAssortmentPreparation;
+    key: string;
+  }>();
   const [error, setError] = useState<unknown>();
   const [uncertain, setUncertain] = useState(false),
     [done, setDone] = useState(false);
   const generation = useRef(0);
-  const signature = JSON.stringify([props.storeId, [...new Set(props.productIds)].sort()]);
-  const busy = optionsMutation.isLoading || previewMutation.isLoading || saveMutation.isLoading;
+  const signature = JSON.stringify([
+    props.fromStoreId,
+    props.storeId,
+    [...new Set(props.productIds)].sort(),
+    props.lines,
+  ]);
+  const busy =
+    optionsMutation.isLoading ||
+    previewMutation.isLoading ||
+    saveMutation.isLoading ||
+    reconcileMutation.isLoading;
   const { mutateAsync: loadOptions } = optionsMutation;
   useEffect(() => {
     if (!props.open) return;
@@ -59,14 +97,36 @@ export function TransferAssortmentDialog(props: {
     setError(undefined);
     setDone(false);
     setUncertain(false);
-    const [storeId, productIds] = JSON.parse(signature) as [string, string[]];
-    void loadOptions({ storeId, productIds })
+    setPending(null);
+    try {
+      const restored = pendingKey
+        ? readTransferPreparationPending(
+            sessionStorage,
+            pendingKey,
+            props.fromStoreId,
+            props.storeId,
+          )
+        : null;
+      if (restored) {
+        setPending(restored);
+        setUncertain(true);
+      }
+    } catch {
+      setError(new Error("productPreparationStorageUnavailable"));
+    }
+    const [fromStoreId, toStoreId, productIds] = JSON.parse(signature) as [
+      string,
+      string,
+      string[],
+    ];
+    void loadOptions({ fromStoreId, toStoreId, productIds })
       .then((rows) => {
         if (!active || id !== generation.current) return;
         setOptions(rows);
+        setPrices(rows.pricingAllowed ? "MISSING" : "NONE");
         setSelection(
           Object.fromEntries(
-            rows
+            rows.products
               .filter((row) => !row.hidden && !row.available && row.sources.length === 1)
               .map((row) => [row.id, row.sources[0].key]),
           ),
@@ -78,72 +138,120 @@ export function TransferAssortmentDialog(props: {
     return () => {
       active = false;
     };
-  }, [props.open, signature, loadOptions]);
+  }, [props.open, signature, loadOptions, pendingKey, props.fromStoreId, props.storeId]);
+  function clearPending() {
+    try {
+      if (pendingKey) sessionStorage.removeItem(pendingKey);
+    } catch {
+      /* A retained key is safe to reconcile again. */
+    }
+    setPending(null);
+  }
+  async function completed() {
+    clearPending();
+    setDone(true);
+    setUncertain(false);
+    await Promise.allSettled([
+      utils.inventory.invalidate(),
+      utils.products.invalidate(),
+      utils.stores.invalidate(),
+    ]);
+    props.onApplied();
+  }
   async function reload() {
+    const id = generation.current;
     setError(undefined);
     try {
+      if (uncertain && pending) {
+        const result = await reconcileMutation.mutateAsync({
+          ...pending,
+        });
+        if (id !== generation.current) return;
+        if (result.status === "APPLIED") {
+          await completed();
+          return;
+        }
+        clearPending();
+        setUncertain(false);
+        setApproval(undefined);
+      }
       const rows = await loadOptions({
-        storeId: props.storeId,
+        fromStoreId: props.fromStoreId,
+        toStoreId: props.storeId,
         productIds: [...new Set(props.productIds)],
       });
-      setOptions(rows);
-      if (uncertain && approval) {
-        const selected = approval.preview.change.connections
-          .filter((c) => c.enabled && c.scope === "SELECTED")
-          .flatMap((c) => c.productIds);
-        if (rows.filter((r) => selected.includes(r.id)).every((r) => r.available)) {
-          setDone(true);
-          setUncertain(false);
-          props.onApplied();
-        }
-      }
+      if (id === generation.current) setOptions(rows);
     } catch (e) {
-      setError(e);
+      if (id === generation.current) setError(e);
     }
   }
   async function preview() {
+    const id = generation.current;
     setError(undefined);
     try {
-      const result = await previewMutation.mutateAsync({
-        storeId: props.storeId,
-        selections: Object.entries(selection)
-          .filter(
-            ([id, key]) => key && options?.some((o) => o.id === id && !o.available && !o.hidden),
-          )
-          .map(([productId, sourceKey]) => ({ productId, sourceKey })),
-      });
-      setApproval({ preview: result, key: crypto.randomUUID() });
+      const selections = Object.entries(selection)
+        .filter(
+          ([id, value]) =>
+            value && options?.products.some((o) => o.id === id && !o.available && !o.hidden),
+        )
+        .map(([productId, sourceKey]) => ({ productId, sourceKey }));
+      const change: TransferAssortmentPreparation = {
+        fromStoreId: props.fromStoreId,
+        toStoreId: props.storeId,
+        selections,
+        lines: props.lines.filter((line) => selections.some((s) => s.productId === line.productId)),
+        prices,
+      };
+      const result = await previewMutation.mutateAsync(change);
+      if (id === generation.current)
+        setApproval({ preview: result, change, key: crypto.randomUUID() });
     } catch (e) {
-      setError(e);
+      if (id === generation.current) setError(e);
     }
   }
   async function apply() {
     if (!approval) return;
+    const id = generation.current;
     setError(undefined);
+    const request = {
+      change: approval.change,
+      token: approval.preview.token,
+      idempotencyKey: approval.key,
+    };
+    try {
+      if (!pendingKey) throw new Error("productPreparationStorageUnavailable");
+      saveTransferPreparationPending(sessionStorage, pendingKey, request);
+    } catch {
+      setError(new Error("productPreparationStorageUnavailable"));
+      return;
+    }
+    setPending(request);
     try {
       await saveMutation.mutateAsync({
-        change: approval.preview.change,
+        change: approval.change,
         token: approval.preview.token,
         idempotencyKey: approval.key,
       });
-      setDone(true);
-      setUncertain(false);
-      await Promise.allSettled([
-        utils.inventory.invalidate(),
-        utils.products.invalidate(),
-        utils.stores.invalidate(),
-      ]);
-      props.onApplied();
+      if (id === generation.current) await completed();
     } catch (e) {
+      if (id !== generation.current) return;
       setError(e);
       const code = (e as { data?: { code?: string } })?.data?.code;
-      if (!code || code === "INTERNAL_SERVER_ERROR") setUncertain(true);
+      if (
+        !code ||
+        code === "INTERNAL_SERVER_ERROR" ||
+        (e as { message?: string }).message === "requestInProgress"
+      )
+        setUncertain(true);
       else {
+        clearPending();
         setUncertain(false);
         setApproval(undefined);
       }
     }
   }
+  const money = (value: string | null) =>
+    value === null ? t("priceMissing") : formatKgsMoney(Number(value), locale, undefined);
   return (
     <Modal
       open={props.open}
@@ -154,7 +262,7 @@ export function TransferAssortmentDialog(props: {
       className="sm:max-w-2xl"
     >
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">{t("connectHint")}</p>
+        <p className="text-sm text-muted-foreground">{t("preparationHint")}</p>
         {error ? (
           <div role="alert" className="space-y-2 text-sm text-danger">
             {translateError(errors, error as Parameters<typeof translateError>[1])}
@@ -175,8 +283,26 @@ export function TransferAssortmentDialog(props: {
           </p>
         ) : (
           <>
-            <div className="max-h-[50vh] space-y-3 overflow-y-auto">
-              {options?.map((row) => (
+            {options?.pricingAllowed ? (
+              <div className="rounded-md border border-border p-3">
+                <Label className="flex items-start gap-2">
+                  <Checkbox
+                    checked={prices === "MISSING"}
+                    disabled={busy || uncertain}
+                    onCheckedChange={(checked) => {
+                      setPrices(checked ? "MISSING" : "NONE");
+                      setApproval(undefined);
+                    }}
+                  />
+                  <span>{t("copyMissingPrices", { source: options.sourceName })}</span>
+                </Label>
+                <p className="mt-2 text-xs text-muted-foreground">{t("priceSafetyHint")}</p>
+              </div>
+            ) : options ? (
+              <p className="text-sm text-muted-foreground">{t("pricePlanHint")}</p>
+            ) : null}
+            <div className="max-h-[35vh] space-y-3 overflow-y-auto">
+              {options?.products.map((row) => (
                 <div key={row.id} className="space-y-2 rounded-md border border-border p-3">
                   <Label className="flex items-start gap-2">
                     <Checkbox
@@ -228,9 +354,54 @@ export function TransferAssortmentDialog(props: {
               ))}
             </div>
             {approval ? (
-              <p role="status" className="rounded-md bg-muted p-3 text-sm">
-                {t("connectPreview", { count: approval.preview.added })}
-              </p>
+              <div className="space-y-3 rounded-md bg-muted p-3 text-sm">
+                <p role="status">
+                  {t("preparationPreview", {
+                    count: approval.preview.added,
+                    prices: approval.preview.priceChanges,
+                  })}
+                </p>
+                {approval.preview.rows.length ? (
+                  <div
+                    className="max-h-[30vh] space-y-3 overflow-y-auto"
+                    aria-label={t("priceReview")}
+                  >
+                    {approval.preview.rows.map((row) => (
+                      <div
+                        key={`${row.productId}:${row.variantKey}`}
+                        className="rounded-md border border-border bg-background p-3"
+                      >
+                        <p className="break-words font-medium">
+                          {row.name}
+                          {row.variantName ? ` · ${row.variantName}` : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{row.sku}</p>
+                        {(
+                          [
+                            "retail",
+                            ...(approval.preview.retailWholesaleEnabled
+                              ? ["wholesale" as const]
+                              : []),
+                          ] as const
+                        ).map((kind) => (
+                          <div key={kind} className="mt-2 space-y-1">
+                            <p>
+                              {t(kind)}:{" "}
+                              <span className="tabular-nums">
+                                {money(row.before[kind])} → {money(row.after[kind])}
+                              </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {t("priceSource", { price: money(row.source[kind]) })} ·{" "}
+                              {t(`priceReason.${row.reasons[kind]}`)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             {uncertain ? (
               <p role="alert" className="text-sm text-warning">
@@ -241,15 +412,12 @@ export function TransferAssortmentDialog(props: {
         )}
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="secondary" disabled={busy} onClick={() => props.onOpenChange(false)}>
-            {common(done ? "close" : "cancel")}
+            {common(done || uncertain ? "close" : "cancel")}
           </Button>
           {done ? null : uncertain ? (
             <>
               <Button variant="secondary" disabled={busy} onClick={() => void reload()}>
                 {t("check")}
-              </Button>
-              <Button disabled={busy} onClick={() => void apply()}>
-                {common("tryAgain")}
               </Button>
             </>
           ) : approval ? (

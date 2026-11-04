@@ -3846,7 +3846,24 @@
       "unavailableHint": "Stock will arrive on this card; connect assortment to sell it at the destination.",
       "outcomeTitle": "Destination stock · {store}",
       "outcomeHint": "Current balances of the exact transferred cards. Subsequent sales and other operations are already included.",
-      "historicalUnavailable": "The card is archived or no longer accessible. Transfer history is preserved."
+      "historicalUnavailable": "The card is archived or no longer accessible. Transfer history is preserved.",
+      "preparationHint": "Connect the selected products and optionally fill missing prices. Stock moves only when you post the transfer.",
+      "copyMissingPrices": "Fill missing prices from “{source}”",
+      "priceSafetyHint": "Retail and wholesale for selected products and variants only. Existing prices, including zero, discounts and shared price lists are preserved. Costs and stock stay unchanged.",
+      "pricePlanHint": "Assortment can be connected. Copying store prices requires a plan with per-store pricing.",
+      "preparationPreview": "Products to add: {count}. Prices to fill: {prices} items. Review before confirming.",
+      "priceReview": "Prices before and after",
+      "priceMissing": "Not set",
+      "retail": "Retail",
+      "wholesale": "Wholesale",
+      "priceSource": "At source: {price}",
+      "priceReason": {
+        "copy": "Will be filled",
+        "existing": "Existing price kept",
+        "shared": "Shared price list kept",
+        "sourceMissing": "Source price not set",
+        "disabled": "Wholesale prices disabled"
+      }
     }
   },
   "products": {
@@ -5751,7 +5768,9 @@
     "productPreparationStorageUnavailable": "The browser could not save the operation key. Allow storage for Bazaar and review again. No changes were sent.",
     "productPreparationAttemptClosed": "This attempt was closed without applying changes. Review a new attempt.",
     "transferDestinationNotSellable": "Destination assortment changed. Connect the products or confirm inventory-only receipt. The transfer was not posted.",
-    "productDeletionStale": "The product changed or the review expired. Review deletion again."
+    "productDeletionStale": "The product changed or the review expired. Review deletion again.",
+    "transferPreparationStale": "Data changed after the preview. Review a new preview and confirm again.",
+    "transferPreparationAttemptClosed": "This attempt was closed while checking its result. Review a new preview to continue."
   },
   "adminJobs": {
     "title": "Admin jobs",
