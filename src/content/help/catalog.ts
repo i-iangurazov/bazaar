@@ -51,9 +51,9 @@ const guide = (value: HelpGuide) => value;
 const productPriceTypesStep = step(
   t("Укажите розничную и оптовую цены", "Чекене жана дүң бааларды коюңуз", "Set retail and wholesale prices"),
   t(
-    "Если в профиле организации включены «Розничные и оптовые цены», в блоке «Цены» заполните эти поля для выбранного магазина. У вариантов товара есть свои поля цен. Все изменения сохраняются общей кнопкой «Сохранить». На кассе выберите «Розница» или «Опт», чтобы применить нужную цену.",
-    "Уюмдун профилинде «Чекене жана дүң баалар» күйгүзүлсө, «Баалар» бөлүмүндө тандалган дүкөн үчүн бул талааларды толтуруңуз. Товардын варианттарында өзүнчө баа талаалары бар. Бардык өзгөртүүлөр «Сактоо» баскычы менен сакталат. Керектүү бааны колдонуу үчүн кассада «Чекене» же «Дүң» режимин тандаңыз.",
-    "When Retail and wholesale prices is enabled in the business profile, fill in these fields under Pricing for the selected store. Product variants have their own price fields. The main Save button saves all changes. Choose Retail or Wholesale at checkout to apply that price.",
+    "Если в профиле организации включены «Розничные и оптовые цены», в блоке «Цены» заполните эти поля для выбранного магазина. У вариантов товара есть свои поля цен. В уже созданной карточке розница и опт сохраняются автоматически после выхода из поля, если доступно автосохранение магазинных цен: дождитесь статуса «Цены сохранены». Карточка остаётся открытой. Остальные поля и новые варианты сохраняйте общей кнопкой «Сохранить». При изменении единицы измерения сначала сохраните карточку целиком. На кассе выберите «Розница» или «Опт», чтобы применить нужную цену.",
+    "Уюмдун профилинде «Чекене жана дүң баалар» күйгүзүлсө, «Баалар» бөлүмүндө тандалган дүкөн үчүн бул талааларды толтуруңуз. Товардын варианттарында өзүнчө баа талаалары бар. Түзүлгөн карточкада дүкөн бааларын автоматтык сактоо жеткиликтүү болсо, чекене жана дүң баалар талаадан чыккандан кийин сакталат: «Баалар сакталды» абалын күтүңүз. Карточка ачык калат. Башка талааларды жана жаңы варианттарды жалпы «Сактоо» баскычы менен сактаңыз. Өлчөм бирдиги өзгөрсө, адегенде карточканы толугу менен сактаңыз. Керектүү бааны колдонуу үчүн кассада «Чекене» же «Дүң» режимин тандаңыз.",
+    "When Retail and wholesale prices is enabled in the business profile, fill in these fields under Pricing for the selected store. Product variants have their own price fields. On an existing product with store price autosave available, retail and wholesale prices save after leaving the field: wait for Prices saved. The card stays open. Use the main Save button for other fields and new variants. Save the whole card first when changing the unit. Choose Retail or Wholesale at checkout to apply that price.",
   ),
   {
     note: t(
@@ -336,9 +336,9 @@ export const helpGuides: HelpGuide[] = [
       step(
         t("Откройте карточку", "Карточканы ачыңыз", "Open the product"),
         t(
-          "Нажмите строку товара или действие «Изменить».",
-          "Товар сабын же «Өзгөртүү» аракетин басыңыз.",
-          "Select the product row or Edit action.",
+          "Нажмите действие «Изменить» у нужного товара.",
+          "Керектүү товардын «Өзгөртүү» аракетин басыңыз.",
+          "Choose the Edit action for the product.",
         ),
       ),
       step(

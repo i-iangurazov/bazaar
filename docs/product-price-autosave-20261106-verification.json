@@ -1,0 +1,177 @@
+{
+  "date": "2026-11-06",
+  "feature": "Guarded retail/wholesale autosave in an existing product editor",
+  "releaseBase": "1b920af46602d989e00d8ef4d8b23be69bd8407b",
+  "behavior": [
+    "Save settled base and persisted-variant retail/wholesale fields in the current store; remain in the editor.",
+    "Keep whole-form Save for metadata, new variants, creation, unit changes and legacy single-price mode.",
+    "Store preparation remains an explicit previewed/confirmed action using saved server prices.",
+    "Persist exact request keys before sending, serialize edits, reject stale versions and check unknown outcomes before recovery.",
+    "A receipt does not replace current data during page recovery. Known canceled attempts cannot apply later.",
+    "Do not overwrite newer local field input when acknowledging an earlier response.",
+    "No-op writes preserve shared-price inheritance; an actual local edit affects only the changed price kind.",
+    "Check fresh permissions, organization, active assortment, plan, currency, rate, unit and variant scope."
+  ],
+  "databaseChanges": "No schema migration. No customer data repair or balance changes. Existing canonical store-price columns are reused.",
+  "verification": {
+    "isolatedPostgres": "127.0.0.1:55486 / bazaar_hardening_ci; cluster identity verified; no customer database URLs inherited",
+    "testsPassed": 173,
+    "testsFailed": 0,
+    "unitTests": 25,
+    "databaseTests": 148,
+    "suites": [
+      {
+        "file": "product-price-autosave.test.tsx",
+        "tests": 8
+      },
+      {
+        "file": "price-autosave-queue.test.ts",
+        "tests": 17
+      },
+      {
+        "file": "product-price-autosave.test.ts",
+        "tests": 16
+      },
+      {
+        "file": "product-store-preparation.test.ts",
+        "tests": 23
+      },
+      {
+        "file": "price-books.test.ts",
+        "tests": 15
+      },
+      {
+        "file": "store-prices.test.ts",
+        "tests": 2
+      },
+      {
+        "file": "product-price-types.test.ts",
+        "tests": 6
+      },
+      {
+        "file": "products.test.ts",
+        "tests": 41
+      },
+      {
+        "file": "product-unit-change.test.ts",
+        "tests": 14
+      },
+      {
+        "file": "product-wholesale-list.test.ts",
+        "tests": 2
+      },
+      {
+        "file": "store-product-visibility.test.ts",
+        "tests": 7
+      },
+      {
+        "file": "transfer-price-preparation.test.ts",
+        "tests": 22
+      }
+    ],
+    "productionBuild": "passed; Node 22; temporary local cache disabled and CPU discovery limited to one; production config restored",
+    "lint": "passed in production build",
+    "typecheck": "passed in production build",
+    "translations": "i18n:check passed; Russian, Kyrgyz, English",
+    "browser": {
+      "results": [
+        {
+          "scenario": "900/750 -> autosave -> prepare -> destination prices",
+          "passed": true,
+          "stockUnchanged": true
+        },
+        {
+          "scenario": "lost committed response and newer draft",
+          "passed": true,
+          "sameRequestKey": true
+        },
+        {
+          "scenario": "two tabs version conflict and explicit reload",
+          "passed": true
+        },
+        {
+          "scenario": "localized responsive editor",
+          "locale": "ru",
+          "width": 390,
+          "autosaved": true,
+          "noHorizontalOverflow": true
+        },
+        {
+          "scenario": "localized responsive editor",
+          "locale": "kg",
+          "width": 1440,
+          "autosaved": true,
+          "noHorizontalOverflow": true
+        },
+        {
+          "scenario": "localized responsive editor",
+          "locale": "kg",
+          "width": 390,
+          "autosaved": true,
+          "noHorizontalOverflow": true
+        },
+        {
+          "scenario": "localized responsive editor",
+          "locale": "en",
+          "width": 1440,
+          "autosaved": true,
+          "noHorizontalOverflow": true
+        },
+        {
+          "scenario": "localized responsive editor",
+          "locale": "en",
+          "width": 390,
+          "autosaved": true,
+          "noHorizontalOverflow": true
+        },
+        {
+          "scenario": "ordinary metadata save after autosave",
+          "passed": true
+        },
+        {
+          "scenario": "staff cannot access product editor and is redirected to checkout",
+          "passed": true
+        }
+      ],
+      "errors": []
+    },
+    "screenshots": [
+      "saved-desktop.png",
+      "saved-ru-390.png",
+      "prepare-desktop.png",
+      "conflict-desktop.png",
+      "saved-kg-390.png",
+      "saved-en-390.png"
+    ],
+    "businessInvariants": [
+      "stock, movements, cost, barcodes and product metadata unchanged by price-only autosave",
+      "existing discounts and unedited price kinds unchanged",
+      "shared price no-op retains inheritance",
+      "old and competing tab writes cannot overwrite newer prices",
+      "ordinary metadata Save still succeeds after autosave"
+    ]
+  },
+  "scopeLimits": [
+    "Does not silently propagate edits to other stores.",
+    "Does not autosave product name, images, unit changes, unsaved variants or product creation.",
+    "Does not change the existing quick-price upsert API; required-version protection is enforced by the new autosave endpoint and already guarded whole-form path.",
+    "Automatic tests use synthetic data and disabled external providers. Production verification is read-only."
+  ],
+  "infrastructureNotes": [
+    "Early local runs interrupted by disk exhaustion, missing installed dependencies or an insufficient heap are excluded from successful counts. Related tests reran successfully after restoring exact lockfile dependencies.",
+    "Local checks were switched to sequential, one-CPU, low-priority execution after the owner reported laptop heat.",
+    "Temporary browser fixture first used a disconnected recipient; the existing permission boundary correctly prevented application. Final transfer verification uses a permitted connected recipient.",
+    "Unpublished legal and marketing work is excluded from the production commit."
+  ],
+  "referencePrinciples": [
+    {
+      "source": "https://shopify.dev/docs/api/app-home/latest/apis/user-interface-and-interactions/save-bar-api",
+      "applied": "Make saved/unsaved/pending state explicit; this is not a claim that Shopify automatically saves product prices."
+    },
+    {
+      "source": "https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-implementation",
+      "applied": "Optimistic version checks, bounded field patches and idempotent retries."
+    }
+  ],
+  "release": "CI, release-gate and exact custom-domain SHA must still be verified after push; receipt is kept under the private QA directory."
+}

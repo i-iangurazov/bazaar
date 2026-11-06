@@ -4566,7 +4566,21 @@
     "separateProductConfirm": "A product with this name already exists. Reuse its card for another store. Continue only for a genuinely different product: a new card has separate prices, stock and history.",
     "createSeparateProduct": "Create separate product",
     "deletePermanent": "Delete permanently",
-    "duplicateAccessHint": "A matching card exists, but you do not have access to it. Contact an administrator."
+    "duplicateAccessHint": "A matching card exists, but you do not have access to it. Contact an administrator.",
+    "priceAutosave": {
+      "idle": "Prices save automatically",
+      "changed": "Prices have unsaved changes",
+      "saving": "Saving prices…",
+      "saved": "Prices saved",
+      "uncertain": "Save result has not been confirmed",
+      "error": "Prices not saved",
+      "conflict": "Prices changed in another window",
+      "checking": "Checking the save…",
+      "hint": "Retail and wholesale save in the current store when you leave a field. A changed price kind becomes an individual price. Copying to other stores requires separate confirmation.",
+      "retry": "Retry saving",
+      "checkRetry": "Check and retry",
+      "reload": "Load current prices and discard price edits"
+    }
   },
   "storeGroups": {
     "title": "Store assortments",
@@ -5770,7 +5784,12 @@
     "transferDestinationNotSellable": "Destination assortment changed. Connect the products or confirm inventory-only receipt. The transfer was not posted.",
     "productDeletionStale": "The product changed or the review expired. Review deletion again.",
     "transferPreparationStale": "Data changed after the preview. Review a new preview and confirm again.",
-    "transferPreparationAttemptClosed": "This attempt was closed while checking its result. Review a new preview to continue."
+    "transferPreparationAttemptClosed": "This attempt was closed while checking its result. Review a new preview to continue.",
+    "priceAutosaveConflict": "The price, currency or unit changed after opening. Load current prices and enter your edit again. Drafts in other fields are preserved.",
+    "priceAutosaveAttemptClosed": "This save attempt was closed while checking its result. Save again.",
+    "priceAutosaveNotApplied": "The previous attempt was not applied. Review your entered prices and save again.",
+    "priceAutosaveUnitPending": "You changed the unit. Save the whole product so its unit and prices change together.",
+    "priceAutosaveInvalid": "Enter a valid price greater than or equal to zero."
   },
   "adminJobs": {
     "title": "Admin jobs",

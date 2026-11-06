@@ -1,4 +1,5 @@
 "use client";
+import { ProductPriceAutosave, type ProductPriceAutosaveConfig } from "@/components/products/product-price-autosave";
 import { productRecoveryHref } from "@/lib/productRecoveryHref";
 
 import {
@@ -645,6 +646,7 @@ export const ProductForm = ({
   categoryStoreId,
   onDirtyChange,
   savedRevision,
+  priceAutosave,
 }: {
   initialValues: ProductFormValues;
   onSubmit: (values: ProductFormValues) => void;
@@ -669,6 +671,7 @@ export const ProductForm = ({
   categoryStoreId?: string | null;
   onDirtyChange?: (isDirty: boolean) => void;
   savedRevision?: number;
+  priceAutosave?: ProductPriceAutosaveConfig;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -982,6 +985,10 @@ export const ProductForm = ({
         })) ?? [],
     },
   });
+  const [priceAutosaveChecking, setPriceAutosaveChecking] = useState(false);
+  useEffect(() => {
+    if (!priceAutosave) setPriceAutosaveChecking(false);
+  }, [priceAutosave]);
   const formIsDirty = form.formState.isDirty;
   const formDirtyFields = form.formState.dirtyFields;
   const savedRevisionRef = useRef(savedRevision);
@@ -1345,6 +1352,14 @@ export const ProductForm = ({
                 <FormControl>
                   <Input
                     {...field}
+                    onChange={(event) => {
+                      field.onChange(event);
+                      priceAutosave?.controlRef.current?.edited(field.name);
+                    }}
+                    onBlur={() => {
+                      field.onBlur();
+                      priceAutosave?.controlRef.current?.blur(field.name);
+                    }}
                     value={field.value ?? ""}
                     type="number"
                     inputMode="decimal"
@@ -1352,7 +1367,7 @@ export const ProductForm = ({
                     step="0.01"
                     aria-required={variantIndex === undefined && name === "retailPriceKgs"}
                     placeholder={t("retailPricePlaceholder")}
-                    disabled={readOnly || isSubmitting}
+                    disabled={readOnly || isSubmitting || priceAutosaveChecking}
                   />
                 </FormControl>
                 <FormMessage />
@@ -4864,7 +4879,11 @@ export const ProductForm = ({
         <form
           id={formId}
           className="min-w-0"
-          onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
+          onSubmit={async (event)=>{
+            event.preventDefault();
+            if (priceAutosave?.controlRef.current && !(await priceAutosave.controlRef.current.flushManual())) return;
+            await form.handleSubmit(handleSubmit, handleInvalidSubmit)(event);
+          }}
         >
           <TooltipProvider>
             <ProductEditorCard
@@ -5030,6 +5049,17 @@ export const ProductForm = ({
                   />
                 ) : null}
                 {renderAdditionalPriceFields()}
+                {priceAutosave && productId && retailWholesaleEnabled && !readOnly ? (
+                  <ProductPriceAutosave
+                    ref={priceAutosave.controlRef}
+                    productId={productId}
+                    config={priceAutosave}
+                    unitId={initialValues.baseUnitId}
+                    currencyCode={currencyCode}
+                    currencyRateKgsPerUnit={currencyRateKgsPerUnit}
+                    onChecking={setPriceAutosaveChecking}
+                  />
+                ) : null}
                 <FormField
                   control={form.control}
                   name="avgCostKgs"
@@ -6056,7 +6086,11 @@ export const ProductForm = ({
       <form
         id={formId}
         className="space-y-6 pb-28 md:pb-0"
-        onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
+        onSubmit={async (event)=>{
+            event.preventDefault();
+            if (priceAutosave?.controlRef.current && !(await priceAutosave.controlRef.current.flushManual())) return;
+            await form.handleSubmit(handleSubmit, handleInvalidSubmit)(event);
+          }}
       >
         <TooltipProvider>
           <Card>
@@ -6391,6 +6425,17 @@ export const ProductForm = ({
                       />
                     ) : null}
                     {renderAdditionalPriceFields()}
+                {priceAutosave && productId && retailWholesaleEnabled && !readOnly ? (
+                  <ProductPriceAutosave
+                    ref={priceAutosave.controlRef}
+                    productId={productId}
+                    config={priceAutosave}
+                    unitId={initialValues.baseUnitId}
+                    currencyCode={currencyCode}
+                    currencyRateKgsPerUnit={currencyRateKgsPerUnit}
+                    onChecking={setPriceAutosaveChecking}
+                  />
+                ) : null}
                     {compactCreate ? (
                       <>
                         {canEditInitialStock ? (
