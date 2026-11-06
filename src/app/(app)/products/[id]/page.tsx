@@ -1,4 +1,5 @@
 "use client";
+import type { PriceAutosaveHandle } from "@/components/products/product-price-autosave";
 import { StoreExtraPrices } from "@/components/products/store-extra-prices";
 import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
 import { ProductDeletionDialog } from "@/components/products/product-deletion-dialog";
@@ -205,11 +206,16 @@ const ProductDetailPage = () => {
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
   const [variantPriceDrafts, setVariantPriceDrafts] = useState<Record<string, string>>({});
   const [productFormDirty, setProductFormDirty] = useState(false);
+  const autoPriceControl = useRef<PriceAutosaveHandle | null>(null);
+  const [autoPriceState, setAutoPriceState] = useState({ blocked: false, pending: false });
+  const autoPricePendingRef = useRef(false);
+  const priceEditVersionRef = useRef<{ storeId: string; version: string } | null>(null);
+  const priceFeatures = trpc.billing.features.useQuery(undefined, { enabled: canManageProducts });
   const [storePreparationOpen, setStorePreparationOpen] = useState(false);
   const [deletionOpen, setDeletionOpen] = useState(false);
   const [externalProductChange, setExternalProductChange] = useState(false);
   const [cardVersion, setCardVersion] = useState<string | undefined>();
-  const [priceEditVersion, setPriceEditVersion] = useState<{ storeId: string; version: string } | null>(null);
+  const [, setPriceEditVersion] = useState<{ storeId: string; version: string } | null>(null);
   const [editorReloadRevision, setEditorReloadRevision] = useState(0);
   const updateMutationPendingRef = useRef(false);
   const [productFormSavedRevision, setProductFormSavedRevision] = useState(0);
@@ -294,9 +300,14 @@ const ProductDetailPage = () => {
   const selectedSettingsStore = selectedPricingStore ?? assignedStoreRows[0] ?? null;
   useEffect(() => {
     if (productFormDirty || updateMutationPendingRef.current || !selectedSettingsStore) return;
-    setPriceEditVersion(old => old?.storeId === selectedSettingsStore.storeId && old.version === selectedSettingsStore.priceVersion ? old
-      : { storeId: selectedSettingsStore.storeId, version: selectedSettingsStore.priceVersion });
+    const next = { storeId: selectedSettingsStore.storeId, version: selectedSettingsStore.priceVersion };
+    priceEditVersionRef.current = next;
+    setPriceEditVersion(old => old?.storeId === next.storeId && old.version === next.version ? old : next);
   }, [productFormDirty, selectedSettingsStore]);
+  useEffect(() => {
+    setAutoPriceState({ blocked: false, pending: false });
+    autoPricePendingRef.current = false;
+  }, [selectedSettingsStore?.storeId]);
   const productSettingsLoaded = storePricingQuery.isSuccess;
   const enableSku = productSettingsLoaded ? (selectedSettingsStore?.enableSku ?? true) : false;
   const enableBarcode = productSettingsLoaded
@@ -468,7 +479,7 @@ const ProductDetailPage = () => {
   useSse({
     "products.updated": (payload) => {
       if (!payload || typeof payload !== "object" || !("productId" in payload) || payload.productId !== productId) return;
-      if (updateMutation.isLoading) return;
+      if (updateMutation.isLoading || autoPricePendingRef.current) return;
       if (productFormDirty) setExternalProductChange(true);
       else void Promise.all([productQuery.refetch({ cancelRefetch: false }), storePricingQuery.refetch({ cancelRefetch: false }), pricingQuery.refetch({ cancelRefetch: false })]);
     },
@@ -1045,8 +1056,13 @@ const ProductDetailPage = () => {
             <CopyIcon className="h-4 w-4" aria-hidden />
             {t("selectiveDuplicate")}
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={productFormDirty || updateMutation.isLoading} onSelect={() => {
-            actionAfterMenuCloseRef.current = () => setStorePreparationOpen(true);
+          <DropdownMenuItem disabled={productFormDirty || updateMutation.isLoading || autoPriceState.blocked} onSelect={() => {
+            actionAfterMenuCloseRef.current = () => {
+              void (async () => {
+                if (autoPriceControl.current && !(await autoPriceControl.current.flush())) return;
+                setStorePreparationOpen(true);
+              })();
+            };
           }}><CopyIcon className="h-4 w-4" aria-hidden />{t("prepareInStores")}</DropdownMenuItem>
           {selectedSettingsStore ? <DropdownMenuItem disabled={storeVisibilityMutation.isLoading}
             onSelect={() => {
@@ -1205,7 +1221,7 @@ const ProductDetailPage = () => {
           canManageProducts ? (
             <ProductEditorSaveBar
               label={
-                updateMutation.isLoading
+                (updateMutation.isLoading || autoPriceState.pending)
                   ? t("saveBarSaving")
                   : productEditorDirty
                     ? t("saveBarUnsavedChanges")
@@ -1216,7 +1232,7 @@ const ProductDetailPage = () => {
                   type="submit"
                   form={productEditFormId}
                   className="min-w-24"
-                  disabled={updateMutation.isLoading}
+                  disabled={updateMutation.isLoading || autoPriceState.pending}
                 >
                   {updateMutation.isLoading ? (
                     <Spinner className="h-4 w-4" />
@@ -1263,7 +1279,9 @@ const ProductDetailPage = () => {
                 updateMutation.mutate({
                   productId,
                   expectedUpdatedAt: cardVersion ?? productQuery.data?.updatedAt.toISOString(),
-                  expectedStorePriceVersion: priceEditVersion?.storeId === selectedSettingsStore?.storeId ? priceEditVersion?.version : selectedSettingsStore?.priceVersion,
+                  expectedStorePriceVersion: priceEditVersionRef.current?.storeId === selectedSettingsStore?.storeId
+                    ? priceEditVersionRef.current?.version
+                    : selectedSettingsStore?.priceVersion,
                   storeId: selectedSettingsStore?.storeId ?? undefined,
                   ...values,
                 })
@@ -1272,6 +1290,27 @@ const ProductDetailPage = () => {
               units={unitsQuery.data ?? []}
               onDirtyChange={setProductFormDirty}
               savedRevision={productFormSavedRevision}
+              priceAutosave={
+                canManageProducts && session?.user?.organizationId &&
+                selectedSettingsStore?.retailWholesaleEnabled && priceFeatures.data?.featureFlags.storePrices
+                  ? {
+                      organizationId: session.user.organizationId,
+                      userId: session.user.id,
+                      storeId: selectedSettingsStore.storeId,
+                      version: selectedSettingsStore.priceVersion,
+                      controlRef: autoPriceControl,
+                      onSaved: version => {
+                        const value = { storeId: selectedSettingsStore.storeId, version };
+                        priceEditVersionRef.current = value;
+                        setPriceEditVersion(value);
+                      },
+                      onState: state => {
+                        autoPricePendingRef.current = state.pending;
+                        setAutoPriceState(old => old.blocked === state.blocked && old.pending === state.pending ? old : state);
+                      },
+                    }
+                  : undefined
+              }
               isSubmitting={updateMutation.isLoading}
               readOnly={!canManageProducts}
               productId={productId}

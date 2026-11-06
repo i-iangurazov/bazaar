@@ -1,6 +1,11 @@
+import { productPriceAutosaveSchema } from "@/lib/productPriceAutosave";
+import {
+  autosaveProductPrices,
+  reconcileProductPriceAutosave,
+} from "@/server/services/productPriceAutosave";
 import { z } from "zod";
 
-import { managerProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { bulkUpdateStorePrices, upsertStorePrice } from "@/server/services/storePrices";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
@@ -27,6 +32,36 @@ const storePricesProcedure = managerProcedure.use(async ({ ctx, next }) => {
 });
 
 export const storePricesRouter = router({
+  autosave: storePricesProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 60, prefix: "product-price-autosave" }))
+    .input(productPriceAutosaveSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await autosaveProductPrices({
+          change: input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  reconcileAutosave: storePricesProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 60, prefix: "product-price-reconcile" }))
+    .input(productPriceAutosaveSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await reconcileProductPriceAutosave({
+          change: input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   previewDiscount: storePricesProcedure
     .input(previewCatalogDiscountInputSchema)
     .mutation(async ({ ctx, input }) => {
