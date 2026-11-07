@@ -64,6 +64,11 @@ newer production migration ledger.
   Customer database URLs, Vercel flags, provider keys and developer `.env` files
   are not inherited. Package verification rejects extra files, including an
   injected `.env.local`, before executing package code.
+- The current reviewed coordinator/probe are recovery tools; the probe's SHA-256
+  is recorded and checked again before success. All application services and
+  Prisma clients resolve from their exact byte-verified baseline/release trees.
+  Installs use the shared local pnpm store explicitly, avoiding duplicate
+  per-package downloads while keeping the two versioned clients separate.
 - Payments stay disabled. A separate in-process negative test temporarily uses
   synthetic sandbox readiness, with a fetch tripwire, to prove the old checkout
   fails at the new SQL guard **before** making a provider request.

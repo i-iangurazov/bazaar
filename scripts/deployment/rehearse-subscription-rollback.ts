@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 import { mkdir, mkdtemp, open, readFile, realpath, writeFile } from "node:fs/promises";
@@ -123,7 +124,11 @@ export async function rehearseSubscriptionRollback(packagePath: string, buildBun
     }
   };
   const context = resolve(directory, "subscription-fixtures.json");
-  const probe = resolve(directory, "release/scripts/deployment/subscription-rollback-probe.ts");
+  // Recovery tooling may receive fixture corrections independently of the
+  // application release. Actual services and Prisma clients still resolve
+  // exclusively from the two byte-verified archived application trees.
+  const probe = resolve(root, "scripts/deployment/subscription-rollback-probe.ts");
+  const probeSha256 = createHash("sha256").update(await readFile(probe)).digest("hex");
   const require = createRequire(resolve(root, "package.json"));
   const probeVersion = (
     version: "baseline" | "release",
@@ -256,7 +261,7 @@ export async function rehearseSubscriptionRollback(packagePath: string, buildBun
     for (const version of ["baseline", "release"] as const) {
       await run(
         "pnpm",
-        ["install", "--frozen-lockfile", "--ignore-scripts"],
+        ["install", "--frozen-lockfile", "--ignore-scripts", "--store-dir", resolve(root, ".pnpm-store")],
         resolve(directory, version),
       );
       await run("pnpm", ["prisma:generate"], resolve(directory, version));
@@ -303,6 +308,11 @@ export async function rehearseSubscriptionRollback(packagePath: string, buildBun
         await run("pnpm", ["build"], resolve(directory, version), { NODE_ENV: "production" });
     }
     const evidence = JSON.parse(await readFile(context, "utf8"));
+    assert.equal(
+      createHash("sha256").update(await readFile(probe)).digest("hex"),
+      probeSha256,
+      "Recovery probe changed during the rehearsal",
+    );
     verification = {
       status: "passed",
       strategy: manifest.strategy,
@@ -316,6 +326,7 @@ export async function rehearseSubscriptionRollback(packagePath: string, buildBun
       productionChanges: false,
       providerRequests: 0,
       bundlesCompiled: buildBundles,
+      tooling: { probeSha256, applicationSource: "byte-verified baseline/release archives" },
       checks: evidence.checks,
       limits: [
         "Actual versioned application services and Prisma clients were exercised; no production alias was changed.",

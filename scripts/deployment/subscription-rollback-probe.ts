@@ -41,6 +41,7 @@ type InvoiceFixture = {
 type State = {
   legacy: StoreFixture;
   lifetime: StoreFixture;
+  checkout?: StoreFixture;
   replay?: Record<string, unknown>;
   longInvoices?: InvoiceFixture[];
   checks: string[];
@@ -281,6 +282,7 @@ try {
       const invoice = await db.subscriptionInvoice.create({
         data: {
           organizationId: fixture.organizationId,
+          pendingSlot: fixture.organizationId,
           createdById: fixture.userId,
           idempotencyKey,
           plan: "STARTER",
@@ -319,6 +321,10 @@ try {
     record(
       "new service settles a six-month purchase; twelve-month pending purchase retained for old-version test",
     );
+    // A separate self-serve business has no pending invoice, so the old
+    // creation probe reaches the SQL snapshot guard instead of merely failing
+    // the existing one-pending-checkout application rule.
+    state.checkout = await seed(undefined, createContractTerms("2026-11"));
     state.snapshots.beforeOldRuntime = await snapshot();
   } else if (phase === "old-runtime") {
     const payments = await load("src/server/billing/subscriptionPayments.ts");
@@ -349,9 +355,10 @@ try {
     record(
       "old paid callback is idempotent; old twelve-month callback fails atomically instead of granting one month",
     );
+    assert(state.checkout, "Missing independent checkout fixture");
     const checkoutInput = {
-      organizationId: pending.organizationId,
-      actorId: pending.userId,
+      organizationId: state.checkout.organizationId,
+      actorId: state.checkout.userId,
       plan: "STARTER",
       idempotencyKey: randomUUID(),
       termsVersion: "synthetic-rehearsal",
