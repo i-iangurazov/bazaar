@@ -31,6 +31,8 @@ async function fixture() {
   () => {
     beforeEach(resetDatabase);
     afterEach(() => vi.restoreAllMocks());
+    // This exercises a real 500-card database job, not a latency benchmark.
+    // Keep the quota/provider assertions intact while allowing slower CI hosts.
     it("accepts 495 no-op cards plus5 image-backed cards against Business300 and calls AI only5 times", async () => {
       const f = await fixture();
       const ids = Array.from({ length: 500 }, () => randomUUID());
@@ -74,7 +76,7 @@ async function fixture() {
       expect(
         (await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai"),
       ).toMatchObject({ used: 5, reserved: 0 });
-    });
+    }, 30_000);
     it("rechecks the exact worker snapshot and cannot call AI after a no-op card gains an image without remaining quota", async () => {
       const f = await fixture();
       const used = await reserveSubscriptionUsage({
