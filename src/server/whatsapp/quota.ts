@@ -98,6 +98,21 @@ export async function reserveWhatsAppUnit(
   });
 }
 
+/** Call under the organization lock in the transaction that claims SENDING. */
+export async function assertWhatsAppReservedUnitCanSend(
+  organizationId: string,
+  messageId: string,
+  db: WhatsAppDb,
+) {
+  const usage = await db.whatsAppCreditUse.findFirst({
+    where: { messageId, organizationId, state: "RESERVED" },
+    select: { lotId: true, lot: { select: { revoked: true } } },
+  });
+  if (!usage) throw new AppError("whatsappQuotaConflict", "CONFLICT", 409);
+  if (usage.lotId && (!usage.lot || usage.lot.revoked))
+    throw new AppError("whatsappQuotaExhausted", "CONFLICT", 409);
+}
+
 /** Delivery, not a redirect/accepted send/AI opinion, completes a customer unit. */
 export async function settleWhatsAppUnit(
   organizationId: string,

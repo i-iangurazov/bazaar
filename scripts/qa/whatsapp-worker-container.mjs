@@ -19,6 +19,7 @@ const network = `${prefix}-network`,
   postgres = `${prefix}-postgres`,
   worker = `${prefix}-worker`;
 const migration = `${prefix}-migration`;
+const recovery = `${prefix}-recovery`;
 const password = `synthetic-${randomUUID()}`;
 const database = "bazaar_hardening_whatsapp_worker";
 const databaseUrl = `postgresql://inventory:${password}@${postgres}:5432/${database}`;
@@ -93,6 +94,42 @@ try {
     "-e",
     "const fs=require('node:fs');for(const p of ['/app/.env','/app/.env.local','/app/.git','/app/.local'])if(fs.existsSync(p))process.exit(1)",
   ]);
+  // No database or provider exists on this network. The packaged operator CLI
+  // must reject missing IDs before attempting recovery, rather than being absent.
+  await assert.rejects(
+    () =>
+      docker([
+        "run",
+        "--rm",
+        "--name",
+        recovery,
+        "--label",
+        ownership,
+        "--network",
+        "none",
+        "--read-only",
+        "--tmpfs",
+        "/tmp:rw,size=32m",
+        "--cpus",
+        "0.5",
+        "--memory",
+        "512m",
+        "-e",
+        "VERCEL_ENV=production",
+        image,
+        "node",
+        "--import",
+        "tsx",
+        "scripts/whatsapp-recover-connection.ts",
+      ]),
+    (error) => {
+      assert.equal(error.code, 1, "Recovery without IDs must refuse to run");
+      assert.match(error.stderr, /Connection recovery requires configured transport and two IDs/);
+      assert.doesNotMatch(error.stderr, /ERR_MODULE_NOT_FOUND|PrismaClientInitializationError/);
+      return true;
+    },
+  );
+  evidence.recoveryUsageGuard = { refused: true, network: "none", database: "not configured" };
   await docker(["network", "create", "--internal", "--label", ownership, network]);
   const networkInfo = JSON.parse(await docker(["network", "inspect", network]))[0];
   assert.equal(networkInfo.Internal, true);
@@ -193,6 +230,8 @@ try {
     "-e",
     "NODE_ENV=production",
     "-e",
+    "VERCEL_ENV=production",
+    "-e",
     "HARDENING_EXTERNAL_PROVIDER_MODE=disabled",
     "-e",
     "WHATSAPP_AI_ENABLED=0",
@@ -216,6 +255,44 @@ try {
     assert.notEqual(heartbeat.heartbeat, previousHeartbeat, "Restart must produce a new heartbeat");
     previousHeartbeat = heartbeat.heartbeat;
     assert.equal(await docker(["exec", worker, "id", "-u"]), "1000");
+    if (!round) {
+      // Exercise the actual worker-container environment. Override only the
+      // pure function's synthetic input so external-call disabling cannot mask
+      // a missing production guard; never change the running process env.
+      const guard = JSON.parse(
+        await docker([
+          "exec",
+          worker,
+          "node",
+          "--import",
+          "tsx",
+          "--input-type=module",
+          "-e",
+          `import assert from 'node:assert/strict';
+import { getSubscriptionPaymentConfig } from './src/server/billing/paymentConfig.ts';
+assert.equal(process.env.NODE_ENV, 'production');
+assert.equal(process.env.VERCEL_ENV, 'production');
+const input = {
+  ...process.env,
+  HARDENING_EXTERNAL_PROVIDER_MODE: 'enabled',
+  BILLING_PAYMENTS_MODE: 'sandbox',
+  FREEDOMPAY_MERCHANT_ID: '1',
+  FREEDOMPAY_SECRET_KEY: 'synthetic-1234567890',
+  BILLING_SELLER_NAME: 'Synthetic',
+  BILLING_TERMS_VERSION: 'synthetic',
+  BILLING_PUBLIC_URL: 'https://bazaar.kg',
+  BILLING_TERMS_URL: 'https://bazaar.kg/legal/offer',
+};
+assert.equal(getSubscriptionPaymentConfig(input).ready, false);
+assert.equal(getSubscriptionPaymentConfig({ ...input, VERCEL_ENV: undefined }).ready, true);
+console.log(JSON.stringify({ productionEnvironment: true, sandboxRejected: true, positiveControl: true }));`,
+        ]),
+      );
+      assert.equal(guard.productionEnvironment, true);
+      assert.equal(guard.sandboxRejected, true);
+      assert.equal(guard.positiveControl, true);
+      evidence.productionSandboxGuard = guard;
+    }
     const started = Date.now();
     await docker(["stop", "--time", "90", worker], 100_000);
     const stopped = (await inspect(worker)).State;
@@ -252,7 +329,7 @@ try {
 } finally {
   const failures = [];
   if (daemonReady) {
-    for (const name of [worker, migration, postgres]) {
+    for (const name of [worker, migration, recovery, postgres]) {
       try {
         await removeOwnedContainer(name);
       } catch (error) {

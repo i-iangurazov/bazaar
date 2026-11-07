@@ -4,7 +4,6 @@ import { prisma } from "@/server/db/prisma";
 import { catalogVariantLabel } from "@/lib/catalogVariantLabel";
 import { findRankedProductIds } from "@/server/services/products/searchSql";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
-import { resolveStoreSellingPrice } from "@/server/services/storeSellingPrice";
 import { catalogVisibilityWhere } from "@/server/services/catalogVisibility";
 
 export const whatsappSearchSchema = z
@@ -39,7 +38,7 @@ export async function whatsappSearch(
   const input = whatsappSearchSchema.parse(raw);
   const store = await prisma.store.findFirstOrThrow({
     where: { id: storeId, organizationId },
-    select: { currencyCode: true, organization: { select: { retailWholesaleEnabled: true } } },
+    select: { currencyCode: true },
   });
   if (store.currencyCode !== "KGS") return [];
   const ids = await findRankedProductIds({
@@ -103,24 +102,6 @@ export async function whatsappSearch(
       inventorySnapshots: { where: { storeId }, select: { variantKey: true, onHand: true } },
     },
   });
-  // POS and shared price books use the independent StorePriceTypes table.
-  // The former StorePrice type columns remain only for rollback compatibility.
-  const priceTypes = store.organization.retailWholesaleEnabled
-    ? await prisma.storePriceTypes.findMany({
-        where: {
-          organizationId,
-          storeId,
-          productId: { in: products.map((product) => product.id) },
-        },
-        select: {
-          productId: true,
-          variantKey: true,
-          retailPriceKgs: true,
-          wholesalePriceKgs: true,
-        },
-      })
-    : [];
-  const typesByKey = new Map(priceTypes.map((row) => [`${row.productId}:${row.variantKey}`, row]));
   const bundleAvailable = products.some((p) => p.isBundle)
     ? new Set(
         (
@@ -141,6 +122,7 @@ export async function whatsappSearch(
       )
     : new Set<string>();
   const offers: WhatsAppOffer[] = [];
+  const pricingNow = new Date();
   const ranked = new Map(ids.map((id, i) => [id, i]));
   products.sort((a, b) => ranked.get(a.id)! - ranked.get(b.id)!);
   for (const p of products) {
@@ -153,20 +135,17 @@ export async function whatsappSearch(
       const row =
         p.storePrices.find((r) => r.variantKey === (v?.id ?? "BASE")) ??
         p.storePrices.find((r) => r.variantKey === "BASE");
-      const extra = typesByKey.get(`${p.id}:${v?.id ?? "BASE"}`);
-      const price = resolveStoreSellingPrice({
-        enabled: store.organization.retailWholesaleEnabled,
-        mode: "RETAIL",
-        standard: row?.priceKgs ?? p.basePriceKgs,
-        retail: extra?.retailPriceKgs,
-        wholesale: extra?.wholesalePriceKgs,
-      }).price;
+      // This is the public sales channel linked from the reply. Match the
+      // existing Catalog checkout: exact variant row -> BASE row -> product.
+      // POS price-type settings are separate and must not be mixed with a
+      // fallback row's discount or leak unpublished wholesale prices here.
+      const price = row?.priceKgs ?? p.basePriceKgs;
       const effective =
         price !== null
           ? getEffectiveProductPrice({
               basePrice: price,
               currency: "KGS",
-              now: new Date(),
+              now: pricingNow,
               discount:
                 row?.discountType === "PERCENTAGE" && row.discountPercentage
                   ? {

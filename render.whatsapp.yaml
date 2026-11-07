@@ -18,6 +18,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Preserve the web app's existing production payment/pooling guards on
+      # this non-Vercel host; NODE_ENV alone does not activate those guards.
+      - key: VERCEL_ENV
+        value: production
       # Same production database as Vercel, using its pooled endpoint. Preserve
       # the existing URL options and bound this process's connection_limit.
       - key: DATABASE_URL

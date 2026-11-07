@@ -27,7 +27,7 @@ import { DeleteIcon } from "@/components/icons";
 import { trpc } from "@/lib/trpc";
 import { WHATSAPP_STYLES } from "@/lib/whatsapp-ai";
 import { Conversations, Costs } from "./workspace-panels";
-import { Choice, Field, useFeedback, type Workspace } from "./workspace-ui";
+import { canRetainWorkspace, Choice, Field, useFeedback, type Workspace } from "./workspace-ui";
 
 function Editor({
   storeId,
@@ -542,15 +542,19 @@ function Editor({
 
 export default function WhatsAppAiPage() {
   const t = useTranslations("whatsappAi"),
-    { data: session } = useSession();
-  const allowed = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+    { data: session, status } = useSession();
+  const allowed =
+    status === "authenticated" &&
+    (session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER");
   const stores = trpc.whatsappAi.stores.useQuery(undefined, { enabled: allowed });
   const [selected, setSelected] = useState(""),
     [pendingStore, setPendingStore] = useState("");
   const storeId = selected || stores.data?.[0]?.id || "";
+  const readableStores = canRetainWorkspace(stores.error) ? stores.data : undefined;
+  const storeAccessible = Boolean(readableStores?.some((store) => store.id === storeId));
   const workspace = trpc.whatsappAi.workspace.useQuery(
     { storeId },
-    { enabled: allowed && Boolean(storeId), refetchInterval: 15_000 },
+    { enabled: allowed && storeAccessible, refetchInterval: 15_000 },
   );
   return (
     <div className="min-w-0 space-y-4">
@@ -563,13 +567,13 @@ export default function WhatsAppAiPage() {
             <QueryErrorState error={stores.error} onRetry={() => void stores.refetch()} />
           )}
           {stores.isLoading && <p>{t("loading")}</p>}
-          {stores.data?.length === 0 && <p>{t("noStores")}</p>}
-          {Boolean(stores.data?.length) && (
+          {readableStores?.length === 0 && <p>{t("noStores")}</p>}
+          {Boolean(readableStores?.length) && (
             <div className="max-w-md">
               <Choice
                 label={t("store")}
                 value={storeId}
-                options={stores.data!.map((s) => ({ value: s.id, label: s.name }))}
+                options={readableStores!.map((s) => ({ value: s.id, label: s.name }))}
                 onChange={setPendingStore}
               />
             </div>
@@ -578,7 +582,7 @@ export default function WhatsAppAiPage() {
             <QueryErrorState error={workspace.error} onRetry={() => void workspace.refetch()} />
           )}
           {workspace.isLoading && Boolean(storeId) && <p>{t("loading")}</p>}
-          {workspace.data && !workspace.error && (
+          {workspace.data && storeAccessible && canRetainWorkspace(workspace.error) && (
             <Editor
               key={storeId}
               storeId={storeId}

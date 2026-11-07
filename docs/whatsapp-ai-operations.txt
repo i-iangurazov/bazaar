@@ -31,7 +31,9 @@ normalized customer images. Other countries, voice notes, documents, video,
 complaints, unsupported questions and missing authoritative information go to
 an employee. No marketing templates, automatic transcription, calls or stock /
 order / payment / refund writes by the language model. Product search uses the
-selected store, current retail prices, discounts and public assortment only.
+selected store, current public Catalog prices/discounts and public assortment only.
+Quotes match the linked public checkout; private retail/wholesale POS price types
+are not substituted into this channel. Existing POS pricing is unchanged.
 A public catalog link can lead to the existing checkout; no reservation or
 payment success is invented inside the chat.
 
@@ -79,6 +81,17 @@ Before enabling
    render.whatsapp.yaml is the validated one-worker Render configuration:
    Virginia (the existing database reports iad1), 0.5 CPU/512 MB, one instance,
    no new database/Redis, no public listener and 90-second shutdown grace.
+   Proposed compute is $7/month for this worker alone. It excludes DeepSeek,
+   BSP/Meta, Neon compute/storage, chargeable transfer and any applicable taxes.
+   This is not an all-in integration price or a database-cost ceiling.
+   Set both NODE_ENV=production and VERCEL_ENV=production on this Render worker.
+   The latter preserves existing payment sandbox rejection and pooled-connection
+   guards shared with the Vercel web app; NODE_ENV alone does not enable them.
+   The image includes the operator recovery CLI below. Container CI verifies its
+   refusal without IDs before any database/provider access, plus sandbox refusal
+   under the actual worker environment using otherwise eligible synthetic inputs.
+   Docker heartbeat checks do not establish Render worker heartbeat alerting or
+   automatic recovery from a hung process; verify these during the host pilot.
    Creation/secret transfer still requires the owner's hosting approval.
    Publish the file before applying a Blueprint; select this custom file path.
    Never add an automatic database migration to the worker: the web release

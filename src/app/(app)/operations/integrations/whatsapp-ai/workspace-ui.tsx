@@ -15,6 +15,27 @@ import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
 
 export type Workspace = inferRouterOutputs<AppRouter>["whatsappAi"]["workspace"];
+
+/** Keep local drafts through a temporary read failure, but never through an access denial. */
+export function canRetainWorkspace(error: Parameters<typeof translateError>[1]) {
+  if (!error) return true;
+  const code = error.data?.code;
+  if (code) {
+    return [
+      "INTERNAL_SERVER_ERROR",
+      "TIMEOUT",
+      "BAD_GATEWAY",
+      "SERVICE_UNAVAILABLE",
+      "GATEWAY_TIMEOUT",
+      "TOO_MANY_REQUESTS",
+    ].includes(code);
+  }
+  // Transport failures have no tRPC error data. Unknown/malformed responses fail closed.
+  return /failed to fetch|fetch failed|networkerror|network request failed|load failed/i.test(
+    error.message,
+  );
+}
+
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Label className="grid gap-2 text-sm">

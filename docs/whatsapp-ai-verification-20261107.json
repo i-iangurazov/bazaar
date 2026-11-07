@@ -25,7 +25,8 @@
       "oldSubscriptionPaymentDb": 45,
       "migrationAndRollbackUnit": 22,
       "isolatedPostgres": "127.0.0.1:55472/bazaar_hardening_ci",
-      "providers": "mocked; no real customer transactions"
+      "providers": "mocked; no real customer transactions",
+      "scope": "Baseline verification before the independent review; latest changed-area results are recorded in review20261108."
     },
     "broadUnit": {
       "files": 321,
@@ -1076,20 +1077,85 @@
           "pass": true,
           "latencyMs": 2392
         }
-      ]
-    },
-    "authoritativeRetailPrice": {
-      "regressionReproduced": "3/4 failed before correction",
-      "after": "4/4 PASS; included in final 170 tests",
-      "source": "Organization.retailWholesaleEnabled + StorePriceTypes, same authoritative price types as POS",
-      "includes": [
-        "Discounted current retail",
-        "Disabled retail/wholesale mode",
-        "Explicit zero retail",
-        "Zero standard fallback",
-        "Legacy price columns ignored"
       ],
-      "realDeepSeek": "4/4 PASS using changed synthetic retail price in RU/KG/EN and remembered conversation context"
+      "scope": "Historical 42-scenario benchmark. The four retail-* price assertions were superseded by the public-channel price contract; current four real-provider checks are recorded below."
+    },
+    "authoritativePublicChannelPrice": {
+      "regressionReproduced": "5/9 cross-channel database cases failed against the previous implementation",
+      "after": "9/9 PASS against unchanged public catalog listing and actual checkout; eight persisted synthetic order-line amounts match WhatsApp quotes",
+      "source": "StorePrice exact variant -> BASE -> Product.basePriceKgs, including the chosen row discount; same as the linked public Catalog checkout",
+      "privatePriceTypes": "StorePriceTypes retail/wholesale and POS pricing behavior are unchanged and are not exposed through this public channel",
+      "missingAndZero": "Explicit zero is preserved; unconfigured public price stays null and requires staff",
+      "realDeepSeek": "4/4 PASS with current discounted public225.00KGS, unpublished retail275/wholesale90, RU/KG/EN and remembered product context"
+    },
+    "review20261108": {
+      "status": "Local changed-area verification PASS; cloud container assertions and full release CI must pass for the review commit",
+      "dbTests": 62,
+      "unitAndReactTests": 79,
+      "totalChangedAreaTests": 141,
+      "typecheck": "PASS",
+      "changedFileLint": "PASS",
+      "translations": "PASS",
+      "providerCallsInAutomatedTests": "Mocked; only named disposable PostgreSQL databases",
+      "refundRaces": "Four real-database regressions: reserved PREPARED sends from a revoked lot cancel; SENDING/UNKNOWN reservations and late-delivery idempotency remain intact",
+      "draftRecovery": "Eleven React regressions plus actual browser outage/recovery preserve assistant name, store knowledge and reply drafts; authorization/store/session loss fail closed",
+      "unnecessaryClarification": "Fourteen mocked-DeepSeek regressions: uniquely resolved explicit price/stock questions render authoritative facts without contradictory optional prose; multiple variants/other intents retain clarification",
+      "liveDeepSeek": {
+        "syntheticOnly": true,
+        "publicPrice": "225.00 KGS",
+        "unpublishedRetail": "275.00 KGS",
+        "unpublishedWholesale": "90.00 KGS",
+        "rows": [
+          {
+            "id": "public-ru",
+            "pass": true,
+            "latencyMs": 2873,
+            "body": "Смеситель хромированный QA\n225.00 KGS\nВ наличии"
+          },
+          {
+            "id": "public-kg",
+            "pass": true,
+            "latencyMs": 2139,
+            "body": "Смеситель хромированный QA\n225.00 KGS\nКампада бар"
+          },
+          {
+            "id": "public-en",
+            "pass": true,
+            "latencyMs": 2656,
+            "body": "Смеситель хромированный QA\n225.00 KGS\nIn stock"
+          },
+          {
+            "id": "public-current-context",
+            "pass": true,
+            "latencyMs": 1502,
+            "body": "Вот актуальная информация по этому смесителю.\n\nСмеситель хромированный QA\n225.00 KGS\nВ наличии\n\nПодсказать что-то ещё по этому смесителю?"
+          }
+        ]
+      },
+      "browser": {
+        "status": "PASS for observed states",
+        "sizes": ["1280x900", "390x844"],
+        "languages": ["ru", "kg", "en"],
+        "tabs": 5,
+        "viewportStates": 30,
+        "additionalFlows": [
+          "Temporary DB outage before/after fix",
+          "All three unsaved drafts retained after recovery",
+          "Mobile tab horizontal scroll",
+          "Archive/restore synthetic voice handoff",
+          "Pack quantity 1-10 and KGS total",
+          "Unavailable transport/checkout remain disabled"
+        ],
+        "screenshots": "Ignored local QA artifacts verified-{desktop|mobile}-{ru|kg|en}-{connection|assistant|conversations|knowledge|costs}.jpg; no customer data",
+        "limitations": "Viewport states and selected lower-form flows, not an exhaustive screenshot of every scroll position; real WhatsApp transport and payments still pending"
+      },
+      "lastFullyGreenCommitBeforeReview": {
+        "sha": "fd21ee6587688c88ca011717fb4713749924c625",
+        "ci": "https://github.com/i-iangurazov/bazaar/actions/runs/42404981418",
+        "jobsPassed": 14,
+        "productionPublicSmoke": "https://github.com/i-iangurazov/bazaar/actions/runs/42406491145"
+      },
+      "containerReview": "Added actual worker production environment sandbox refusal + positive control, packaged recovery CLI refusal without IDs; execution pending the review commit CI"
     }
   },
   "fixedDuringVerification": [
@@ -1101,7 +1167,11 @@
     "Turning AI off does not cancel employee replies",
     "Conversation drafts survive tab and conversation switching",
     "Durable status settlement, duplicate claims, receipt order and ambiguous-send recovery covered with real DB",
-    "Authoritative organization retail/wholesale settings and StorePriceTypes replace historical compatibility columns in WhatsApp quotes"
+    "WhatsApp public price matches the linked Catalog checkout without changing POS or existing monetary flows",
+    "Refunded paid credits are checked under the organization lock immediately before PREPARED -> SENDING",
+    "Transient read errors retain local drafts; access denial discards cached private workspace",
+    "Uniquely identified price/stock requests omit redundant questions and contradictory optional prose",
+    "Render worker uses shared production guards and includes the operator recovery CLI"
   ],
   "preservation": {
     "customerStockOrFinancialWrites": "NONE",
@@ -1171,6 +1241,8 @@
       "WhatsApp/BSP fees",
       "Applicable taxes"
     ],
-    "pricingSource": "https://render.com/pricing"
-  }
+    "pricingSource": "https://render.com/pricing",
+    "productionEnvironment": ["NODE_ENV=production", "VERCEL_ENV=production"]
+  },
+  "updatedAt": "2026-11-08"
 }

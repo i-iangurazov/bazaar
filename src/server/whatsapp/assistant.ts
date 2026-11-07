@@ -412,6 +412,19 @@ VERIFIED RECENT / IDENTIFIER OFFERS (refreshed now): ${JSON.stringify([...offers
       // explicitly identified, server-verified public product was not found.
       answer.offerRefs = [...identifierOffers.keys()].slice(0, 3);
     }
+    if (
+      answer.intent === "products" &&
+      explicitPriceOrStock &&
+      identifierOffers.size === 1 &&
+      answer.offerRefs.length === 1 &&
+      identifierOffers.has(answer.offerRefs[0])
+    ) {
+      // The requested public offer is already uniquely resolved. Do not ask the
+      // customer to name it again after rendering its authoritative price/stock.
+      // Multiple variants or other intents still retain their useful question.
+      answer.question = "";
+      answer.socialText = "";
+    }
     if (requiredLanguage && answer.language !== requiredLanguage) {
       // Render authoritative facts in the requested language; discard mismatched
       // optional prose instead of failing a useful factual reply.

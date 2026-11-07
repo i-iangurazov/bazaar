@@ -20,6 +20,7 @@ import { decryptWhatsAppSecret, whatsappConfig } from "./config";
 import { sendGupshupText, WhatsAppUnknownSend } from "./gupshup";
 import { whatsappImage } from "./media";
 import {
+  assertWhatsAppReservedUnitCanSend,
   recordWhatsAppEstimate,
   reserveWhatsAppUnit,
   settleWhatsAppUnit,
@@ -312,6 +313,10 @@ async function processOutbound(id: string) {
         },
       });
       if (older) return "WAIT";
+      // A refund can revoke a paid lot after preparation/reservation. The refund
+      // and this final claim share the organization lock; in-flight sends retain
+      // their reservation so late delivery can still be accounted exactly once.
+      await assertWhatsAppReservedUnitCanSend(seed.organizationId, id, tx);
       const changed = await tx.whatsAppMessage.updateMany({
         where: { id, state: "PREPARED" },
         data: {

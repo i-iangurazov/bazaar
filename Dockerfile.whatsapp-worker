@@ -6,7 +6,7 @@ COPY package.json pnpm-lock.yaml tsconfig.json ./
 COPY prisma ./prisma
 RUN pnpm install --frozen-lockfile && pnpm prisma:generate
 COPY src ./src
-COPY scripts/whatsapp-worker.ts scripts/whatsapp-worker-health.ts ./scripts/
+COPY scripts/whatsapp-worker.ts scripts/whatsapp-worker-health.ts scripts/whatsapp-recover-connection.ts ./scripts/
 ENV NODE_ENV=production
 USER node
 STOPSIGNAL SIGTERM

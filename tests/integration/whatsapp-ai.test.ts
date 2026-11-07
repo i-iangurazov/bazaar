@@ -32,6 +32,7 @@ import { signFreedomPay } from "@/server/billing/freedomPay";
 import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
 import * as transport from "@/server/whatsapp/gupshup";
 import * as assistant from "@/server/whatsapp/assistant";
+import * as quota from "@/server/whatsapp/quota";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -607,7 +608,8 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
                       offerRefs: [],
                       knowledgeTopics: [],
                       faqIndices: [],
-                      question: "",
+                      question:
+                        "Возможно, вас интересует смеситель — подскажите, какой товар нужен?",
                       socialText: "",
                     }),
                   },
@@ -627,6 +629,8 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
       });
       expect(result.body).toContain("125.50 KGS");
       expect(result.offerRefs).toEqual([ref]);
+      expect(result.answer.question).toBe("");
+      expect(result.body).not.toContain("какой товар нужен?");
     },
   );
   it("keeps ambiguous sends reserved and resolves a receipt using the opaque ID", async () => {
@@ -739,7 +743,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
       storeEnabled: false,
       standard: 250,
       retail: 300,
-      expected: "270.00",
+      expected: "225.00",
     },
     {
       organizationEnabled: false,
@@ -748,10 +752,16 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
       retail: 300,
       expected: "225.00",
     },
-    { organizationEnabled: true, storeEnabled: false, standard: 250, retail: 0, expected: "0.00" },
+    {
+      organizationEnabled: true,
+      storeEnabled: false,
+      standard: 250,
+      retail: 0,
+      expected: "225.00",
+    },
     { organizationEnabled: true, storeEnabled: false, standard: 0, retail: null, expected: "0.00" },
   ])(
-    "uses the authoritative retail price settings: $organizationEnabled / $storeEnabled / $retail",
+    "keeps the public checkout price independent of private price types: $organizationEnabled / $storeEnabled / $retail",
     async (item) => {
       await prisma.organization.update({
         where: { id: f.org.id },
@@ -939,6 +949,151 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
       lastIssue: "REFUND_REVIEW",
     });
   });
+  it("cancels a prepared paid reservation after refund without releasing an older uncertain send", async () => {
+    const bill = await invoice();
+    await applyWhatsAppPayment({ invoiceId: bill.id, fields: fields(bill.id), source: "CALLBACK" });
+    await prisma.whatsAppMonth.create({
+      data: { organizationId: f.org.id, period: whatsappPeriod().key, includedUsed: 1000 },
+    });
+    const older = await outgoing();
+    await reserveWhatsAppUnit(f.org.id, older.id);
+    await prisma.whatsAppMessage.update({
+      where: { id: older.id },
+      data: {
+        state: "SENDING",
+        createdAt: new Date(Date.now() - 1000),
+        sendStartedAt: new Date(),
+        leaseUntil: new Date(Date.now() + 60000),
+      },
+    });
+    const waiting = await outgoing();
+    const send = vi.spyOn(transport, "sendGupshupText").mockResolvedValue("must-not-send");
+    await runWhatsAppWorkerBatch();
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      await prisma.whatsAppCreditUse.findUnique({ where: { messageId: waiting.id } }),
+    ).toMatchObject({ state: "RESERVED" });
+    await applyWhatsAppPayment({
+      invoiceId: bill.id,
+      fields: fields(bill.id, { pg_refund_amount: "3490.00" }),
+      source: "CALLBACK",
+    });
+    await prisma.whatsAppMessage.update({
+      where: { id: older.id },
+      data: { state: "UNKNOWN", leaseUntil: null },
+    });
+    await runWhatsAppWorkerBatch();
+    await runWhatsAppWorkerBatch();
+    expect(send).not.toHaveBeenCalled();
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: waiting.id } })).toMatchObject({
+      state: "CANCELLED",
+      lastIssue: "whatsappQuotaExhausted",
+    });
+    expect(
+      await prisma.whatsAppCreditUse.findUnique({ where: { messageId: waiting.id } }),
+    ).toMatchObject({ state: "RELEASED" });
+    expect(
+      await prisma.whatsAppCreditUse.findUnique({ where: { messageId: older.id } }),
+    ).toMatchObject({ state: "RESERVED" });
+    expect(
+      await prisma.whatsAppCreditLot.findUnique({ where: { invoiceId: bill.id } }),
+    ).toMatchObject({ revoked: true, reserved: 1, used: 0 });
+    expect((await whatsappQuota(f.org.id)).paidRemaining).toBe(0);
+  });
+  it("rechecks a paid reservation when refund commits between reservation and the send claim", async () => {
+    const bill = await invoice();
+    await applyWhatsAppPayment({ invoiceId: bill.id, fields: fields(bill.id), source: "CALLBACK" });
+    await prisma.whatsAppMonth.create({
+      data: { organizationId: f.org.id, period: whatsappPeriod().key, includedUsed: 1000 },
+    });
+    const m = await outgoing(),
+      reserve = quota.reserveWhatsAppUnit;
+    vi.spyOn(quota, "reserveWhatsAppUnit").mockImplementationOnce(async (...args) => {
+      const usage = await reserve(...args);
+      await applyWhatsAppPayment({
+        invoiceId: bill.id,
+        fields: fields(bill.id, { pg_refund_amount: "3490.00" }),
+        source: "CALLBACK",
+      });
+      return usage;
+    });
+    const send = vi.spyOn(transport, "sendGupshupText").mockResolvedValue("must-not-send");
+    await runWhatsAppWorkerBatch();
+    expect(send).not.toHaveBeenCalled();
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: m.id } })).toMatchObject({
+      state: "CANCELLED",
+      lastIssue: "whatsappQuotaExhausted",
+    });
+    expect(await prisma.whatsAppCreditUse.findUnique({ where: { messageId: m.id } })).toMatchObject(
+      { state: "RELEASED" },
+    );
+    expect(
+      await prisma.whatsAppCreditLot.findUnique({ where: { invoiceId: bill.id } }),
+    ).toMatchObject({ revoked: true, reserved: 0, used: 0 });
+  });
+  it.each([false, true])(
+    "keeps a refunded in-flight reservation and accounts duplicate late delivery once (unknown=%s)",
+    async (unknown) => {
+      const bill = await invoice();
+      await applyWhatsAppPayment({
+        invoiceId: bill.id,
+        fields: fields(bill.id),
+        source: "CALLBACK",
+      });
+      await prisma.whatsAppMonth.create({
+        data: { organizationId: f.org.id, period: whatsappPeriod().key, includedUsed: 1000 },
+      });
+      const m = await outgoing();
+      const send = vi.spyOn(transport, "sendGupshupText").mockImplementationOnce(async () => {
+        expect(await prisma.whatsAppMessage.findUnique({ where: { id: m.id } })).toMatchObject({
+          state: "SENDING",
+        });
+        await applyWhatsAppPayment({
+          invoiceId: bill.id,
+          fields: fields(bill.id, { pg_refund_amount: "3490.00" }),
+          source: "CALLBACK",
+        });
+        expect(
+          await prisma.whatsAppCreditLot.findUnique({ where: { invoiceId: bill.id } }),
+        ).toMatchObject({ revoked: true, reserved: 1, used: 0 });
+        if (unknown) throw new transport.WhatsAppUnknownSend();
+        return "provider-refunded-in-flight";
+      });
+      await runWhatsAppWorkerBatch();
+      await runWhatsAppWorkerBatch();
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(await prisma.whatsAppMessage.findUnique({ where: { id: m.id } })).toMatchObject({
+        state: unknown ? "UNKNOWN" : "SENT",
+      });
+      expect(
+        await prisma.whatsAppCreditUse.findUnique({ where: { messageId: m.id } }),
+      ).toMatchObject({ state: "RESERVED" });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await webhook({
+          statuses: [
+            {
+              id: "provider-refunded-in-flight",
+              status: "delivered",
+              timestamp: String(Math.floor(Date.now() / 1000)),
+              biz_opaque_callback_data: `bazaar-wa:${m.id}`,
+            },
+          ],
+        });
+        await reconcileWhatsAppStatuses();
+      }
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(await prisma.whatsAppMessage.findUnique({ where: { id: m.id } })).toMatchObject({
+        state: "DELIVERED",
+      });
+      expect(
+        await prisma.whatsAppCreditUse.findUnique({ where: { messageId: m.id } }),
+      ).toMatchObject({ state: "USED" });
+      expect(
+        await prisma.whatsAppCreditLot.findUnique({ where: { invoiceId: bill.id } }),
+      ).toMatchObject({ revoked: true, reserved: 0, used: 1 });
+      expect(await whatsappQuota(f.org.id)).toMatchObject({ delivered: 1, paidRemaining: 0 });
+    },
+  );
   it("does not initiate payment while the partner/pilot/worker is unavailable", async () => {
     const input = {
       quantity: 1,
