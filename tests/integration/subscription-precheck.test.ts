@@ -1,28 +1,19 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db/prisma";
 import { handleFreedomPayNotification } from "@/server/billing/paymentWebhook";
 import { getSubscriptionQuote } from "@/server/billing/subscriptionQuotes";
 import { verifyPurchaseQuote } from "@/server/billing/purchaseSnapshot";
 import { minorToKgs } from "@/server/billing/paymentMath";
-import { parseFreedomPayXml } from "@/server/billing/freedomPay";
+import { parseFreedomPayXml, signFreedomPay } from "@/server/billing/freedomPay";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const secret = "synthetic-freedompay-precheck-secret";
+// Signature vectors are covered independently by subscription-payment-protocol;
+// these fixtures exercise precheck state, tenant and immutable-invoice guards.
 const sign = (script: string, fields: Record<string, string>) =>
-  createHash("md5")
-    .update(
-      [
-        script,
-        ...Object.keys(fields)
-          .filter((key) => key !== "pg_sig")
-          .sort()
-          .map((key) => fields[key]),
-        secret,
-      ].join(";"),
-    )
-    .digest("hex");
+  signFreedomPay(script, fields, secret);
 
 describeDb("subscription provider precheck against current locked organization state", () => {
   let fixture: Awaited<ReturnType<typeof seedBase>>;

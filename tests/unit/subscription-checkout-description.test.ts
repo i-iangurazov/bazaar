@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { initializeFreedomPay } from "@/server/billing/freedomPay";
+import { initializeFreedomPay, signFreedomPay } from "@/server/billing/freedomPay";
 
 const secret = "synthetic-checkout-description-secret";
 const snapshot = (months: 1 | 6 | 12, kind: "RENEWAL" | "UPGRADE" = "RENEWAL") => ({
@@ -68,17 +67,7 @@ describe("gateway description represents the immutable invoice term", () => {
           pg_redirect_url: "https://api.freedompay.kg/pay?id=12345",
           pg_salt: "synthetic",
         };
-        const signature = createHash("md5")
-          .update(
-            [
-              "init_payment.php",
-              ...Object.keys(response)
-                .sort()
-                .map((key) => response[key as keyof typeof response]),
-              secret,
-            ].join(";"),
-          )
-          .digest("hex");
+        const signature = signFreedomPay("init_payment.php", response, secret);
         return new Response(
           `<response>${Object.entries({ ...response, pg_sig: signature })
             .map(([key, value]) => `<${key}>${value}</${key}>`)
