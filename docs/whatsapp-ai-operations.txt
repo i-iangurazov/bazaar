@@ -64,6 +64,18 @@ Before enabling
    employee replies. Three independent conversations run concurrently, while
    every conversation's replies remain serialized. Turning AI off cancels queued
    AI answers, never an employee's prepared reply.
+   In a container, invoke the installed runtime directly:
+   node --import tsx scripts/whatsapp-worker.ts (the image's default command).
+   The CI job whatsapp-worker-container builds the Linux image and verifies
+   migrations, non-root startup, heartbeat health, two graceful stop/start cycles,
+   absence of baked-in credentials and cleanup in an internal Docker network.
+   Its disposable PostgreSQL has no host ports or customer data, and provider
+   calls are disabled. Evidence is uploaded as whatsapp-worker-container.
+   This proves packaging/lifecycle only; it does not establish live-provider
+   compatibility, production capacity or the actual host's monthly cost.
+   Before starting a permanent instance, confirm the intended hosting account,
+   its resource price and database compute implications. The one-second queue
+   polling loop can keep an otherwise sleeping database active overnight.
 5. Obtain the FreedomPay test merchant. Approve/publicize pack terms, validity,
    refund handling and seller details before live collection. Existing legal
    publication checks also apply. Initial payment integration has no recurring

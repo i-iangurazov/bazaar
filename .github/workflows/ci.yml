@@ -423,6 +423,30 @@ jobs:
           -derivedDataPath ios/DerivedData
           CODE_SIGNING_ALLOWED=NO build
 
+  whatsapp-worker-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the standalone Linux WhatsApp worker without runtime secrets
+        run: docker build --progress=plain -f Dockerfile.whatsapp-worker -t bazaar-whatsapp-worker:ci .
+      - name: Verify isolated container startup, health, restart and graceful shutdown
+        env:
+          RUN_WHATSAPP_CONTAINER_SMOKE: "1"
+        run: node scripts/qa/whatsapp-worker-container.mjs
+      - name: Upload isolated worker-container evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatsapp-worker-container
+          path: artifacts/whatsapp-worker-container/
+          if-no-files-found: warn
+
   release-gate:
     # A skipped aggregate job can be treated as passing by GitHub-backed checks.
     # Always report a failure unless every required job actually succeeded.
@@ -440,6 +464,7 @@ jobs:
       - ux-browser
       - reporting-browser
       - landing-browser
+      - whatsapp-worker-container
     services:
       postgres:
         image: postgres:16-alpine
