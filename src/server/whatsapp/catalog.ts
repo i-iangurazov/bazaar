@@ -39,7 +39,7 @@ export async function whatsappSearch(
   const input = whatsappSearchSchema.parse(raw);
   const store = await prisma.store.findFirstOrThrow({
     where: { id: storeId, organizationId },
-    select: { currencyCode: true, retailWholesaleEnabled: true },
+    select: { currencyCode: true, organization: { select: { retailWholesaleEnabled: true } } },
   });
   if (store.currencyCode !== "KGS") return [];
   const ids = await findRankedProductIds({
@@ -94,8 +94,6 @@ export async function whatsappSearch(
         select: {
           variantKey: true,
           priceKgs: true,
-          retailPriceKgs: true,
-          wholesalePriceKgs: true,
           discountType: true,
           discountPercentage: true,
           discountStartsAt: true,
@@ -105,6 +103,24 @@ export async function whatsappSearch(
       inventorySnapshots: { where: { storeId }, select: { variantKey: true, onHand: true } },
     },
   });
+  // POS and shared price books use the independent StorePriceTypes table.
+  // The former StorePrice type columns remain only for rollback compatibility.
+  const priceTypes = store.organization.retailWholesaleEnabled
+    ? await prisma.storePriceTypes.findMany({
+        where: {
+          organizationId,
+          storeId,
+          productId: { in: products.map((product) => product.id) },
+        },
+        select: {
+          productId: true,
+          variantKey: true,
+          retailPriceKgs: true,
+          wholesalePriceKgs: true,
+        },
+      })
+    : [];
+  const typesByKey = new Map(priceTypes.map((row) => [`${row.productId}:${row.variantKey}`, row]));
   const bundleAvailable = products.some((p) => p.isBundle)
     ? new Set(
         (
@@ -137,12 +153,13 @@ export async function whatsappSearch(
       const row =
         p.storePrices.find((r) => r.variantKey === (v?.id ?? "BASE")) ??
         p.storePrices.find((r) => r.variantKey === "BASE");
+      const extra = typesByKey.get(`${p.id}:${v?.id ?? "BASE"}`);
       const price = resolveStoreSellingPrice({
-        enabled: store.retailWholesaleEnabled,
+        enabled: store.organization.retailWholesaleEnabled,
         mode: "RETAIL",
         standard: row?.priceKgs ?? p.basePriceKgs,
-        retail: row?.retailPriceKgs,
-        wholesale: row?.wholesalePriceKgs,
+        retail: extra?.retailPriceKgs,
+        wholesale: extra?.wholesalePriceKgs,
       }).price;
       const effective =
         price !== null

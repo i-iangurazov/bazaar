@@ -23,8 +23,8 @@
     "focusedFinal": {
       "status": "PASS",
       "files": 6,
-      "tests": 166,
-      "newWhatsAppDb": 45,
+      "tests": 170,
+      "newWhatsAppDb": 49,
       "newWhatsAppUnit": 54,
       "oldSubscriptionPaymentDb": 45,
       "migrationAndRollbackUnit": 22,
@@ -803,8 +803,8 @@
     },
     "realDeepSeek": {
       "status": "PASS",
-      "cases": 38,
-      "passed": 38,
+      "cases": 42,
+      "passed": 42,
       "model": "deepseek-flash",
       "data": "Artificial products, conversations and one-pixel image only; no customer data",
       "medianMs": 2256.0,
@@ -1052,8 +1052,41 @@
           "pass": true,
           "latencyMs": 2596,
           "needsHuman": true
+        },
+        {
+          "id": "retail-ru",
+          "pass": true,
+          "latencyMs": 3816
+        },
+        {
+          "id": "retail-kg",
+          "pass": true,
+          "latencyMs": 998
+        },
+        {
+          "id": "retail-en",
+          "pass": true,
+          "latencyMs": 2067
+        },
+        {
+          "id": "retail-current-context",
+          "pass": true,
+          "latencyMs": 2392
         }
       ]
+    },
+    "authoritativeRetailPrice": {
+      "regressionReproduced": "3/4 failed before correction",
+      "after": "4/4 PASS; included in final 170 tests",
+      "source": "Organization.retailWholesaleEnabled + StorePriceTypes, same authoritative price types as POS",
+      "includes": [
+        "Discounted current retail",
+        "Disabled retail/wholesale mode",
+        "Explicit zero retail",
+        "Zero standard fallback",
+        "Legacy price columns ignored"
+      ],
+      "realDeepSeek": "4/4 PASS using changed synthetic retail price in RU/KG/EN and remembered conversation context"
     }
   },
   "fixedDuringVerification": [
@@ -1064,14 +1097,15 @@
     "Employee transport remains usable during DeepSeek outage or partner onboarding-token rotation",
     "Turning AI off does not cancel employee replies",
     "Conversation drafts survive tab and conversation switching",
-    "Durable status settlement, duplicate claims, receipt order and ambiguous-send recovery covered with real DB"
+    "Durable status settlement, duplicate claims, receipt order and ambiguous-send recovery covered with real DB",
+    "Authoritative organization retail/wholesale settings and StorePriceTypes replace historical compatibility columns in WhatsApp quotes"
   ],
   "preservation": {
-    "customerDatabaseAccess": "NONE",
     "customerStockOrFinancialWrites": "NONE",
     "existingSubscriptionEdits": "NONE",
     "lifetimeGrants": "Read-only preservation checks for all five protected organization IDs; no customer organization edited",
-    "migration": "11 additive tables and one Store unique index; old records unchanged in isolated migration rehearsal"
+    "migration": "11 additive tables and one Store unique index; old records unchanged in isolated migration rehearsal",
+    "customerBusinessDataAccessDuringTests": "NONE; only named disposable databases were used. The approved additive schema migration is applied by the production build."
   },
   "economics": {
     "status": "Planning assumptions; signed partner/provider terms still required",
@@ -1110,5 +1144,11 @@
     "Last 100 messages are shown; older conversation history pagination is outside this launch",
     "AI supplies no authoritative financial, inventory or order writes"
   ],
-  "rollback": "Disable AI/pack collection; drain worker; reconcile outstanding sends/payments. Promote prior verified deployment without dropping additive tables. A source revert must retain the applied migration and reviewed checksum."
+  "rollback": "Disable AI/pack collection; drain worker; reconcile outstanding sends/payments. Promote prior verified deployment without dropping additive tables. A source revert must retain the applied migration and reviewed checksum.",
+  "productionMigration": {
+    "status": "PASS",
+    "deployment": "dpl_2xfFt5AgdupkGFsBn5nWW4DDhieM",
+    "migration": "20261107190000_whatsapp_ai",
+    "evidence": "Vercel build log: reviewed additive migration applied successfully; no customer records rewritten"
+  }
 }

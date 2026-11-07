@@ -733,6 +733,59 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     });
     expect((await whatsappSearch(f.org.id, f.store.id, { query: "TEST-1" }))[0].price).toBe("0.00");
   });
+  it.each([
+    {
+      organizationEnabled: true,
+      storeEnabled: false,
+      standard: 250,
+      retail: 300,
+      expected: "270.00",
+    },
+    {
+      organizationEnabled: false,
+      storeEnabled: true,
+      standard: 250,
+      retail: 300,
+      expected: "225.00",
+    },
+    { organizationEnabled: true, storeEnabled: false, standard: 250, retail: 0, expected: "0.00" },
+    { organizationEnabled: true, storeEnabled: false, standard: 0, retail: null, expected: "0.00" },
+  ])(
+    "uses the authoritative retail price settings: $organizationEnabled / $storeEnabled / $retail",
+    async (item) => {
+      await prisma.organization.update({
+        where: { id: f.org.id },
+        data: { retailWholesaleEnabled: item.organizationEnabled },
+      });
+      await prisma.store.update({
+        where: { id: f.store.id },
+        data: { retailWholesaleEnabled: item.storeEnabled },
+      });
+      await prisma.storePrice.create({
+        data: {
+          organizationId: f.org.id,
+          storeId: f.store.id,
+          productId: f.product.id,
+          priceKgs: item.standard,
+          retailPriceKgs: 999,
+          discountType: "PERCENTAGE",
+          discountPercentage: 10,
+        },
+      });
+      await prisma.storePriceTypes.create({
+        data: {
+          organizationId: f.org.id,
+          storeId: f.store.id,
+          productId: f.product.id,
+          retailPriceKgs: item.retail,
+          wholesalePriceKgs: 90,
+        },
+      });
+      expect((await whatsappSearch(f.org.id, f.store.id, { query: "TEST-1" }))[0].price).toBe(
+        item.expected,
+      );
+    },
+  );
   it("finds Cyrillic product families regardless of typed case", async () => {
     await prisma.product.update({
       where: { id: f.product.id },
