@@ -1,3 +1,9 @@
+import {
+  assertMarketplaceFeature,
+  claimMarketplaceChannel,
+  releaseMarketplaceChannelIfUnused,
+  authorizeMarketplaceExchange,
+} from "./marketplaceSubscription";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { basename, extname, join } from "node:path";
@@ -1322,6 +1328,17 @@ export const normalizeBakaiApiError = (input: {
   error?: unknown;
   token?: string | null;
 }) => {
+  if (
+    input.error instanceof AppError &&
+    /^(billing|featureLockedPlan$|subscriptionInactive$)/.test(input.error.message)
+  )
+    return {
+      code: input.error.message,
+      status: input.error.status,
+      retryable: false,
+      body: null,
+      message: input.error.message,
+    };
   const code = normalizeBakaiApiIssueCode({
     status: input.status,
     body: input.body,
@@ -1657,6 +1674,7 @@ export const runBakaiStoreApiPreflight = async (
   organizationId: string,
   storeId?: string | null,
 ) => {
+  await assertMarketplaceFeature(organizationId);
   const plan = await buildBakaiStoreApiPayload({ organizationId, storeId });
   return plan.preflight;
 };
@@ -2292,6 +2310,7 @@ export const saveBakaiStoreTemplateWorkbook = async (input: {
   requestId: string;
   upload: BakaiTemplateUpload;
 }) => {
+  await assertMarketplaceFeature(input.organizationId, "FILE");
   if (!input.upload.fileName.trim()) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
@@ -2435,6 +2454,7 @@ export const updateBakaiStoreMappings = async (input: {
     storeId: string;
   }>;
 }) => {
+  await assertMarketplaceFeature(input.organizationId, "FILE");
   const normalizedMappings = input.mappings.map((mapping) => ({
     columnKey: normalizeStockColumnKey(mapping.columnKey),
     storeId: mapping.storeId.trim(),
@@ -2579,6 +2599,12 @@ export const updateBakaiStoreSettings = async (input: {
   apiToken?: string | null;
   clearToken?: boolean;
 }) => {
+  await assertMarketplaceFeature(
+    input.organizationId,
+    input.connectionMode === BakaiStoreConnectionMode.API || Boolean(input.apiToken?.trim())
+      ? "LIVE"
+      : "FILE",
+  );
   return prisma.$transaction(async (tx) => {
     const existing = await tx.bakaiStoreIntegration.findUnique({
       where: { orgId: input.organizationId },
@@ -2617,6 +2643,7 @@ export const updateBakaiStoreSettings = async (input: {
     ]);
 
     const storedTemplateSchema = parseStoredTemplateSchema(existing?.templateSchemaJson);
+    if (nextTokenEncrypted) await claimMarketplaceChannel(input.organizationId, "BAKAI", tx);
     const nextStatus = resolveStoredIntegrationStatus({
       connectionMode: input.connectionMode,
       hasTemplate: Boolean(existing?.templateStoragePath),
@@ -2659,6 +2686,8 @@ export const updateBakaiStoreSettings = async (input: {
       },
     });
 
+    if (!nextTokenEncrypted)
+      await releaseMarketplaceChannelIfUnused(input.organizationId, "BAKAI", tx);
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -2701,6 +2730,7 @@ export const updateBakaiStoreBranchMappings = async (input: {
     branchId: string;
   }>;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   const normalizedMappings = input.mappings.map((mapping) => ({
     storeId: mapping.storeId.trim(),
     branchId: mapping.branchId.trim(),
@@ -2825,6 +2855,7 @@ export const testBakaiStoreConnection = async (input: {
   actorId: string;
   requestId: string;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   const integration = await prisma.bakaiStoreIntegration.findUnique({
     where: { orgId: input.organizationId },
     select: {
@@ -3080,6 +3111,7 @@ export const updateBakaiStoreProductSelection = async (input: {
   productIds: string[];
   included: boolean;
 }) => {
+  await assertMarketplaceFeature(input.organizationId, "FILE");
   const storeContext = await resolveIntegrationStoreContext({
     organizationId: input.organizationId,
     storeId: input.storeId,
@@ -3136,11 +3168,15 @@ export const updateBakaiStoreProductSelection = async (input: {
 };
 
 export const runBakaiStorePreflight = async (organizationId: string, storeId?: string | null) => {
+  const org = await assertMarketplaceFeature(organizationId, "FILE");
   const integration = await prisma.bakaiStoreIntegration.findUnique({
     where: { orgId: organizationId },
     select: { connectionMode: true },
   });
-  if (resolveConnectionMode(integration?.connectionMode) === BakaiStoreConnectionMode.API) {
+  if (
+    org.entitlements.features.marketplaces &&
+    resolveConnectionMode(integration?.connectionMode) === BakaiStoreConnectionMode.API
+  ) {
     return runBakaiStoreApiPreflight(organizationId, storeId);
   }
   const plan = await buildBakaiStoreExportPlan({ organizationId, storeId });
@@ -3307,6 +3343,7 @@ export const requestBakaiStoreExport = async (input: {
   requestId: string;
   mode?: BakaiStoreExportMode;
 }) => {
+  await assertMarketplaceFeature(input.organizationId, "FILE");
   await timeoutAbandonedBakaiStoreExportJobs(input.organizationId);
 
   const integration = await prisma.bakaiStoreIntegration.findUnique({
@@ -3405,6 +3442,7 @@ export const requestBakaiStoreApiSync = async (input: {
   requestId: string;
   mode?: BakaiStoreExportMode;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   await timeoutAbandonedBakaiStoreExportJobs(input.organizationId);
 
   const integration = await prisma.bakaiStoreIntegration.findUnique({
@@ -3554,6 +3592,7 @@ export const runBakaiStoreExportJob = async (
   let plan: BakaiStoreExportPlan | null = null;
 
   try {
+    await assertMarketplaceFeature(job.orgId, "FILE");
     plan = await buildBakaiStoreExportPlan({
       organizationId: job.orgId,
       storeId: job.storeId,
@@ -3827,6 +3866,7 @@ export const runBakaiStoreApiSyncJob = async (
   let token: string | null = null;
 
   try {
+    await assertMarketplaceFeature(job.orgId);
     if (!process.env.BAKAI_STORE_IMPORT_ENDPOINT?.trim()) {
       throw new AppError("bakaiStoreImportEndpointMissing", "CONFLICT", 409);
     }
@@ -3856,6 +3896,12 @@ export const runBakaiStoreApiSyncJob = async (
       throw new AppError("bakaiStoreApiPreflightFailed", "CONFLICT", 409);
     }
 
+    await authorizeMarketplaceExchange({
+      organizationId: job.orgId,
+      channel: "BAKAI",
+      jobId: job.id,
+      full: true,
+    });
     const batches = chunkBakaiStoreItems(
       plan.payload.products,
       BAKAI_STORE_MAX_PRODUCTS_PER_REQUEST,

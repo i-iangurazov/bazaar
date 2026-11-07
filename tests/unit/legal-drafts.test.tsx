@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { legalDraftPreviewAllowed } from "@/lib/legalPreview";
 import { legalCopy } from "@/content/legal";
 import { sellerDraft } from "@/content/legal/seller";
+import { syntheticSellerEnvironment, syntheticSeller } from "../helpers/legalSeller";
 import { legalDocumentIds, sellerFields } from "@/content/legal/types";
 import { LegalDocument } from "@/components/legal/legal-document";
+import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 
 const mocks = vi.hoisted(() => ({
   host: "localhost:3134",
@@ -88,12 +90,35 @@ describe("legal draft publication boundary", () => {
     vi.stubEnv("VERCEL", "0");
     vi.stubEnv("VERCEL_ENV", "");
     mocks.getLocale.mockResolvedValue("ky");
+    for (const [key, value] of Object.entries(syntheticSellerEnvironment)) vi.stubEnv(key, value);
     const result = await LegalDraftPage({ params: { document: "offer" } });
     expect(result.props.copy).toBe(legalCopy.kg);
+    expect(result.props.seller.taxId).toBe(syntheticSeller.taxId);
     expect(await generateMetadata({ params: { document: "offer" } })).toMatchObject({
       title: expect.stringContaining(legalCopy.kg.draft),
       robots: { index: false, follow: false, noarchive: true },
     });
+  });
+
+  it("renders the approved production edition without exposing the private registered address", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    for (const [key, value] of Object.entries(syntheticSellerEnvironment)) vi.stubEnv(key, value);
+    vi.stubEnv("BILLING_LEGAL_RELEASE_APPROVED", LEGAL_TERMS_VERSION);
+    vi.stubEnv("BILLING_SUPPORT_EMAIL_VERIFIED", "1");
+    vi.stubEnv(
+      "BILLING_PUBLIC_CONTACT_ADDRESS",
+      "Кыргызстан, Бишкек, тестовый адрес для корреспонденции 1",
+    );
+    mocks.host = "bazaar.kg";
+    mocks.getLocale.mockResolvedValue("ru");
+    for (const document of legalDocumentIds) {
+      const result = await LegalDraftPage({ params: { document } });
+      expect(result.props.draft).toBe(false);
+      expect(result.props.seller.registeredAddress).toBeNull();
+      expect(result.props.seller.correspondenceAddress).toContain("тестовый адрес");
+      const metadata = await generateMetadata({ params: { document } });
+      expect(metadata.title).toBe(`${legalCopy.ru.documents[document].title} · Bazaar`);
+    }
   });
 });
 
@@ -114,7 +139,7 @@ describe("reviewable legal pages", () => {
         );
         const root = document.createElement("div");
         root.innerHTML = renderToStaticMarkup(
-          <LegalDocument documentId={id} copy={copy} seller={sellerDraft} />,
+          <LegalDocument documentId={id} copy={copy} seller={syntheticSeller} />,
         );
         expect(root.querySelectorAll("h1")).toHaveLength(1);
         expect(root.querySelector('[role="note"]')?.textContent).toBe(copy.draftNotice);
@@ -123,7 +148,8 @@ describe("reviewable legal pages", () => {
         );
         expect(root.querySelectorAll("[data-seller-field]")).toHaveLength(sellerFields.length);
         expect(root.querySelector("form")).toBeNull();
-        expect(root.querySelector('a[href^="mailto:"], a[href^="tel:"]')).toBeNull();
+        expect(root.querySelector('a[href="mailto:seller@example.invalid"]')).not.toBeNull();
+        expect(root.querySelector('a[href^="tel:"]')).not.toBeNull();
         expect(root.textContent).not.toMatch(/undefined|\[object Object\]|\{\{/);
         for (const link of root.querySelectorAll('a[href^="#"]')) {
           expect(root.querySelector(link.getAttribute("href")!)).not.toBeNull();
@@ -135,9 +161,13 @@ describe("reviewable legal pages", () => {
     },
   );
 
-  it("keeps unknown seller details empty instead of borrowing customer or provider identities", () => {
-    for (const field of sellerFields) {
-      expect(sellerDraft[field]).toBe(field === "bankName" ? "KICB" : null);
-    }
+  it("uses approved seller contacts and the KGS account while withholding the private home address", () => {
+    expect(sellerDraft.phone).toBe("+996 709 911 300");
+    expect(sellerDraft.email).toBe("support@bazaar.kg");
+    expect(sellerDraft.accountCurrency).toBe("KGS");
+    expect(sellerDraft.accountNumber).toBeNull();
+    expect(sellerDraft.registrationNumber).toBeNull();
+    expect(sellerDraft.registeredAddress).toBeNull();
+    expect(sellerDraft.correspondenceAddress).toBeNull();
   });
 });

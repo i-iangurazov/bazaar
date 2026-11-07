@@ -15,6 +15,7 @@ import {
   startProductDescriptionGenerationJob,
 } from "@/server/services/productDescriptionGenerationJobs";
 import { toJson } from "@/server/services/json";
+import * as productContent from "@/server/services/productContentGeneration";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const { mockDownloadRemoteImage, mockNormalizeProductImageUrl } = vi.hoisted(() => ({
@@ -137,6 +138,191 @@ describeDb("product description generation jobs", () => {
       contentType: "image/png",
     });
     await resetDatabase();
+  });
+
+  const atomicFixture = async () => {
+    const base = await seedBase({ plan: "ENTERPRISE" });
+    await prisma.subscriptionContract.create({
+      data: { organizationId: base.org.id, catalogVersion: "2026-11" },
+    });
+    const trialEnd = new Date(Date.now() + 7 * 86400000);
+    await prisma.organization.update({
+      where: { id: base.org.id },
+      data: {
+        subscriptionBillingMode: "SELF_SERVE",
+        trialEndsAt: trialEnd,
+        currentPeriodEndsAt: trialEnd,
+      },
+    });
+    await seedPhoneCaseSpecTemplate(base.org.id, "Аксессуары");
+    const variant = await seedProductForAiJob({
+      organizationId: base.org.id,
+      productId: base.product.id,
+      category: "Аксессуары",
+      description: "Исходное описание",
+      attributes: { type: "Старый тип", color: "Белый", material: "Силикон" },
+    });
+    const generated = vi
+      .spyOn(productContent, "generateProductContent")
+      .mockImplementation(async (input) => ({
+        description: input.generateDescription
+          ? { status: "generated" as const, value: generatedDescriptionText, reason: null }
+          : { status: "skipped" as const, value: null, reason: "descriptionGenerationDisabled" },
+        specs: input.generateSpecs
+          ? {
+              status: "generated" as const,
+              reason: null,
+              skippedExistingCount: 0,
+              values: [
+                {
+                  key: "type",
+                  labelRu: "Тип",
+                  kind: "type" as const,
+                  value: "Чехол",
+                  source: "image" as const,
+                },
+                {
+                  key: "color",
+                  labelRu: "Цвет",
+                  kind: "color" as const,
+                  value: "Черный",
+                  source: "image" as const,
+                },
+                {
+                  key: "material",
+                  labelRu: "Материал",
+                  kind: "material" as const,
+                  value: "Поликарбонат",
+                  source: "image" as const,
+                },
+              ],
+            }
+          : {
+              status: "skipped" as const,
+              reason: "specGenerationDisabled",
+              skippedExistingCount: 0,
+              values: [],
+            },
+        meta: {
+          locale: "ru" as const,
+          mode: "overwrite" as const,
+          imageCount: 1,
+          integrationContext: null,
+        },
+      }));
+    const network = vi.fn(() => {
+      throw new Error("atomic persistence test must not call a provider");
+    });
+    vi.stubGlobal("fetch", network);
+    const job = await startProductDescriptionGenerationJob({
+      organizationId: base.org.id,
+      actorId: base.adminUser.id,
+      requestId: "atomic-ai-content",
+      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      productIds: [base.product.id],
+      overwriteExisting: true,
+      runImmediately: false,
+    });
+    return { ...base, variant, generated, network, job };
+  };
+
+  it("rolls back description, specs, audits and committed quota if the final item-success write fails", async () => {
+    const f = await atomicFixture();
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION test_ai_item_success_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status='SUCCESS' THEN RAISE EXCEPTION 'synthetic item completion fault'; END IF; RETURN NEW; END; $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER test_ai_item_success_fault BEFORE UPDATE ON "ProductDescriptionGenerationJobItem" FOR EACH ROW EXECUTE FUNCTION test_ai_item_success_fault()`,
+    );
+    try {
+      await runProductDescriptionGenerationJob({ jobId: f.job.id });
+      expect(
+        (await prisma.product.findUniqueOrThrow({ where: { id: f.product.id } })).description,
+      ).toBe("Исходное описание");
+      expect(
+        (await prisma.productVariant.findUniqueOrThrow({ where: { id: f.variant.id } })).attributes,
+      ).toEqual({ type: "Старый тип", color: "Белый", material: "Силикон" });
+      expect(
+        await prisma.auditLog.count({
+          where: { entity: "Product", entityId: f.product.id, action: "PRODUCT_UPDATE" },
+        }),
+      ).toBe(0);
+      expect(
+        (
+          await prisma.productDescriptionGenerationJobItem.findFirstOrThrow({
+            where: { jobId: f.job.id },
+          })
+        ).status,
+      ).not.toBe("SUCCESS");
+      expect(
+        await prisma.subscriptionUsageReservation.count({
+          where: { organizationId: f.org.id, resource: "ai", state: "COMMITTED" },
+        }),
+      ).toBe(0);
+      expect(
+        (
+          await prisma.subscriptionUsageBucket.findFirstOrThrow({
+            where: { organizationId: f.org.id, resource: "ai" },
+          })
+        ).used,
+      ).toBe(0);
+      expect(f.generated).toHaveBeenCalledTimes(2);
+      expect(f.network).not.toHaveBeenCalled();
+    } finally {
+      await prisma.$executeRawUnsafe(
+        `DROP TRIGGER IF EXISTS test_ai_item_success_fault ON "ProductDescriptionGenerationJobItem"`,
+      );
+      await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS test_ai_item_success_fault()`);
+      f.generated.mockRestore();
+    }
+  });
+
+  it("retains successful content and exactly one quota receipt after a later job-finalization fault, without calling AI again", async () => {
+    const f = await atomicFixture();
+    await prisma.$executeRawUnsafe(
+      `CREATE FUNCTION test_ai_job_finish_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='PRODUCT_DESCRIPTION_GENERATION_JOB_FINISHED' THEN RAISE EXCEPTION 'synthetic job finalization fault'; END IF; RETURN NEW; END; $$`,
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE TRIGGER test_ai_job_finish_fault BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION test_ai_job_finish_fault()`,
+    );
+    try {
+      await runProductDescriptionGenerationJob({ jobId: f.job.id });
+      const item = await prisma.productDescriptionGenerationJobItem.findFirstOrThrow({
+        where: { jobId: f.job.id },
+      });
+      expect(item).toMatchObject({
+        status: "SUCCESS",
+        generatedDescription: generatedDescriptionText,
+        leaseToken: null,
+      });
+      expect(
+        (await prisma.product.findUniqueOrThrow({ where: { id: f.product.id } })).description,
+      ).toBe(generatedDescriptionText);
+      expect(
+        (await prisma.productVariant.findUniqueOrThrow({ where: { id: f.variant.id } })).attributes,
+      ).toMatchObject({ type: "Чехол", color: "Черный", material: "Поликарбонат" });
+      expect(
+        await prisma.subscriptionUsageReservation.count({
+          where: { organizationId: f.org.id, resource: "ai", state: "COMMITTED" },
+        }),
+      ).toBe(1);
+      expect(
+        (
+          await prisma.subscriptionUsageBucket.findFirstOrThrow({
+            where: { organizationId: f.org.id, resource: "ai" },
+          })
+        ).used,
+      ).toBe(1);
+      await runProductDescriptionGenerationJob({ jobId: f.job.id });
+      expect(f.generated).toHaveBeenCalledTimes(2);
+      expect(f.network).not.toHaveBeenCalled();
+    } finally {
+      await prisma.$executeRawUnsafe(
+        `DROP TRIGGER IF EXISTS test_ai_job_finish_fault ON "AuditLog"`,
+      );
+      await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS test_ai_job_finish_fault()`);
+      f.generated.mockRestore();
+    }
   });
 
   it("persists per-product skipped status when a product has no usable photo", async () => {

@@ -11,9 +11,15 @@ import {
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { subscriptionPaymentsRouter } from "./subscriptionPayments";
+import { getSubscriptionUsage } from "@/server/billing/subscriptionUsage";
+import { toTRPCError } from "@/server/trpc/errors";
 
 export const billingRouter = router({
   payments: subscriptionPaymentsRouter,
+  usage: adminProcedure.query(async ({ ctx }) => {
+    try { return await getSubscriptionUsage(ctx.user.organizationId); }
+    catch (error) { throw toTRPCError(error); }
+  }),
   get: adminProcedure.query(async ({ ctx }) => {
     return getBillingSummary({ organizationId: ctx.user.organizationId });
   }),

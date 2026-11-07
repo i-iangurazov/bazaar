@@ -49,6 +49,9 @@ vi.mock("@/lib/trpc", () => {
   };
   const mutation = () => ({ mutate: state.mutate, isLoading: false });
   return { trpc: {
+    billing: { features: { useQuery: () => ({ data: {
+      billingCatalogVersion: "2026-10", lifetimeAccess: false, access: { hasAccess: true }, featureFlags: { periodClose: true },
+    } }) } },
     stores: { list: { useQuery: () => ({
       data: state.storeError ? undefined : state.stores,
       error: state.storeError,

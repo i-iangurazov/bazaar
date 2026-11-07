@@ -1,5 +1,8 @@
 "use client";
-import { ProductPriceAutosave, type ProductPriceAutosaveConfig } from "@/components/products/product-price-autosave";
+import {
+  ProductPriceAutosave,
+  type ProductPriceAutosaveConfig,
+} from "@/components/products/product-price-autosave";
 import { productRecoveryHref } from "@/lib/productRecoveryHref";
 
 import {
@@ -676,18 +679,31 @@ export const ProductForm = ({
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: !readOnly,
+    staleTime: 60_000,
+  });
+  const canConfigureBundles = Boolean(billing.data?.featureFlags.bundles);
   const locale = useLocale();
   const { toast } = useToast();
   const productUtils = trpc.useUtils();
-  const { confirm: confirmSeparateProduct, confirmDialog: separateProductDialog } = useConfirmDialog();
+  const { confirm: confirmSeparateProduct, confirmDialog: separateProductDialog } =
+    useConfirmDialog();
   const duplicateCheckInFlight = useRef(false);
   const compactCreate = quickCreateMode && !productId && !readOnly;
   const reuseRouter = useRouter();
-  const [reuseProduct, setReuseProduct] = useState<{ id: string; name: string; sku?: string } | null>(null);
+  const [reuseProduct, setReuseProduct] = useState<{
+    id: string;
+    name: string;
+    sku?: string;
+  } | null>(null);
   const [reuseNavigation, setReuseNavigation] = useState<string | null>(null);
   useEffect(() => {
     if (reuseProduct || !reuseNavigation) return;
-    const frame = requestAnimationFrame(() => { reuseRouter.push(reuseNavigation); setReuseNavigation(null); });
+    const frame = requestAnimationFrame(() => {
+      reuseRouter.push(reuseNavigation);
+      setReuseNavigation(null);
+    });
     return () => cancelAnimationFrame(frame);
   }, [reuseProduct, reuseNavigation, reuseRouter]);
   const shopifyEditor = shopifyEditorLayout || compactCreate;
@@ -697,11 +713,13 @@ export const ProductForm = ({
     currencyRateKgsPerUnit,
     moneyCurrencyCode,
   );
-  const displayMoneyFromKgs = useCallback((value?: number | null) =>
-    value === null || value === undefined
-      ? undefined
-      : convertFromKgs(value, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode),
-    [moneyCurrencyRateKgsPerUnit, moneyCurrencyCode]);
+  const displayMoneyFromKgs = useCallback(
+    (value?: number | null) =>
+      value === null || value === undefined
+        ? undefined
+        : convertFromKgs(value, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode),
+    [moneyCurrencyRateKgsPerUnit, moneyCurrencyCode],
+  );
   const submitMoneyToKgs = (value?: number | null) =>
     Number.isFinite(value ?? NaN)
       ? convertToKgs(value as number, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode)
@@ -771,7 +789,11 @@ export const ProductForm = ({
     );
     const optionalStockQty = z.preprocess(
       (value) => (value === "" || value === null || value === undefined ? undefined : value),
-      z.coerce.number().multipleOf(0.001, t("stockNonNegative")).min(0, t("stockNonNegative")).optional(),
+      z.coerce
+        .number()
+        .multipleOf(0.001, t("stockNonNegative"))
+        .min(0, t("stockNonNegative"))
+        .optional(),
     );
 
     return z
@@ -804,7 +826,9 @@ export const ProductForm = ({
           )
           .optional(),
         barcodes: z.array(z.string()).optional(),
-        barcodeTransfers: z.array(z.object({ sourceProductId: z.string(), barcode: z.string() })).optional(),
+        barcodeTransfers: z
+          .array(z.object({ sourceProductId: z.string(), barcode: z.string() }))
+          .optional(),
         packs: z
           .array(
             z.object({
@@ -1001,24 +1025,35 @@ export const ProductForm = ({
     const prices = {
       basePriceKgs: initialValues.basePriceKgs,
       storePriceKgs: initialValues.storePriceKgs,
-      retailPriceKgs: initialValues.retailPriceKgs ?? initialValues.storePriceKgs ?? initialValues.basePriceKgs,
+      retailPriceKgs:
+        initialValues.retailPriceKgs ?? initialValues.storePriceKgs ?? initialValues.basePriceKgs,
       wholesalePriceKgs: initialValues.wholesalePriceKgs,
     };
-    for (const name of ["basePriceKgs", "storePriceKgs", "retailPriceKgs", "wholesalePriceKgs"] as const) {
-      if (!current[name]) form.resetField(name, { defaultValue: displayMoneyFromKgs(prices[name]) });
+    for (const name of [
+      "basePriceKgs",
+      "storePriceKgs",
+      "retailPriceKgs",
+      "wholesalePriceKgs",
+    ] as const) {
+      if (!current[name])
+        form.resetField(name, { defaultValue: displayMoneyFromKgs(prices[name]) });
     }
     form.getValues("variants").forEach((variant, index) => {
-      const initial = initialValues.variants.find(v => v.id === variant.id);
+      const initial = initialValues.variants.find((v) => v.id === variant.id);
       if (!variant.id || !initial) return;
       for (const name of ["storePriceKgs", "retailPriceKgs", "wholesalePriceKgs"] as const) {
         if (!current.variants?.[index]?.[name]) {
-          const value = name === "retailPriceKgs" ? initial.retailPriceKgs ?? initial.storePriceKgs : initial[name];
-          form.resetField(`variants.${index}.${name}`, { defaultValue: displayMoneyFromKgs(value) });
+          const value =
+            name === "retailPriceKgs"
+              ? (initial.retailPriceKgs ?? initial.storePriceKgs)
+              : initial[name];
+          form.resetField(`variants.${index}.${name}`, {
+            defaultValue: displayMoneyFromKgs(value),
+          });
         }
       }
     });
   }, [form, initialValues, productId, displayMoneyFromKgs]);
-
 
   useEffect(() => {
     onDirtyChange?.(formIsDirty);
@@ -1347,7 +1382,8 @@ export const ProductForm = ({
             render={({ field }) => (
               <FormItem>
                 <FormLabel required={variantIndex === undefined && name === "retailPriceKgs"}>
-                  {t(name === "retailPriceKgs" ? "retailPrice" : "wholesalePrice")} · {moneyCurrencyCode}
+                  {t(name === "retailPriceKgs" ? "retailPrice" : "wholesalePrice")} ·{" "}
+                  {moneyCurrencyCode}
                 </FormLabel>
                 <FormControl>
                   <Input
@@ -1479,24 +1515,34 @@ export const ProductForm = ({
       name: enableSimilarProductCheck ? watchedName?.trim() || undefined : undefined,
       barcodes: enableBarcode ? normalizeProductBarcodes(watchedBarcodes) : [],
     }),
-    [enableBarcode, enableSku, enableSimilarProductCheck, productId, watchedBarcodes, watchedName, watchedSku],
+    [
+      enableBarcode,
+      enableSku,
+      enableSimilarProductCheck,
+      productId,
+      watchedBarcodes,
+      watchedName,
+      watchedSku,
+    ],
   );
   const diagnosticsKey = JSON.stringify(duplicateDiagnosticsInput);
   const debouncedDiagnosticsKey = useDebouncedValue(diagnosticsKey, 250);
-  const deferredDuplicateDiagnosticsInput = useMemo(() => JSON.parse(debouncedDiagnosticsKey) as typeof duplicateDiagnosticsInput, [debouncedDiagnosticsKey]);
+  const deferredDuplicateDiagnosticsInput = useMemo(
+    () => JSON.parse(debouncedDiagnosticsKey) as typeof duplicateDiagnosticsInput,
+    [debouncedDiagnosticsKey],
+  );
   const diagnosticsPending = diagnosticsKey !== debouncedDiagnosticsKey;
   const duplicateDiagnosticsEnabled =
     !readOnly &&
     (enableSimilarProductCheck || deferredDuplicateDiagnosticsInput.barcodes.length > 0) &&
     (Boolean(
-          deferredDuplicateDiagnosticsInput.sku &&
-          deferredDuplicateDiagnosticsInput.sku.length >= 2,
-        ) ||
-        Boolean(
-          deferredDuplicateDiagnosticsInput.name &&
-          deferredDuplicateDiagnosticsInput.name.length >= 4,
-        ) ||
-        deferredDuplicateDiagnosticsInput.barcodes.length > 0);
+      deferredDuplicateDiagnosticsInput.sku && deferredDuplicateDiagnosticsInput.sku.length >= 2,
+    ) ||
+      Boolean(
+        deferredDuplicateDiagnosticsInput.name &&
+        deferredDuplicateDiagnosticsInput.name.length >= 4,
+      ) ||
+      deferredDuplicateDiagnosticsInput.barcodes.length > 0);
   const duplicateDiagnosticsQuery = trpc.products.duplicateDiagnostics.useQuery(
     deferredDuplicateDiagnosticsInput,
     {
@@ -1506,28 +1552,60 @@ export const ProductForm = ({
     },
   );
   const barcodeTransfers = useWatch({ control: form.control, name: "barcodeTransfers" }) ?? [];
-  const renderBarcodeConflict = (match: NonNullable<typeof duplicateDiagnosticsQuery.data>["exactBarcodeMatches"][number]) => (
-    <ProductBarcodeConflict key={`${match.barcode}-${match.id}`} match={match}
-      showSku={enableSku} disabled={readOnly || isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching}
-      onReuse={!productId && categoryStoreId && match.canReuse ? () => setReuseProduct({ id: match.id, name: match.name, sku: match.sku }) : undefined}
-      selected={barcodeTransfers.some(t => t.sourceProductId === match.id && t.barcode === match.barcode)}
+  const renderBarcodeConflict = (
+    match: NonNullable<typeof duplicateDiagnosticsQuery.data>["exactBarcodeMatches"][number],
+  ) => (
+    <ProductBarcodeConflict
+      key={`${match.barcode}-${match.id}`}
+      match={match}
+      showSku={enableSku}
+      disabled={
+        readOnly || isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching
+      }
+      onReuse={
+        !productId && categoryStoreId && match.canReuse
+          ? () => setReuseProduct({ id: match.id, name: match.name, sku: match.sku })
+          : undefined
+      }
+      selected={barcodeTransfers.some(
+        (t) => t.sourceProductId === match.id && t.barcode === match.barcode,
+      )}
       onToggle={() => {
         const current = form.getValues("barcodeTransfers") ?? [];
-        const selected = current.some(t => t.sourceProductId === match.id && t.barcode === match.barcode);
-        form.setValue("barcodeTransfers", selected ? current.filter(t => t.barcode !== match.barcode)
-          : [...current.filter(t => t.barcode !== match.barcode), { sourceProductId: match.id, barcode: match.barcode }], { shouldDirty: true });
-      }} />
+        const selected = current.some(
+          (t) => t.sourceProductId === match.id && t.barcode === match.barcode,
+        );
+        form.setValue(
+          "barcodeTransfers",
+          selected
+            ? current.filter((t) => t.barcode !== match.barcode)
+            : [
+                ...current.filter((t) => t.barcode !== match.barcode),
+                { sourceProductId: match.id, barcode: match.barcode },
+              ],
+          { shouldDirty: true },
+        );
+      }}
+    />
   );
-  const barcodeConflictPanel = enableBarcode && duplicateDiagnosticsEnabled && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.some(m => watchedBarcodes.includes(m.barcode)) ? (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-foreground">{t("duplicateExactBarcodesTitle")}</p>
-      {duplicateDiagnosticsQuery.data.exactBarcodeMatches.filter(m => watchedBarcodes.includes(m.barcode)).map(renderBarcodeConflict)}
-    </div>
-  ) : null;
+  const barcodeConflictPanel =
+    enableBarcode &&
+    duplicateDiagnosticsEnabled &&
+    duplicateDiagnosticsQuery.data?.exactBarcodeMatches.some((m) =>
+      watchedBarcodes.includes(m.barcode),
+    ) ? (
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-foreground">{t("duplicateExactBarcodesTitle")}</p>
+        {duplicateDiagnosticsQuery.data.exactBarcodeMatches
+          .filter((m) => watchedBarcodes.includes(m.barcode))
+          .map(renderBarcodeConflict)}
+      </div>
+    ) : null;
   useEffect(() => {
     const current = form.getValues("barcodeTransfers") ?? [];
-    const remaining = current.filter(t => watchedBarcodes.includes(t.barcode));
-    if (remaining.length !== current.length) form.setValue("barcodeTransfers", remaining, { shouldDirty: true });
+    const remaining = current.filter((t) => watchedBarcodes.includes(t.barcode));
+    if (remaining.length !== current.length)
+      form.setValue("barcodeTransfers", remaining, { shouldDirty: true });
   }, [form, watchedBarcodes]);
   const generateBarcodeMutation = trpc.products.generateBarcode.useMutation({
     onSuccess: (result) => {
@@ -1775,7 +1853,11 @@ export const ProductForm = ({
   };
 
   const optimizeImageToLimit = (file: File, targetMaxBytes = maxImageBytes) =>
-    optimizeProductPhotoForUpload({ file, maxImageBytes: targetMaxBytes, logger: logImagePrepDebug });
+    optimizeProductPhotoForUpload({
+      file,
+      maxImageBytes: targetMaxBytes,
+      logger: logImagePrepDebug,
+    });
 
   const convertBrowserReadableImageToJpeg = async (file: File) => {
     const objectUrl = URL.createObjectURL(file);
@@ -2733,9 +2815,12 @@ export const ProductForm = ({
       maxImageBytes: Math.min(maxImageBytes, maxProxyUploadBytes),
       maxInputImageBytes,
       optimizeAboveBytes: 512 * 1024,
-      serverConversionMaxBytes: isHeicLikeFile(upload.file) ? Math.min(maxImageBytes, maxProxyUploadBytes) : undefined,
+      serverConversionMaxBytes: isHeicLikeFile(upload.file)
+        ? Math.min(maxImageBytes, maxProxyUploadBytes)
+        : undefined,
       convertHeicToJpeg,
-      optimizeImageToLimit: (file) => optimizeImageToLimit(file, Math.min(maxImageBytes, maxProxyUploadBytes)),
+      optimizeImageToLimit: (file) =>
+        optimizeImageToLimit(file, Math.min(maxImageBytes, maxProxyUploadBytes)),
     });
     if (!prepared.ok) {
       logImagePrepDebug("prepare-failed", {
@@ -3098,6 +3183,10 @@ export const ProductForm = ({
     if (readOnly) {
       return;
     }
+    if (values.isBundle && !initialValues.isBundle && !canConfigureBundles) {
+      toast({ variant: "error", description: tErrors("featureLockedBundles") });
+      return;
+    }
     const parsedVariants: ProductFormValues["variants"] = [];
 
     for (const [index, variant] of values.variants.entries()) {
@@ -3109,7 +3198,8 @@ export const ProductForm = ({
           variant.initialOnHand !== null &&
           Number(variant.initialOnHand) > 0) ||
         (variant.storePriceKgs !== undefined && variant.storePriceKgs !== null) ||
-        (retailWholesaleEnabled && (variant.retailPriceKgs != null || variant.wholesalePriceKgs != null)) ||
+        (retailWholesaleEnabled &&
+          (variant.retailPriceKgs != null || variant.wholesalePriceKgs != null)) ||
         attributes.some((entry) => {
           const value = entry.value;
           if (Array.isArray(value)) {
@@ -3205,11 +3295,20 @@ export const ProductForm = ({
         name: variant.name?.trim() || undefined,
         sku: enableSku ? variant.sku?.trim() || undefined : undefined,
         initialOnHand: variant.initialOnHand,
-        ...(!retailWholesaleEnabled && (!variant.id || formDirtyFields.variants?.[index]?.storePriceKgs) ? { storePriceKgs: submitMoneyToKgs(variant.storePriceKgs) } : {}),
-        ...(retailWholesaleEnabled ? {
-          ...(!variant.id || formDirtyFields.variants?.[index]?.retailPriceKgs ? { retailPriceKgs: submitMoneyToKgs(variant.retailPriceKgs) ?? null } : {}),
-          ...(!variant.id || formDirtyFields.variants?.[index]?.wholesalePriceKgs ? { wholesalePriceKgs: submitMoneyToKgs(variant.wholesalePriceKgs) ?? null } : {}),
-        } : {}),
+        ...(!retailWholesaleEnabled &&
+        (!variant.id || formDirtyFields.variants?.[index]?.storePriceKgs)
+          ? { storePriceKgs: submitMoneyToKgs(variant.storePriceKgs) }
+          : {}),
+        ...(retailWholesaleEnabled
+          ? {
+              ...(!variant.id || formDirtyFields.variants?.[index]?.retailPriceKgs
+                ? { retailPriceKgs: submitMoneyToKgs(variant.retailPriceKgs) ?? null }
+                : {}),
+              ...(!variant.id || formDirtyFields.variants?.[index]?.wholesalePriceKgs
+                ? { wholesalePriceKgs: submitMoneyToKgs(variant.wholesalePriceKgs) ?? null }
+                : {}),
+            }
+          : {}),
         attributes: parsedAttributes,
       });
     }
@@ -3254,12 +3353,23 @@ export const ProductForm = ({
       if (duplicateCheckInFlight.current) return;
       duplicateCheckInFlight.current = true;
       try {
-        const matches = await productUtils.products.duplicateDiagnostics.fetch({ name: values.name.trim() });
-        if (matches.likelyNameMatches.length && !(await confirmSeparateProduct({
-          title: t("separateProductTitle"), description: t("separateProductConfirm"), confirmLabel: t("createSeparateProduct"),
-        }))) return;
+        const matches = await productUtils.products.duplicateDiagnostics.fetch({
+          name: values.name.trim(),
+        });
+        if (
+          matches.likelyNameMatches.length &&
+          !(await confirmSeparateProduct({
+            title: t("separateProductTitle"),
+            description: t("separateProductConfirm"),
+            confirmLabel: t("createSeparateProduct"),
+          }))
+        )
+          return;
       } catch (error) {
-        toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+        toast({
+          variant: "error",
+          description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+        });
         return;
       } finally {
         duplicateCheckInFlight.current = false;
@@ -3274,14 +3384,30 @@ export const ProductForm = ({
       category: categoryValues[0],
       categories: categoryValues,
       baseUnitId: values.baseUnitId,
-      ...(!retailWholesaleEnabled ? {
-        ...(!productId || formDirtyFields.basePriceKgs ? { basePriceKgs: showBasePriceField ? submitMoneyToKgs(values.basePriceKgs) ?? null : undefined } : {}),
-        ...(!productId || formDirtyFields.storePriceKgs ? { storePriceKgs: submitMoneyToKgs(values.storePriceKgs) } : {}),
-      } : {}),
-      ...(retailWholesaleEnabled ? {
-        ...(!productId || formDirtyFields.retailPriceKgs ? { retailPriceKgs: submitMoneyToKgs(values.retailPriceKgs) ?? null } : {}),
-        ...(!productId || formDirtyFields.wholesalePriceKgs ? { wholesalePriceKgs: submitMoneyToKgs(values.wholesalePriceKgs) ?? null } : {}),
-      } : {}),
+      ...(!retailWholesaleEnabled
+        ? {
+            ...(!productId || formDirtyFields.basePriceKgs
+              ? {
+                  basePriceKgs: showBasePriceField
+                    ? (submitMoneyToKgs(values.basePriceKgs) ?? null)
+                    : undefined,
+                }
+              : {}),
+            ...(!productId || formDirtyFields.storePriceKgs
+              ? { storePriceKgs: submitMoneyToKgs(values.storePriceKgs) }
+              : {}),
+          }
+        : {}),
+      ...(retailWholesaleEnabled
+        ? {
+            ...(!productId || formDirtyFields.retailPriceKgs
+              ? { retailPriceKgs: submitMoneyToKgs(values.retailPriceKgs) ?? null }
+              : {}),
+            ...(!productId || formDirtyFields.wholesalePriceKgs
+              ? { wholesalePriceKgs: submitMoneyToKgs(values.wholesalePriceKgs) ?? null }
+              : {}),
+          }
+        : {}),
       purchasePriceKgs: submitMoneyToKgs(values.purchasePriceKgs),
       avgCostKgs: submitMoneyToKgs(values.avgCostKgs),
       initialOnHand: values.initialOnHand,
@@ -3290,7 +3416,9 @@ export const ProductForm = ({
       photoUrl: resolvedPhotoUrl,
       images: resolvedImages,
       barcodes: submittedBarcodes,
-      barcodeTransfers: (values.barcodeTransfers ?? []).filter(t => submittedBarcodes.includes(t.barcode)),
+      barcodeTransfers: (values.barcodeTransfers ?? []).filter((t) =>
+        submittedBarcodes.includes(t.barcode),
+      ),
       packs:
         values.packs?.map((pack) => ({
           id: pack.id,
@@ -4291,76 +4419,130 @@ export const ProductForm = ({
     </FormSection>
   );
 
-  const duplicateDiagnosticsPanel = enableSimilarProductCheck && duplicateDiagnosticsEnabled &&
-    (duplicateDiagnosticsQuery.isFetching || duplicateDiagnosticsQuery.data?.exactSkuMatch || duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
-    <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-foreground">{t("duplicateDiagnosticsTitle")}</p>
-        {duplicateDiagnosticsQuery.isFetching ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Spinner className="h-4 w-4" />
-            {t("duplicateDiagnosticsLoading")}
-          </div>
-        ) : null}
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">{t("duplicateAssortmentHint")}</p>
-      <div className="mt-3 space-y-2">
-        {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
-          <div className="rounded-md border border-danger/30 bg-background p-3">
-            <p className="text-xs font-semibold text-danger">{t("duplicateExactSkuTitle")}</p>
-            <p className="mt-1 text-sm text-foreground">
-              {duplicateDiagnosticsQuery.data.exactSkuMatch.name}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="muted">{duplicateDiagnosticsQuery.data.exactSkuMatch.sku}</Badge>
-              {duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? (
-                <Badge variant="muted">{t("archived")}</Badge>
-              ) : null}
-              {duplicateDiagnosticsQuery.data.exactSkuMatch.canAccess ? <Link
-                href={duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? productRecoveryHref(duplicateDiagnosticsQuery.data.exactSkuMatch.sku, duplicateDiagnosticsQuery.data.exactSkuMatch.stores[0]?.id) : `/products/${duplicateDiagnosticsQuery.data.exactSkuMatch.id}`}
-                target="_blank"
-                className="text-primary underline-offset-4 hover:underline"
-              >
-                {t(duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? "barcodeShowArchived" : "duplicateOpenProduct")}
-              </Link> : <span>{t("duplicateAccessHint")}</span>}
-              {!productId && categoryStoreId && duplicateDiagnosticsQuery.data.exactSkuMatch.canReuse ? <Button type="button" size="sm" variant="secondary" disabled={isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching} onClick={() => setReuseProduct(duplicateDiagnosticsQuery.data!.exactSkuMatch!)}>{t("useExistingProduct")}</Button> : null}
+  const duplicateDiagnosticsPanel =
+    enableSimilarProductCheck &&
+    duplicateDiagnosticsEnabled &&
+    (duplicateDiagnosticsQuery.isFetching ||
+      duplicateDiagnosticsQuery.data?.exactSkuMatch ||
+      duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
+      <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-foreground">{t("duplicateDiagnosticsTitle")}</p>
+          {duplicateDiagnosticsQuery.isFetching ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              {t("duplicateDiagnosticsLoading")}
             </div>
-          </div>
-        ) : null}
-        {duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-foreground">
-              {t("duplicateLikelyMatchesTitle")}
-            </p>
-            {duplicateDiagnosticsQuery.data.likelyNameMatches.map((match) => (
-              <div key={match.id} className="rounded-md border border-warning/30 bg-background p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-foreground">{match.name}</span>
-                  {enableSku ? <Badge variant="muted">{match.sku}</Badge> : null}
-                  {match.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
-                </div>
-                {match.unit || match.stores?.length ? <p className="mt-1 text-xs text-muted-foreground">{[match.unit, match.stores?.map(s => s.name).join(", ")].filter(Boolean).join(" · ")}</p> : null}
-                <Link
-                  href={`/products/${match.id}`}
-                  target="_blank"
-                  className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
-                >
-                  {t("duplicateOpenProduct")}
-                </Link>
-                {!productId && categoryStoreId && match.canReuse ? <Button type="button" size="sm" variant="secondary" disabled={isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching} onClick={() => setReuseProduct(match)}>{t("useExistingProduct")}</Button> : null}
+          ) : null}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">{t("duplicateAssortmentHint")}</p>
+        <div className="mt-3 space-y-2">
+          {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
+            <div className="rounded-md border border-danger/30 bg-background p-3">
+              <p className="text-xs font-semibold text-danger">{t("duplicateExactSkuTitle")}</p>
+              <p className="mt-1 text-sm text-foreground">
+                {duplicateDiagnosticsQuery.data.exactSkuMatch.name}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="muted">{duplicateDiagnosticsQuery.data.exactSkuMatch.sku}</Badge>
+                {duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted ? (
+                  <Badge variant="muted">{t("archived")}</Badge>
+                ) : null}
+                {duplicateDiagnosticsQuery.data.exactSkuMatch.canAccess ? (
+                  <Link
+                    href={
+                      duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted
+                        ? productRecoveryHref(
+                            duplicateDiagnosticsQuery.data.exactSkuMatch.sku,
+                            duplicateDiagnosticsQuery.data.exactSkuMatch.stores[0]?.id,
+                          )
+                        : `/products/${duplicateDiagnosticsQuery.data.exactSkuMatch.id}`
+                    }
+                    target="_blank"
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    {t(
+                      duplicateDiagnosticsQuery.data.exactSkuMatch.isDeleted
+                        ? "barcodeShowArchived"
+                        : "duplicateOpenProduct",
+                    )}
+                  </Link>
+                ) : (
+                  <span>{t("duplicateAccessHint")}</span>
+                )}
+                {!productId &&
+                categoryStoreId &&
+                duplicateDiagnosticsQuery.data.exactSkuMatch.canReuse ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={
+                      isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching
+                    }
+                    onClick={() => setReuseProduct(duplicateDiagnosticsQuery.data!.exactSkuMatch!)}
+                  >
+                    {t("useExistingProduct")}
+                  </Button>
+                ) : null}
               </div>
-            ))}
-          </div>
-        ) : null}
-        {!duplicateDiagnosticsQuery.isFetching &&
-        !(enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch) &&
-        !(enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length) &&
-        !duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
-          <p className="text-xs text-muted-foreground">{t("duplicateDiagnosticsEmpty")}</p>
-        ) : null}
+            </div>
+          ) : null}
+          {duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-foreground">
+                {t("duplicateLikelyMatchesTitle")}
+              </p>
+              {duplicateDiagnosticsQuery.data.likelyNameMatches.map((match) => (
+                <div
+                  key={match.id}
+                  className="rounded-md border border-warning/30 bg-background p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-foreground">{match.name}</span>
+                    {enableSku ? <Badge variant="muted">{match.sku}</Badge> : null}
+                    {match.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
+                  </div>
+                  {match.unit || match.stores?.length ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {[match.unit, match.stores?.map((s) => s.name).join(", ")]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  ) : null}
+                  <Link
+                    href={`/products/${match.id}`}
+                    target="_blank"
+                    className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
+                  >
+                    {t("duplicateOpenProduct")}
+                  </Link>
+                  {!productId && categoryStoreId && match.canReuse ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={
+                        isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching
+                      }
+                      onClick={() => setReuseProduct(match)}
+                    >
+                      {t("useExistingProduct")}
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {!duplicateDiagnosticsQuery.isFetching &&
+          !(enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch) &&
+          !(enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length) &&
+          !duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
+            <p className="text-xs text-muted-foreground">{t("duplicateDiagnosticsEmpty")}</p>
+          ) : null}
+        </div>
       </div>
-    </div>
-  ) : null;
+    ) : null;
 
   const shopifyMediaBlock = (
     <div className="space-y-3">
@@ -4862,14 +5044,28 @@ export const ProductForm = ({
     </div>
   );
 
-  const reuseDialog = reuseProduct && categoryStoreId ? <ProductStorePreparationDialog
-    open onOpenChange={open => { if (!open) setReuseProduct(null); }} productId={reuseProduct.id}
-    productName={reuseProduct.name} productSku={reuseProduct.sku} targetStoreIds={[categoryStoreId]} addToAssortment useExisting
-    onPrepared={ids => {
-      onDirtyChange?.(false);
-      setReuseNavigation(`/products/${encodeURIComponent(reuseProduct.id)}?storeId=${encodeURIComponent(ids[0] ?? categoryStoreId)}`);
-      setReuseProduct(null);
-    }} /> : null;
+  const reuseDialog =
+    reuseProduct && categoryStoreId ? (
+      <ProductStorePreparationDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setReuseProduct(null);
+        }}
+        productId={reuseProduct.id}
+        productName={reuseProduct.name}
+        productSku={reuseProduct.sku}
+        targetStoreIds={[categoryStoreId]}
+        addToAssortment
+        useExisting
+        onPrepared={(ids) => {
+          onDirtyChange?.(false);
+          setReuseNavigation(
+            `/products/${encodeURIComponent(reuseProduct.id)}?storeId=${encodeURIComponent(ids[0] ?? categoryStoreId)}`,
+          );
+          setReuseProduct(null);
+        }}
+      />
+    ) : null;
 
   if (shopifyEditor) {
     return (
@@ -4879,9 +5075,13 @@ export const ProductForm = ({
         <form
           id={formId}
           className="min-w-0"
-          onSubmit={async (event)=>{
+          onSubmit={async (event) => {
             event.preventDefault();
-            if (priceAutosave?.controlRef.current && !(await priceAutosave.controlRef.current.flushManual())) return;
+            if (
+              priceAutosave?.controlRef.current &&
+              !(await priceAutosave.controlRef.current.flushManual())
+            )
+              return;
             await form.handleSubmit(handleSubmit, handleInvalidSubmit)(event);
           }}
         >
@@ -4958,7 +5158,7 @@ export const ProductForm = ({
 
             <ProductEditorCard title={t("category")} className={editorFormCardClassName}>
               {shopifyCategoryPicker}
-              {(
+              {
                 <FormField
                   control={form.control}
                   name="baseUnitId"
@@ -4986,7 +5186,9 @@ export const ProductForm = ({
                           ))}
                         </SelectContent>
                       </Select>
-                      {!unitOptions.length ? <FormDescription>{t("unitMissingHint")}</FormDescription> : null}
+                      {!unitOptions.length ? (
+                        <FormDescription>{t("unitMissingHint")}</FormDescription>
+                      ) : null}
                       {productId && field.value !== initialValues.baseUnitId ? (
                         <FormDescription>{t("unitChangeHint")}</FormDescription>
                       ) : null}
@@ -4994,7 +5196,7 @@ export const ProductForm = ({
                     </FormItem>
                   )}
                 />
-              )}
+              }
             </ProductEditorCard>
 
             <ProductEditorCard title={t("pricingTitle")} className={editorFormCardClassName}>
@@ -5259,7 +5461,7 @@ export const ProductForm = ({
                       window.setTimeout(() => setShowBundleResults(false), 120);
                     }}
                     placeholder={t("bundleSearchPlaceholder")}
-                    disabled={readOnly}
+                    disabled={readOnly || !canConfigureBundles}
                   />
                   {showBundleResults && bundleSearch.trim().length > 0 ? (
                     <div className="absolute z-[90] mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
@@ -5318,7 +5520,7 @@ export const ProductForm = ({
                                   min={0.001}
                                   step={0.001}
                                   inputMode="decimal"
-                                  disabled={readOnly}
+                                  disabled={readOnly || !canConfigureBundles}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -5330,7 +5532,7 @@ export const ProductForm = ({
                           variant="secondary"
                           size="icon"
                           onClick={() => removeBundleComponent(index)}
-                          disabled={readOnly}
+                          disabled={readOnly || !canConfigureBundles}
                           aria-label={t("bundleRemoveComponent")}
                         >
                           <DeleteIcon className="h-4 w-4" aria-hidden />
@@ -5628,7 +5830,9 @@ export const ProductForm = ({
                       <span>{t("variantTableVariant")}</span>
                       {showVariantImagePicker ? <span>{t("variantTableImage")}</span> : null}
                       {enableSku ? <span>{t("variantTableSku")}</span> : null}
-                      {canEditVariantPrice ? <span>{t(retailWholesaleEnabled ? "pricingTitle" : "salePrice")}</span> : null}
+                      {canEditVariantPrice ? (
+                        <span>{t(retailWholesaleEnabled ? "pricingTitle" : "salePrice")}</span>
+                      ) : null}
                       {canEditInitialStock ? <span>{t("variantTableStock")}</span> : null}
                       <span className="sr-only">{tCommon("actions")}</span>
                     </div>
@@ -5741,27 +5945,31 @@ export const ProductForm = ({
                               <div className="space-y-3">
                                 {!retailWholesaleEnabled ? (
                                   <FormField
-                                  control={form.control}
-                                  name={`variants.${variant.index}.storePriceKgs`}
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel className={retailWholesaleEnabled ? undefined : "sr-only"}>{t("salePrice")}</FormLabel>
-                                      <FormControl>
-                                        <Input
-                                          {...field}
-                                          value={field.value ?? ""}
-                                          type="number"
-                                          inputMode="decimal"
-                                          min={0}
-                                          step="0.01"
-                                          className="h-9"
-                                          placeholder={t("pricePlaceholder")}
-                                          disabled={readOnly}
-                                        />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
+                                    control={form.control}
+                                    name={`variants.${variant.index}.storePriceKgs`}
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel
+                                          className={retailWholesaleEnabled ? undefined : "sr-only"}
+                                        >
+                                          {t("salePrice")}
+                                        </FormLabel>
+                                        <FormControl>
+                                          <Input
+                                            {...field}
+                                            value={field.value ?? ""}
+                                            type="number"
+                                            inputMode="decimal"
+                                            min={0}
+                                            step="0.01"
+                                            className="h-9"
+                                            placeholder={t("pricePlaceholder")}
+                                            disabled={readOnly}
+                                          />
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
                                   />
                                 ) : null}
                                 {renderAdditionalPriceFields(variant.index)}
@@ -6086,11 +6294,15 @@ export const ProductForm = ({
       <form
         id={formId}
         className="space-y-6 pb-28 md:pb-0"
-        onSubmit={async (event)=>{
-            event.preventDefault();
-            if (priceAutosave?.controlRef.current && !(await priceAutosave.controlRef.current.flushManual())) return;
-            await form.handleSubmit(handleSubmit, handleInvalidSubmit)(event);
-          }}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (
+            priceAutosave?.controlRef.current &&
+            !(await priceAutosave.controlRef.current.flushManual())
+          )
+            return;
+          await form.handleSubmit(handleSubmit, handleInvalidSubmit)(event);
+        }}
       >
         <TooltipProvider>
           <Card>
@@ -6174,7 +6386,7 @@ export const ProductForm = ({
                         </FormItem>
                       )}
                     />
-                    {!compactCreate ? (
+                    {!compactCreate && (canConfigureBundles || initialValues.isBundle) ? (
                       <FormField
                         control={form.control}
                         name="isBundle"
@@ -6184,7 +6396,7 @@ export const ProductForm = ({
                             <Select
                               value={field.value ? "bundle" : "product"}
                               onValueChange={(value) => field.onChange(value === "bundle")}
-                              disabled={readOnly}
+                              disabled={readOnly || !canConfigureBundles}
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -6363,7 +6575,7 @@ export const ProductForm = ({
                         </FormItem>
                       )}
                     />
-                    {(
+                    {
                       <FormField
                         control={form.control}
                         name="baseUnitId"
@@ -6400,7 +6612,7 @@ export const ProductForm = ({
                           </FormItem>
                         )}
                       />
-                    )}
+                    }
                     {showBasePriceField && !retailWholesaleEnabled ? (
                       <FormField
                         control={form.control}
@@ -6425,17 +6637,17 @@ export const ProductForm = ({
                       />
                     ) : null}
                     {renderAdditionalPriceFields()}
-                {priceAutosave && productId && retailWholesaleEnabled && !readOnly ? (
-                  <ProductPriceAutosave
-                    ref={priceAutosave.controlRef}
-                    productId={productId}
-                    config={priceAutosave}
-                    unitId={initialValues.baseUnitId}
-                    currencyCode={currencyCode}
-                    currencyRateKgsPerUnit={currencyRateKgsPerUnit}
-                    onChecking={setPriceAutosaveChecking}
-                  />
-                ) : null}
+                    {priceAutosave && productId && retailWholesaleEnabled && !readOnly ? (
+                      <ProductPriceAutosave
+                        ref={priceAutosave.controlRef}
+                        productId={productId}
+                        config={priceAutosave}
+                        unitId={initialValues.baseUnitId}
+                        currencyCode={currencyCode}
+                        currencyRateKgsPerUnit={currencyRateKgsPerUnit}
+                        onChecking={setPriceAutosaveChecking}
+                      />
+                    ) : null}
                     {compactCreate ? (
                       <>
                         {canEditInitialStock ? (
@@ -6700,7 +6912,7 @@ export const ProductForm = ({
                           window.setTimeout(() => setShowBundleResults(false), 120);
                         }}
                         placeholder={t("bundleSearchPlaceholder")}
-                        disabled={readOnly}
+                        disabled={readOnly || !canConfigureBundles}
                       />
                       {showBundleResults && bundleSearch.trim().length > 0 ? (
                         <div className="absolute z-[90] mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
@@ -6759,7 +6971,7 @@ export const ProductForm = ({
                                       min={0.001}
                                       step={0.001}
                                       inputMode="decimal"
-                                      disabled={readOnly}
+                                      disabled={readOnly || !canConfigureBundles}
                                     />
                                   </FormControl>
                                   <FormMessage />
@@ -6771,7 +6983,7 @@ export const ProductForm = ({
                               variant="secondary"
                               size="icon"
                               onClick={() => removeBundleComponent(index)}
-                              disabled={readOnly}
+                              disabled={readOnly || !canConfigureBundles}
                               aria-label={t("bundleRemoveComponent")}
                             >
                               <DeleteIcon className="h-4 w-4" aria-hidden />

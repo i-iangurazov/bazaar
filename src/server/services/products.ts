@@ -1,8 +1,24 @@
+import {
+  reserveSubscriptionUsageBatch,
+  startSubscriptionUsageBatch,
+  resumeSubscriptionUsage,
+  startSubscriptionUsage,
+  settleSubscriptionUsage,
+  settleSubscriptionUsageBatch,
+  releaseUnusedSubscriptionUsage,
+  type UsageLease,
+} from "@/server/billing/subscriptionUsage";
+import { assertActorCanWriteProducts } from "@/server/services/productAccess";
+import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
 import { defaultUnitPrecision, isValidQuantity, roundQuantity } from "@/lib/quantity";
-import { saveProductPriceTypes, syncExistingRetailPrice, type ProductPriceTypeValues } from "@/server/services/productPriceTypes";
+import {
+  saveProductPriceTypes,
+  syncExistingRetailPrice,
+  type ProductPriceTypeValues,
+} from "@/server/services/productPriceTypes";
 import { resolveProductFormRetailPrice } from "@/server/services/productFormPricing";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   OperationRequestPrincipalType,
   StockMovementType,
@@ -21,7 +37,13 @@ import {
   type BarcodeGenerationMode,
 } from "@/server/services/barcodes";
 import { recordFirstEvent } from "@/server/services/productEvents";
-import { assertWithinLimits } from "@/server/services/planLimits";
+import {
+  assertWithinLimits,
+  assertCapacity,
+  assertFeatureCanBeConfigured,
+  assertFeatureEnabled,
+  assertTrialActive,
+} from "@/server/services/planLimits";
 import {
   ensureProductCategory,
   listProductCategoriesFromDb,
@@ -35,7 +57,10 @@ import {
   resolveProductImageUrl,
   type ResolveProductImageUrlResult,
 } from "@/server/services/productImageStorage";
-import { generateProductDescriptionFromImages, prepareProductAiImage } from "@/server/services/productDescriptions";
+import {
+  generateProductDescriptionFromImages,
+  prepareProductAiImage,
+} from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { assignProductToStore } from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
@@ -50,7 +75,10 @@ import {
   runOperationRequest,
 } from "@/server/services/operationRequests";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
-import { applyArchivedBarcodeTransfers, type ProductBarcodeTransfer } from "./products/barcodeTransfers";
+import {
+  applyArchivedBarcodeTransfers,
+  type ProductBarcodeTransfer,
+} from "./products/barcodeTransfers";
 import { assertProductUnitPrecision } from "./products/unitChange";
 import { assertProductDeletionReview } from "./productDeletion";
 import { withIdempotency } from "./idempotency";
@@ -719,7 +747,9 @@ const buildCategoryArrangementUserContent = async (
 
   for (const product of products) {
     const source = imageUrlsForCategoryArrangement(product)[0];
-    const imageUrl = source?.startsWith("/uploads/") ? await prepareProductAiImage(source).catch(() => null) : source;
+    const imageUrl = source?.startsWith("/uploads/")
+      ? await prepareProductAiImage(source).catch(() => null)
+      : source;
     if (!imageUrl) {
       continue;
     }
@@ -967,8 +997,12 @@ const upsertStoreVariantPrices = async (
       },
     });
     await syncExistingRetailPrice(tx, {
-      organizationId: input.organizationId, storeId: input.storeId,
-      productId: input.productId, variantKey: variant.id, priceKgs, actorId: input.actorId,
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      productId: input.productId,
+      variantKey: variant.id,
+      priceKgs,
+      actorId: input.actorId,
     });
   }
 };
@@ -1071,7 +1105,13 @@ const ensureUnitByCode = async (
   tx.unit.upsert({
     where: { organizationId_code: { organizationId, code } },
     update: { labelRu: code, labelKg: code },
-    create: { organizationId, code, labelRu: code, labelKg: code, quantityPrecision: defaultUnitPrecision(code) },
+    create: {
+      organizationId,
+      code,
+      labelRu: code,
+      labelKg: code,
+      quantityPrecision: defaultUnitPrecision(code),
+    },
   });
 
 const normalizeImportPhotoUrl = normalizeProductImageUrl;
@@ -1188,7 +1228,9 @@ const syncBundleComponents = async (
     select: { id: true, baseUnit: { select: { quantityPrecision: true } } },
   });
   const validIds = new Set(products.map((product) => product.id));
-  const precisionByProduct = new Map(products.map(product => [product.id, product.baseUnit.quantityPrecision]));
+  const precisionByProduct = new Map(
+    products.map((product) => [product.id, product.baseUnit.quantityPrecision]),
+  );
   for (const component of normalized) {
     if (!validIds.has(component.componentProductId)) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
@@ -1599,10 +1641,16 @@ const applyInitialVariantInventory = async (
       continue;
     }
     await applyStockMovement(tx, {
-      storeId: input.store.id, productId: input.productId, variantId: variant.id,
-      qtyDelta: initialOnHand, type: StockMovementType.ADJUSTMENT,
-      referenceType: "ProductVariant", referenceId: variant.id,
-      note: "Initial variant stock", actorId: input.actorId, organizationId: input.organizationId,
+      storeId: input.store.id,
+      productId: input.productId,
+      variantId: variant.id,
+      qtyDelta: initialOnHand,
+      type: StockMovementType.ADJUSTMENT,
+      referenceType: "ProductVariant",
+      referenceId: variant.id,
+      note: "Initial variant stock",
+      actorId: input.actorId,
+      organizationId: input.organizationId,
     });
   }
 };
@@ -1635,8 +1683,8 @@ const applyInitialInventorySettings = async (
     throw new AppError("storeRequired", "BAD_REQUEST", 400);
   }
 
-  const initialOnHand = hasInitialOnHand ? input.initialOnHand ?? 0 : undefined;
-  const minStock = hasMinStock ? input.minStock ?? 0 : undefined;
+  const initialOnHand = hasInitialOnHand ? (input.initialOnHand ?? 0) : undefined;
+  const minStock = hasMinStock ? (input.minStock ?? 0) : undefined;
   if (
     (initialOnHand !== undefined && initialOnHand < 0) ||
     (minStock !== undefined && minStock < 0)
@@ -1646,10 +1694,15 @@ const applyInitialInventorySettings = async (
 
   if (initialOnHand && initialOnHand > 0) {
     await applyStockMovement(tx, {
-      storeId: input.store.id, productId: input.productId,
-      qtyDelta: initialOnHand, type: StockMovementType.ADJUSTMENT,
-      referenceType: "Product", referenceId: input.productId,
-      note: "Initial stock", actorId: input.actorId, organizationId: input.organizationId,
+      storeId: input.store.id,
+      productId: input.productId,
+      qtyDelta: initialOnHand,
+      type: StockMovementType.ADJUSTMENT,
+      referenceType: "Product",
+      referenceId: input.productId,
+      note: "Initial stock",
+      actorId: input.actorId,
+      organizationId: input.organizationId,
     });
   }
 
@@ -1763,7 +1816,10 @@ const resolveIncomingProductImages = async (input: {
       where: { id: input.productId, organizationId: input.organizationId },
       select: { photoUrl: true, images: { select: { url: true } } },
     });
-    for (const value of [existing?.photoUrl, ...(existing?.images.map((image) => image.url) ?? [])]) {
+    for (const value of [
+      existing?.photoUrl,
+      ...(existing?.images.map((image) => image.url) ?? []),
+    ]) {
       const url = normalizeProductImageUrl(value);
       // Already saved remote photos must not be downloaded again on every edit.
       if (url && !url.startsWith("data:")) {
@@ -1832,50 +1888,58 @@ export const createProduct = async (input: CreateProductInput) => {
 
   const runCreateTransaction = async () => {
     const executeCreate = async (tx: Prisma.TransactionClient) => {
-        const assignmentStores = await resolveProductCreateStores(tx, {
-          organizationId: input.organizationId,
-          storeId: input.storeId,
-        });
-        const retailPriceKgs = input.requireRetailPrice
-          ? await resolveProductFormRetailPrice(tx, {
-              ...input,
-              storeId: input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0]?.id : undefined),
-            })
-          : input.retailPriceKgs;
-        await ensureSupplier(tx, input.organizationId, input.supplierId);
-        const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
-        const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
-        ensureRequiredAttributes(input.variants, attributeDefinitions);
-        const barcodes = normalizeBarcodes(input.barcodes);
-        await applyArchivedBarcodeTransfers(tx, { ...input, targetProductId: productId, barcodes, transfers: input.barcodeTransfers });
-        await ensureBarcodesAvailable(tx, input.organizationId, barcodes);
-        const normalizedPacks = normalizePacks(input.packs);
-        const packBarcodes = normalizedPacks
-          .map((pack) => pack.packBarcode)
-          .filter(Boolean) as string[];
-        await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
-        const normalizedImages = withStableProductImageIds(resolvedMedia.images);
-        const imageReferences = buildProductImageReferenceMap(normalizedImages);
-        const normalizedCategories = resolveNormalizedProductCategories({
-          category: input.category,
-          categories: input.categories,
-        });
-        for (const category of normalizedCategories) {
-          await ensureProductCategory(tx, {
-            organizationId: input.organizationId,
-            name: category,
-          });
-        }
-        if (input.isBundle && normalizedBundleComponents.length < 1) {
-          throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
-        }
+      const assignmentStores = await resolveProductCreateStores(tx, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+      });
+      const retailPriceKgs = input.requireRetailPrice
+        ? await resolveProductFormRetailPrice(tx, {
+            ...input,
+            storeId:
+              input.storeId ??
+              (assignmentStores.length === 1 ? assignmentStores[0]?.id : undefined),
+          })
+        : input.retailPriceKgs;
+      await ensureSupplier(tx, input.organizationId, input.supplierId);
+      const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
+      const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
+      ensureRequiredAttributes(input.variants, attributeDefinitions);
+      const barcodes = normalizeBarcodes(input.barcodes);
+      await applyArchivedBarcodeTransfers(tx, {
+        ...input,
+        targetProductId: productId,
+        barcodes,
+        transfers: input.barcodeTransfers,
+      });
+      await ensureBarcodesAvailable(tx, input.organizationId, barcodes);
+      const normalizedPacks = normalizePacks(input.packs);
+      const packBarcodes = normalizedPacks
+        .map((pack) => pack.packBarcode)
+        .filter(Boolean) as string[];
+      await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
+      const normalizedImages = withStableProductImageIds(resolvedMedia.images);
+      const imageReferences = buildProductImageReferenceMap(normalizedImages);
+      const normalizedCategories = resolveNormalizedProductCategories({
+        category: input.category,
+        categories: input.categories,
+      });
+      for (const category of normalizedCategories) {
+      await ensureProductCategory(tx, {
+        organizationId: input.organizationId,
+        name: category,
+      });
+    }
+      if (input.isBundle && normalizedBundleComponents.length < 1) {
+        throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
+      }
+      if (input.isBundle) await assertFeatureCanBeConfigured(input.organizationId, "bundles", tx);
 
-        const resolvedSku = await resolveCreateSku(tx, {
-          organizationId: input.organizationId,
-          requestedSku,
-        });
+      const resolvedSku = await resolveCreateSku(tx, {
+        organizationId: input.organizationId,
+        requestedSku,
+      });
 
-        const product = await tx.product.create({
+      const product = await tx.product.create({
           data: {
             id: productId,
             organizationId: input.organizationId,
@@ -1901,7 +1965,7 @@ export const createProduct = async (input: CreateProductInput) => {
           },
         });
 
-        if (normalizedPacks.length) {
+      if (normalizedPacks.length) {
           await tx.productPack.createMany({
             data: normalizedPacks.map((pack) => ({
               organizationId: input.organizationId,
@@ -1915,7 +1979,7 @@ export const createProduct = async (input: CreateProductInput) => {
           });
         }
 
-        if (normalizedImages.length) {
+      if (normalizedImages.length) {
           await tx.productImage.createMany({
             data: normalizedImages.map((image) => ({
               id: image.id,
@@ -1927,7 +1991,7 @@ export const createProduct = async (input: CreateProductInput) => {
           });
         }
 
-        const createdVariants = await createVariants(
+      const createdVariants = await createVariants(
           tx,
           product.id,
           input.variants,
@@ -1935,7 +1999,7 @@ export const createProduct = async (input: CreateProductInput) => {
           attributeDefinitions,
           imageReferences,
         );
-        if (normalizedBundleComponents.length) {
+      if (normalizedBundleComponents.length) {
           await syncBundleComponents(tx, {
             organizationId: input.organizationId,
             productId: product.id,
@@ -1943,15 +2007,15 @@ export const createProduct = async (input: CreateProductInput) => {
             mode: "create-only",
           });
         }
-        await createInitialStoreAssignments(tx, {
+      await createInitialStoreAssignments(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
           productId: product.id,
           stores: assignmentStores,
           sourceStoreId: input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0].id : null),
         });
-        await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
-        await applyInitialInventorySettings(tx, {
+      await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
+      await applyInitialInventorySettings(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
           requestId: input.requestId,
@@ -1960,7 +2024,7 @@ export const createProduct = async (input: CreateProductInput) => {
           initialOnHand: input.initialOnHand,
           minStock: input.minStock,
         });
-        await applyInitialVariantInventory(tx, {
+      await applyInitialVariantInventory(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
           store: assignmentStores[0] ?? null,
@@ -1970,7 +2034,7 @@ export const createProduct = async (input: CreateProductInput) => {
             initialOnHand: input.variants?.[index]?.initialOnHand,
           })),
         });
-        await upsertStoreVariantPrices(tx, {
+      await upsertStoreVariantPrices(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
           storeId: assignmentStores[0]?.id ?? input.storeId,
@@ -1980,10 +2044,14 @@ export const createProduct = async (input: CreateProductInput) => {
             storePriceKgs: input.variants?.[index]?.storePriceKgs,
           })),
         });
-        await saveProductPriceTypes(tx, {
-          organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId,
-          storeId: input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0]?.id : undefined), productId: product.id,
-          prices: [
+      await saveProductPriceTypes(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        requestId: input.requestId,
+        storeId:
+          input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0]?.id : undefined),
+        productId: product.id,
+        prices: [
             { retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
             ...createdVariants.map((variant, index) => ({
               variantId: variant.id,
@@ -1991,8 +2059,8 @@ export const createProduct = async (input: CreateProductInput) => {
               wholesalePriceKgs: input.variants?.[index]?.wholesalePriceKgs,
             })),
           ],
-        });
-        if (resolvedBaseCost !== undefined) {
+      });
+      if (resolvedBaseCost !== undefined) {
           await upsertBaseProductCost(tx, {
             organizationId: input.organizationId,
             productId: product.id,
@@ -2000,22 +2068,22 @@ export const createProduct = async (input: CreateProductInput) => {
           });
         }
 
-        await writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "PRODUCT_CREATE",
-          entity: "Product",
-          entityId: product.id,
-          before: null,
-          after: toJson(product),
-          requestId: input.requestId,
-        });
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_CREATE",
+        entity: "Product",
+        entityId: product.id,
+        before: null,
+        after: toJson(product),
+        requestId: input.requestId,
+      });
 
-        return {
-          response: { productId: product.id },
-          responseStatus: 201,
-          resource: { type: "Product", id: product.id },
-        };
+      return {
+        response: { productId: product.id },
+        responseStatus: 201,
+        resource: { type: "Product", id: product.id },
+      };
     };
     const operation = await runOperationRequest(
       {
@@ -2089,13 +2157,13 @@ export const createProduct = async (input: CreateProductInput) => {
   };
 
   if (!shouldGenerateSku) {
-    const { product, replayed } = await runCreateTransaction();
-    await publishAssortmentChange(input.organizationId);
-    if (!replayed) {
-      await recordFirstProductCreated(product.id);
+      const { product, replayed } = await runCreateTransaction();
+      await publishAssortmentChange(input.organizationId);
+      if (!replayed) {
+        await recordFirstProductCreated(product.id);
+      }
+      return product;
     }
-    return product;
-  }
 
   for (let attempt = 0; attempt < GENERATED_SKU_MAX_RETRIES; attempt += 1) {
     try {
@@ -2119,6 +2187,7 @@ export const createProduct = async (input: CreateProductInput) => {
 };
 
 export const assignExistingProductsToStore = async (input: AssignExistingProductsToStoreInput) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "assortments" });
   const productIds = Array.from(
     new Set(input.productIds.map((value) => value.trim()).filter(Boolean)),
   );
@@ -2126,8 +2195,9 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
 
-  return prisma.$transaction(async (tx) => {
-    const [store, products] = await Promise.all([
+  return prisma
+    .$transaction(async (tx) => {
+      const [store, products] = await Promise.all([
       tx.store.findFirst({
         where: { id: input.storeId, organizationId: input.organizationId },
         select: { id: true, allowNegativeStock: true, catalogSourcesConfigured: true },
@@ -2142,16 +2212,16 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
       }),
     ]);
 
-    if (!store) {
-      throw new AppError("storeNotFound", "NOT_FOUND", 404);
-    }
+      if (!store) {
+        throw new AppError("storeNotFound", "NOT_FOUND", 404);
+      }
 
-    const ownedProductIds = products.map((product) => product.id);
-    if (!ownedProductIds.length) {
-      throw new AppError("productNotFound", "NOT_FOUND", 404);
-    }
+      const ownedProductIds = products.map((product) => product.id);
+      if (!ownedProductIds.length) {
+        throw new AppError("productNotFound", "NOT_FOUND", 404);
+      }
 
-    const existingAssignments = await tx.storeProduct.findMany({
+      const existingAssignments = await tx.storeProduct.findMany({
       where: {
         organizationId: input.organizationId,
         storeId: input.storeId,
@@ -2159,24 +2229,27 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
       },
       select: { productId: true, isActive: true, isDirect: true },
     });
-    if (store.catalogSourcesConfigured && existingAssignments.some(a => !a.isActive && !a.isDirect)) {
-      throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
-    }
-    const activeIds = new Set(
+      if (
+        store.catalogSourcesConfigured &&
+        existingAssignments.some((a) => !a.isActive && !a.isDirect)
+      ) {
+        throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
+      }
+      const activeIds = new Set(
       existingAssignments
         .filter((assignment) => assignment.isActive)
         .map((assignment) => assignment.productId),
     );
-    const inactiveIds = new Set(
+      const inactiveIds = new Set(
       existingAssignments
         .filter((assignment) => !assignment.isActive)
         .map((assignment) => assignment.productId),
     );
-    const existingIds = new Set(existingAssignments.map((assignment) => assignment.productId));
-    const createIds = ownedProductIds.filter((productId) => !existingIds.has(productId));
-    const reactivateIds = ownedProductIds.filter((productId) => inactiveIds.has(productId));
+      const existingIds = new Set(existingAssignments.map((assignment) => assignment.productId));
+      const createIds = ownedProductIds.filter((productId) => !existingIds.has(productId));
+      const reactivateIds = ownedProductIds.filter((productId) => inactiveIds.has(productId));
 
-    const [created, reactivated] = await Promise.all([
+      const [created, reactivated] = await Promise.all([
       createIds.length
         ? tx.storeProduct.createMany({
             data: createIds.map((productId) => ({
@@ -2206,13 +2279,13 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
         : Promise.resolve({ count: 0 }),
     ]);
 
-    const assignedCount = created.count + reactivated.count;
-    if (assignedCount > 0) {
+      const assignedCount = created.count + reactivated.count;
+      if (assignedCount > 0) {
       for (const productId of [...createIds, ...reactivateIds]) {
         await ensureBaseSnapshots(tx, input.organizationId, productId, [store]);
       }
     }
-    const result = {
+      const result = {
       requestedCount: productIds.length,
       eligibleCount: ownedProductIds.length,
       assignedCount,
@@ -2220,7 +2293,7 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
       missingCount: Math.max(0, productIds.length - ownedProductIds.length),
     };
 
-    await writeAuditLog(tx, {
+      await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
       action: "PRODUCT_STORE_ASSIGN",
@@ -2235,8 +2308,12 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
       requestId: input.requestId,
     });
 
-    return result;
-  }).then(async result => { await publishAssortmentChange(input.organizationId); return result; });
+      return result;
+    })
+    .then(async (result) => {
+      await publishAssortmentChange(input.organizationId);
+      return result;
+    });
 };
 
 export type UpdateProductInput = ProductPriceTypeValues & {
@@ -2298,69 +2375,92 @@ export const updateProduct = async (input: UpdateProductInput) => {
         ? input.purchasePriceKgs
         : undefined;
 
-  return prisma.$transaction(async (tx) => {
-    await assertBaamReviewedVersion(tx, "Product", input.productId);
-    if (input.expectedUpdatedAt) {
+  return prisma
+    .$transaction(
+      async (tx) => {
+        await assertBaamReviewedVersion(tx, "Product", input.productId);
+        if (input.expectedUpdatedAt) {
       await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id"=${input.productId} AND "organizationId"=${input.organizationId} FOR UPDATE`;
     }
-    // Serialize a unit correction with inventory movements, then read the current unit.
-    await tx.$queryRaw`
+        // Serialize a unit correction with inventory movements, then read the current unit.
+        await tx.$queryRaw`
       SELECT "id" FROM "Product"
       WHERE "id" = ${input.productId} AND "organizationId" = ${input.organizationId}
         AND "baseUnitId" <> ${input.baseUnitId}
       FOR UPDATE
     `;
-    const before = await tx.product.findUnique({ where: { id: input.productId } });
-    if (!before || before.organizationId !== input.organizationId) {
-      throw new AppError("productNotFound", "NOT_FOUND", 404);
-    }
-    if (input.expectedUpdatedAt && before.updatedAt.toISOString() !== input.expectedUpdatedAt)
-      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
-    if (input.expectedStorePriceVersion && (!input.storeId || input.expectedStorePriceVersion !== await readProductPriceVersion(tx, input.organizationId, input.storeId, input.productId)))
-      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+        const before = await tx.product.findUnique({ where: { id: input.productId } });
+        if (!before || before.organizationId !== input.organizationId) {
+          throw new AppError("productNotFound", "NOT_FOUND", 404);
+        }
+        if (input.expectedUpdatedAt && before.updatedAt.toISOString() !== input.expectedUpdatedAt)
+          throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+        if (
+          input.expectedStorePriceVersion &&
+          (!input.storeId ||
+            input.expectedStorePriceVersion !==
+              (await readProductPriceVersion(
+                tx,
+                input.organizationId,
+                input.storeId,
+                input.productId,
+              )))
+        )
+          throw new AppError("productChangedElsewhere", "CONFLICT", 409);
 
-    const validatedRetailPriceKgs = input.requireRetailPrice
-      ? await resolveProductFormRetailPrice(tx, input)
-      : input.retailPriceKgs;
-    // Validation may read the current shared price. A metadata-only save must
-    // not turn that fallback into an individual store price.
-    const retailPriceKgs = input.retailPriceKgs !== undefined || input.storePriceKgs !== undefined
-      ? validatedRetailPriceKgs : undefined;
+        const validatedRetailPriceKgs = input.requireRetailPrice
+          ? await resolveProductFormRetailPrice(tx, input)
+          : input.retailPriceKgs;
+        // Validation may read the current shared price. A metadata-only save must
+        // not turn that fallback into an individual store price.
+        const retailPriceKgs =
+          input.retailPriceKgs !== undefined || input.storePriceKgs !== undefined
+            ? validatedRetailPriceKgs
+            : undefined;
 
-    const selectedStore = input.storeId
+        const selectedStore = input.storeId
       ? await tx.store.findFirst({
           where: { id: input.storeId, organizationId: input.organizationId },
           select: { id: true, allowNegativeStock: true },
         })
       : null;
 
-    await ensureSupplier(tx, input.organizationId, input.supplierId ?? undefined);
-    const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
-    const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
-    ensureRequiredAttributes(input.variants, attributeDefinitions);
-    const barcodes = normalizeBarcodes(input.barcodes);
-    await applyArchivedBarcodeTransfers(tx, { ...input, targetProductId: input.productId, barcodes, transfers: input.barcodeTransfers });
-    await ensureBarcodesAvailable(tx, input.organizationId, barcodes, input.productId);
-    if (before.baseUnitId !== baseUnit.id) {
-      if (await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) {
-        throw new AppError("priceBookUnitConflict", "CONFLICT", 409);
-      }
-      const previousUnit = await ensureUnit(tx, input.organizationId, before.baseUnitId);
-      if (baseUnit.quantityPrecision < previousUnit.quantityPrecision) {
+        await ensureSupplier(tx, input.organizationId, input.supplierId ?? undefined);
+        const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
+        const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
+        ensureRequiredAttributes(input.variants, attributeDefinitions);
+        const barcodes = normalizeBarcodes(input.barcodes);
+        await applyArchivedBarcodeTransfers(tx, {
+          ...input,
+          targetProductId: input.productId,
+          barcodes,
+          transfers: input.barcodeTransfers,
+        });
+        await ensureBarcodesAvailable(tx, input.organizationId, barcodes, input.productId);
+        if (before.baseUnitId !== baseUnit.id) {
+          if (
+            await tx.priceBookEntry.count({
+              where: { organizationId: input.organizationId, productId: input.productId },
+            })
+          ) {
+            throw new AppError("priceBookUnitConflict", "CONFLICT", 409);
+          }
+          const previousUnit = await ensureUnit(tx, input.organizationId, before.baseUnitId);
+          if (baseUnit.quantityPrecision < previousUnit.quantityPrecision) {
         await assertProductUnitPrecision(tx, input.productId, baseUnit.quantityPrecision);
       }
-    }
+        }
 
-    const existingImages = await tx.productImage.findMany({
+        const existingImages = await tx.productImage.findMany({
       where: { productId: input.productId },
       select: { id: true, url: true, position: true },
       orderBy: { position: "asc" },
     });
-    const existingImageIds = new Set(existingImages.map((image) => image.id));
-    const normalizedImages = input.images
-      ? withStableProductImageIds(resolvedMedia.images, { preserveIds: existingImageIds })
-      : undefined;
-    const imageReferences = buildProductImageReferenceMap(
+        const existingImageIds = new Set(existingImages.map((image) => image.id));
+        const normalizedImages = input.images
+          ? withStableProductImageIds(resolvedMedia.images, { preserveIds: existingImageIds })
+          : undefined;
+        const imageReferences = buildProductImageReferenceMap(
       normalizedImages ??
         existingImages.map((image) => ({
           id: image.id,
@@ -2369,18 +2469,20 @@ export const updateProduct = async (input: UpdateProductInput) => {
           position: image.position,
         })),
     );
-    const normalizedCategories = resolveNormalizedProductCategories({
-      category: input.category,
-      categories: input.categories,
-    });
-    for (const category of normalizedCategories) {
+        const normalizedCategories = resolveNormalizedProductCategories({
+          category: input.category,
+          categories: input.categories,
+        });
+        for (const category of normalizedCategories) {
       await ensureProductCategory(tx, {
         organizationId: input.organizationId,
         name: category,
       });
     }
-    const nextIsBundle = input.isBundle ?? before.isBundle;
-    if (
+        const nextIsBundle = input.isBundle ?? before.isBundle;
+        if (nextIsBundle && (!before.isBundle || normalizedBundleComponents !== undefined))
+          await assertFeatureCanBeConfigured(input.organizationId, "bundles", tx);
+        if (
       nextIsBundle &&
       !before.isBundle &&
       normalizedBundleComponents !== undefined &&
@@ -2388,7 +2490,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
     ) {
       throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
     }
-    const product = await tx.product.update({
+        const product = await tx.product.update({
       where: { id: input.productId },
       data: {
         sku: input.sku,
@@ -2406,21 +2508,23 @@ export const updateProduct = async (input: UpdateProductInput) => {
       },
     });
 
-    if (input.storePriceKgs !== undefined) {
-      if (!selectedStore) throw new AppError("storeRequired", "BAD_REQUEST", 400);
-      const assignment = await tx.storeProduct.findUnique({
-        where: { storeId_productId: { storeId: selectedStore.id, productId: input.productId } },
-      });
-      if (!assignment?.isActive) throw new AppError("productNotFound", "NOT_FOUND", 404);
-      await upsertStoreVariantPrices(tx, {
-        organizationId: input.organizationId, actorId: input.actorId,
-        storeId: selectedStore.id, productId: input.productId,
-        variants: [{ id: "BASE", storePriceKgs: input.storePriceKgs }],
-      });
-    }
+        if (input.storePriceKgs !== undefined) {
+          if (!selectedStore) throw new AppError("storeRequired", "BAD_REQUEST", 400);
+          const assignment = await tx.storeProduct.findUnique({
+            where: { storeId_productId: { storeId: selectedStore.id, productId: input.productId } },
+          });
+          if (!assignment?.isActive) throw new AppError("productNotFound", "NOT_FOUND", 404);
+          await upsertStoreVariantPrices(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            storeId: selectedStore.id,
+            productId: input.productId,
+            variants: [{ id: "BASE", storePriceKgs: input.storePriceKgs }],
+          });
+        }
 
-    await tx.productBarcode.deleteMany({ where: { productId: input.productId } });
-    if (barcodes.length) {
+        await tx.productBarcode.deleteMany({ where: { productId: input.productId } });
+        if (barcodes.length) {
       await tx.productBarcode.createMany({
         data: barcodes.map((value) => ({
           organizationId: input.organizationId,
@@ -2430,27 +2534,27 @@ export const updateProduct = async (input: UpdateProductInput) => {
       });
     }
 
-    await syncProductPacks(tx, input.organizationId, input.productId, input.packs);
-    if (normalizedImages) {
-      await syncProductImages(tx, input.organizationId, input.productId, normalizedImages);
-    }
+        await syncProductPacks(tx, input.organizationId, input.productId, input.packs);
+        if (normalizedImages) {
+          await syncProductImages(tx, input.organizationId, input.productId, normalizedImages);
+        }
 
-    const additionalPrices: Array<ProductPriceTypeValues & { variantId?: string }> = [
-      { retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
-    ];
-    if (input.variants) {
-      const incomingIds = new Set(
-        input.variants.map((variant) => variant.id).filter(Boolean) as string[],
-      );
-      const existingVariants = await tx.productVariant.findMany({
+        const additionalPrices: Array<ProductPriceTypeValues & { variantId?: string }> = [
+          { retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
+        ];
+        if (input.variants) {
+          const incomingIds = new Set(
+            input.variants.map((variant) => variant.id).filter(Boolean) as string[],
+          );
+          const existingVariants = await tx.productVariant.findMany({
         where: { productId: input.productId, isActive: true },
         select: { id: true },
       });
-      const removedIds = existingVariants
-        .map((variant) => variant.id)
-        .filter((id) => !incomingIds.has(id));
+          const removedIds = existingVariants
+            .map((variant) => variant.id)
+            .filter((id) => !incomingIds.has(id));
 
-      if (removedIds.length) {
+          if (removedIds.length) {
         const [movementCount, snapshotCount, lineCount] = await Promise.all([
           tx.stockMovement.count({ where: { variantId: { in: removedIds } } }),
           tx.inventorySnapshot.count({
@@ -2475,16 +2579,16 @@ export const updateProduct = async (input: UpdateProductInput) => {
         });
       }
 
-      const definitionMap = new Map<string, AttributeDefinitionRow>(
-        attributeDefinitions.map((definition: AttributeDefinitionRow) => [
-          definition.key,
-          definition,
-        ]),
-      );
-      const variantPriceInputs: Array<{ id: string; storePriceKgs?: number | null }> = [];
-      for (const variant of input.variants) {
-        if (variant.id) {
-          const updateResult = await tx.productVariant.updateMany({
+          const definitionMap = new Map<string, AttributeDefinitionRow>(
+      attributeDefinitions.map((definition: AttributeDefinitionRow) => [
+        definition.key,
+        definition,
+      ]),
+    );
+          const variantPriceInputs: Array<{ id: string; storePriceKgs?: number | null }> = [];
+          for (const variant of input.variants) {
+            if (variant.id) {
+              const updateResult = await tx.productVariant.updateMany({
             where: { id: variant.id, productId: input.productId },
             data: {
               imageId: resolveVariantImageId(variant, imageReferences),
@@ -2494,13 +2598,13 @@ export const updateProduct = async (input: UpdateProductInput) => {
               isActive: true,
             },
           });
-          if (updateResult.count < 1) {
-            continue;
-          }
-          await tx.variantAttributeValue.deleteMany({
-            where: { variantId: variant.id },
-          });
-          await syncVariantAttributeValues(
+              if (updateResult.count < 1) {
+                continue;
+              }
+              await tx.variantAttributeValue.deleteMany({
+                where: { variantId: variant.id },
+              });
+              await syncVariantAttributeValues(
             tx,
             {
               organizationId: input.organizationId,
@@ -2510,10 +2614,14 @@ export const updateProduct = async (input: UpdateProductInput) => {
             },
             definitionMap,
           );
-          additionalPrices.push({ variantId: variant.id, retailPriceKgs: variant.retailPriceKgs, wholesalePriceKgs: variant.wholesalePriceKgs });
-          variantPriceInputs.push({ id: variant.id, storePriceKgs: variant.storePriceKgs });
-        } else {
-          const createdVariant = await tx.productVariant.create({
+              additionalPrices.push({
+                variantId: variant.id,
+                retailPriceKgs: variant.retailPriceKgs,
+                wholesalePriceKgs: variant.wholesalePriceKgs,
+              });
+              variantPriceInputs.push({ id: variant.id, storePriceKgs: variant.storePriceKgs });
+            } else {
+              const createdVariant = await tx.productVariant.create({
             data: {
               productId: input.productId,
               imageId: resolveVariantImageId(variant, imageReferences),
@@ -2522,7 +2630,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
               attributes: toJson(variant.attributes ?? {}),
             },
           });
-          await syncVariantAttributeValues(
+              await syncVariantAttributeValues(
             tx,
             {
               organizationId: input.organizationId,
@@ -2532,30 +2640,40 @@ export const updateProduct = async (input: UpdateProductInput) => {
             },
             definitionMap,
           );
-          additionalPrices.push({ variantId: createdVariant.id, retailPriceKgs: variant.retailPriceKgs, wholesalePriceKgs: variant.wholesalePriceKgs });
-          variantPriceInputs.push({
-            id: createdVariant.id,
-            storePriceKgs: variant.storePriceKgs,
-          });
-        }
-      }
-      await upsertStoreVariantPrices(tx, {
+              additionalPrices.push({
+                variantId: createdVariant.id,
+                retailPriceKgs: variant.retailPriceKgs,
+                wholesalePriceKgs: variant.wholesalePriceKgs,
+              });
+              variantPriceInputs.push({
+                id: createdVariant.id,
+                storePriceKgs: variant.storePriceKgs,
+              });
+            }
+          }
+          await upsertStoreVariantPrices(tx, {
         organizationId: input.organizationId,
         actorId: input.actorId,
         storeId: input.storeId,
         productId: input.productId,
         variants: variantPriceInputs,
       });
-    }
+        }
 
-    await saveProductPriceTypes(tx, {
-      organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId,
-      storeId: input.storeId, productId: input.productId, prices: additionalPrices,
-    });
+        await saveProductPriceTypes(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          requestId: input.requestId,
+          storeId: input.storeId,
+          productId: input.productId,
+          prices: additionalPrices,
+        });
 
-    if (!nextIsBundle) {
-      await tx.productBundleComponent.deleteMany({ where: { bundleProductId: input.productId } });
-    } else if (normalizedBundleComponents !== undefined) {
+        if (!nextIsBundle) {
+          await tx.productBundleComponent.deleteMany({
+            where: { bundleProductId: input.productId },
+          });
+        } else if (normalizedBundleComponents !== undefined) {
       if (normalizedBundleComponents.length < 1) {
         throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
       }
@@ -2567,7 +2685,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
       });
     }
 
-    if (resolvedBaseCost !== undefined) {
+        if (resolvedBaseCost !== undefined) {
       await upsertBaseProductCost(tx, {
         organizationId: input.organizationId,
         productId: input.productId,
@@ -2575,7 +2693,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
       });
     }
 
-    if (input.minStock !== undefined && input.minStock !== null) {
+        if (input.minStock !== undefined && input.minStock !== null) {
       await applyInitialInventorySettings(tx, {
         organizationId: input.organizationId,
         actorId: input.actorId,
@@ -2586,7 +2704,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
       });
     }
 
-    await writeAuditLog(tx, {
+        await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
       action: "PRODUCT_UPDATE",
@@ -2597,16 +2715,26 @@ export const updateProduct = async (input: UpdateProductInput) => {
       requestId: input.requestId,
     });
 
-    return product;
-  }, input.expectedUpdatedAt || input.expectedStorePriceVersion ? { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 } : undefined).catch(error => {
-    if ((input.expectedUpdatedAt || input.expectedStorePriceVersion) && error instanceof Prisma.PrismaClientKnownRequestError &&
-      (error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code)))))
-      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
-    throw error;
-  }).then(async product => {
-    await publishProductChange(input.organizationId, product.id);
-    return product;
-  });
+        return product;
+      },
+      input.expectedUpdatedAt || input.expectedStorePriceVersion
+        ? { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 }
+        : undefined,
+    )
+    .catch((error) => {
+      if (
+        (input.expectedUpdatedAt || input.expectedStorePriceVersion) &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2034" ||
+          (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code))))
+      )
+        throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+      throw error;
+    })
+    .then(async (product) => {
+      await publishProductChange(input.organizationId, product.id);
+      return product;
+    });
 };
 
 // Shared assortment managers may maintain photos without editing source prices or details.
@@ -2620,52 +2748,68 @@ export const updateProductImages = async (input: {
   variants?: Array<{ id?: string; imageId?: string | null; imageUrl?: string | null }>;
 }) => {
   const media = await resolveIncomingProductImages(input);
-  return prisma.$transaction(async (tx) => {
-    await assertBaamReviewedVersion(tx, "Product", input.productId);
-    if (input.expectedUpdatedAt)
+  return prisma
+    .$transaction(
+      async (tx) => {
+        await assertBaamReviewedVersion(tx, "Product", input.productId);
+        if (input.expectedUpdatedAt)
       await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id"=${input.productId} AND "organizationId"=${input.organizationId} FOR UPDATE`;
-    const before = await tx.product.findFirst({
+        const before = await tx.product.findFirst({
       where: { id: input.productId, organizationId: input.organizationId, isDeleted: false },
       include: { images: true, variants: { where: { isActive: true } } },
     });
-    if (!before) throw new AppError("productNotFound", "NOT_FOUND", 404);
-    if (input.expectedUpdatedAt && before.updatedAt.toISOString() !== input.expectedUpdatedAt)
-      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
-    const images = withStableProductImageIds(media.images, {
-      preserveIds: new Set(before.images.map((image) => image.id)),
-    });
-    const references = buildProductImageReferenceMap(images);
-    const variants = input.variants ?? before.variants;
-    if (variants.some((variant) => !before.variants.some((row) => row.id === variant.id))) {
-      throw new AppError("variantNotFound", "NOT_FOUND", 404);
-    }
-    await syncProductImages(tx, input.organizationId, input.productId, images);
-    for (const variant of variants) {
+        if (!before) throw new AppError("productNotFound", "NOT_FOUND", 404);
+        if (input.expectedUpdatedAt && before.updatedAt.toISOString() !== input.expectedUpdatedAt)
+          throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+        const images = withStableProductImageIds(media.images, {
+          preserveIds: new Set(before.images.map((image) => image.id)),
+        });
+        const references = buildProductImageReferenceMap(images);
+        const variants = input.variants ?? before.variants;
+        if (variants.some((variant) => !before.variants.some((row) => row.id === variant.id))) {
+          throw new AppError("variantNotFound", "NOT_FOUND", 404);
+        }
+        await syncProductImages(tx, input.organizationId, input.productId, images);
+        for (const variant of variants) {
       await tx.productVariant.update({
         where: { id: variant.id! },
         data: { imageId: resolveVariantImageId(variant, references) },
       });
     }
-    const product = await tx.product.update({
-      where: { id: input.productId },
-      data: { photoUrl: images[0]?.url ?? null },
+        const product = await tx.product.update({
+          where: { id: input.productId },
+          data: { photoUrl: images[0]?.url ?? null },
+        });
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          requestId: input.requestId,
+          action: "PRODUCT_UPDATE",
+          entity: "Product",
+          entityId: product.id,
+          before: toJson({ photoUrl: before.photoUrl, images: before.images }),
+          after: toJson({ photoUrl: product.photoUrl, images }),
+        });
+        return product;
+      },
+      input.expectedUpdatedAt
+        ? { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 }
+        : undefined,
+    )
+    .catch((error) => {
+      if (
+        input.expectedUpdatedAt &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2034" ||
+          (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code))))
+      )
+        throw new AppError("productChangedElsewhere", "CONFLICT", 409);
+      throw error;
+    })
+    .then(async (product) => {
+      await publishProductChange(input.organizationId, product.id);
+      return product;
     });
-    await writeAuditLog(tx, {
-      organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId,
-      action: "PRODUCT_UPDATE", entity: "Product", entityId: product.id,
-      before: toJson({ photoUrl: before.photoUrl, images: before.images }),
-      after: toJson({ photoUrl: product.photoUrl, images }),
-    });
-    return product;
-  }, input.expectedUpdatedAt ? { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 } : undefined).catch(error => {
-    if (input.expectedUpdatedAt && error instanceof Prisma.PrismaClientKnownRequestError &&
-      (error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code)))))
-      throw new AppError("productChangedElsewhere", "CONFLICT", 409);
-    throw error;
-  }).then(async product => {
-    await publishProductChange(input.organizationId, product.id);
-    return product;
-  });
 };
 
 export const duplicateProduct = async (input: {
@@ -2784,7 +2928,7 @@ export const duplicateProduct = async (input: {
     }
 
     const requestedStoreId = input.storeId?.trim() || null;
-    if (!requestedStoreId && source.storeProducts.some(row => row.store.directedAssortment)) {
+    if (!requestedStoreId && source.storeProducts.some((row) => row.store.directedAssortment)) {
       throw new AppError("storeRequired", "BAD_REQUEST", 400);
     }
     const assignmentStores = requestedStoreId
@@ -2868,9 +3012,7 @@ export const duplicateProduct = async (input: {
               name: variant.name,
               sku: `${nextSku}-${String(index + 1).padStart(2, "0")}`,
               attributes:
-                    copyCharacteristics &&
-                    variant.attributes &&
-                    typeof variant.attributes === "object"
+                copyCharacteristics && variant.attributes && typeof variant.attributes === "object"
                   ? (variant.attributes as Record<string, unknown>)
                   : {},
             })),
@@ -2952,9 +3094,13 @@ export const duplicateProduct = async (input: {
           data: copiedPriceTypes.map((price) => {
             const variantId = copiedVariantIdBySourceId.get(price.variantKey) ?? null;
             return {
-              organizationId: input.organizationId, storeId: price.storeId,
-              productId: duplicate.id, variantId, variantKey: variantId ?? "BASE",
-              retailPriceKgs: price.retailPriceKgs, wholesalePriceKgs: price.wholesalePriceKgs,
+              organizationId: input.organizationId,
+              storeId: price.storeId,
+              productId: duplicate.id,
+              variantId,
+              variantKey: variantId ?? "BASE",
+              retailPriceKgs: price.retailPriceKgs,
+              wholesalePriceKgs: price.wholesalePriceKgs,
               updatedById: input.actorId,
             };
           }),
@@ -3054,11 +3200,17 @@ export const duplicateProduct = async (input: {
         copiedInventoryRows += 1;
         if (snapshot.onHand !== 0) {
           await applyStockMovement(tx, {
-            storeId: snapshot.storeId, productId: duplicate.id, variantId: copiedVariantId,
-            qtyDelta: snapshot.onHand, type: StockMovementType.ADJUSTMENT,
-            referenceType: "PRODUCT_DUPLICATE", referenceId: duplicate.id,
+            storeId: snapshot.storeId,
+            productId: duplicate.id,
+            variantId: copiedVariantId,
+            qtyDelta: snapshot.onHand,
+            type: StockMovementType.ADJUSTMENT,
+            referenceType: "PRODUCT_DUPLICATE",
+            referenceId: duplicate.id,
             note: `Copied inventory from ${source.sku}`,
-            actorId: input.actorId, organizationId: input.organizationId, allowNegativeStock: true,
+            actorId: input.actorId,
+            organizationId: input.organizationId,
+            allowNegativeStock: true,
           });
         }
       }
@@ -3140,8 +3292,12 @@ export const duplicateProduct = async (input: {
       await publishAssortmentChange(input.organizationId);
       return result;
     } catch (error) {
-      if (input.sku?.trim() || !isOrganizationSkuUniqueConstraintError(error) ||
-          attempt === GENERATED_SKU_MAX_RETRIES - 1) throw error;
+      if (
+        input.sku?.trim() ||
+        !isOrganizationSkuUniqueConstraintError(error) ||
+        attempt === GENERATED_SKU_MAX_RETRIES - 1
+      )
+        throw error;
     }
   }
   throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
@@ -3243,8 +3399,9 @@ export const bulkGenerateProductBarcodes = async (input: {
   mode: BarcodeGenerationMode;
   filter?: ProductBulkGenerationFilter;
   accessibleStoreIds?: string[];
-}) =>
-  prisma.$transaction(async (tx) => {
+}) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "bulkProducts" });
+  return prisma.$transaction(async (tx) => {
     const productIds = input.filter?.productIds?.map((value) => value.trim()).filter(Boolean) ?? [];
     const uniqueProductIds = Array.from(new Set(productIds));
     const search = input.filter?.search?.trim();
@@ -3288,7 +3445,17 @@ export const bulkGenerateProductBarcodes = async (input: {
       organizationId: input.organizationId,
       ...(input.filter?.includeArchived ? {} : { isDeleted: false }),
       ...(uniqueProductIds.length ? { id: { in: uniqueProductIds } } : {}),
-      ...(input.accessibleStoreIds ? { storeProducts: { some: { storeId: { in: input.accessibleStoreIds }, isActive: true, OR: [{ isDirect: true }, { isHistorical: true }] } } } : {}),
+      ...(input.accessibleStoreIds
+        ? {
+            storeProducts: {
+              some: {
+                storeId: { in: input.accessibleStoreIds },
+                isActive: true,
+                OR: [{ isDirect: true }, { isHistorical: true }],
+              },
+            },
+          }
+        : {}),
       ...(filters.length ? { AND: filters } : {}),
     };
 
@@ -3321,12 +3488,12 @@ export const bulkGenerateProductBarcodes = async (input: {
         mode: input.mode,
       });
       await tx.productBarcode.create({
-        data: {
-          organizationId: input.organizationId,
-          productId: product.id,
-          value,
-        },
-      });
+          data: {
+            organizationId: input.organizationId,
+            productId: product.id,
+            value,
+          },
+        });
       await writeAuditLog(tx, {
         organizationId: input.organizationId,
         actorId: input.actorId,
@@ -3348,6 +3515,7 @@ export const bulkGenerateProductBarcodes = async (input: {
       updatedProductIds,
     };
   });
+};
 
 export const bulkGenerateProductDescriptions = async (input: {
   organizationId: string;
@@ -3358,23 +3526,19 @@ export const bulkGenerateProductDescriptions = async (input: {
   logger?: ProductBulkDescriptionLogger;
   maxProducts?: number;
 }) => {
+  const billing = await assertFeatureEnabled({
+    organizationId: input.organizationId,
+    feature: "bulkAiContent",
+  });
   const uniqueProductIds = Array.from(
     new Set(input.productIds.map((value) => value.trim()).filter(Boolean)),
   );
-  if (!uniqueProductIds.length) {
-    throw new AppError("invalidInput", "BAD_REQUEST", 400);
-  }
+  if (!uniqueProductIds.length) throw new AppError("invalidInput", "BAD_REQUEST", 400);
   const maxProducts = Math.max(1, Math.trunc(input.maxProducts ?? MAX_BULK_DESCRIPTION_PRODUCTS));
-  if (uniqueProductIds.length > maxProducts) {
+  if (uniqueProductIds.length > maxProducts)
     throw new AppError("bulkGenerateDescriptionsLimitExceeded", "BAD_REQUEST", 400);
-  }
-
   const products = await prisma.product.findMany({
-    where: {
-      organizationId: input.organizationId,
-      id: { in: uniqueProductIds },
-      isDeleted: false,
-    },
+    where: { organizationId: input.organizationId, id: { in: uniqueProductIds }, isDeleted: false },
     select: {
       id: true,
       name: true,
@@ -3382,73 +3546,110 @@ export const bulkGenerateProductDescriptions = async (input: {
       isBundle: true,
       description: true,
       photoUrl: true,
+      updatedAt: true,
       images: {
-        where: {
-          url: {
-            not: { startsWith: "data:image/" },
-          },
-        },
+        where: { url: { not: { startsWith: "data:image/" } } },
         select: { url: true },
         orderBy: { position: "asc" },
         take: 3,
       },
     },
   });
-
   const productById = new Map(products.map((product) => [product.id, product]));
-  let updatedCount = 0;
-  let skippedCount = 0;
-  let failedCount = 0;
-  let rateLimited = false;
-  const updatedProductIds: string[] = [];
-
-  for (const productId of uniqueProductIds) {
-    const product = productById.get(productId);
-    if (!product) {
-      skippedCount += 1;
-      continue;
-    }
-
-    const previousDescription = product.description?.trim() ?? "";
-    if (previousDescription) {
-      skippedCount += 1;
-      continue;
-    }
-
-    const imageUrls = Array.from(
+  const imagesFor = (product: (typeof products)[number]) =>
+    Array.from(
       new Set(
         [product.photoUrl, ...product.images.map((image) => image.url)]
           .map((value) => normalizeProductImageUrl(value ?? null))
           .filter((value): value is string => Boolean(value)),
       ),
     ).slice(0, 3);
-
-    if (!imageUrls.length) {
-      skippedCount += 1;
-      continue;
-    }
-
-    try {
-      const result = await generateProductDescriptionFromImages({
-        name: product.name,
-        category: product.category,
-        isBundle: product.isBundle,
-        locale: input.locale,
-        imageUrls,
-        logger: input.logger,
-      });
-
-      const nextDescription = result.description.trim();
-      if (!nextDescription || nextDescription === previousDescription) {
-        skippedCount += 1;
+  const eligible = products.filter(
+    (product) => !product.description?.trim() && imagesFor(product).length > 0,
+  );
+  const metered = !billing.lifetimeAccess && billing.entitlements.usageLimits.ai !== null;
+  const keyFor = (id: string) => `bulk-description:${input.actorId}:${input.requestId}:${id}`;
+  const operationKeys = eligible.map((product) => keyFor(product.id));
+  if (metered && operationKeys.length)
+    await prisma.$transaction((tx) =>
+      reserveSubscriptionUsageBatch(
+        {
+          organizationId: input.organizationId,
+          resource: "ai",
+          operationKeys,
+        },
+        tx,
+      ),
+    );
+  let updatedCount = 0,
+    skippedCount = 0,
+    failedCount = 0;
+  let rateLimited = false;
+  const updatedProductIds: string[] = [];
+  try {
+    for (const productId of uniqueProductIds) {
+      const product = productById.get(productId);
+      if (!product || product.description?.trim() || !imagesFor(product).length) {
+        skippedCount++;
         continue;
       }
-
-      await prisma.product.update({
-        where: { id: product.id },
-        data: { description: nextDescription },
-      });
-      await writeAuditLog(prisma, {
+      let usageLease: UsageLease = null;
+      let succeeded = false;
+      try {
+        await assertActorCanWriteProducts(prisma, input.organizationId, input.actorId, [
+          product.id,
+        ]);
+        if (metered) {
+          usageLease = await resumeSubscriptionUsage({
+            organizationId: input.organizationId,
+            resource: "ai",
+            operationKey: keyFor(product.id),
+          });
+          await startSubscriptionUsage(usageLease);
+        }
+        const result = await withAiOperationBudget(
+          {
+            organizationId: input.organizationId,
+            operationKey: keyFor(product.id),
+            enabled: Boolean(usageLease),
+          },
+          () =>
+            generateProductDescriptionFromImages({
+              name: product.name,
+              category: product.category,
+              isBundle: product.isBundle,
+              locale: input.locale,
+              imageUrls: imagesFor(product),
+              logger: input.logger,
+            }),
+        );
+        const nextDescription = result.description.trim();
+        const previousDescription = product.description?.trim() ?? "";
+        if (!nextDescription || nextDescription === previousDescription) {
+          skippedCount++;
+          continue;
+        }
+        await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
+          await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [product.id]);
+          if (usageLease) {
+            const ownsUsage = await tx.subscriptionUsageReservation.findFirst({
+              where: {
+                id: usageLease.id,
+                organizationId: input.organizationId,
+                leaseToken: usageLease.token,
+                state: "RESERVED",
+                expiresAt: { gt: new Date() },
+              },
+              select: { id: true },
+            });
+            if (!ownsUsage) throw new AppError("billingUsageExpired", "CONFLICT", 409);
+          }
+          await tx.product.update({
+            where: { id: product.id, updatedAt: product.updatedAt },
+            data: { description: nextDescription },
+          });
+          await writeAuditLog(tx, {
         organizationId: input.organizationId,
         actorId: input.actorId,
         action: "PRODUCT_UPDATE",
@@ -3458,25 +3659,34 @@ export const bulkGenerateProductDescriptions = async (input: {
         after: toJson({ description: nextDescription, generated: true }),
         requestId: input.requestId,
       });
-
-      updatedCount += 1;
-      updatedProductIds.push(product.id);
-    } catch (error) {
-      if (error instanceof Error && error.message === "rateLimited") {
-        rateLimited = true;
-        break;
-      }
-      if (
-        error instanceof Error &&
-        (error.message === "aiDescriptionNoUsableImages" ||
-          error.message === "aiDescriptionImageRequired")
-      ) {
-        skippedCount += 1;
-        continue;
-      }
-
-      failedCount += 1;
-      input.logger?.warn(
+          if (metered)
+            await settleSubscriptionUsageBatch(
+              {
+                organizationId: input.organizationId,
+                resource: "ai",
+                operationKeys: [keyFor(product.id)],
+                success: true,
+              },
+              tx,
+            );
+        });
+        succeeded = true;
+        updatedCount++;
+        updatedProductIds.push(product.id);
+      } catch (error) {
+        if (error instanceof Error && error.message === "rateLimited") {
+          rateLimited = true;
+          break;
+        }
+        if (
+          error instanceof Error &&
+          ["aiDescriptionNoUsableImages", "aiDescriptionImageRequired"].includes(error.message)
+        ) {
+          skippedCount++;
+          continue;
+        }
+        failedCount++;
+        input.logger?.warn(
         {
           phase: "bulk-description-item",
           productId: product.id,
@@ -3484,17 +3694,24 @@ export const bulkGenerateProductDescriptions = async (input: {
         },
         "bulk product description generation failed for item",
       );
+      } finally {
+        if (usageLease && !succeeded) await settleSubscriptionUsage(usageLease, false);
+      }
     }
+  } finally {
+    if (metered && operationKeys.length)
+      await releaseUnusedSubscriptionUsage({
+        organizationId: input.organizationId,
+        resource: "ai",
+        operationKeys,
+      });
   }
-
   const processedCount = updatedCount + skippedCount + failedCount;
-  const deferredCount = rateLimited ? Math.max(0, uniqueProductIds.length - processedCount) : 0;
-
   return {
     updatedCount,
     skippedCount,
     failedCount,
-    deferredCount,
+    deferredCount: rateLimited ? Math.max(0, uniqueProductIds.length - processedCount) : 0,
     rateLimited,
     updatedProductIds,
   };
@@ -3507,8 +3724,11 @@ export const bulkUpdateProductCategory = async (input: {
   productIds: string[];
   category?: string | null;
   mode?: "add" | "setPrimary" | "replace";
-}) =>
-  prisma.$transaction(async (tx) => {
+}) => {
+  if (new Set(input.productIds).size > 1)
+    await assertFeatureEnabled({ organizationId: input.organizationId, feature: "bulkProducts" });
+  else await assertTrialActive(input.organizationId);
+  return prisma.$transaction(async (tx) => {
     if (!input.productIds.length) {
       return { updated: 0 };
     }
@@ -3594,6 +3814,7 @@ export const bulkUpdateProductCategory = async (input: {
 
     return { updated };
   });
+};
 
 export const arrangeClothingCategoriesWithAi = async (input: {
   organizationId: string;
@@ -3601,6 +3822,10 @@ export const arrangeClothingCategoriesWithAi = async (input: {
   requestId: string;
   productIds: string[];
 }) => {
+  const billing = await assertFeatureEnabled({
+    organizationId: input.organizationId,
+    feature: "bulkProducts",
+  });
   const uniqueProductIds = Array.from(
     new Set(input.productIds.map((id) => id.trim()).filter(Boolean)),
   );
@@ -3650,6 +3875,13 @@ export const arrangeClothingCategoriesWithAi = async (input: {
     .filter((category) => !isGenderCategoryName(category));
   const context: CategoryArrangementContext = { availableCategories };
   const eligibleProducts = products;
+  if (eligibleProducts.length)
+    await assertActorCanWriteProducts(
+      prisma,
+      input.organizationId,
+      input.actorId,
+      eligibleProducts.map((product) => product.id),
+    );
   const decisions = new Map<string, CategoryArrangementDecision>();
   const uncertainProducts: CategoryArrangementProduct[] = [];
 
@@ -3676,10 +3908,48 @@ export const arrangeClothingCategoriesWithAi = async (input: {
     aiBatches.push(batch);
   }
 
-  const aiDecisionResults = await Promise.all(
-    aiBatches.map((batch) => callCategoryArrangementAi(batch, context)),
-  );
-  for (const aiDecisions of aiDecisionResults) {
+  const metered = !billing.lifetimeAccess && billing.entitlements.usageLimits.ai !== null;
+  const keyFor = (id: string) => `category-arrange:${input.actorId}:${input.requestId}:${id}`;
+  const operationKeys = uncertainProducts.map((product) => keyFor(product.id));
+  if (metered && operationKeys.length) {
+    await prisma.$transaction((tx) =>
+      reserveSubscriptionUsageBatch(
+        { organizationId: input.organizationId, resource: "ai", operationKeys },
+        tx,
+      ),
+    );
+    await startSubscriptionUsageBatch({
+      organizationId: input.organizationId,
+      resource: "ai",
+      operationKeys,
+    });
+  }
+  try {
+    const aiDecisionResults: Map<string, CategoryArrangementDecision>[] = [];
+    // Bound model/image preparation concurrency instead of opening every batch at once.
+    for (let index = 0; index < aiBatches.length; index += 2) {
+      aiDecisionResults.push(
+        ...(await Promise.all(
+          aiBatches.slice(index, index + 2).map(async (batch) => {
+            const allowedIds = new Set(batch.map((product) => product.id));
+            const result = await withAiOperationBudget(
+              {
+                organizationId: input.organizationId,
+                enabled: metered && operationKeys.length > 0,
+                units: batch.length,
+                operationKey: keyFor(batch[0].id),
+              },
+              () => callCategoryArrangementAi(batch, context),
+            );
+            return new Map(Array.from(result).filter(([id]) => allowedIds.has(id)));
+          }),
+        )),
+      );
+    }
+    const completedAiKeys = Array.from(
+      new Set(aiDecisionResults.flatMap((result) => Array.from(result.keys()))),
+    ).map(keyFor);
+    for (const aiDecisions of aiDecisionResults) {
     if (aiDecisions.size > 0) {
       aiUsed = true;
     }
@@ -3688,20 +3958,42 @@ export const arrangeClothingCategoriesWithAi = async (input: {
     }
   }
 
-  let proposed = 0;
-  let updated = 0;
+    let proposed = 0;
+    let updated = 0;
 
-  await prisma.$transaction(async (tx) => {
-    await ensureProductCategory(tx, {
-      organizationId: input.organizationId,
-      name: MEN_CATEGORY_NAME,
-    });
-    await ensureProductCategory(tx, {
-      organizationId: input.organizationId,
-      name: WOMEN_CATEGORY_NAME,
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
+      await assertActorCanWriteProducts(
+        tx,
+        input.organizationId,
+        input.actorId,
+        eligibleProducts.map((product) => product.id),
+      );
+      if (metered && completedAiKeys.length) {
+        const ownsUsage = await tx.subscriptionUsageReservation.count({
+          where: {
+            organizationId: input.organizationId,
+            resource: "ai",
+            state: "RESERVED",
+            operationKey: {
+              in: completedAiKeys.map((key) => createHash("sha256").update(key).digest("hex")),
+            },
+            expiresAt: { gt: new Date() },
+          },
+        });
+        if (ownsUsage !== completedAiKeys.length)
+          throw new AppError("billingUsageExpired", "CONFLICT", 409);
+      }
+      await ensureProductCategory(tx, {
+        organizationId: input.organizationId,
+        name: MEN_CATEGORY_NAME,
+      });
+      await ensureProductCategory(tx, {
+        organizationId: input.organizationId,
+        name: WOMEN_CATEGORY_NAME,
+      });
 
-    for (const product of eligibleProducts) {
+      for (const product of eligibleProducts) {
       const decision = decisions.get(product.id);
       if (!decision) {
         continue;
@@ -3756,9 +4048,19 @@ export const arrangeClothingCategoriesWithAi = async (input: {
       proposed += 1;
       updated += 1;
     }
-  });
+      if (metered && completedAiKeys.length)
+        await settleSubscriptionUsageBatch(
+          {
+            organizationId: input.organizationId,
+            resource: "ai",
+            operationKeys: completedAiKeys,
+            success: true,
+          },
+          tx,
+        );
+    });
 
-  return {
+    return {
     scanned: products.length,
     eligible: eligibleProducts.length,
     proposed,
@@ -3766,6 +4068,15 @@ export const arrangeClothingCategoriesWithAi = async (input: {
     skipped: Math.max(0, eligibleProducts.length - proposed),
     aiUsed,
   };
+  } finally {
+    if (metered && operationKeys.length)
+      await settleSubscriptionUsageBatch({
+        organizationId: input.organizationId,
+        resource: "ai",
+        operationKeys,
+        success: false,
+      });
+  }
 };
 
 export type ImportProductRow = {
@@ -4201,8 +4512,12 @@ export const importProductsTx = async (
       },
     });
     await syncExistingRetailPrice(tx, {
-      organizationId: input.organizationId, storeId: input.storeId,
-      productId, variantKey: "BASE", priceKgs, actorId: input.actorId,
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      productId,
+      variantKey: "BASE",
+      priceKgs,
+      actorId: input.actorId,
     });
   };
 
@@ -4249,7 +4564,9 @@ export const importProductsTx = async (
     }
 
     const currentSnapshot = await lockStockSnapshot(tx, {
-      storeId: input.storeId, productId, organizationId: input.organizationId,
+      storeId: input.storeId,
+      productId,
+      organizationId: input.organizationId,
     });
     const currentOnHand = currentSnapshot?.onHand ?? 0;
     const qtyDelta = stockBehavior === "set" ? roundQuantity(stockQty - currentOnHand) : stockQty;
@@ -4449,10 +4766,15 @@ export const importProductsTx = async (
       : ({ reason: "none", product: null } as const);
     if (rowDecision?.action === "connect") {
       if (
-        !input.storeId || !importMatch.product ||
+        !input.storeId ||
+        !importMatch.product ||
         importMatch.product.id !== rowDecision.existingProductId ||
         !(await canConnectProductImportMatch({
-          prisma: tx, organizationId: input.organizationId, match: importMatch, sku, barcodes,
+          prisma: tx,
+          organizationId: input.organizationId,
+          match: importMatch,
+          sku,
+          barcodes,
         }))
       ) {
         throw new AppError("importProductMatchChanged", "CONFLICT", 409);
@@ -4463,23 +4785,34 @@ export const importProductsTx = async (
       }
       // Reuse the card without importing its common fields or assigning legacy catalog peers.
       const assignment = await assignProductToStore(tx, {
-        organizationId: input.organizationId, storeId: input.storeId,
-        productId: product.id, actorId: input.actorId, direct: true,
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: product.id,
+        actorId: input.actorId,
+        direct: true,
       });
       await tx.storeProduct.update({
-        where: { id: assignment.id }, data: { isDirect: true, isHistorical: false },
+        where: { id: assignment.id },
+        data: { isDirect: true, isHistorical: false },
       });
       await ensureBaseSnapshots(
-        tx, input.organizationId, product.id, stores.filter((store) => store.id === input.storeId),
+        tx,
+        input.organizationId,
+        product.id,
+        stores.filter((store) => store.id === input.storeId),
       );
       if (basePriceKgs !== undefined) {
         const organization = await tx.organization.findUniqueOrThrow({
-          where: { id: input.organizationId }, select: { retailWholesaleEnabled: true },
+          where: { id: input.organizationId },
+          select: { retailWholesaleEnabled: true },
         });
         if (organization.retailWholesaleEnabled) {
           await saveProductPriceTypes(tx, {
-            organizationId: input.organizationId, storeId: input.storeId,
-            actorId: input.actorId, requestId: input.requestId, productId: product.id,
+            organizationId: input.organizationId,
+            storeId: input.storeId,
+            actorId: input.actorId,
+            requestId: input.requestId,
+            productId: product.id,
             prices: [{ retailPriceKgs: basePriceKgs }],
           });
         } else {
@@ -4489,12 +4822,17 @@ export const importProductsTx = async (
       await upsertMinStock(product.id, minStock);
       await applyImportedStock(product.id, stockQty);
       await writeAuditLog(tx, {
-        organizationId: input.organizationId, actorId: input.actorId,
-        action: "PRODUCT_UPDATE", entity: "Product", entityId: product.id,
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_UPDATE",
+        entity: "Product",
+        entityId: product.id,
         before: toJson({ isDeleted: product.isDeleted }),
         after: toJson({
-          isDeleted: false, connectedStoreId: input.storeId,
-          importBatchId: input.batchId ?? null, preservedProductFields: true,
+          isDeleted: false,
+          connectedStoreId: input.storeId,
+          importBatchId: input.batchId ?? null,
+          preservedProductFields: true,
         }),
         requestId: input.requestId,
       });
@@ -4543,9 +4881,10 @@ export const importProductsTx = async (
       continue;
     }
 
-    const baseUnit = shouldApplyField("unit") && unitCode
-      ? await ensureUnitByCode(tx, input.organizationId, unitCode)
-      : null;
+    const baseUnit =
+      shouldApplyField("unit") && unitCode
+        ? await ensureUnitByCode(tx, input.organizationId, unitCode)
+        : null;
     if (shouldApplyField("barcodes")) {
       await ensureBarcodesAvailable(tx, input.organizationId, barcodes, existing?.id);
     }
@@ -4772,10 +5111,15 @@ export const importProductsTx = async (
 };
 
 export const importProducts = async (input: ImportProductsInput) =>
-  prisma.$transaction(async (tx) => importProductsTx(tx, input), {
-    maxWait: 10_000,
-    timeout: resolveImportTransactionTimeout(),
-  }).then(async result => { await publishAssortmentChange(input.organizationId); return result; });
+  prisma
+    .$transaction(async (tx) => importProductsTx(tx, input), {
+      maxWait: 10_000,
+      timeout: resolveImportTransactionTimeout(),
+    })
+    .then(async (result) => {
+      await publishAssortmentChange(input.organizationId);
+      return result;
+    });
 
 export type ArchiveProductInput = {
   productId: string;
@@ -4824,6 +5168,16 @@ export const restoreProduct = async (input: RestoreProductInput) =>
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
 
+    if (before.isDeleted) {
+      if (before.isBundle) await assertFeatureCanBeConfigured(input.organizationId, "bundles", tx);
+      await assertCapacity({
+        organizationId: input.organizationId,
+        kind: "products",
+        add: 1,
+        db: tx,
+      });
+    }
+
     const product = await tx.product.update({
       where: { id: input.productId },
       data: { isDeleted: false },
@@ -4853,33 +5207,72 @@ export type DeleteProductInput = {
 };
 
 export const deleteProduct = async (input: DeleteProductInput) => {
-  const result = await prisma.$transaction(async (tx) => {
-    const run = () => deleteProductRecords(tx, input);
-    if (!input.idempotencyKey) return run();
-    const actor = await tx.user.findFirst({ where: { id: input.actorId, organizationId: input.organizationId, isActive: true, role: "ADMIN" }, select: { id: true } });
-    if (!actor) throw new AppError("forbidden", "FORBIDDEN", 403);
-    return (await withIdempotency(tx, { key: input.idempotencyKey, route: "products.deletePermanent", userId: input.actorId, request: toJson({ organizationId: input.organizationId, productId: input.productId, reviewToken: input.reviewToken }) }, run)).result;
-  }, { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 });
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const run = () => deleteProductRecords(tx, input);
+      if (!input.idempotencyKey) return run();
+      const actor = await tx.user.findFirst({
+        where: {
+          id: input.actorId,
+          organizationId: input.organizationId,
+          isActive: true,
+          role: "ADMIN",
+        },
+        select: { id: true },
+      });
+      if (!actor) throw new AppError("forbidden", "FORBIDDEN", 403);
+      return (
+        await withIdempotency(
+          tx,
+          {
+            key: input.idempotencyKey,
+            route: "products.deletePermanent",
+            userId: input.actorId,
+            request: toJson({
+              organizationId: input.organizationId,
+              productId: input.productId,
+              reviewToken: input.reviewToken,
+            }),
+          },
+          run,
+        )
+      ).result;
+    },
+    { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 },
+  );
   await publishProductChange(input.organizationId, input.productId, result.storeIds);
   return { id: result.id };
 };
 
 const deleteProductRecords = async (tx: Prisma.TransactionClient, input: DeleteProductInput) => {
-    await lockAssortment(tx, input.organizationId);
-    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "organizationId" = ${input.organizationId} FOR UPDATE`;
-    if (input.reviewToken) await assertProductDeletionReview(tx, input, input.reviewToken);
-    const before = await tx.product.findUnique({ where: { id: input.productId }, include: { storeProducts: true, catalogMemberships: true, assortmentGrants: true } });
-    if (!before || before.organizationId !== input.organizationId) {
-      throw new AppError("productNotFound", "NOT_FOUND", 404);
-    }
+  await lockAssortment(tx, input.organizationId);
+  await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${input.productId} AND "organizationId" = ${input.organizationId} FOR UPDATE`;
+  if (input.reviewToken) await assertProductDeletionReview(tx, input, input.reviewToken);
+  const before = await tx.product.findUnique({
+    where: { id: input.productId },
+    include: { storeProducts: true, catalogMemberships: true, assortmentGrants: true },
+  });
+  if (!before || before.organizationId !== input.organizationId) {
+    throw new AppError("productNotFound", "NOT_FOUND", 404);
+  }
 
-    const affectedStores = await tx.storeProduct.findMany({ where: { organizationId: input.organizationId, productId: input.productId }, select: { storeId: true } });
+  const affectedStores = await tx.storeProduct.findMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+    select: { storeId: true },
+  });
 
-    if ((await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) || (await tx.priceBookStoreItem.count({ where: { organizationId: input.organizationId, productId: input.productId } }))) {
-      throw new AppError("priceBookProductInUse", "CONFLICT", 409);
-    }
+  if (
+    (await tx.priceBookEntry.count({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    })) ||
+    (await tx.priceBookStoreItem.count({
+      where: { organizationId: input.organizationId, productId: input.productId },
+    }))
+  ) {
+    throw new AppError("priceBookProductInUse", "CONFLICT", 409);
+  }
 
-    const [
+  const [
       stockMovementsCount,
       purchaseOrderLinesCount,
       customerOrderLinesCount,
@@ -4909,7 +5302,7 @@ const deleteProductRecords = async (tx: Prisma.TransactionClient, input: DeleteP
       }),
     ]);
 
-    if (
+  if (
       stockMovementsCount > 0 ||
       purchaseOrderLinesCount > 0 ||
       customerOrderLinesCount > 0 ||
@@ -4922,72 +5315,85 @@ const deleteProductRecords = async (tx: Prisma.TransactionClient, input: DeleteP
       throw new AppError("productDeleteBlockedByHistory", "CONFLICT", 409);
     }
 
-    const [catalogSelections, ruleSelections] = await Promise.all([
-      tx.storeCatalog.findMany({ where: { store: { organizationId: input.organizationId }, selectedProductIds: { has: input.productId } }, select: { storeId: true, catalogId: true, selectedProductIds: true } }),
-      tx.assortmentRule.findMany({ where: { organizationId: input.organizationId, selectedProductIds: { has: input.productId } }, select: { id: true, selectedProductIds: true } }),
-    ]);
-    // Only unused-card metadata is removed. Operational references were checked
-    // above, and the assortment/product locks keep concurrent writers serialized.
-    await tx.$executeRaw`UPDATE "StoreCatalog" sc SET "selectedProductIds" = array_remove(sc."selectedProductIds", ${input.productId}), "updatedAt" = NOW() FROM "Store" s WHERE sc."storeId" = s.id AND s."organizationId" = ${input.organizationId} AND ${input.productId} = ANY(sc."selectedProductIds")`;
-    await tx.$executeRaw`UPDATE "AssortmentRule" SET "selectedProductIds" = array_remove("selectedProductIds", ${input.productId}), "updatedAt" = NOW() WHERE "organizationId" = ${input.organizationId} AND ${input.productId} = ANY("selectedProductIds")`;
-    await tx.assortmentGrant.deleteMany({ where: { productId: input.productId, rule: { organizationId: input.organizationId } } });
-    await tx.productCatalogProduct.deleteMany({ where: { productId: input.productId, catalog: { organizationId: input.organizationId } } });
-    await tx.productImageStudioJob.updateMany({
+  const [catalogSelections, ruleSelections] = await Promise.all([
+    tx.storeCatalog.findMany({
+      where: {
+        store: { organizationId: input.organizationId },
+        selectedProductIds: { has: input.productId },
+      },
+      select: { storeId: true, catalogId: true, selectedProductIds: true },
+    }),
+    tx.assortmentRule.findMany({
+      where: { organizationId: input.organizationId, selectedProductIds: { has: input.productId } },
+      select: { id: true, selectedProductIds: true },
+    }),
+  ]);
+  // Only unused-card metadata is removed. Operational references were checked
+  // above, and the assortment/product locks keep concurrent writers serialized.
+  await tx.$executeRaw`UPDATE "StoreCatalog" sc SET "selectedProductIds" = array_remove(sc."selectedProductIds", ${input.productId}), "updatedAt" = NOW() FROM "Store" s WHERE sc."storeId" = s.id AND s."organizationId" = ${input.organizationId} AND ${input.productId} = ANY(sc."selectedProductIds")`;
+  await tx.$executeRaw`UPDATE "AssortmentRule" SET "selectedProductIds" = array_remove("selectedProductIds", ${input.productId}), "updatedAt" = NOW() WHERE "organizationId" = ${input.organizationId} AND ${input.productId} = ANY("selectedProductIds")`;
+  await tx.assortmentGrant.deleteMany({
+    where: { productId: input.productId, rule: { organizationId: input.organizationId } },
+  });
+  await tx.productCatalogProduct.deleteMany({
+    where: { productId: input.productId, catalog: { organizationId: input.organizationId } },
+  });
+  await tx.productImageStudioJob.updateMany({
       where: { organizationId: input.organizationId, productId: input.productId },
       data: { productId: null },
     });
-    await tx.productBundleComponent.deleteMany({
-      where: { organizationId: input.organizationId, bundleProductId: input.productId },
-    });
-    await tx.variantAttributeValue.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.storePrice.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.productCost.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.reorderPolicy.deleteMany({ where: { productId: input.productId } });
-    await tx.forecastSnapshot.deleteMany({ where: { productId: input.productId } });
-    await tx.inventorySnapshot.deleteMany({ where: { productId: input.productId } });
-    await tx.storeProduct.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.productComplianceFlags.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.mMarketIncludedProduct.deleteMany({
-      where: { orgId: input.organizationId, productId: input.productId },
-    });
-    await tx.bakaiStoreIncludedProduct.deleteMany({
-      where: { orgId: input.organizationId, productId: input.productId },
-    });
-    await tx.bakaiStoreProductSyncState.deleteMany({
-      where: { orgId: input.organizationId, productId: input.productId },
-    });
-    await tx.oMarketIncludedProduct.deleteMany({
-      where: { orgId: input.organizationId, productId: input.productId },
-    });
-    await tx.oMarketProductSyncState.deleteMany({
-      where: { orgId: input.organizationId, productId: input.productId },
-    });
-    await tx.bazaarCatalogHiddenProduct.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.productImage.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.productBarcode.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.productPack.deleteMany({
-      where: { organizationId: input.organizationId, productId: input.productId },
-    });
-    await tx.productVariant.deleteMany({ where: { productId: input.productId } });
-    await tx.product.delete({ where: { id: input.productId } });
+  await tx.productBundleComponent.deleteMany({
+    where: { organizationId: input.organizationId, bundleProductId: input.productId },
+  });
+  await tx.variantAttributeValue.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.storePrice.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.productCost.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.reorderPolicy.deleteMany({ where: { productId: input.productId } });
+  await tx.forecastSnapshot.deleteMany({ where: { productId: input.productId } });
+  await tx.inventorySnapshot.deleteMany({ where: { productId: input.productId } });
+  await tx.storeProduct.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.productComplianceFlags.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.mMarketIncludedProduct.deleteMany({
+    where: { orgId: input.organizationId, productId: input.productId },
+  });
+  await tx.bakaiStoreIncludedProduct.deleteMany({
+    where: { orgId: input.organizationId, productId: input.productId },
+  });
+  await tx.bakaiStoreProductSyncState.deleteMany({
+    where: { orgId: input.organizationId, productId: input.productId },
+  });
+  await tx.oMarketIncludedProduct.deleteMany({
+    where: { orgId: input.organizationId, productId: input.productId },
+  });
+  await tx.oMarketProductSyncState.deleteMany({
+    where: { orgId: input.organizationId, productId: input.productId },
+  });
+  await tx.bazaarCatalogHiddenProduct.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.productImage.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.productBarcode.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.productPack.deleteMany({
+    where: { organizationId: input.organizationId, productId: input.productId },
+  });
+  await tx.productVariant.deleteMany({ where: { productId: input.productId } });
+  await tx.product.delete({ where: { id: input.productId } });
 
-    await writeAuditLog(tx, {
+  await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
       action: "PRODUCT_DELETE",
@@ -4998,5 +5404,5 @@ const deleteProductRecords = async (tx: Prisma.TransactionClient, input: DeleteP
       requestId: input.requestId,
     });
 
-    return { id: input.productId, storeIds: affectedStores.map((s) => s.storeId) };
+  return { id: input.productId, storeIds: affectedStores.map((s) => s.storeId) };
 };

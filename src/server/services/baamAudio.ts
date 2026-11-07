@@ -7,6 +7,17 @@ import { prisma } from "@/server/db/prisma";
 import type { Context } from "@/server/trpc/trpc";
 import { baamJson, ownBaamConversation } from "./baamConversations";
 import { AppError } from "./errors";
+import {
+  reserveSubscriptionUsage,
+  startSubscriptionUsage,
+  settleSubscriptionUsage,
+  type UsageLease,
+} from "@/server/billing/subscriptionUsage";
+import {
+  reserveProviderExpense,
+  settleProviderExpense,
+  type ProviderExpense,
+} from "@/server/billing/providerExpense";
 
 export const BAAM_AUDIO_MAX_BYTES = 3 * 1024 * 1024;
 export const BAAM_AUDIO_MAX_SECONDS = 90;
@@ -150,7 +161,22 @@ export async function transcribeBaamAudio(
       throw error;
     }
   }
+  let usageLease: UsageLease = null;
+  let expense: ProviderExpense | null = null;
   try {
+    usageLease = await reserveSubscriptionUsage({
+      organizationId: scope.organizationId,
+      resource: "ai",
+      operationKey: `baam-voice:${transcription.id}`,
+    });
+    await startSubscriptionUsage(usageLease);
+    if (usageLease)
+      expense = await reserveProviderExpense({
+        organizationId: scope.organizationId,
+        kind: "text",
+        operationKey: `voice-provider:${transcription.id}:${leaseUntil.getTime()}`,
+        estimatedMinor: Math.ceil((duration * 45) / 60),
+      });
     const form = new FormData();
     const extension = mime.includes("mp4")
       ? "mp4"
@@ -205,6 +231,8 @@ export async function transcribeBaamAudio(
       signal: AbortSignal.timeout(75_000),
     });
     if (!response.ok) {
+      if (response.status >= 400 && response.status < 500 && response.status !== 408)
+        await settleProviderExpense(expense, 0);
       ctx.logger.warn({ status: response.status }, "BAAM transcription provider failed");
       throw new AppError("baamVoiceUnavailable", "BAD_REQUEST", 400);
     }
@@ -216,21 +244,28 @@ export async function transcribeBaamAudio(
       .parse(await response.json());
     await ownBaamConversation(ctx, conversationId);
     if (!parsed.text.trim()) throw new AppError("baamAudioEmpty", "BAD_REQUEST", 400);
-    const completed = await prisma.baamTranscription.updateMany({
-      where: { id: transcription.id, status: "PROCESSING", leaseUntil },
-      data: {
-        status: "COMPLETED",
-        text: normalizeBaamTranscript(
-          parsed.text,
-          products.map((p) => p.sku),
-        ),
-        languages: baamJson(parsed.languages ?? []),
-        needsReview: true,
-      },
+    await settleProviderExpense(expense);
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${scope.organizationId} FOR UPDATE`;
+      const completed = await tx.baamTranscription.updateMany({
+        where: { id: transcription.id, status: "PROCESSING", leaseUntil },
+        data: {
+          status: "COMPLETED",
+          text: normalizeBaamTranscript(
+            parsed.text,
+            products.map((p) => p.sku),
+          ),
+          languages: baamJson(parsed.languages ?? []),
+          needsReview: true,
+        },
+      });
+      if (!completed.count) throw new AppError("baamAudioProcessing", "CONFLICT", 409);
+      await settleSubscriptionUsage(usageLease, true, tx);
     });
-    if (!completed.count) throw new AppError("baamAudioProcessing", "CONFLICT", 409);
     return await prisma.baamTranscription.findUniqueOrThrow({ where: { id: transcription.id } });
   } catch (error) {
+    await settleProviderExpense(expense);
+    await settleSubscriptionUsage(usageLease, false);
     await prisma.baamTranscription.updateMany({
       where: { id: transcription.id, status: "PROCESSING", leaseUntil },
       data: {

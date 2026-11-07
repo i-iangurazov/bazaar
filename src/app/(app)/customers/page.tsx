@@ -92,6 +92,15 @@ const parseOption = <T extends string>(value: string | null, options: readonly T
 const CustomerDatabasePage = () => {
   const { data: session } = useSession();
   const canManageCustomers = hasPermission({ role: session?.user?.role }, "manageCustomers");
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
+  const canExport = Boolean(
+    billing.data?.featureFlags.exports ||
+    (billing.data?.featureFlags.rawDataExport &&
+      (session?.user?.isOrgOwner || session?.user?.role === "ADMIN")),
+  );
   const t = useTranslations("customers");
   const tCommon = useTranslations("common");
   const purchaseText = useTranslations("customerPurchases");
@@ -118,8 +127,12 @@ const CustomerDatabasePage = () => {
   );
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
-  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(searchParams.get("customerId"));
-  useEffect(() => { setDetailCustomerId(searchParams.get("customerId")); }, [searchParams]);
+  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(
+    searchParams.get("customerId"),
+  );
+  useEffect(() => {
+    setDetailCustomerId(searchParams.get("customerId"));
+  }, [searchParams]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("xlsx");
   const [selectedExportColumns, setSelectedExportColumns] = useState<CustomerExportColumnKey[]>([
@@ -388,7 +401,11 @@ const CustomerDatabasePage = () => {
             </Button>
           </>
         ) : (
-          <Button className="mt-3" onClick={openAdd} disabled={!canManageCustomers || !selectedStore}>
+          <Button
+            className="mt-3"
+            onClick={openAdd}
+            disabled={!canManageCustomers || !selectedStore}
+          >
             {t("actions.add")}
           </Button>
         )}
@@ -403,16 +420,27 @@ const CustomerDatabasePage = () => {
         subtitle={t("subtitle")}
         action={
           <div className="flex flex-wrap gap-2">
+            {canExport ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setExportOpen(true)}
+                disabled={
+                  !canManageCustomers ||
+                  !selectedStore ||
+                  customersQuery.isLoading ||
+                  !customersQuery.data?.total
+                }
+              >
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+                {t("actions.export")}
+              </Button>
+            ) : null}
             <Button
               type="button"
-              variant="outline"
-              onClick={() => setExportOpen(true)}
-              disabled={!canManageCustomers || !selectedStore || customersQuery.isLoading || !customersQuery.data?.total}
+              onClick={openAdd}
+              disabled={!canManageCustomers || !selectedStore}
             >
-              <DownloadIcon className="h-4 w-4" aria-hidden />
-              {t("actions.export")}
-            </Button>
-            <Button type="button" onClick={openAdd} disabled={!canManageCustomers || !selectedStore}>
               {t("actions.add")}
             </Button>
           </div>
@@ -534,7 +562,10 @@ const CustomerDatabasePage = () => {
 
       {customersQuery.error ? (
         <Card className="bazaar-admin-surface">
-          <CardContent className="bazaar-admin-error flex flex-wrap items-center gap-2" role="alert">
+          <CardContent
+            className="bazaar-admin-error flex flex-wrap items-center gap-2"
+            role="alert"
+          >
             <span>{translateError(tErrors, customersQuery.error)}</span>
             <Button
               type="button"
@@ -673,8 +704,13 @@ const CustomerDatabasePage = () => {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <IconButton icon={PhoneIcon} label={t("actions.call")} variant="secondary"
-                    href={customer.phone ? `tel:${customer.phone}` : undefined} disabled={!customer.phone} />
+                  <IconButton
+                    icon={PhoneIcon}
+                    label={t("actions.call")}
+                    variant="secondary"
+                    href={customer.phone ? `tel:${customer.phone}` : undefined}
+                    disabled={!customer.phone}
+                  />
                   <IconButton
                     type="button"
                     variant="secondary"
@@ -858,10 +894,19 @@ const CustomerDatabasePage = () => {
           </div>
         ) : customerDetail ? (
           <div className="space-y-5">
-            <Button variant="secondary" asChild><Link href={reportHref("/reports/analytics", {
-              customerId: customerDetail.customer.id, channel: "all", view: "products",
-              dateFrom: addBusinessDays(businessDateKey(new Date()), -29), dateTo: businessDateKey(new Date()),
-            })}>{purchaseText("openReport")}</Link></Button>
+            <Button variant="secondary" asChild>
+              <Link
+                href={reportHref("/reports/analytics", {
+                  customerId: customerDetail.customer.id,
+                  channel: "all",
+                  view: "products",
+                  dateFrom: addBusinessDays(businessDateKey(new Date()), -29),
+                  dateTo: businessDateKey(new Date()),
+                })}
+              >
+                {purchaseText("openReport")}
+              </Link>
+            </Button>
             <CustomerLoyaltyHistory customerId={customerDetail.customer.id} />
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">{t("detail.contactInfo")}</h3>
@@ -930,7 +975,12 @@ const CustomerDatabasePage = () => {
                     <div key={order.id} className="bazaar-admin-modal-card">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <Link className="font-semibold text-primary hover:underline" href={`/reports/receipts?receiptId=${encodeURIComponent(order.id)}`}>{order.number}</Link>
+                          <Link
+                            className="font-semibold text-primary hover:underline"
+                            href={`/reports/receipts?receiptId=${encodeURIComponent(order.id)}`}
+                          >
+                            {order.number}
+                          </Link>
                           <p className="text-xs text-muted-foreground">
                             {formatDateTime(order.completedAt ?? order.createdAt, locale)}
                           </p>

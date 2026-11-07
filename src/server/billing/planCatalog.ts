@@ -1,5 +1,9 @@
 import type { OrganizationPlan } from "@prisma/client";
-import { PLAN_CODES, toPlanCode, type PlanCode, type PlanFeature } from "@/lib/billing/plans";
+import {
+  CURRENT_CATALOG_VERSION, PUBLISHED_CATALOG_VERSION, LEGACY_CATALOG_VERSION, NEW_MONTHLY_PRICES_KGS,
+  type SubscriptionCatalogVersion, type SubscriptionExtras, validateSubscriptionExtras,
+} from "@/lib/billing/subscriptionPricing";
+import { PLAN_CODES, PLAN_FEATURE_CODES, toPlanCode, type PlanCode, type PlanFeature } from "@/lib/billing/plans";
 
 export { PLAN_CODES, toPlanCode } from "@/lib/billing/plans";
 export type { PlanCode, PlanFeature } from "@/lib/billing/plans";
@@ -17,9 +21,21 @@ export type PlanDefinition = {
   limits: PlanLimits;
   features: PlanFeatureMap;
   monthlyPriceKgs: number;
+  usageLimits: PlanUsageLimits;
+  countArchivedProducts: boolean;
 };
 
-const PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
+export type PlanUsageLimits = {
+  ai: number | null;
+  images: number | null;
+  marketingEmails: number | null;
+  externalApi: number | null;
+  marketplaceChannels: number | null;
+  marketplaceRunsDaily: number | null;
+  marketplaceFullRunsDaily: number | null;
+};
+
+const LEGACY_PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
   STARTER: {
     maxStores: 1,
     maxProducts: 1000,
@@ -37,13 +53,13 @@ const PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
   },
 };
 
-const PLAN_PRICES_KGS: Record<PlanCode, number> = {
+const LEGACY_PLAN_PRICES_KGS: Record<PlanCode, number> = {
   STARTER: 1750,
   BUSINESS: 4375,
   ENTERPRISE: 8750,
 };
 
-const PLAN_FEATURES: Record<PlanCode, PlanFeatureMap> = {
+const PLAN_FEATURES: Record<PlanCode, Partial<PlanFeatureMap>> = {
   STARTER: {
     imports: false,
     exports: false,
@@ -94,7 +110,7 @@ const PLAN_FEATURES: Record<PlanCode, PlanFeatureMap> = {
   },
 };
 
-const FEATURE_ERROR_KEYS: Record<PlanFeature, string> = {
+const FEATURE_ERROR_KEYS: Partial<Record<PlanFeature, string>> = {
   imports: "featureLockedImports",
   exports: "featureLockedExports",
   analytics: "featureLockedAnalytics",
@@ -128,44 +144,103 @@ const toPositiveNumber = (value: string | undefined) => {
   return parsed;
 };
 
-export const getPlanLimits = (plan: OrganizationPlan | string): PlanLimits => {
-  return PLAN_LIMITS[toPlanCode(plan)];
+const NEW_PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
+  STARTER: { maxStores: 1, maxProducts: 1000, maxActiveUsers: 2 },
+  BUSINESS: { maxStores: 1, maxProducts: 5000, maxActiveUsers: 5 },
+  ENTERPRISE: { maxStores: 1, maxProducts: 15000, maxActiveUsers: 15 },
 };
 
-export const getPlanFeatureMap = (plan: OrganizationPlan | string): PlanFeatureMap => {
-  return PLAN_FEATURES[toPlanCode(plan)];
+export const getPlanLimits = (
+  plan: OrganizationPlan | string,
+  version: SubscriptionCatalogVersion = LEGACY_CATALOG_VERSION,
+  extras?: SubscriptionExtras,
+): PlanLimits => {
+  const code = toPlanCode(plan);
+  if (extras) validateSubscriptionExtras(code, extras);
+  const base = (version === CURRENT_CATALOG_VERSION ? NEW_PLAN_LIMITS : LEGACY_PLAN_LIMITS)[code];
+  // Add-ons are a new-catalog product. Existing contracts keep their resources.
+  const extraStores = version === CURRENT_CATALOG_VERSION ? extras?.stores ?? 0 : 0;
+  const reserve = version === CURRENT_CATALOG_VERSION ? extras?.productPacks ?? 0 : 0;
+  return { maxStores: base.maxStores + extraStores, maxProducts: base.maxProducts + reserve * 1000,
+    maxActiveUsers: base.maxActiveUsers + reserve * 2 };
 };
 
-export const getPlanFeatures = (plan: OrganizationPlan | string): PlanFeature[] => {
-  const map = getPlanFeatureMap(plan);
-  return (Object.keys(map) as PlanFeature[]).filter((feature) => map[feature]);
+export const getPlanFeatureMap = (
+  plan: OrganizationPlan | string,
+  version: SubscriptionCatalogVersion = LEGACY_CATALOG_VERSION,
+): PlanFeatureMap => {
+  const code = toPlanCode(plan);
+  const legacy = PLAN_FEATURES[code];
+  const flags = Object.fromEntries(PLAN_FEATURE_CODES.map((feature) =>
+    [feature, legacy[feature] ?? true])) as PlanFeatureMap;
+  if (version === LEGACY_CATALOG_VERSION) return { ...flags, priceBooks: flags.storePrices };
+  const managed = code !== "STARTER";
+  const advanced = code === "ENTERPRISE";
+  return { ...flags,
+    stockCounts: true, storePrices: true, supportToolkit: true,
+    bundles: advanced, expiryLots: advanced, periodClose: advanced,
+    kkm: false,
+    bulkProducts: managed, priceBooks: managed, assortments: managed,
+    purchaseOrders: managed, replenishment: advanced, loyalty: managed,
+    emailMarketing: managed, marketingAutomation: advanced, ownSender: advanced,
+    bazaarCatalog: managed, bazaarApi: advanced, marketplaces: advanced,
+    bakaiExport: managed, bulkAiContent: managed, imageStudio: managed,
+    initialImport: true, rawDataExport: true,
+  };
 };
 
-export const hasFeature = (plan: OrganizationPlan | string, feature: PlanFeature) => {
-  return getPlanFeatureMap(plan)[feature] === true;
+export const getPlanUsageLimits = (
+  plan: OrganizationPlan | string,
+  version: SubscriptionCatalogVersion = LEGACY_CATALOG_VERSION,
+): PlanUsageLimits => {
+  if (version === LEGACY_CATALOG_VERSION) return { ai: null, images: null, marketingEmails: null,
+    externalApi: null, marketplaceChannels: null, marketplaceRunsDaily: null, marketplaceFullRunsDaily: null };
+  const code = toPlanCode(plan);
+  return {
+    ai: { STARTER: 100, BUSINESS: 300, ENTERPRISE: 500 }[code],
+    images: { STARTER: 0, BUSINESS: 5, ENTERPRISE: 10 }[code],
+    marketingEmails: { STARTER: 0, BUSINESS: 500, ENTERPRISE: 1500 }[code],
+    externalApi: code === "ENTERPRISE" ? 10000 : 0,
+    marketplaceChannels: code === "ENTERPRISE" ? 1 : 0,
+    marketplaceRunsDaily: code === "ENTERPRISE" ? 24 : 0,
+    marketplaceFullRunsDaily: code === "ENTERPRISE" ? 1 : 0,
+  };
 };
 
-export const getFeatureLockedErrorKey = (feature: PlanFeature) => FEATURE_ERROR_KEYS[feature];
-
-export const getPlanMonthlyPriceKgsOverride = (plan: OrganizationPlan | string) => {
-  const key = PLAN_PRICE_OVERRIDE_ENV_KEY[toPlanCode(plan)];
-  return toPositiveNumber(process.env[key]);
+export const getPlanFeatures = (plan: OrganizationPlan | string,
+  version: SubscriptionCatalogVersion = LEGACY_CATALOG_VERSION): PlanFeature[] => {
+  const map = getPlanFeatureMap(plan, version);
+  return PLAN_FEATURE_CODES.filter((feature) => map[feature]);
 };
+export const hasFeature = (plan: OrganizationPlan | string, feature: PlanFeature,
+  version: SubscriptionCatalogVersion = LEGACY_CATALOG_VERSION) => getPlanFeatureMap(plan, version)[feature];
+export const getFeatureLockedErrorKey = (feature: PlanFeature) => FEATURE_ERROR_KEYS[feature] ?? "featureLockedPlan";
 
-export const getPlanMonthlyPriceKgs = (plan: OrganizationPlan | string) => {
-  const override = getPlanMonthlyPriceKgsOverride(plan);
+export const getPlanMonthlyPriceKgsOverride = (
+  plan: OrganizationPlan | string,
+  version: SubscriptionCatalogVersion = PUBLISHED_CATALOG_VERSION,
+) => version === LEGACY_CATALOG_VERSION
+  ? toPositiveNumber(process.env[PLAN_PRICE_OVERRIDE_ENV_KEY[toPlanCode(plan)]]) : null;
+
+export const getPlanMonthlyPriceKgs = (
+  plan: OrganizationPlan | string,
+  version: SubscriptionCatalogVersion = PUBLISHED_CATALOG_VERSION,
+) => {
+  const override = getPlanMonthlyPriceKgsOverride(plan, version);
   if (override !== null) {
     return override;
   }
-  return PLAN_PRICES_KGS[toPlanCode(plan)];
+  return (version === LEGACY_CATALOG_VERSION ? LEGACY_PLAN_PRICES_KGS : NEW_MONTHLY_PRICES_KGS)[toPlanCode(plan)];
 };
 
-export const getPlanCatalogEntry = (plan: PlanCode): PlanDefinition => ({
+export const getPlanCatalogEntry = (plan: PlanCode, version: SubscriptionCatalogVersion = PUBLISHED_CATALOG_VERSION): PlanDefinition => ({
   code: plan,
-  limits: PLAN_LIMITS[plan],
-  features: PLAN_FEATURES[plan],
-  monthlyPriceKgs: getPlanMonthlyPriceKgs(plan),
+  limits: getPlanLimits(plan, version),
+  features: getPlanFeatureMap(plan, version),
+  usageLimits: getPlanUsageLimits(plan, version),
+  countArchivedProducts: version === LEGACY_CATALOG_VERSION,
+  monthlyPriceKgs: getPlanMonthlyPriceKgs(plan, version),
 });
 
-export const getPlanCatalogEntries = () =>
-  PLAN_CODES.map((planCode) => getPlanCatalogEntry(planCode));
+export const getPlanCatalogEntries = (version: SubscriptionCatalogVersion = PUBLISHED_CATALOG_VERSION) =>
+  PLAN_CODES.map((planCode) => getPlanCatalogEntry(planCode, version));

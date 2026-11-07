@@ -9,6 +9,7 @@ import {
 } from "./lib/locales";
 import { canAccessAppRoute, getRoleHomePath } from "./lib/roleAccess";
 import { legalDraftPreviewAllowed } from "./lib/legalPreview";
+import { legalPublicationState } from "./lib/legalPublication";
 import {
   acquisitionCookieName,
   acquisitionFromSearch,
@@ -67,6 +68,7 @@ export const middleware = async (request: NextRequest) => {
   // Reject unpublished legal drafts before rendering, including locale aliases.
   if (
     /^\/(?:ru\/|kg\/|ky\/|en\/)?legal(?:\/|$)/.test(pathname) &&
+    !legalPublicationState(process.env).published &&
     !legalDraftPreviewAllowed(process.env, request.headers.get("host"))
   ) {
     return new NextResponse(null, {

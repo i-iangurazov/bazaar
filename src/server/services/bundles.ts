@@ -1,3 +1,4 @@
+import { assertFeatureEnabled, assertFeatureCanBeConfigured } from "@/server/services/planLimits";
 import { assertProductQuantity } from "./productQuantity";
 import { randomUUID } from "node:crypto";
 import { Prisma, StockMovementType } from "@prisma/client";
@@ -57,8 +58,10 @@ export const addBundleComponent = async (input: {
   organizationId: string;
   actorId: string;
   requestId: string;
-}) =>
-  prisma.$transaction(async (tx) => {
+}) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "bundles" });
+  return prisma.$transaction(async (tx) => {
+    await assertFeatureCanBeConfigured(input.organizationId, "bundles", tx);
     const bundle = await tx.product.findUnique({ where: { id: input.bundleProductId } });
     if (!bundle || bundle.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
@@ -108,15 +111,19 @@ export const addBundleComponent = async (input: {
 
     return componentLine;
   });
+};
 
 export const removeBundleComponent = async (input: {
   componentId: string;
   organizationId: string;
   actorId: string;
   requestId: string;
-}) =>
-  prisma.$transaction(async (tx) => {
-    const component = await tx.productBundleComponent.findUnique({ where: { id: input.componentId } });
+}) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "bundles" });
+  return prisma.$transaction(async (tx) => {
+    const component = await tx.productBundleComponent.findUnique({
+      where: { id: input.componentId },
+    });
     if (!component || component.organizationId !== input.organizationId) {
       throw new AppError("bundleComponentNotFound", "NOT_FOUND", 404);
     }
@@ -136,6 +143,7 @@ export const removeBundleComponent = async (input: {
 
     return removed;
   });
+};
 
 export const assembleBundle = async (input: {
   storeId: string;
@@ -146,6 +154,7 @@ export const assembleBundle = async (input: {
   requestId: string;
   idempotencyKey: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "bundles" });
   let affectedProductIds: string[] = [];
   const result = await prisma.$transaction(async (tx) => {
     const { result } = await withIdempotency(
@@ -201,7 +210,9 @@ export const assembleBundle = async (input: {
           organizationId: input.organizationId,
         });
 
-        affectedProductIds = bundle.bundleComponents.map((component) => component.componentProductId);
+        affectedProductIds = bundle.bundleComponents.map(
+          (component) => component.componentProductId,
+        );
         affectedProductIds.push(bundleMovement.snapshot.productId);
 
         await writeAuditLog(tx, {

@@ -178,7 +178,9 @@ describe("product spec suggestions", () => {
     const userText = body.input[1]?.content[0]?.text ?? "";
     expect(systemText).toContain("Для material возвращай материал");
     expect(systemText).toContain("Для compatibility не придумывай точную модель");
-    expect(userText).toContain("Разрешенные поля ответа: material, compatibility, design, features, purpose.");
+    expect(userText).toContain(
+      "Разрешенные поля ответа: material, compatibility, design, features, purpose.",
+    );
   });
 
   it("maps OpenAI rate limits to application rate limit errors", async () => {
@@ -187,11 +189,13 @@ describe("product spec suggestions", () => {
       buffer: Buffer.from([9, 9, 9]),
       contentType: "image/png",
     });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: { message: "Rate limit reached" } }), {
-        status: 429,
-        headers: { "content-type": "application/json" },
-      }),
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "Rate limit reached" } }), {
+          status: 429,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
     );
     vi.stubGlobal("fetch", fetchMock);
 

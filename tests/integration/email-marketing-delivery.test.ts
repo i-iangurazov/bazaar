@@ -590,7 +590,7 @@ describeDb("email marketing durable delivery", () => {
     }
   });
 
-  it("keeps a provider network timeout retry-safe instead of terminally failing", async () => {
+  it("keeps an unknown provider network outcome retry-safe with its durable operation key", async () => {
     const { org, store } = await seedBase({ plan: "BUSINESS" });
     const customer = await prisma.customer.create({
       data: {
@@ -641,9 +641,10 @@ describeDb("email marketing durable delivery", () => {
         prisma.emailCampaignRecipient.findUniqueOrThrow({ where: { id: recipient.id } }),
       ).resolves.toMatchObject({
         status: EmailCampaignRecipientStatus.QUEUED,
-        normalizedErrorCategory: "PROVIDER_TEMPORARY",
+        normalizedErrorCategory: "UNKNOWN",
         attemptCount: 1,
         terminalAt: null,
+        sendOperationKey: recipient.sendOperationKey,
       });
     } finally {
       fetchMock.mockRestore();

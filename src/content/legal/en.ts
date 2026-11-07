@@ -5,8 +5,12 @@ export const enLegal: LegalCopy = {
   navigation: "Bazaar documents",
   contents: "On this page",
   draft: "Draft · local preview only",
+  published: "Version dated 7 November 2026",
+  paymentSystemsTitle: "Bank cards",
+  paymentSystemsNotice:
+    "Availability of a particular card and payment method is confirmed on the FreedomPay checkout page.",
   draftNotice:
-    "Draft for review. The seller's details have not been provided. This text is unpublished and is not an effective offer. Viewing this page does not enable payment collection.",
+    "Draft for review. Seller details were verified; the public address and support mailbox still need confirmation. This is unpublished and is not an effective offer. Viewing this page does not enable payments.",
   missing: "To be completed from the entrepreneur's documents",
   sellerTitle: "Service provider details",
   sellerIntro:
@@ -25,6 +29,7 @@ export const enLegal: LegalCopy = {
     bankName: "Bank",
     beneficiary: "Payment beneficiary",
     accountNumber: "Bank account",
+    accountCurrency: "Account currency",
     bankCode: "Bank identification code (BIK)",
   },
   pricing: "Plans and features",
@@ -59,6 +64,8 @@ export const enLegal: LegalCopy = {
             "Bazaar supports product and stock records, POS, orders, inventory operations and reporting. Available features and limits on stores, products and users depend on the selected plan, published under Plans and features and displayed in the account before payment.",
             "Hardware, fiscal services and external integrations may require compatible equipment, configuration, a separate agreement or payment to a third party. Paying for Bazaar does not itself activate every external service. AI features may make mistakes; verify financial and inventory decisions against source records.",
             "The service is delivered remotely; no physical goods are shipped. Internet access and a compatible browser are required. Contact the provider for access and setup questions.",
+            "Add-ons accompany the selected plan and do not unlock another plan’s features. Starter cannot add locations; the total location limits with add-ons are 1, 5 and 15 respectively. One capacity reserve adds 1,000 product cards and two users; only one such pack may be active at a time. Products and people are counted across the organization and are not multiplied by location count.",
+            "Included AI, image, email and external API allowances are shown in the plan. Monthly allowances renew monthly even when six or twelve months are prepaid. Processing reserves capacity before execution; failed operations release unused reservations. Automatic paid overages are not enabled.",
           ],
         },
         {
@@ -66,7 +73,7 @@ export const enLegal: LegalCopy = {
           title: "4. Price and payment",
           paragraphs: [
             "Prices are in Kyrgyz som (KGS). The final amount and selected plan are shown before payment confirmation. If the price changes before invoice creation, the updated amount must be confirmed again. The price of an already paid period cannot be increased retrospectively.",
-            "Access is paid for one calendar month. The customer initiates a new payment for the next period. This offer does not provide for automatic monthly charges or mandatory card saving.",
+            "Access is purchased in one payment for a selected term of 1, 6 or 12 calendar months, when that term is available in the published plan. The discount, its application to extra capacity and the full amount are determined by the selected offer and shown before payment. There are no automatic charges or mandatory card saving.",
             "When online payment is available, FreedomPay processes the transaction. Available payment methods and restrictions are shown on its payment page. Card details and bank verification codes are entered on the provider's side. The payer's bank determines any bank fees and currency conversion.",
           ],
         },
@@ -76,8 +83,8 @@ export const enLegal: LegalCopy = {
           paragraphs: [
             "The paid period is recorded in the account after Bazaar's server verifies successful payment. Returning from the payment page alone is not proof of payment. If confirmation is delayed, check the invoice status or contact support instead of paying again.",
             "If an existing paid or trial period is still active, the new period starts after it ends. If access has expired, the new period starts after payment confirmation. Exact dates are displayed in the account. A month is not a fixed 30 days. Calendar boundaries are calculated in UTC: if the corresponding day does not exist in the following month, its last day is used. The account displays exact dates in the application time zone.",
-            "Early payment adds a period instead of replacing access already granted. While a paid period remains active, changing plans through a new self-service online payment is available after that period ends; other changes require a separate arrangement with support.",
-            "If the next period is not paid for, paid access is restricted when the current period ends. This does not authorise a card charge or data deletion. Account and data deletion are handled separately under the privacy policy and applicable retention requirements.",
+            "Early renewal adds the selected term after existing access. An upgrade credits unused service value and preserves the end date; the additional payment is shown before confirmation. Plan and capacity reductions start next period if the selected capacity accommodates current usage. Changes across already prepaid future periods are arranged with support. Existing individual agreements and lifetime free access remain in force.",
+            "New contracts provide seven calendar days to renew after a paid period ends, unless access has been cancelled or restricted on another basis. This does not extend an unpaid trial. After that grace period, creating and changing operational data is restricted; history is preserved, with available read access, obtaining your data and renewal remaining accessible. Expiry does not authorize a card charge or data deletion. Existing customers retain their agreed terms.",
           ],
         },
         {
@@ -116,7 +123,7 @@ export const enLegal: LegalCopy = {
           title: "1. Payments covered",
           paragraphs: [
             "These rules cover payment for access to Bazaar software. Stores using Bazaar handle refunds to their shoppers under their own agreements and rules.",
-            "Each renewal requires a separate payment initiated by the customer. To stop renewal for the following month, do not create another payment. This does not cancel a payment already made or replace a refund request.",
+            "Each renewal requires a separate payment initiated by the customer. To stop renewal for the next period, do not create another payment. This does not cancel an existing payment or replace a refund request.",
           ],
         },
         {
@@ -188,13 +195,13 @@ export const enLegal: LegalCopy = {
     payment: {
       title: "Subscription payment",
       description:
-        "Paying for one month of Bazaar access through FreedomPay and checking the result.",
+        "Paying for a month, six months or a year of Bazaar access through FreedomPay and checking the result.",
       sections: [
         {
           id: "before",
           title: "1. What you are paying for",
           paragraphs: [
-            "Payment covers one calendar month of Bazaar access on the selected plan. Prices are in Kyrgyz som (KGS). Compare features and limits on the plans page; the final amount appears in the account before confirmation.",
+            "Payment covers 1, 6 or 12 calendar months of Bazaar access on the selected plan with the chosen extra capacity. Prices are in Kyrgyz som (KGS). Compare features and limits on the plans page; the full amount and discount appear in the account before confirmation.",
             "This pays for business software, not purchases by shoppers at a store's POS. Online payment is available only with acquiring connected and for organisations eligible for this renewal method. If no payment button is available, contact support; do not pay through somebody else's account.",
           ],
         },
@@ -219,8 +226,8 @@ export const enLegal: LegalCopy = {
           id: "renewal",
           title: "4. Renewal",
           paragraphs: [
-            "If a paid or trial period is still active, the purchased month is added after it ends. Without an active period, it starts after payment confirmation. The account displays exact start and end dates.",
-            "You initiate a new payment for the next month. There are no automatic monthly charges. While a paid period remains active, a self-service payment changing the plan is available after that period ends; contact support about special arrangements.",
+            "If a paid or trial period is still active, the selected term is added after it ends. Without an active period, it starts after payment confirmation. The account displays exact start and end dates.",
+            "Early renewal adds the selected term after existing access. An upgrade credits unused service value and preserves the end date; the additional payment is shown before confirmation. Plan and capacity reductions start next period if the selected capacity accommodates current usage. Changes across already prepaid future periods are arranged with support. Existing individual agreements and lifetime free access remain in force.",
           ],
         },
         {

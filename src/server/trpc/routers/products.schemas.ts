@@ -397,6 +397,9 @@ export const importCsvRowSchema = z.object({
 
 export const importProductsCsvInputSchema = z.object({
   idempotencyKey: z.string().min(8),
+  initialImportChunk: z
+    .object({ sessionId: z.string().min(1), chunkIndex: z.number().int().min(0).max(99) })
+    .optional(),
   rows: z.array(importCsvRowSchema).min(1),
   source: importSourceEnum.optional(),
   storeId: z.string().min(1),

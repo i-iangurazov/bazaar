@@ -2,8 +2,12 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { AppError } from "@/server/services/errors";
 import type { LoyaltyRules } from "@/server/services/loyalty/calc";
+import { assertFeatureCanBeConfigured } from "@/server/services/planLimits";
 
-type LoyaltyClient = Pick<PrismaClient | Prisma.TransactionClient, "loyaltyProgram" | "loyaltyProgramStore">;
+type LoyaltyClient = Pick<
+  PrismaClient | Prisma.TransactionClient,
+  "loyaltyProgram" | "loyaltyProgramStore"
+>;
 
 /** First-version defaults. The programme stays disabled until an owner enables it. */
 export const DEFAULT_LOYALTY_RULES = {
@@ -97,7 +101,14 @@ export const upsertLoyaltyProgram = async (
   input: LoyaltySettingsInput,
 ) =>
   client.$transaction(async (tx) => {
-    if (input.pointValueKgs !== undefined && (!Number.isFinite(input.pointValueKgs) || input.pointValueKgs < 0.01 || new Prisma.Decimal(input.pointValueKgs).decimalPlaces() > 2)) throw new AppError("loyaltyInvalidPointValue", "BAD_REQUEST", 400);
+    if (input.enabled) await assertFeatureCanBeConfigured(organizationId, "loyalty", tx);
+    if (
+      input.pointValueKgs !== undefined &&
+      (!Number.isFinite(input.pointValueKgs) ||
+        input.pointValueKgs < 0.01 ||
+        new Prisma.Decimal(input.pointValueKgs).decimalPlaces() > 2)
+    )
+      throw new AppError("loyaltyInvalidPointValue", "BAD_REQUEST", 400);
     const defaults = DEFAULT_LOYALTY_RULES;
     const program = await tx.loyaltyProgram.upsert({
       where: { organizationId },

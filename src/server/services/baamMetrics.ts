@@ -4,8 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import {
-  getPlanFeatures,
-  hasPlanFeature,
+  getOrganizationPlan,
   resolveOrganizationAccessState,
 } from "@/server/services/planLimits";
 import {
@@ -24,6 +23,7 @@ export const readBaamAccessScope = async (
   actorId: string,
   storeId?: string,
   requireAnalytics = true,
+  allowReadOnly = false,
 ) => {
   const actor = await tx.user.findUnique({
     where: { id: actorId },
@@ -42,14 +42,13 @@ export const readBaamAccessScope = async (
   if (actor.role !== "ADMIN" && actor.role !== "MANAGER") {
     throw new AppError("forbidden", "FORBIDDEN", 403);
   }
-  const organization = await tx.organization.findUnique({
-    where: { id: actor.organizationId },
-    select: { plan: true, subscriptionStatus: true, trialEndsAt: true, currentPeriodEndsAt: true, subscriptionBillingMode: true },
-  });
-  if (!organization || !resolveOrganizationAccessState(organization).hasAccess) {
+  const organization = await getOrganizationPlan(actor.organizationId, tx);
+  const historicalRead = allowReadOnly && organization.billingCatalogVersion === "2026-11" &&
+    organization.subscriptionStatus !== "CANCELED";
+  if (!resolveOrganizationAccessState(organization).hasAccess && !historicalRead) {
     throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   }
-  if (requireAnalytics && !hasPlanFeature(organization.plan, "analytics")) {
+  if (requireAnalytics && !organization.entitlements.features.analytics) {
     throw new AppError("featureLockedAnalytics", "FORBIDDEN", 403);
   }
   const stores = await tx.store.findMany({
@@ -71,14 +70,17 @@ export const readBaamAccessScope = async (
   return {
     role: actor.role,
     isOrgOwner: actor.isOrgOwner,
-    planFeatures: getPlanFeatures(organization.plan),
+    planFeatures: Object.entries(organization.entitlements.features).filter(([,enabled]) => enabled).map(([feature]) => feature),
     authorizationFingerprint: createHash("sha256")
       .update(
         JSON.stringify({
           role: actor.role,
           owner: actor.isOrgOwner,
           sessionVersion: actor.sessionVersion,
-          organization,
+          organization: { plan: organization.plan, subscriptionStatus: organization.subscriptionStatus,
+            trialEndsAt: organization.trialEndsAt, currentPeriodEndsAt: organization.currentPeriodEndsAt,
+            subscriptionBillingMode: organization.subscriptionBillingMode, lifetimeAccess: organization.lifetimeAccess,
+            catalogVersion: organization.billingCatalogVersion, extras: organization.subscriptionExtras },
           stores: stores.map((store) => store.id),
         }),
       )
@@ -90,11 +92,11 @@ export const readBaamAccessScope = async (
   };
 };
 
-export const getBaamAccessScope = async (actorId: string, storeId?: string, requireAnalytics = true) =>
+export const getBaamAccessScope = async (actorId: string, storeId?: string, requireAnalytics = true, allowReadOnly = false) =>
   prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-      return readBaamAccessScope(tx, actorId, storeId, requireAnalytics);
+      return readBaamAccessScope(tx, actorId, storeId, requireAnalytics, allowReadOnly);
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15_000 },
   );

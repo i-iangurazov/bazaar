@@ -27,6 +27,9 @@ import { PLAN_CODES, PLAN_FEATURE_CODES, getPlanRank, type PlanCode } from "@/li
 import { formatDateTime, formatNumber as formatLocaleNumber } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 import { SubscriptionPayments } from "@/components/billing/subscription-payments";
+import { SubscriptionUsage } from "@/components/billing/subscription-usage";
+import { SubscriptionAccessNotice } from "@/components/billing/subscription-access-banner";
+import { CURRENT_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
 
 type PlanTier = PlanCode;
 const planOrder = PLAN_CODES;
@@ -86,7 +89,9 @@ const BillingPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">{isForbidden ? tErrors("forbidden") : tCommon("loading")}</p>
+        <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">
+          {isForbidden ? tErrors("forbidden") : tCommon("loading")}
+        </p>
       </div>
     );
   }
@@ -104,6 +109,20 @@ const BillingPage = () => {
         <QueryErrorState error={billingQuery.error} onRetry={() => void billingQuery.refetch()} />
       ) : billingQuery.data ? (
         <div className="space-y-4">
+          <SubscriptionAccessNotice
+            canManage={isAdmin}
+            showBillingLink={false}
+            state={{
+              billingCatalogVersion: billingQuery.data.billingCatalogVersion,
+              lifetimeAccess: billingQuery.data.lifetimeAccess,
+              subscriptionStatus: billingQuery.data.subscriptionStatus,
+              access: {
+                inGrace: billingQuery.data.inGrace,
+                hasAccess: billingQuery.data.hasAccess,
+                graceEndsAt: billingQuery.data.graceEndsAt,
+              },
+            }}
+          />
           {billingQuery.data.limitState === "LIMIT_EXCEEDED" ? (
             <Card className="border-warning/40 bg-warning/10">
               <CardHeader>
@@ -155,7 +174,10 @@ const BillingPage = () => {
                   })}
                 </p>
               ) : null}
-              {billingQuery.data.trialExpired ? (
+              {billingQuery.data.trialExpired &&
+              (billingQuery.data.billingCatalogVersion !== CURRENT_CATALOG_VERSION ||
+                billingQuery.data.lifetimeAccess ||
+                billingQuery.data.subscriptionStatus === "CANCELED") ? (
                 <p className="text-sm text-warning-foreground">{t("trialExpired")}</p>
               ) : billingQuery.data.trialActive ? (
                 <p>{t("trialActive")}</p>
@@ -177,6 +199,7 @@ const BillingPage = () => {
           </Card>
 
           <SubscriptionPayments onUpdated={() => void billingQuery.refetch()} />
+          <SubscriptionUsage />
 
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -450,7 +473,12 @@ const BillingPage = () => {
           >
             <p className="text-sm text-muted-foreground">{t("requestModalDescription")}</p>
             <div className="space-y-2">
-              <label htmlFor="billing-upgrade-message" className="block text-sm font-medium text-foreground">{t("requestMessageLabel")}</label>
+              <label
+                htmlFor="billing-upgrade-message"
+                className="block text-sm font-medium text-foreground"
+              >
+                {t("requestMessageLabel")}
+              </label>
               <Textarea
                 id="billing-upgrade-message"
                 value={requestMessage}

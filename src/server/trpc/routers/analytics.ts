@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { managerProcedure, router, type Context } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
-import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertReadableFeature } from "@/server/billing/coreAccess";
 import {
   getInventoryValue,
   getSalesTrend,
@@ -127,10 +127,7 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({
-          organizationId: ctx.user.organizationId,
-          feature: "analytics",
-        });
+        await assertReadableFeature(ctx.user.organizationId, "analytics");
         const storeScope = await resolveAnalyticsStoreScope(ctx, input.storeId);
         return await getSalesTrend({
           organizationId: ctx.user.organizationId,
@@ -152,10 +149,7 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({
-          organizationId: ctx.user.organizationId,
-          feature: "analytics",
-        });
+        await assertReadableFeature(ctx.user.organizationId, "analytics");
         const storeScope = await resolveAnalyticsStoreScope(ctx, input.storeId);
         return await getTopProducts({
           organizationId: ctx.user.organizationId,
@@ -176,10 +170,7 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({
-          organizationId: ctx.user.organizationId,
-          feature: "analytics",
-        });
+        await assertReadableFeature(ctx.user.organizationId, "analytics");
         const storeScope = await resolveAnalyticsStoreScope(ctx, input.storeId);
         return await getStockoutsLowStockSeries({
           organizationId: ctx.user.organizationId,
@@ -193,7 +184,7 @@ export const analyticsRouter = router({
   inventoryValue: managerProcedure.input(storeScopeSchema).query(async ({ ctx, input }) => {
     const storeId = input?.storeId;
     try {
-      await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+      await assertReadableFeature(ctx.user.organizationId, "analytics");
       const storeScope = await resolveAnalyticsStoreScope(ctx, storeId);
       return await getInventoryValue({
         organizationId: ctx.user.organizationId,
@@ -205,7 +196,7 @@ export const analyticsRouter = router({
   }),
   salesOverview: managerProcedure.input(salesAnalyticsBaseInput).query(async ({ ctx, input }) => {
     try {
-      await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+      await assertReadableFeature(ctx.user.organizationId, "analytics");
       const scope = await resolveSalesAnalyticsScope(ctx, input);
       return await getSalesAnalyticsOverview({
         ...scope,
@@ -220,10 +211,7 @@ export const analyticsRouter = router({
     .input(salesAnalyticsBaseInput)
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({
-          organizationId: ctx.user.organizationId,
-          feature: "analytics",
-        });
+        await assertReadableFeature(ctx.user.organizationId, "analytics");
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await getSalesAnalyticsFilterOptions({
           ...scope,
@@ -245,10 +233,7 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({
-          organizationId: ctx.user.organizationId,
-          feature: "analytics",
-        });
+        await assertReadableFeature(ctx.user.organizationId, "analytics");
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await getSoldProductsAnalytics({
           ...scope,
@@ -264,35 +249,54 @@ export const analyticsRouter = router({
       }
     }),
   soldProductsExport: managerProcedure
-    .input(salesAnalyticsBaseInput.extend({
-      storeId: z.string().min(1).max(200).optional(),
-      registerId: z.string().min(1).max(200).optional(),
-      cashierId: z.string().min(1).max(200).optional(),
-      category: z.string().max(200).optional(),
-      search: z.string().max(200).optional(),
-    }).strict())
+    .input(
+      salesAnalyticsBaseInput
+        .extend({
+          storeId: z.string().min(1).max(200).optional(),
+          registerId: z.string().min(1).max(200).optional(),
+          cashierId: z.string().min(1).max(200).optional(),
+          category: z.string().max(200).optional(),
+          search: z.string().max(200).optional(),
+        })
+        .strict(),
+    )
     .query(async ({ ctx, input }) => {
       try {
         // Reuse the certified live role/plan/store-grant reader. Request input
         // never chooses an organization or supplies its own list of stores.
-        const access = await getBaamAccessScope(ctx.user.id, input.storeId);
+        const access = await getBaamAccessScope(ctx.user.id, input.storeId, true, true);
         if (access.organizationId !== ctx.user.organizationId) {
           throw new AppError("forbidden", "FORBIDDEN", 403);
         }
         if (!access.planFeatures.includes("exports")) {
           throw new AppError("featureLockedExports", "FORBIDDEN", 403);
         }
-        const freshContext = { ...ctx, user: { ...ctx.user, role: access.role, isOrgOwner: access.isOrgOwner, isPlatformOwner: false } };
+        const freshContext = {
+          ...ctx,
+          user: {
+            ...ctx.user,
+            role: access.role,
+            isOrgOwner: access.isOrgOwner,
+            isPlatformOwner: false,
+          },
+        };
         await assertAnalyticsRegisterScope(freshContext, input);
         await assertAnalyticsCashierScope(freshContext, input.cashierId);
         const result = await getSoldProductsAnalyticsExport({
-          organizationId: access.organizationId, storeIds: access.storeIds,
-          registerId: input.registerId, cashierId: input.cashierId,
-          dateFrom: input.dateFrom, dateTo: input.dateTo,
-          category: input.category?.trim() || undefined, search: input.search?.trim() || undefined,
+          organizationId: access.organizationId,
+          storeIds: access.storeIds,
+          registerId: input.registerId,
+          cashierId: input.cashierId,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+          category: input.category?.trim() || undefined,
+          search: input.search?.trim() || undefined,
         });
-        const current = await getBaamAccessScope(ctx.user.id, input.storeId);
-        if (current.organizationId !== access.organizationId || current.authorizationFingerprint !== access.authorizationFingerprint) {
+        const current = await getBaamAccessScope(ctx.user.id, input.storeId, true, true);
+        if (
+          current.organizationId !== access.organizationId ||
+          current.authorizationFingerprint !== access.authorizationFingerprint
+        ) {
           throw new AppError("analyticsExportScopeChanged", "FORBIDDEN", 403);
         }
         return result;
@@ -311,10 +315,7 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({
-          organizationId: ctx.user.organizationId,
-          feature: "analytics",
-        });
+        await assertReadableFeature(ctx.user.organizationId, "analytics");
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await getSalesAnalyticsDayDetail({
           ...scope,
@@ -335,10 +336,7 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({
-          organizationId: ctx.user.organizationId,
-          feature: "analytics",
-        });
+        await assertReadableFeature(ctx.user.organizationId, "analytics");
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await listSalesAnalyticsReceipts({
           ...scope,

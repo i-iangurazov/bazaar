@@ -26,6 +26,7 @@ describe("scheduled job recovery", () => {
     );
     expect(isScheduledJobGroup("recovery")).toBe(true);
     expect(isScheduledJobGroup("arbitrary-provider-job")).toBe(false);
+    expect(scheduledJobGroups.email).toContain("subscription-reminders");
   });
 
   it("runs a group once and reports failed job identities without raw errors", async () => {

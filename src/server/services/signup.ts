@@ -11,6 +11,8 @@ import { consumeAuthToken } from "@/server/services/authTokens";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import { isEmailVerificationRequired } from "@/server/config/auth";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { PUBLISHED_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
+import { createContractTerms } from "@/server/billing/contractTerms";
 import { selfServeSignupEnabled } from "@/server/billing/paymentConfig";
 import { parseAcquisition, type Acquisition } from "@/lib/acquisition";
 
@@ -196,6 +198,8 @@ export const registerBusinessFromToken = async (input: {
           trialEndsAt,
           currentPeriodEndsAt: trialEndsAt,
           subscriptionBillingMode: selfServeSignupEnabled() ? "SELF_SERVE" : "MANUAL",
+          subscriptionContract: { create: { catalogVersion: PUBLISHED_CATALOG_VERSION,
+            termsSnapshot: createContractTerms(PUBLISHED_CATALOG_VERSION) } },
         },
       });
       organizationId = createdOrg.id;

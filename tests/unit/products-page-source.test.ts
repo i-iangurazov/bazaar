@@ -83,9 +83,7 @@ describe("index page source layout", () => {
 
     expect(pageSource).toContain("const handleBulkGenerateDescriptionsForCurrentFilter = async (");
     expect(pageSource).toContain("overwriteExisting: options.overwriteExisting ?? true");
-    expect(pageSource).toContain(
-      "handleBulkGenerateDescriptionsForCurrentFilter({\n                          overwriteExisting: false,",
-    );
+    expect(pageSource).toMatch(/handleBulkGenerateDescriptionsForCurrentFilter\(\{\s*overwriteExisting: false,/);
     expect(pageHeaderStart).toBeGreaterThan(-1);
     expect(tableCardStart).toBeGreaterThan(-1);
     expect(filteredActionStart).toBeGreaterThan(pageHeaderStart);

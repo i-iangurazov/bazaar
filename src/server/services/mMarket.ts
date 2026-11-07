@@ -1,3 +1,16 @@
+import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
+import {
+  reserveSubscriptionUsageBatch,
+  resumeSubscriptionUsage,
+  startSubscriptionUsage,
+  settleSubscriptionUsageBatch,
+} from "@/server/billing/subscriptionUsage";
+import {
+  assertMarketplaceFeature,
+  claimMarketplaceChannel,
+  releaseMarketplaceChannelIfUnused,
+  authorizeMarketplaceExchange,
+} from "./marketplaceSubscription";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
@@ -1992,6 +2005,7 @@ export const updateMMarketConnection = async (input: {
   apiToken?: string | null;
   clearToken?: boolean;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   return prisma.$transaction(async (tx) => {
     const existing = await tx.mMarketIntegration.findUnique({
       where: { orgId: input.organizationId },
@@ -2025,6 +2039,7 @@ export const updateMMarketConnection = async (input: {
     ]);
 
     const mappingsComplete = storesCount > 0 && mappedCount === storesCount;
+    if (nextTokenEncrypted) await claimMarketplaceChannel(input.organizationId, "MMARKET", tx);
     const nextStatus = resolveStoredIntegrationStatus({
       hasToken: Boolean(nextTokenEncrypted),
       mappingsComplete,
@@ -2056,6 +2071,8 @@ export const updateMMarketConnection = async (input: {
       },
     });
 
+    if (!nextTokenEncrypted)
+      await releaseMarketplaceChannelIfUnused(input.organizationId, "MMARKET", tx);
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -2080,6 +2097,7 @@ export const updateMMarketBranchMappings = async (input: {
     mmarketBranchId: string;
   }>;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   const mappingByStoreId = new Map<string, string>();
   for (const mapping of input.mappings) {
     mappingByStoreId.set(mapping.storeId, normalizeBranchId(mapping.mmarketBranchId));
@@ -2239,6 +2257,7 @@ export const bulkGenerateMMarketShortDescriptions = async (input: {
   productIds?: string[];
   logger?: MMarketBulkDescriptionLogger;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   const preflight = await runMMarketPreflight(input.organizationId, input.storeId);
   const requestedProductIds = input.productIds?.length
     ? new Set(input.productIds.map((value) => value.trim()).filter(Boolean))
@@ -2513,6 +2532,8 @@ export const bulkAutofillMMarketSpecs = async (input: {
   productIds?: string[];
   logger?: MMarketBulkSpecsLogger;
 }) => {
+  const subscription = await assertMarketplaceFeature(input.organizationId);
+  const metered = subscription.billingCatalogVersion === "2026-11" && !subscription.lifetimeAccess;
   const preflight = await runMMarketPreflight(input.organizationId, input.storeId);
   const requestedProductIds = input.productIds?.length
     ? new Set(input.productIds.map((value) => value.trim()).filter(Boolean))
@@ -2652,6 +2673,35 @@ export const bulkAutofillMMarketSpecs = async (input: {
     }
   }
 
+  const aiOperationKey = (productId: string) => `mmarket-specs:${input.requestId}:${productId}`;
+  const aiProductIds = products
+    .filter((product) => {
+      const hasImage = [product.photoUrl, ...product.images.map((image) => image.url)].some((url) =>
+        Boolean(normalizeProductImageUrl(url ?? null)),
+      );
+      if (!hasImage || !product.category?.trim()) return false;
+      const current = currentValuesByProduct.get(product.id);
+      return (templatesByCategory.get(product.category.trim()) ?? []).some(
+        (spec) =>
+          (spec.autofillKind === "type" || spec.autofillKind === "color") &&
+          !current?.get(spec.attributeKey)?.length,
+      );
+    })
+    .map((product) => product.id);
+  if (metered && aiProductIds.length > (subscription.entitlements.usageLimits.ai ?? Infinity))
+    throw new AppError("billingUsageLimitReached", "CONFLICT", 409);
+  if (metered && aiProductIds.length)
+    await prisma.$transaction((tx) =>
+      reserveSubscriptionUsageBatch(
+        {
+          organizationId: input.organizationId,
+          resource: "ai",
+          operationKeys: aiProductIds.map(aiOperationKey),
+        },
+        tx,
+      ),
+    );
+
   const productById = new Map(products.map((product) => [product.id, product]));
   let updatedCount = 0;
   let filledValueCount = 0;
@@ -2662,179 +2712,331 @@ export const bulkAutofillMMarketSpecs = async (input: {
   const skipReasonCounts = createBulkAutofillSkipReasonCounts();
   const items: BulkAutofillItemResult[] = [];
 
-  for (const productId of productIds) {
-    const product = productById.get(productId);
-    if (!product || !product.category?.trim()) {
-      skippedCount += 1;
-      skipReasonCounts.noCategory += 1;
-      items.push({
-        productId,
-        sku: product?.sku ?? "",
-        name: product?.name ?? "",
-        status: "skipped",
-        filledValueCount: 0,
-        errorMessage: "missingCategory",
-      });
-      continue;
-    }
-
-    const templateSpecs = templatesByCategory.get(product.category.trim()) ?? [];
-    if (!templateSpecs.length) {
-      skippedCount += 1;
-      skipReasonCounts.noTemplate += 1;
-      items.push({
-        productId: product.id,
-        sku: product.sku,
-        name: product.name,
-        status: "skipped",
-        filledValueCount: 0,
-        errorMessage: "missingSpecTemplate",
-      });
-      continue;
-    }
-
-    const currentValues = currentValuesByProduct.get(product.id) ?? new Map<string, string[]>();
-    const nextValues = new Map<string, unknown>();
-    let stopAfterCurrentProduct = false;
-    let supportedFieldCount = 0;
-    const aiRequests: Array<{
-      attributeKey: string;
-      type: AutofillTemplateSpec["type"];
-      kind: "type" | "color";
-      labelRu: string;
-      options?: string[];
-    }> = [];
-    let aiErrorMessage: string | null = null;
-
-    for (const templateSpec of templateSpecs) {
-      const hasValue = (currentValues.get(templateSpec.attributeKey) ?? []).length > 0;
-      if (hasValue || !templateSpec.autofillKind) {
-        continue;
-      }
-      supportedFieldCount += 1;
-
-      if (templateSpec.autofillKind === "manufacturer") {
-        const manufacturerValue = product.supplier?.name?.trim() || MMARKET_DEFAULT_MANUFACTURER;
-        if (manufacturerValue) {
-          nextValues.set(
-            templateSpec.attributeKey,
-            toStoredAttributeValue(templateSpec.type, manufacturerValue),
-          );
-        }
-        continue;
-      }
-
-      if (templateSpec.autofillKind === "model") {
-        const modelValue = MMARKET_DEFAULT_MODEL || product.sku.trim();
-        if (modelValue) {
-          nextValues.set(
-            templateSpec.attributeKey,
-            toStoredAttributeValue(templateSpec.type, modelValue),
-          );
-        }
-        continue;
-      }
-
-      if (
-        (templateSpec.autofillKind === "type" || templateSpec.autofillKind === "color") &&
-        !aiRequests.some((entry) => entry.attributeKey === templateSpec.attributeKey)
-      ) {
-        aiRequests.push({
-          attributeKey: templateSpec.attributeKey,
-          type: templateSpec.type,
-          kind: templateSpec.autofillKind,
-          labelRu: templateSpec.labelRu,
-          options: templateSpec.optionsRu,
+  try {
+    for (const productId of productIds) {
+      const product = productById.get(productId);
+      if (!product || !product.category?.trim()) {
+        skippedCount += 1;
+        skipReasonCounts.noCategory += 1;
+        items.push({
+          productId,
+          sku: product?.sku ?? "",
+          name: product?.name ?? "",
+          status: "skipped",
+          filledValueCount: 0,
+          errorMessage: "missingCategory",
         });
-      }
-    }
-
-    if (aiRequests.length > 0) {
-      const imageUrls = Array.from(
-        new Set(
-          [product.photoUrl, ...product.images.map((image) => image.url)]
-            .map((value) => normalizeProductImageUrl(value ?? null))
-            .filter((value): value is string => Boolean(value)),
-        ),
-      ).slice(0, 3);
-
-      if (imageUrls.length > 0) {
-        try {
-          const aiResult = await suggestProductSpecsFromImages({
-            imageUrls,
-            requestedSpecs: aiRequests.map((entry) => ({
-              kind: entry.kind,
-              labelRu: entry.labelRu,
-              options: entry.options,
-            })),
-            logger: input.logger,
-          });
-
-          for (const request of aiRequests) {
-            const suggestedValue = aiResult.suggestions[request.kind];
-            if (!suggestedValue) {
-              continue;
-            }
-            nextValues.set(
-              request.attributeKey,
-              toStoredAttributeValue(request.type, suggestedValue),
-            );
-          }
-        } catch (error) {
-          if (error instanceof Error && error.message === "rateLimited") {
-            rateLimited = true;
-            stopAfterCurrentProduct = true;
-          }
-          if (error instanceof Error && error.message === "aiSpecNoUsableImages") {
-            // Keep rule-based values if any; otherwise this product will be skipped below.
-            aiErrorMessage = "aiSpecNoUsableImages";
-          } else if (error instanceof Error && error.message === "rateLimited") {
-            aiErrorMessage = "rateLimited";
-          } else {
-            aiErrorMessage = resolveBulkAutofillFailureReason(error);
-            input.logger?.warn(
-              {
-                phase: "bulk-specs-ai",
-                productId: product.id,
-                error:
-                  error instanceof Error ? { message: error.message, name: error.name } : error,
-              },
-              "bulk MMarket specs AI autofill failed for item",
-            );
-          }
-        }
+        continue;
       }
 
-      for (const request of aiRequests) {
-        if (nextValues.has(request.attributeKey)) {
+      const templateSpecs = templatesByCategory.get(product.category.trim()) ?? [];
+      if (!templateSpecs.length) {
+        skippedCount += 1;
+        skipReasonCounts.noTemplate += 1;
+        items.push({
+          productId: product.id,
+          sku: product.sku,
+          name: product.name,
+          status: "skipped",
+          filledValueCount: 0,
+          errorMessage: "missingSpecTemplate",
+        });
+        continue;
+      }
+
+      const currentValues = currentValuesByProduct.get(product.id) ?? new Map<string, string[]>();
+      const nextValues = new Map<string, unknown>();
+      let stopAfterCurrentProduct = false;
+      let supportedFieldCount = 0;
+      const aiRequests: Array<{
+        attributeKey: string;
+        type: AutofillTemplateSpec["type"];
+        kind: "type" | "color";
+        labelRu: string;
+        options?: string[];
+      }> = [];
+      let aiErrorMessage: string | null = null;
+      let aiGenerated = false;
+
+      for (const templateSpec of templateSpecs) {
+        const hasValue = (currentValues.get(templateSpec.attributeKey) ?? []).length > 0;
+        if (hasValue || !templateSpec.autofillKind) {
           continue;
         }
-        const inferredValue = inferProductSpecValueFromMetadata({
-          kind: request.kind,
-          product: {
-            id: product.id,
+        supportedFieldCount += 1;
+
+        if (templateSpec.autofillKind === "manufacturer") {
+          const manufacturerValue = product.supplier?.name?.trim() || MMARKET_DEFAULT_MANUFACTURER;
+          if (manufacturerValue) {
+            nextValues.set(
+              templateSpec.attributeKey,
+              toStoredAttributeValue(templateSpec.type, manufacturerValue),
+            );
+          }
+          continue;
+        }
+
+        if (templateSpec.autofillKind === "model") {
+          const modelValue = MMARKET_DEFAULT_MODEL || product.sku.trim();
+          if (modelValue) {
+            nextValues.set(
+              templateSpec.attributeKey,
+              toStoredAttributeValue(templateSpec.type, modelValue),
+            );
+          }
+          continue;
+        }
+
+        if (
+          (templateSpec.autofillKind === "type" || templateSpec.autofillKind === "color") &&
+          !aiRequests.some((entry) => entry.attributeKey === templateSpec.attributeKey)
+        ) {
+          aiRequests.push({
+            attributeKey: templateSpec.attributeKey,
+            type: templateSpec.type,
+            kind: templateSpec.autofillKind,
+            labelRu: templateSpec.labelRu,
+            options: templateSpec.optionsRu,
+          });
+        }
+      }
+
+      if (aiRequests.length > 0) {
+        const imageUrls = Array.from(
+          new Set(
+            [product.photoUrl, ...product.images.map((image) => image.url)]
+              .map((value) => normalizeProductImageUrl(value ?? null))
+              .filter((value): value is string => Boolean(value)),
+          ),
+        ).slice(0, 3);
+
+        if (imageUrls.length > 0) {
+          try {
+            const usageLease = metered
+              ? await resumeSubscriptionUsage({
+                  organizationId: input.organizationId,
+                  resource: "ai",
+                  operationKey: aiOperationKey(product.id),
+                })
+              : null;
+            await startSubscriptionUsage(usageLease);
+            const aiResult = await withAiOperationBudget(
+              { organizationId: input.organizationId, enabled: Boolean(usageLease) },
+              () =>
+                suggestProductSpecsFromImages({
+                  imageUrls,
+                  requestedSpecs: aiRequests.map((entry) => ({
+                    kind: entry.kind,
+                    labelRu: entry.labelRu,
+                    options: entry.options,
+                  })),
+                  logger: input.logger,
+                }),
+            );
+
+            for (const request of aiRequests) {
+              const suggestedValue = aiResult.suggestions[request.kind];
+              if (!suggestedValue) {
+                continue;
+              }
+              aiGenerated = true;
+              nextValues.set(
+                request.attributeKey,
+                toStoredAttributeValue(request.type, suggestedValue),
+              );
+            }
+          } catch (error) {
+            if (error instanceof Error && error.message === "rateLimited") {
+              rateLimited = true;
+              stopAfterCurrentProduct = true;
+            }
+            if (error instanceof Error && error.message === "aiSpecNoUsableImages") {
+              // Keep rule-based values if any; otherwise this product will be skipped below.
+              aiErrorMessage = "aiSpecNoUsableImages";
+            } else if (error instanceof Error && error.message === "rateLimited") {
+              aiErrorMessage = "rateLimited";
+            } else {
+              aiErrorMessage = resolveBulkAutofillFailureReason(error);
+              input.logger?.warn(
+                {
+                  phase: "bulk-specs-ai",
+                  productId: product.id,
+                  error:
+                    error instanceof Error ? { message: error.message, name: error.name } : error,
+                },
+                "bulk MMarket specs AI autofill failed for item",
+              );
+            }
+          }
+        }
+
+        for (const request of aiRequests) {
+          if (nextValues.has(request.attributeKey)) {
+            continue;
+          }
+          const inferredValue = inferProductSpecValueFromMetadata({
+            kind: request.kind,
+            product: {
+              id: product.id,
+              sku: product.sku,
+              name: product.name,
+              supplier: product.supplier,
+            },
+            category: product.category,
+            options: request.options,
+          });
+          if (!inferredValue) {
+            continue;
+          }
+          nextValues.set(
+            request.attributeKey,
+            toStoredAttributeValue(
+              request.type,
+              matchProductSpecOption(inferredValue, request.options),
+            ),
+          );
+        }
+      }
+
+      if (!nextValues.size) {
+        if (aiErrorMessage && aiErrorMessage !== "aiSpecNoUsableImages") {
+          failedCount += 1;
+          items.push({
+            productId: product.id,
             sku: product.sku,
             name: product.name,
-            supplier: product.supplier,
-          },
-          category: product.category,
-          options: request.options,
-        });
-        if (!inferredValue) {
-          continue;
+            status: "failed",
+            filledValueCount: 0,
+            errorMessage: aiErrorMessage,
+          });
+        } else {
+          skippedCount += 1;
+          if (supportedFieldCount === 0) {
+            skipReasonCounts.noSupportedFields += 1;
+          } else {
+            skipReasonCounts.noResolvedValues += 1;
+          }
+          items.push({
+            productId: product.id,
+            sku: product.sku,
+            name: product.name,
+            status: "skipped",
+            filledValueCount: 0,
+            errorMessage:
+              supportedFieldCount === 0 ? "noSupportedSpecFields" : "noResolvedSpecValues",
+          });
         }
-        nextValues.set(
-          request.attributeKey,
-          toStoredAttributeValue(
-            request.type,
-            matchProductSpecOption(inferredValue, request.options),
-          ),
-        );
+        if (stopAfterCurrentProduct) {
+          break;
+        }
+        continue;
       }
-    }
 
-    if (!nextValues.size) {
-      if (aiErrorMessage && aiErrorMessage !== "aiSpecNoUsableImages") {
+      try {
+        const updated = await prisma.$transaction(async (tx) => {
+          let targetVariant = product.variants[0];
+          if (!targetVariant) {
+            targetVariant = await tx.productVariant.create({
+              data: {
+                productId: product.id,
+                attributes: toJson({}),
+              },
+              select: { id: true, attributes: true },
+            });
+          }
+
+          const currentAttributes =
+            targetVariant.attributes &&
+            typeof targetVariant.attributes === "object" &&
+            !Array.isArray(targetVariant.attributes)
+              ? { ...(targetVariant.attributes as Record<string, unknown>) }
+              : {};
+
+          const beforeValues = Array.from(nextValues.keys()).reduce<Record<string, string | null>>(
+            (accumulator, key) => {
+              accumulator[key] = currentValues.get(key)?.[0] ?? null;
+              return accumulator;
+            },
+            {},
+          );
+
+          for (const [key, value] of nextValues.entries()) {
+            currentAttributes[key] = value;
+          }
+
+          await tx.productVariant.update({
+            where: { id: targetVariant.id },
+            data: {
+              attributes: toJson(currentAttributes),
+            },
+          });
+
+          for (const [key, value] of nextValues.entries()) {
+            await tx.variantAttributeValue.upsert({
+              where: {
+                variantId_key: {
+                  variantId: targetVariant.id,
+                  key,
+                },
+              },
+              update: {
+                value: toJson(value),
+              },
+              create: {
+                organizationId: input.organizationId,
+                productId: product.id,
+                variantId: targetVariant.id,
+                key,
+                value: toJson(value),
+              },
+            });
+          }
+
+          if (metered && aiGenerated)
+            await settleSubscriptionUsageBatch(
+              {
+                organizationId: input.organizationId,
+                resource: "ai",
+                operationKeys: [aiOperationKey(product.id)],
+                success: true,
+              },
+              tx,
+            );
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "PRODUCT_UPDATE",
+            entity: "Product",
+            entityId: product.id,
+            before: toJson({ specsAutofill: beforeValues }),
+            after: toJson({
+              specsAutofill: Array.from(nextValues.entries()).reduce<Record<string, unknown>>(
+                (accumulator, [key, value]) => {
+                  accumulator[key] = value;
+                  return accumulator;
+                },
+                {},
+              ),
+              generated: true,
+            }),
+            requestId: input.requestId,
+          });
+
+          return nextValues.size;
+        });
+
+        updatedCount += 1;
+        filledValueCount += updated;
+        updatedProductIds.push(product.id);
+        items.push({
+          productId: product.id,
+          sku: product.sku,
+          name: product.name,
+          status: "success",
+          filledValueCount: updated,
+          errorMessage: null,
+        });
+      } catch (error) {
         failedCount += 1;
         items.push({
           productId: product.id,
@@ -2842,148 +3044,30 @@ export const bulkAutofillMMarketSpecs = async (input: {
           name: product.name,
           status: "failed",
           filledValueCount: 0,
-          errorMessage: aiErrorMessage,
+          errorMessage: resolveBulkAutofillFailureReason(error),
         });
-      } else {
-        skippedCount += 1;
-        if (supportedFieldCount === 0) {
-          skipReasonCounts.noSupportedFields += 1;
-        } else {
-          skipReasonCounts.noResolvedValues += 1;
-        }
-        items.push({
-          productId: product.id,
-          sku: product.sku,
-          name: product.name,
-          status: "skipped",
-          filledValueCount: 0,
-          errorMessage:
-            supportedFieldCount === 0 ? "noSupportedSpecFields" : "noResolvedSpecValues",
-        });
+        input.logger?.warn(
+          {
+            phase: "bulk-specs-item",
+            productId: product.id,
+            error: error instanceof Error ? { message: error.message, name: error.name } : error,
+          },
+          "bulk MMarket specs autofill failed for item",
+        );
       }
+
       if (stopAfterCurrentProduct) {
         break;
       }
-      continue;
     }
-
-    try {
-      const updated = await prisma.$transaction(async (tx) => {
-        let targetVariant = product.variants[0];
-        if (!targetVariant) {
-          targetVariant = await tx.productVariant.create({
-            data: {
-              productId: product.id,
-              attributes: toJson({}),
-            },
-            select: { id: true, attributes: true },
-          });
-        }
-
-        const currentAttributes =
-          targetVariant.attributes &&
-          typeof targetVariant.attributes === "object" &&
-          !Array.isArray(targetVariant.attributes)
-            ? { ...(targetVariant.attributes as Record<string, unknown>) }
-            : {};
-
-        const beforeValues = Array.from(nextValues.keys()).reduce<Record<string, string | null>>(
-          (accumulator, key) => {
-            accumulator[key] = currentValues.get(key)?.[0] ?? null;
-            return accumulator;
-          },
-          {},
-        );
-
-        for (const [key, value] of nextValues.entries()) {
-          currentAttributes[key] = value;
-        }
-
-        await tx.productVariant.update({
-          where: { id: targetVariant.id },
-          data: {
-            attributes: toJson(currentAttributes),
-          },
-        });
-
-        for (const [key, value] of nextValues.entries()) {
-          await tx.variantAttributeValue.upsert({
-            where: {
-              variantId_key: {
-                variantId: targetVariant.id,
-                key,
-              },
-            },
-            update: {
-              value: toJson(value),
-            },
-            create: {
-              organizationId: input.organizationId,
-              productId: product.id,
-              variantId: targetVariant.id,
-              key,
-              value: toJson(value),
-            },
-          });
-        }
-
-        await writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "PRODUCT_UPDATE",
-          entity: "Product",
-          entityId: product.id,
-          before: toJson({ specsAutofill: beforeValues }),
-          after: toJson({
-            specsAutofill: Array.from(nextValues.entries()).reduce<Record<string, unknown>>(
-              (accumulator, [key, value]) => {
-                accumulator[key] = value;
-                return accumulator;
-              },
-              {},
-            ),
-            generated: true,
-          }),
-          requestId: input.requestId,
-        });
-
-        return nextValues.size;
+  } finally {
+    if (metered && aiProductIds.length)
+      await settleSubscriptionUsageBatch({
+        organizationId: input.organizationId,
+        resource: "ai",
+        operationKeys: aiProductIds.map(aiOperationKey),
+        success: false,
       });
-
-      updatedCount += 1;
-      filledValueCount += updated;
-      updatedProductIds.push(product.id);
-      items.push({
-        productId: product.id,
-        sku: product.sku,
-        name: product.name,
-        status: "success",
-        filledValueCount: updated,
-        errorMessage: null,
-      });
-    } catch (error) {
-      failedCount += 1;
-      items.push({
-        productId: product.id,
-        sku: product.sku,
-        name: product.name,
-        status: "failed",
-        filledValueCount: 0,
-        errorMessage: resolveBulkAutofillFailureReason(error),
-      });
-      input.logger?.warn(
-        {
-          phase: "bulk-specs-item",
-          productId: product.id,
-          error: error instanceof Error ? { message: error.message, name: error.name } : error,
-        },
-        "bulk MMarket specs autofill failed for item",
-      );
-    }
-
-    if (stopAfterCurrentProduct) {
-      break;
-    }
   }
 
   const processedCount = updatedCount + skippedCount + failedCount;
@@ -3129,6 +3213,7 @@ export const requestMMarketExport = async (input: {
   requestId: string;
   mode?: MMarketExportMode;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   await timeoutAbandonedMMarketExportJobs(input.organizationId);
 
   const integration = await prisma.mMarketIntegration.findUnique({
@@ -3287,6 +3372,7 @@ export const runMMarketExportJob = async (
   let plan: MMarketExportPlan | null = null;
 
   try {
+    await assertMarketplaceFeature(job.orgId);
     const integration = await prisma.mMarketIntegration.findUnique({
       where: { orgId: job.orgId },
       select: {
@@ -3319,6 +3405,12 @@ export const runMMarketExportJob = async (
       throw new AppError("mMarketPreflightFailed", "CONFLICT", 409);
     }
 
+    await authorizeMarketplaceExchange({
+      organizationId: job.orgId,
+      channel: "MMARKET",
+      jobId: job.id,
+      full: true,
+    });
     const remoteResult = await sendMMarketPayload({
       environment: job.environment,
       token,

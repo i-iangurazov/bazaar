@@ -1,101 +1,145 @@
 {
-  "date": "2026-11-04",
+  "date": "2026-11-07",
   "timezone": "Asia/Bishkek",
-  "status": "DRAFTS_PREPARED_NOT_PUBLISHED",
-  "baseCommit": "aac99d9ec1047fa50fdf73cf3fffc972e9e77cd2",
-  "documents": ["offer", "refunds", "requisites", "payment"],
-  "locales": ["ru", "kg", "en"],
+  "status": "PREPARED_PUBLICATION_BLOCKED_EXTERNAL_PREREQUISITES",
+  "baseCommit": "855ab9988388732a71143e3e49ebcf7eefa3df7b",
+  "documents": [
+    "offer",
+    "refunds",
+    "requisites",
+    "payment"
+  ],
+  "locales": [
+    "ru",
+    "kg",
+    "en"
+  ],
   "publication": {
-    "pushPerformed": false,
-    "deploymentPerformed": false,
-    "publicNavigationChanged": false,
-    "paymentConfigurationChanged": false,
-    "sellerDetailsComplete": false,
-    "localPreviewOptInRequired": true,
-    "productionWithPreviewFlag": "404 without draft content",
-    "hostedPreview": "blocked by environment guard; unit-tested",
-    "localPreviewServerStopped": true
+    "publicDocumentsEnabled": false,
+    "default": "404",
+    "requires": [
+      "approved exact version 2026-11-07-v1",
+      "verified support mailbox",
+      "real accepted public correspondence address"
+    ],
+    "registeredHomeAddress": null,
+    "legalFooterLinks": "conditional only after publication gate",
+    "privacyPolicy": "updated public existing route",
+    "providerSecretsChanged": false,
+    "pushPerformedByLegalAgent": false,
+    "deploymentPerformedByLegalAgent": false,
+    "sellerConfiguration": "private server BILLING_SELLER_* allowlist; defaults null; local-only values; Production unchanged"
   },
   "checks": {
     "unit": {
       "result": "PASS",
-      "tests": 136,
-      "files": 8,
-      "databaseTestsRequired": false,
-      "reason": "No financial, inventory, database or subscription business logic changed; middleware/session/access regressions covered."
-    },
-    "typecheck": "PASS",
-    "lint": "PASS",
-    "translationValidation": "PASS",
-    "localizedContentParity": "PASS",
-    "productionBuild": "PASS",
-    "gitDiffCheck": "PASS",
-    "browser": {
-      "result": "PASS",
-      "states": 48,
-      "widths": [390, 1440],
-      "themes": ["light", "dark"],
-      "errors": [],
-      "documentNavigation": "PASS",
-      "localeSwitching": "PASS",
-      "overflowChecks": "PASS"
+      "tests": 101,
+      "files": 5,
+      "log": ".local/subscriptions-final-20261107/legal-private-env-unit.log"
     },
     "offlineHtml": {
       "result": "PASS",
-      "files": 12,
-      "styles": "PASS",
-      "fileNavigation": "PASS"
+      "states": 96,
+      "documents": 4,
+      "locales": 3,
+      "publicationVariants": 2,
+      "widths": [
+        390,
+        1440
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "overflow": "PASS",
+      "anchors": "PASS",
+      "images": "PASS",
+      "fileNavigation": "PASS",
+      "publishedPlaceholders": "none",
+      "registeredHomeAddress": "absent",
+      "report": ".local/legal-drafts-20261104/export.json"
     },
-    "httpBoundary": {
-      "productionBlockedRequests": 16,
-      "localDefaultBlockedRequests": 16,
-      "publicControlRoutes": ["/privacy", "/login", "/sitemap.xml"],
-      "publicControlRoutesResult": "PASS in production and local development; no legal pages in sitemap"
+    "privatePackage": {
+      "result": "PASS",
+      "originalPdfsByteIdentical": 3,
+      "zipEntries": 9,
+      "zipIntegrity": "PASS",
+      "everyZipEntryMatchesPackage": true,
+      "directoryMode": "700",
+      "filesAndZipMode": "600",
+      "path": ".local/freedompay-package-20261107.zip"
+    },
+    "globalTypecheckLintI18nBuild": "owned by root release; no claim from targeted legal checks",
+    "sellerPrivacy": {
+      "result": "PASS",
+      "serverEnvFields": 13,
+      "realSellerValuesInSourceDocsTests": 0,
+      "localPreviewPopulated": true,
+      "unrelatedEnvLinesPreserved": true,
+      "privateFilesMode": "600",
+      "previewDirectoryMode": "700",
+      "syntheticUnitFixtures": true
+    },
+    "accessNotice": {
+      "unitTests": 15,
+      "sharedAdminRecoveryTests": 44,
+      "visualStates": 24,
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "widths": [
+        390,
+        1440
+      ],
+      "locales": [
+        "ru",
+        "kg",
+        "en"
+      ],
+      "visualReport": ".local/subscriptions-final-20261107/notice-visual/verification.json",
+      "legacyLifetimeCanceled": "unchanged",
+      "operationalLayoutChanged": false
     }
   },
   "commands": [
-    "SKIP_DB_TESTS=1 RUN_DB_TESTS=0 ./node_modules/.bin/vitest run tests/unit/legal-drafts.test.tsx tests/unit/legal-drafts-middleware.test.ts tests/unit/middleware.test.ts tests/unit/middleware-session-cookie.test.ts tests/unit/acquisition.test.ts tests/unit/subscription-payment-protocol.test.ts tests/unit/subscription-payments-ui.test.tsx tests/unit/marketing-pricing.test.tsx",
-    "./node_modules/.bin/tsc --noEmit",
-    "./node_modules/.bin/next lint",
-    "node --import tsx scripts/i18n-check.ts",
-    "node scripts/qa/legal-drafts-runtime.mjs build",
-    "node --import tsx scripts/qa/legal-drafts-browser.tsx blocked production",
-    "node --import tsx scripts/qa/legal-drafts-browser.tsx blocked",
-    "node --import tsx scripts/qa/legal-drafts-browser.tsx preview",
+    "RUN_DB_TESTS=0 pnpm exec vitest run tests/unit/privacy-billing-disclosures.test.tsx tests/unit/legal-drafts.test.tsx tests/unit/legal-drafts-middleware.test.ts tests/unit/legal-publication.test.tsx tests/unit/subscription-payment-protocol.test.ts --maxWorkers=1 --minWorkers=1",
     "node --import tsx scripts/qa/legal-drafts-export.tsx",
-    "node --import tsx scripts/qa/legal-drafts-browser.tsx export",
-    "git diff --check"
+    "node --import tsx scripts/qa/legal-drafts-browser.tsx export"
   ],
-  "evidenceDirectory": "/Users/ilias_iangurazov/Commercial/bazaar/.local/legal-drafts-20261104",
   "screenshots": [
-    "ru-offer-1440-light.png",
-    "ru-offer-1440-dark.png",
-    "ru-refunds-390-light.png",
-    "kg-payment-390-light.png"
+    ".local/legal-drafts-20261104/review-published-offer-1440.png",
+    ".local/legal-drafts-20261104/review-published-payment-390.png",
+    ".local/legal-drafts-20261104/review-published-requisites-390.png"
   ],
-  "remainingBeforePublication": [
-    "Actual seller legal/contact/bank details",
-    "Owner approval of proposed 10-business-day review and 3-business-day refund submission targets, refund conditions and final legal/translation review",
-    "FreedomPay contract, merchant capabilities and website compliance approval",
-    "Privacy review under actual seller and processing arrangements",
-    "Explicit publication change, dated/versioned terms and real legal links; payment activation remains separate"
+  "screenshotWarning": "Published layout files use an explicit synthetic correspondence address in ignored local fixtures only; not provider-approved seller data.",
+  "remaining": [
+    "configure and verify support@bazaar.kg",
+    "agree lawful real public correspondence address without home publication",
+    "passport PDF and proof of bazaar.kg ownership",
+    "final legal and translation review including proposed 10/3-business-day refund targets",
+    "FreedomPay contract, merchant capabilities, annual prepayment and 204000 KGS maximum invoice confirmation",
+    "test merchant with API and HTTPS callbacks, actual provider scenarios and separate live activation"
   ],
   "notPerformed": [
-    "Production deploy or push",
-    "Customer database writes or service migrations",
-    "Live merchant transactions or sandbox provider acceptance",
-    "Legal opinion certifying compliance"
+    "provider requests or real payment/refund",
+    "customer database writes",
+    "certified legal opinion",
+    "production deployment or external sending"
   ],
   "sourceSha256": {
-    "src/app/legal/[document]/page.tsx": "199b34f0e738e9ba6f3227bf3569afd4455a7890b5d74e531814d0e9d017818c",
-    "src/components/legal/legal-document.tsx": "8eaa1da58b324d4e636dbe24de9ce914b8b9aca98973f3aee2c92220a8aede85",
-    "src/content/legal/en.ts": "99a727bb2399d4de9ec99e72d0ce3cbca11323e20c3882decd614778386a24a8",
-    "src/content/legal/index.ts": "b6817198778836ca271be95baf0deb1f1d0135c54a91f194b33f079eec16eaa6",
-    "src/content/legal/kg.ts": "20236063ac7112d44fe106600aa08c3914943d51034b6ee2e1186fd994e2d62f",
-    "src/content/legal/ru.ts": "865cb90724698f5e95d218b36064e9cbddcb2ec50c21f894b1c5cb83a6a7aec2",
-    "src/content/legal/seller.ts": "d8ea13a4d19d63ad1dd5f9f51be1c762b86b3da2ee5ec19da1aa918ed7cd6e80",
-    "src/content/legal/types.ts": "dee5b29de52a96fb826d35054eaf47f9a53b36340deccd2f0f94c96a60d9e33e",
+    "src/lib/legalPublication.ts": "1cbd71fd3b4cd55d9d2cfb4ae11d05cff834f6701e829c857cc6a1c210cf811b",
     "src/lib/legalPreview.ts": "d2dbfe44ead59d06a0a8a5ef70a30b4238e1056a370c3a0b3759de3a16e80b0d",
-    "src/middleware.ts": "5c4fc6e37e965d5759a31ef28fcaf55e1837bcb206f9cd07d131929a6b76b346"
+    "src/app/legal/[document]/page.tsx": "f9f57ba53f8bfbff5b924aea21911012e5b4b1780f2e9db50a57549e9e3f71b9",
+    "src/app/privacy/page.tsx": "59ce268e7a7b1310730a7c9023faee5a8a43760697223299d632d1f228b0bdf2",
+    "src/components/legal/legal-document.tsx": "cf6b28d44d7810d461d6ae88885a5a1740195762c557343ffbfda686a27d358a",
+    "src/components/marketing/MarketingLanding.tsx": "09b9f5d9dc0794b120028e2993c390c79f83a2e602d2af8064472bd3459b645a",
+    "src/content/legal/types.ts": "047402f0e5daef47de429597937f3765dbf0ab238b0d8e44faf727767833f532",
+    "src/content/legal/ru.ts": "4030f67d93fd428f8ea22f426f5b524714e7ead7f203e708e5571758fea9eed2",
+    "src/content/legal/kg.ts": "49301d397ea8767bda96b47a101de405462bd64fe195191962a0e9599d678453",
+    "src/content/legal/en.ts": "9e702a458d8c6310af53f02e7d47a3adcaaa5ed1aedabb6f732533139f381150",
+    "src/content/legal/seller.ts": "4dbde1c2b5df3afc0d32e8378b9a93e1e276ca133411c8d82c9cf3d2f15b28e7",
+    "src/server/billing/paymentConfig.ts": "e685c0a26fbe28117706f46106217bf2664c64313f8d9690d081ecd046604a43",
+    "src/server/legal/seller.ts": "aa4efb952aede6a97a576ee709ce509fa7d3f908e0b3655d77d974176bec2eaf"
   }
 }

@@ -3,12 +3,12 @@ import { z } from "zod";
 import { protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
-import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertReadableFeature } from "@/server/billing/coreAccess";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
 const stockLotsProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   try {
-    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "expiryLots" });
+    await assertReadableFeature(ctx.user.organizationId, "expiryLots");
   } catch (error) {
     throw toTRPCError(error);
   }

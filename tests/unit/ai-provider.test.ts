@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ guard: vi.fn(), fetch: vi.fn() }));
+const mocks = vi.hoisted(() => ({ guard: vi.fn(), fetch: vi.fn(), expense: vi.fn(), settle: vi.fn() }));
 vi.mock("@/server/config/runtime", () => ({ assertExternalProviderCallAllowed: mocks.guard }));
+vi.mock("@/server/billing/providerExpense", () => ({
+  reserveProviderExpense: mocks.expense, settleProviderExpense: mocks.settle,
+  aiExpenseMinor: (input: number, output: number) => input + output,
+}));
 import { resolveTextAiConfig, fetchAiResponse, aiOutputText } from "@/server/services/aiProvider";
+import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -22,6 +27,51 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("AI provider routing and credentials", () => {
+  it("reserves a paid DeepSeek attempt before fetching and settles the actual usage receipt", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "synthetic-metered");
+    mocks.expense.mockResolvedValue({ lease: { id: "synthetic" }, reserved: 2000 });
+    mocks.fetch.mockImplementation(async () => {
+      expect(mocks.expense).toHaveBeenCalledOnce();
+      return Response.json({ usage: { input_tokens: 10, output_tokens: 20 }, output: [] });
+    });
+    await withAiOperationBudget({ organizationId: "org", enabled: true }, async () => {
+      const response = await fetchAiResponse(resolveTextAiConfig()!, { input: "test" }, new AbortController().signal);
+      expect((await response.json()).usage.output_tokens).toBe(20);
+    });
+    expect(mocks.settle).toHaveBeenCalledWith(expect.any(Object), 30);
+  });
+  it("prevents an expensive OpenAI text fallback on new paid contracts before any provider work", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "synthetic-fallback");
+    await withAiOperationBudget({ organizationId: "org", enabled: true }, async () => {
+      await expect(fetchAiResponse(resolveTextAiConfig()!, { input: "test" }, new AbortController().signal))
+        .rejects.toThrow("billingAiProviderUnavailable");
+    });
+    expect(mocks.expense).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it("settles a definite provider rejection at zero but holds an uncertain transport attempt", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "synthetic-metered");
+    mocks.expense.mockResolvedValue({ lease: null, reserved: 2000 });
+    mocks.fetch.mockResolvedValueOnce(Response.json({ error: "synthetic" }, { status: 400 }));
+    await withAiOperationBudget({ organizationId: "org", enabled: true }, async () => {
+      await fetchAiResponse(resolveTextAiConfig()!, { input: "test" }, new AbortController().signal);
+    });
+    expect(mocks.settle).toHaveBeenLastCalledWith(expect.any(Object), 0);
+    mocks.fetch.mockRejectedValueOnce(new Error("Synthetic disconnected response"));
+    await withAiOperationBudget({ organizationId: "org", enabled: true }, async () => {
+      await expect(fetchAiResponse(resolveTextAiConfig()!, { input: "test" }, new AbortController().signal)).rejects.toThrow("Synthetic disconnected");
+    });
+    expect(mocks.settle).toHaveBeenLastCalledWith(expect.any(Object));
+  });
+  it("keeps a conservative expense for an HTTP408 with an uncertain outcome", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "synthetic-metered");
+    mocks.expense.mockResolvedValue({ lease: null, reserved: 2000 });
+    mocks.fetch.mockResolvedValueOnce(Response.json({ error: "timeout" }, { status: 408 }));
+    await withAiOperationBudget({ organizationId: "org", enabled: true }, async () => {
+      await fetchAiResponse(resolveTextAiConfig()!, { input: "test" }, new AbortController().signal);
+    });
+    expect(mocks.settle).toHaveBeenLastCalledWith(expect.any(Object), undefined);
+  });
   it("strips provider credentials from QA while preserving explicit HTTPS and browser controls", () => {
     const env = baamTestEnvironment({
       NODE_ENV: "test",
@@ -86,12 +136,12 @@ describe("AI provider routing and credentials", () => {
     });
     expect(mocks.guard).toHaveBeenCalledWith("deepseek");
   });
-  it("honours provider isolation before any network operation", () => {
+  it("honours provider isolation before any network operation", async () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "deepseek-synthetic");
     mocks.guard.mockImplementation(() => {
       throw new Error("externalProviderDisabled");
     });
-    expect(() => fetchAiResponse(resolveTextAiConfig()!, {}, new AbortController().signal)).toThrow(
+    await expect(fetchAiResponse(resolveTextAiConfig()!, {}, new AbortController().signal)).rejects.toThrow(
       "externalProviderDisabled",
     );
     expect(mocks.fetch).not.toHaveBeenCalled();

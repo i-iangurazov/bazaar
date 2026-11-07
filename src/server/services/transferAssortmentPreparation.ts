@@ -6,7 +6,7 @@ import {
 } from "@/lib/transferAssortmentPreparation";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "./errors";
-import { assertTrialActive, hasPlanFeature } from "./planLimits";
+import { assertTrialActive } from "./planLimits";
 import { assertUserCanAccessStore, inventoryProductAccessWhere } from "./storeAccess";
 import {
   applyCatalogSettingsTx,
@@ -87,7 +87,7 @@ async function authorize(tx: Tx, input: Principal & { fromStoreId: string; toSto
   for (const storeId of [input.fromStoreId, input.toStoreId])
     await assertUserCanAccessStore(tx, { ...actor, organizationId: input.organizationId }, storeId);
   const organization = await assertTrialActive(input.organizationId, tx);
-  return { actor, organization, pricingAllowed: hasPlanFeature(organization.plan, "storePrices") };
+  return { actor, organization, pricingAllowed: organization.entitlements.features.storePrices };
 }
 
 export async function getTransferAssortmentOptions(

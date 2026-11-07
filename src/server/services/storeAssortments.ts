@@ -1,3 +1,4 @@
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import { eventBus } from "@/server/events/eventBus";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -188,8 +189,13 @@ async function buildPreview(tx: Tx, organizationId: string, raw: AssortmentChang
     orderBy: { id: "asc" },
   });
   if (stores.length !== storeIds.length) throw new AppError("storeNotFound", "NOT_FOUND", 404);
-  const targets = change.action === "SHARE" ? [...change.targetStoreIds, ...(change.mutual ? [change.sourceStoreId] : [])] : change.action === "CONVERT" ? change.storeIds : selectedRules.map(r => r.targetStoreId);
-  if (stores.some(s => targets.includes(s.id) && s.catalogSourcesConfigured))
+  const targets =
+    change.action === "SHARE"
+      ? [...change.targetStoreIds, ...(change.mutual ? [change.sourceStoreId] : [])]
+      : change.action === "CONVERT"
+        ? change.storeIds
+        : selectedRules.map((r) => r.targetStoreId);
+  if (stores.some((s) => targets.includes(s.id) && s.catalogSourcesConfigured))
     throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
   const assignments = await tx.storeProduct.findMany({
     where: { organizationId, storeId: { in: storeIds }, ...activeProducts },
@@ -387,6 +393,7 @@ export async function previewStoreAssortmentShare(input: {
   actorId: string;
   change: AssortmentChange;
 }) {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "assortments" });
   const result = await prisma.$transaction(
     (tx) => buildPreview(tx, input.organizationId, input.change),
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30_000 },
@@ -415,6 +422,7 @@ export async function applyStoreAssortmentShare(input: {
   previewToken: string;
   idempotencyKey: string;
 }) {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "assortments" });
   const committed = await applyTransaction(async (tx) => {
     await lockAssortment(tx, input.organizationId);
     const replay = await withIdempotency(

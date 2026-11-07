@@ -1,4 +1,8 @@
 "use client";
+import {
+  MarketplacePlanNotice,
+  MarketplaceSubscriptionFailure,
+} from "@/components/billing/marketplace-plan-notice";
 
 import { useEffect, useMemo, useState } from "react";
 import { OMarketExportJobStatus, OMarketJobType } from "@prisma/client";
@@ -37,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDateTime } from "@/lib/i18nFormat";
+import { translateError } from "@/lib/translateError";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 
@@ -55,12 +60,7 @@ const statusVariant = (status?: string | null): BadgeVariant => {
   if (status === "READY" || status === "DONE" || status === "exported" || status === "updated") {
     return "success";
   }
-  if (
-    status === "ERROR" ||
-    status === "FAILED" ||
-    status === "TIMED_OUT" ||
-    status === "failed"
-  ) {
+  if (status === "ERROR" || status === "FAILED" || status === "TIMED_OUT" || status === "failed") {
     return "danger";
   }
   if (
@@ -119,7 +119,13 @@ const OMarketPage = () => {
     const date = value instanceof Date ? value : new Date(value);
     return Number.isNaN(date.getTime()) ? tCommon("notAvailable") : formatDateTime(date, locale);
   };
-  const money = (value: number | null) => value === null ? tCommon("notAvailable") : formatCurrency(value, locale, "KGS", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const money = (value: number | null) =>
+    value === null
+      ? tCommon("notAvailable")
+      : formatCurrency(value, locale, "KGS", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        });
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
@@ -225,12 +231,12 @@ const OMarketPage = () => {
       toast({ variant: "success", description: t("toasts.settingsSaved") });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const revealSavedToken = async () => {
     const result = await revealTokenQuery.refetch();
     if (result.error) {
-      toast({ variant: "error", description: result.error.message });
+      toast({ variant: "error", description: translateError(tErrors, result.error) });
       return;
     }
     setApiToken(result.data?.apiToken ?? "");
@@ -238,59 +244,65 @@ const OMarketPage = () => {
   };
   const testConnectionMutation = trpc.oMarket.testConnection.useMutation({
     onSuccess: async (data) => {
-      toast({ variant: "success", description: t("toasts.connectionChecked", { status: data.status }) });
+      toast({
+        variant: "success",
+        description: t("toasts.connectionChecked", { status: data.status }),
+      });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const saveStoreMappingsMutation = trpc.oMarket.saveStoreMappings.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("toasts.storeMappingSaved") });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const saveCategoryMappingsMutation = trpc.oMarket.saveCategoryMappings.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("toasts.categoryMappingSaved") });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const updateProductsMutation = trpc.oMarket.updateProducts.useMutation({
     onSuccess: async (data) => {
-      toast({ variant: "success", description: t("toasts.productsUpdated", { count: data.updatedCount }) });
+      toast({
+        variant: "success",
+        description: t("toasts.productsUpdated", { count: data.updatedCount }),
+      });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const exportMutation = trpc.oMarket.exportNow.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("toasts.exportQueued") });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const exportReadyMutation = trpc.oMarket.exportReadyNow.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("toasts.readyExportQueued") });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const stockPriceMutation = trpc.oMarket.syncStockPriceNow.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("toasts.stockPriceQueued") });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
   const fullSyncMutation = trpc.oMarket.fullSyncNow.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("toasts.fullSyncQueued") });
       await refresh();
     },
-    onError: (error) => toast({ variant: "error", description: error.message }),
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
 
   const preflight = preflightQuery.data;
@@ -301,10 +313,7 @@ const OMarketPage = () => {
   if (!canManage || settingsQuery.error) {
     return (
       <div className="space-y-6">
-        <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-      />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
         {!canManage ? (
           <p role={session?.user ? "alert" : "status"}>
             {session?.user ? tErrors("forbidden") : tCommon("loading")}
@@ -321,10 +330,8 @@ const OMarketPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <MarketplacePlanNotice />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         <Card className="bazaar-admin-surface">
@@ -573,8 +580,7 @@ const OMarketPage = () => {
                       categoryMappings[mapping.bazaarCategory]?.oMarketCategoryId ?? "",
                     oMarketCategoryName:
                       categoryMappings[mapping.bazaarCategory]?.oMarketCategoryName ?? "",
-                    attributesJson:
-                      categoryMappings[mapping.bazaarCategory]?.attributesJson ?? "",
+                    attributesJson: categoryMappings[mapping.bazaarCategory]?.attributesJson ?? "",
                   })),
                 })
               }
@@ -605,7 +611,10 @@ const OMarketPage = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={jobType} onValueChange={(value) => setJobType(value as OMarketJobType)}>
+              <Select
+                value={jobType}
+                onValueChange={(value) => setJobType(value as OMarketJobType)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -732,30 +741,30 @@ const OMarketPage = () => {
               <TableContainer>
                 <Table>
                   <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("table.product")}</TableHead>
-                    <TableHead>{t("table.category")}</TableHead>
-                    <TableHead>{t("table.price")}</TableHead>
-                    <TableHead>{t("table.stock")}</TableHead>
-                    <TableHead>{t("table.status")}</TableHead>
-                    <TableHead>{t("table.action")}</TableHead>
-                  </TableRow>
-                </TableHeader>
+                    <TableRow>
+                      <TableHead>{t("table.product")}</TableHead>
+                      <TableHead>{t("table.category")}</TableHead>
+                      <TableHead>{t("table.price")}</TableHead>
+                      <TableHead>{t("table.stock")}</TableHead>
+                      <TableHead>{t("table.status")}</TableHead>
+                      <TableHead>{t("table.action")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {(productsQuery.data?.items ?? []).map((product) => (
                       <TableRow key={product.id}>
                         <TableCell>
                           <div className="flex min-w-[220px] items-center gap-3">
                             {product.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={product.imageUrl}
-                              alt=""
-                              className="h-10 w-10 rounded-md object-cover"
-                            />
-                          ) : (
-                            <div className="h-10 w-10 rounded-md border bg-muted" />
-                          )}
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={product.imageUrl}
+                                alt=""
+                                className="h-10 w-10 rounded-md object-cover"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-md border bg-muted" />
+                            )}
                             <div className="min-w-0">
                               <p className="truncate font-medium">{product.name}</p>
                               <p className="truncate text-xs text-muted-foreground">
@@ -768,30 +777,30 @@ const OMarketPage = () => {
                         <TableCell>{money(product.priceKgs)}</TableCell>
                         <TableCell>{product.onHandQty}</TableCell>
                         <TableCell>
-                        <Badge variant={product.included ? "success" : "muted"}>
-                          {product.exportStatus}
-                        </Badge>
-                      </TableCell>
+                          <Badge variant={product.included ? "success" : "muted"}>
+                            {product.exportStatus}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
-                        <IconButton
-                          type="button"
-                          variant={product.included ? "outline" : "secondary"}
-                          disabled={!canManage || updateProductsMutation.isLoading}
-                          onClick={() =>
-                            updateProductsMutation.mutate({
-                              storeId: activeStoreId,
-                              productIds: [product.id],
-                              included: !product.included,
-                            })
-                          }
-                          icon={product.included ? HideIcon : AddIcon}
-                          label={
-                            product.included
-                              ? t("productExport.exclude")
-                              : t("productExport.include")
-                          }
-                        />
-                      </TableCell>
+                          <IconButton
+                            type="button"
+                            variant={product.included ? "outline" : "secondary"}
+                            disabled={!canManage || updateProductsMutation.isLoading}
+                            onClick={() =>
+                              updateProductsMutation.mutate({
+                                storeId: activeStoreId,
+                                productIds: [product.id],
+                                included: !product.included,
+                              })
+                            }
+                            icon={product.included ? HideIcon : AddIcon}
+                            label={
+                              product.included
+                                ? t("productExport.exclude")
+                                : t("productExport.include")
+                            }
+                          />
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -818,7 +827,10 @@ const OMarketPage = () => {
             <Button
               type="button"
               variant="outline"
-              disabled={(productsQuery.data?.page ?? page) >= Math.ceil((productsQuery.data?.total ?? 0) / 10)}
+              disabled={
+                (productsQuery.data?.page ?? page) >=
+                Math.ceil((productsQuery.data?.total ?? 0) / 10)
+              }
               onClick={() => setPage((current) => current + 1)}
             >
               {t("pagination.next")}
@@ -921,6 +933,7 @@ const OMarketPage = () => {
                     </Badge>
                   </div>
                 </div>
+                <MarketplaceSubscriptionFailure report={job.errorReportJson} />
                 {results.length ? (
                   <TableContainer>
                     <Table>
@@ -938,7 +951,11 @@ const OMarketPage = () => {
                             <TableCell>{result.sku}</TableCell>
                             <TableCell>{result.name ?? ""}</TableCell>
                             <TableCell>
-                              <Badge variant={statusVariant(result.status)}>{t.has(`jobs.resultStatus.${result.status}`) ? t(`jobs.resultStatus.${result.status}`) : result.status}</Badge>
+                              <Badge variant={statusVariant(result.status)}>
+                                {t.has(`jobs.resultStatus.${result.status}`)
+                                  ? t(`jobs.resultStatus.${result.status}`)
+                                  : result.status}
+                              </Badge>
                             </TableCell>
                             <TableCell>{result.reason ?? ""}</TableCell>
                           </TableRow>

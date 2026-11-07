@@ -4,7 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { legalCopy } from "../../src/content/legal";
-import { legalDocumentIds } from "../../src/content/legal/types";
+import { legalDocumentIds, sellerFields } from "../../src/content/legal/types";
 import { themeCookieName } from "../../src/lib/theme";
 
 const base = "http://localhost:3134";
@@ -24,36 +24,90 @@ if (mode === "export") {
         : route.abort(),
     );
     const page = await context.newPage();
-    for (const locale of ["ru", "kg", "en"] as const) {
-      for (const id of legalDocumentIds) {
-        const file = `${id}.${locale}.html`;
-        await page.goto(pathToFileURL(path.join(dir, file)).href);
-        assert.equal(await page.locator("h1").textContent(), legalCopy[locale].documents[id].title);
-        const appearance = await page.locator("h1").evaluate((element) => ({
-          size: parseFloat(getComputedStyle(element).fontSize),
-          padding: parseFloat(getComputedStyle(document.querySelector("main")!).paddingLeft),
-          border: parseFloat(
-            getComputedStyle(document.querySelector("article .border")!).borderWidth,
-          ),
-        }));
-        assert(
-          appearance.size >= 24 && appearance.padding >= 16 && appearance.border > 0,
-          JSON.stringify(appearance),
-        );
-        await page
-          .getByRole("link", { name: legalCopy[locale].documents.refunds.title, exact: true })
-          .click();
-        await page.waitForURL(`**/refunds.${locale}.html`);
-        assert.equal(
-          await page.locator("h1").textContent(),
-          legalCopy[locale].documents.refunds.title,
-        );
-        results.push({ file, styles: "PASS", navigation: "PASS" });
+    for (const published of [false, true]) {
+      for (const width of [1440, 390]) {
+        for (const dark of [false, true]) {
+          await page.setViewportSize({ width, height: 1000 });
+          for (const locale of ["ru", "kg", "en"] as const) {
+            for (const id of legalDocumentIds) {
+              const prefix = published ? "review-published-" : "";
+              const file = `${prefix}${id}.${locale}.html`;
+              await page.goto(pathToFileURL(path.join(dir, file)).href);
+              await page.evaluate(
+                (dark) => document.documentElement.classList.toggle("dark", dark),
+                dark,
+              );
+              assert.equal(
+                await page.locator("h1").textContent(),
+                legalCopy[locale].documents[id].title,
+              );
+              const appearance = await page.locator("h1").evaluate((element) => ({
+                size: parseFloat(getComputedStyle(element).fontSize),
+                padding: parseFloat(getComputedStyle(document.querySelector("main")!).paddingLeft),
+                border: parseFloat(
+                  getComputedStyle(document.querySelector("article .border")!).borderWidth,
+                ),
+              }));
+              assert(
+                appearance.size >= 24 && appearance.padding >= 16 && appearance.border > 0,
+                JSON.stringify(appearance),
+              );
+              const layout = await page.evaluate(() => ({
+                overflow: document.documentElement.scrollWidth - window.innerWidth,
+                missingAnchors: [
+                  ...document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]'),
+                ].filter((a) => !document.getElementById(a.hash.slice(1))).length,
+                brokenImages: [...document.images].filter(
+                  (img) => !img.complete || img.naturalWidth === 0,
+                ).length,
+              }));
+              assert(
+                layout.overflow <= 1 && layout.missingAnchors === 0 && layout.brokenImages === 0,
+                JSON.stringify({ file, width, layout }),
+              );
+              assert.equal(await page.locator("[data-legal-published]").count(), Number(published));
+              assert.equal(await page.locator('[role="note"]').count(), Number(!published));
+              if (published) {
+                assert.equal(
+                  await page.locator('[data-seller-field="registeredAddress"]').count(),
+                  0,
+                );
+                assert(
+                  !(await page.locator("main").innerText()).includes(legalCopy[locale].missing),
+                );
+              }
+              if (id === "payment") assert.equal(await page.locator("img").count(), 3);
+              if (
+                locale === "ru" &&
+                !dark &&
+                ((id === "offer" && width === 1440) ||
+                  (id === "payment" && width === 390) ||
+                  (published && id === "requisites" && width === 390))
+              ) {
+                await page.screenshot({
+                  path: path.join(dir, `${prefix}${id}-${width}.png`),
+                  fullPage: id === "payment",
+                });
+              }
+              await page
+                .getByRole("link", { name: legalCopy[locale].documents.refunds.title, exact: true })
+                .click();
+              await page.waitForURL(`**/${prefix}refunds.${locale}.html`);
+              assert.equal(
+                await page.locator("h1").textContent(),
+                legalCopy[locale].documents.refunds.title,
+              );
+              results.push({ file, width, dark, styles: "PASS", navigation: "PASS", ...layout });
+            }
+          }
+        }
       }
     }
     await context.close();
     fs.writeFileSync(path.join(dir, "export.json"), JSON.stringify(results, null, 2));
-    console.log(`PASS: ${results.length} offline HTML previews, styles and file navigation`);
+    console.log(
+      `PASS: ${results.length} offline page states, styles, images, publication fields and file navigation`,
+    );
   } finally {
     await browser.close();
   }
@@ -123,7 +177,7 @@ if (mode === "export") {
                 "noindex",
               ),
             );
-            assert.equal(await page.locator("[data-seller-field]").count(), 14);
+            assert.equal(await page.locator("[data-seller-field]").count(), sellerFields.length);
             assert.equal(
               await page.locator('a[aria-current="page"]').getAttribute("href"),
               `/legal/${id}`,

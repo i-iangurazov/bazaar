@@ -1,3 +1,4 @@
+import { legalPublicationState, LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 export type PaymentMode = "disabled" | "sandbox" | "live";
 
 const localHost = (host: string) => ["localhost", "127.0.0.1", "[::1]"].includes(host);
@@ -14,6 +15,7 @@ export const getSubscriptionPaymentConfig = (
   const termsVersion = env.BILLING_TERMS_VERSION?.trim() ?? "";
   let publicOrigin = "";
   let termsUrl = "";
+  let canonicalPublicOrigin = false;
   try {
     const origin = new URL(env.BILLING_PUBLIC_URL ?? "");
     const terms = new URL(env.BILLING_TERMS_URL ?? "");
@@ -32,10 +34,12 @@ export const getSubscriptionPaymentConfig = (
     ) {
       publicOrigin = origin.origin;
       termsUrl = terms.href;
+      canonicalPublicOrigin = ["bazaar.kg", "www.bazaar.kg"].includes(origin.hostname);
     }
   } catch {
     // Configuration errors disable new checkout, never the rest of the product.
   }
+  const legal = legalPublicationState(env);
   const ready = Boolean(
     mode !== "disabled" &&
     env.HARDENING_EXTERNAL_PROVIDER_MODE !== "disabled" &&
@@ -46,7 +50,14 @@ export const getSubscriptionPaymentConfig = (
     termsVersion &&
     sellerName &&
     !(mode === "sandbox" && env.VERCEL_ENV === "production") &&
-    (mode !== "live" || env.BILLING_LIVE_ACTIVATION_CONFIRMED === "1"),
+    (mode !== "live" ||
+      (env.BILLING_LIVE_ACTIVATION_CONFIRMED === "1" &&
+        legal.published &&
+        termsVersion === LEGAL_TERMS_VERSION &&
+        canonicalPublicOrigin &&
+        (!env.VERCEL_ENV || env.VERCEL_ENV === "production") &&
+        sellerName === legal.seller.legalName &&
+        termsUrl === `${publicOrigin}/legal/offer`)),
   );
   return { mode, ready, merchantId, secretKey, publicOrigin, termsUrl, termsVersion, sellerName };
 };

@@ -28,6 +28,7 @@ import {
   sendBaamMessage,
 } from "@/server/services/baamCompanion";
 import { cancelBaamAction, executeBaamAction } from "@/server/services/baamActions";
+import { withSubscriptionUsage } from "@/server/billing/subscriptionUsage";
 
 const companion = managerProcedure;
 const handle = async <T>(run: () => Promise<T>) => {
@@ -118,7 +119,9 @@ export const baamRouter = router({
     .input(baamAskSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        return await askBaam({ ...input, actorId: ctx.user.id });
+        return await withSubscriptionUsage({ organizationId: ctx.user.organizationId,
+          resource: "ai", operationKey: `baam-ask:${ctx.user.id}:${ctx.requestId}` },
+          () => askBaam({ ...input, actorId: ctx.user.id }));
       } catch (error) {
         throw toTRPCError(error);
       }

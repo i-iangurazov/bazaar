@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { prisma } from "@/server/db/prisma";
@@ -19,6 +20,13 @@ import {
   stopBaamTurn,
 } from "@/server/services/baamConversations";
 import { transcribeBaamAudio } from "@/server/services/baamAudio";
+import { sendBaamMessage } from "@/server/services/baamCompanion";
+import {
+  getSubscriptionUsage,
+  reserveSubscriptionUsage,
+  startSubscriptionUsage,
+  settleSubscriptionUsage,
+} from "@/server/billing/subscriptionUsage";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 function wav() {
@@ -75,6 +83,227 @@ describe.skipIf(!shouldRunDbTests)("BAAM durable history, audio, and interrupted
     };
     return { ...seed, ctx, conversation, request };
   }
+  it("meters a new-contract voice transcript and its answer as one shared operation, including replay", async () => {
+    const f = await fixture();
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: {
+        currentPeriodEndsAt: new Date(Date.now() + 30 * 86400000),
+      },
+    });
+    await prisma.subscriptionContract.create({
+      data: { organizationId: f.org.id, catalogVersion: "2026-11" },
+    });
+    vi.stubEnv("OPENAI_API_KEY", "synthetic-voice-key");
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
+    const provider = vi.fn(async () =>
+      Response.json({ text: "Help", languages: [{ code: "en" }] }),
+    );
+    vi.stubGlobal("fetch", provider);
+    const transcript = await transcribeBaamAudio(
+      f.ctx,
+      f.conversation.id,
+      wav(),
+      "audio/wav",
+      "en",
+    );
+    expect((await transcribeBaamAudio(f.ctx, f.conversation.id, wav(), "audio/wav", "en")).id).toBe(
+      transcript.id,
+    );
+    const request = {
+      ...f.request,
+      text: transcript.text!,
+      transcriptionId: transcript.id,
+      command: { kind: "help" as const },
+    };
+    expect((await sendBaamMessage(f.ctx, request)).status).toBe("COMPLETED");
+    expect((await sendBaamMessage(f.ctx, request)).replayed).toBe(true);
+    const usage = await getSubscriptionUsage(f.org.id);
+    expect(usage.find((r) => r.resource === "ai")).toMatchObject({ used: 1, reserved: 0 });
+    expect(usage.find((r) => r.resource === "voice")).toMatchObject({ used: 0, reserved: 0 });
+    expect(provider).toHaveBeenCalledTimes(1);
+  });
+  async function modernStarter(f: Awaited<ReturnType<typeof fixture>>) {
+    await prisma.user.updateMany({
+      where: { organizationId: f.org.id, id: { notIn: [f.adminUser.id, f.managerUser.id] } },
+      data: { isActive: false },
+    });
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: { plan: "STARTER", currentPeriodEndsAt: new Date(Date.now() + 30 * 86400000) },
+    });
+    await prisma.subscriptionContract.create({
+      data: { organizationId: f.org.id, catalogVersion: "2026-11" },
+    });
+    vi.stubEnv("OPENAI_API_KEY", "synthetic-voice-key");
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
+  }
+  it("blocks voice before the provider when the shared Starter pool is exhausted", async () => {
+    const f = await fixture();
+    await modernStarter(f);
+    const lease = await reserveSubscriptionUsage({
+      organizationId: f.org.id,
+      resource: "ai",
+      operationKey: "previous-ai-work",
+      units: 100,
+    });
+    await startSubscriptionUsage(lease);
+    await settleSubscriptionUsage(lease, true);
+    const provider = vi.fn(async () => Response.json({ text: "Help" }));
+    vi.stubGlobal("fetch", provider);
+    await expect(
+      transcribeBaamAudio(f.ctx, f.conversation.id, wav(), "audio/wav", "en"),
+    ).rejects.toThrow("billingUsageLimitReached");
+    expect(provider).not.toHaveBeenCalled();
+    expect(
+      (await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai"),
+    ).toMatchObject({ used: 100, reserved: 0 });
+  });
+  it("lets the last voice transcript consume slot100 and blocks a later plain chat without double charging its voice answer", async () => {
+    const f = await fixture();
+    await modernStarter(f);
+    const previous = await reserveSubscriptionUsage({
+      organizationId: f.org.id,
+      resource: "ai",
+      operationKey: "previous-voice-results",
+      units: 99,
+    });
+    await startSubscriptionUsage(previous);
+    await settleSubscriptionUsage(previous, true);
+    const provider = vi.fn(async () => Response.json({ text: "Help" }));
+    vi.stubGlobal("fetch", provider);
+    const transcript = await transcribeBaamAudio(
+      f.ctx,
+      f.conversation.id,
+      wav(),
+      "audio/wav",
+      "en",
+    );
+    const voiced = await sendBaamMessage(f.ctx, {
+      ...f.request,
+      clientRequestId: randomUUID(),
+      text: transcript.text!,
+      transcriptionId: transcript.id,
+      command: { kind: "help" },
+    });
+    expect(voiced.status).toBe("COMPLETED");
+    const plain = await sendBaamMessage(f.ctx, {
+      ...f.request,
+      clientRequestId: randomUUID(),
+      text: "Help",
+      command: { kind: "help" },
+    });
+    expect(plain.status).toBe("FAILED");
+    expect(
+      (await prisma.baamTurn.findUniqueOrThrow({ where: { id: plain.turnId } })).errorCode,
+    ).toBe("billingUsageLimitReached");
+    expect(
+      (await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai"),
+    ).toMatchObject({ used: 100, reserved: 0 });
+    expect((await transcribeBaamAudio(f.ctx, f.conversation.id, wav(), "audio/wav", "en")).id).toBe(
+      transcript.id,
+    );
+    expect(provider).toHaveBeenCalledTimes(1);
+  });
+  const rejectNextCustomerQuotaCommit = () => {
+    const original = prisma.$transaction.bind(prisma);
+    let rejected = false;
+    const intercepted = ((arg: unknown, options?: { maxWait?: number; timeout?: number }) => {
+      if (Array.isArray(arg)) return original(arg);
+      const run = arg as (tx: Prisma.TransactionClient) => Promise<unknown>;
+      return original(
+        async (tx) =>
+          run(
+            new Proxy(tx, {
+              get(target, key, receiver) {
+                if (key !== "subscriptionUsageReservation")
+                  return Reflect.get(target, key, receiver);
+                return new Proxy(target.subscriptionUsageReservation, {
+                  get(delegate, method, delegateReceiver) {
+                    if (method !== "update") return Reflect.get(delegate, method, delegateReceiver);
+                    return (args: Prisma.SubscriptionUsageReservationUpdateArgs) => {
+                      if (
+                        !rejected &&
+                        args.data.state === "COMMITTED" &&
+                        args.data.actualUnits === undefined
+                      ) {
+                        rejected = true;
+                        throw new Error("synthetic quota commit failure");
+                      }
+                      return delegate.update(args);
+                    };
+                  },
+                });
+              },
+            }),
+          ),
+        options,
+      );
+    }) as typeof prisma.$transaction;
+    const spy = vi.spyOn(prisma, "$transaction").mockImplementation(intercepted);
+    return { spy, rejected: () => rejected };
+  };
+  it("does not expose a completed transcript when its customer-quota transaction rolls back", async () => {
+    const f = await fixture();
+    await modernStarter(f);
+    const provider = vi.fn(async () => Response.json({ text: "Help" }));
+    vi.stubGlobal("fetch", provider);
+    const fault = rejectNextCustomerQuotaCommit();
+    try {
+      await expect(
+        transcribeBaamAudio(f.ctx, f.conversation.id, wav(), "audio/wav", "en"),
+      ).rejects.toThrow("synthetic quota commit failure");
+      expect(fault.rejected()).toBe(true);
+      expect(
+        await prisma.baamTranscription.count({
+          where: { conversationId: f.conversation.id, status: "COMPLETED" },
+        }),
+      ).toBe(0);
+      expect(
+        (await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai"),
+      ).toMatchObject({ used: 0, reserved: 0 });
+      const result = await transcribeBaamAudio(f.ctx, f.conversation.id, wav(), "audio/wav", "en");
+      expect(result.status).toBe("COMPLETED");
+      expect(
+        (await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai"),
+      ).toMatchObject({ used: 1, reserved: 0 });
+    } finally {
+      fault.spy.mockRestore();
+    }
+  });
+  it("commits the Baam answer and quota atomically and keeps a successful replay free", async () => {
+    const f = await fixture();
+    await modernStarter(f);
+    const fault = rejectNextCustomerQuotaCommit();
+    try {
+      const failed = await sendBaamMessage(f.ctx, {
+        ...f.request,
+        text: "Help",
+        command: { kind: "help" },
+      });
+      expect(fault.rejected()).toBe(true);
+      expect(failed.status).toBe("FAILED");
+      expect(
+        await prisma.baamMessage.count({ where: { turnId: failed.turnId, role: "assistant" } }),
+      ).toBe(0);
+      expect(
+        (await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai"),
+      ).toMatchObject({ used: 0, reserved: 0 });
+      const request = {
+        ...f.request,
+        clientRequestId: randomUUID(),
+        text: "Help",
+        command: { kind: "help" as const },
+      };
+      expect((await sendBaamMessage(f.ctx, request)).status).toBe("COMPLETED");
+      expect((await sendBaamMessage(f.ctx, request)).replayed).toBe(true);
+      expect(
+        (await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai"),
+      ).toMatchObject({ used: 1, reserved: 0 });
+    } finally {
+      fault.spy.mockRestore();
+    }
+  });
   it("pages a long server history without omissions, and deletes only the owned dialog", async () => {
     const f = await fixture();
     await prisma.$transaction(async (tx) => {

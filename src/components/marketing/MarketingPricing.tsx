@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { PLAN_FEATURE_CODES } from "@/lib/billing/plans";
+import { ADDITIONAL_STORE_CAPS, subscriptionPrice } from "@/lib/billing/subscriptionPricing";
 import { formatNumber } from "@/lib/i18nFormat";
 import type { PlanDefinition } from "@/server/billing/planCatalog";
 import styles from "./marketing.module.css";
@@ -23,6 +24,8 @@ export function MarketingPricing({
     ["products", "maxProducts"],
     ["users", "maxActiveUsers"],
   ] as const;
+  const publicFeatures = PLAN_FEATURE_CODES.filter(feature =>
+    !["supportToolkit", "compliance", "kkm"].includes(feature));
 
   return (
     <section id="pricing" className={styles.pricingSection}>
@@ -37,7 +40,7 @@ export function MarketingPricing({
       <div className={styles.planGrid}>
         {plans.map((plan, index) => {
           const previous = plans[index - 1];
-          const highlights = PLAN_FEATURE_CODES.filter(
+          const highlights = publicFeatures.filter(
             (feature) => plan.features[feature] && !previous?.features[feature],
           ).slice(0, 3);
           const recommended = plan.code === "BUSINESS";
@@ -101,6 +104,12 @@ export function MarketingPricing({
                   </th>
                 ))}
               </tr>
+              {([6, 12] as const).map(months => <tr key={months}>
+                <th scope="row">{t(months === 6 ? "publicPricing.halfYearTotal" : "publicPricing.yearTotal")}</th>
+                {plans.map(plan => <td key={plan.code}>
+                  {t("planPricePrimary", { amount: number(subscriptionPrice(plan.monthlyPriceKgs * 100, months).amountMinor / 100) })}
+                </td>)}
+              </tr>)}
             </thead>
             <tbody>
               <tr>
@@ -119,7 +128,14 @@ export function MarketingPricing({
                   ))}
                 </tr>
               ))}
-              {PLAN_FEATURE_CODES.map((feature) => (
+              <tr><th scope="row">{t("publicPricing.maxStores")}</th>
+                {plans.map(plan => <td key={plan.code}>{number(1 + ADDITIONAL_STORE_CAPS[plan.code])}</td>)}
+              </tr>
+              {(["ai", "images", "marketingEmails", "externalApi"] as const).map(resource =>
+                <tr key={resource}><th scope="row">{t(`publicPricing.${resource}`)}</th>
+                  {plans.map(plan => <td key={plan.code}>{number(plan.usageLimits[resource] ?? 0)}</td>)}
+                </tr>)}
+              {publicFeatures.map((feature) => (
                 <tr key={feature} data-feature={feature}>
                   <th scope="row">{t(`features.${feature}`)}</th>
                   {plans.map((plan) => (
@@ -133,6 +149,12 @@ export function MarketingPricing({
           </table>
         </div>
       </details>
+      <div className={styles.sectionHeading}>
+        <h3>{t("publicPricing.extras")}</h3>
+        <p>{t("publicPricing.storeExtra")}</p>
+        <p>{t("publicPricing.reserveExtra")}</p>
+        <p>{t("publicPricing.quotaNote")}</p>
+      </div>
     </section>
   );
 }

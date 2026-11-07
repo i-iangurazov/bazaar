@@ -6,7 +6,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
-import { assertWithinLimits } from "@/server/services/planLimits";
+import { assertWithinLimits, assertFeatureCanBeConfigured } from "@/server/services/planLimits";
 import {
   createDefaultProductCatalog,
   resolveProductCatalog,
@@ -82,6 +82,8 @@ const resolveAdjustedPrice = ({
 export const createStore = async (input: CreateStoreInput) =>
   prisma.$transaction(async (tx) => {
     await assertWithinLimits({ organizationId: input.organizationId, kind: "stores" });
+    if (input.trackExpiryLots)
+      await assertFeatureCanBeConfigured(input.organizationId, "expiryLots", tx);
     const inn = normalizeOptional(input.inn);
     if (inn && !/^\d{10,14}$/.test(inn)) {
       throw new AppError("invalidInn", "BAD_REQUEST", 400);
@@ -116,16 +118,14 @@ export const createStore = async (input: CreateStoreInput) =>
       },
     });
 
-    let cloneSummary:
-      | {
-          sourceStoreId: string;
-          inventorySnapshots: number;
-          stockMovements: number;
-	          storePrices: number;
-	          reorderPolicies: number;
-	          storeProducts: number;
-	        }
-      | null = null;
+    let cloneSummary: {
+      sourceStoreId: string;
+      inventorySnapshots: number;
+      stockMovements: number;
+      storePrices: number;
+      reorderPolicies: number;
+      storeProducts: number;
+    } | null = null;
 
     const cloneFromStoreId = normalizeOptional(input.cloneFromStoreId);
     if (cloneFromStoreId) {
@@ -142,69 +142,75 @@ export const createStore = async (input: CreateStoreInput) =>
       const priceAdjustmentMode = input.priceAdjustmentMode ?? "none";
       const priceAdjustmentValue = input.priceAdjustmentValue ?? 0;
 
-      const [sourceSnapshots, sourcePrices, sourceReorderPolicies, sourceStoreProducts] = await Promise.all([
-        copyInventory
-          ? tx.inventorySnapshot.findMany({
-              where: {
-                storeId: cloneFromStoreId,
-                product: {
-                  organizationId: input.organizationId,
-                  isDeleted: false,
+      const [sourceSnapshots, sourcePrices, sourceReorderPolicies, sourceStoreProducts] =
+        await Promise.all([
+          copyInventory
+            ? tx.inventorySnapshot.findMany({
+                where: {
+                  storeId: cloneFromStoreId,
+                  product: {
+                    organizationId: input.organizationId,
+                    isDeleted: false,
+                  },
                 },
-              },
-              select: {
-                productId: true,
-                variantId: true,
-                variantKey: true,
-                onHand: true,
-                onOrder: true,
-                variant: { select: { productId: true } },
-              },
-            })
-          : Promise.resolve([]),
-        tx.storePrice.findMany({
-          where: {
-            organizationId: input.organizationId,
-            storeId: cloneFromStoreId,
-            product: { isDeleted: false },
-          },
-          select: {
-            productId: true,
-            variantId: true,
-            variantKey: true,
-            priceKgs: true,
-          },
-        }),
-        tx.reorderPolicy.findMany({
-          where: {
-            storeId: cloneFromStoreId,
-            product: {
+                select: {
+                  productId: true,
+                  variantId: true,
+                  variantKey: true,
+                  onHand: true,
+                  onOrder: true,
+                  variant: { select: { productId: true } },
+                },
+              })
+            : Promise.resolve([]),
+          tx.storePrice.findMany({
+            where: {
               organizationId: input.organizationId,
-              isDeleted: false,
+              storeId: cloneFromStoreId,
+              product: { isDeleted: false },
             },
-          },
-          select: {
-            productId: true,
-            minStock: true,
-            leadTimeDays: true,
-            reviewPeriodDays: true,
-            safetyStockDays: true,
-            minOrderQty: true,
-          },
-        }),
-        tx.storeProduct.findMany({
-          where: {
-            organizationId: input.organizationId,
-            storeId: cloneFromStoreId,
-            isActive: true,
-            product: { isDeleted: false },
-          },
-          select: { productId: true },
-        }),
-      ]);
+            select: {
+              productId: true,
+              variantId: true,
+              variantKey: true,
+              priceKgs: true,
+            },
+          }),
+          tx.reorderPolicy.findMany({
+            where: {
+              storeId: cloneFromStoreId,
+              product: {
+                organizationId: input.organizationId,
+                isDeleted: false,
+              },
+            },
+            select: {
+              productId: true,
+              minStock: true,
+              leadTimeDays: true,
+              reviewPeriodDays: true,
+              safetyStockDays: true,
+              minOrderQty: true,
+            },
+          }),
+          tx.storeProduct.findMany({
+            where: {
+              organizationId: input.organizationId,
+              storeId: cloneFromStoreId,
+              isActive: true,
+              product: { isDeleted: false },
+            },
+            select: { productId: true },
+          }),
+        ]);
 
-      if (sourceSnapshots.some((snapshot) => snapshot.variantKey !== (snapshot.variantId ?? "BASE") ||
-          (snapshot.variantId && snapshot.variant?.productId !== snapshot.productId))) {
+      if (
+        sourceSnapshots.some(
+          (snapshot) =>
+            snapshot.variantKey !== (snapshot.variantId ?? "BASE") ||
+            (snapshot.variantId && snapshot.variant?.productId !== snapshot.productId),
+        )
+      ) {
         throw new AppError("inventoryReconciliationRequired", "CONFLICT", 409);
       }
       const nextSnapshots = sourceSnapshots.map((snapshot) => ({
@@ -241,11 +247,17 @@ export const createStore = async (input: CreateStoreInput) =>
         }));
       if (stockMovements.length) {
         if (input.trackExpiryLots) {
-          await tx.stockLot.createMany({ data: stockMovements.map((movement) => ({
-            id: movement.stockLotId!, organizationId: input.organizationId,
-            storeId: store.id, productId: movement.productId, variantId: movement.variantId,
-            variantKey: movement.variantId ?? "BASE", onHandQty: movement.qtyDelta,
-          })) });
+          await tx.stockLot.createMany({
+            data: stockMovements.map((movement) => ({
+              id: movement.stockLotId!,
+              organizationId: input.organizationId,
+              storeId: store.id,
+              productId: movement.productId,
+              variantId: movement.variantId,
+              variantKey: movement.variantId ?? "BASE",
+              onHandQty: movement.qtyDelta,
+            })),
+          });
         }
         await tx.stockMovement.createMany({ data: stockMovements });
       }
@@ -276,39 +288,39 @@ export const createStore = async (input: CreateStoreInput) =>
         safetyStockDays: policy.safetyStockDays,
         minOrderQty: policy.minOrderQty,
       }));
-	      if (nextReorderPolicies.length) {
-	        await tx.reorderPolicy.createMany({ data: nextReorderPolicies });
-	      }
+      if (nextReorderPolicies.length) {
+        await tx.reorderPolicy.createMany({ data: nextReorderPolicies });
+      }
 
-	      const assignedProductIds = Array.from(
-	        new Set([
-	          ...sourceStoreProducts.map((row) => row.productId),
-	          ...sourceSnapshots.map((row) => row.productId),
-	          ...sourcePrices.map((row) => row.productId),
-	          ...sourceReorderPolicies.map((row) => row.productId),
-	        ]),
-	      );
-	      if (assignedProductIds.length) {
-	        await tx.storeProduct.createMany({
-	          data: assignedProductIds.map((productId) => ({
-	            organizationId: input.organizationId,
-	            storeId: store.id,
-	            productId,
-	            assignedById: input.actorId,
-	            isActive: true,
-	          })),
-	          skipDuplicates: true,
-	        });
-	      }
+      const assignedProductIds = Array.from(
+        new Set([
+          ...sourceStoreProducts.map((row) => row.productId),
+          ...sourceSnapshots.map((row) => row.productId),
+          ...sourcePrices.map((row) => row.productId),
+          ...sourceReorderPolicies.map((row) => row.productId),
+        ]),
+      );
+      if (assignedProductIds.length) {
+        await tx.storeProduct.createMany({
+          data: assignedProductIds.map((productId) => ({
+            organizationId: input.organizationId,
+            storeId: store.id,
+            productId,
+            assignedById: input.actorId,
+            isActive: true,
+          })),
+          skipDuplicates: true,
+        });
+      }
 
-	      cloneSummary = {
-	        sourceStoreId: sourceStore.id,
-	        inventorySnapshots: nextSnapshots.length,
-	        stockMovements: stockMovements.length,
-	        storePrices: nextPrices.length,
-	        reorderPolicies: nextReorderPolicies.length,
-	        storeProducts: assignedProductIds.length,
-	      };
+      cloneSummary = {
+        sourceStoreId: sourceStore.id,
+        inventorySnapshots: nextSnapshots.length,
+        stockMovements: stockMovements.length,
+        storePrices: nextPrices.length,
+        reorderPolicies: nextReorderPolicies.length,
+        storeProducts: assignedProductIds.length,
+      };
     }
 
     const catalogSyncSummary = requestedCatalog
@@ -326,7 +338,12 @@ export const createStore = async (input: CreateStoreInput) =>
       entity: "Store",
       entityId: store.id,
       before: null,
-      after: toJson({ store, cloneSummary, productCatalogId: productCatalog.id, catalogSyncSummary }),
+      after: toJson({
+        store,
+        cloneSummary,
+        productCatalogId: productCatalog.id,
+        catalogSyncSummary,
+      }),
       requestId: input.requestId,
     });
 
@@ -383,7 +400,8 @@ export const updateStoreProductCatalog = async (input: UpdateStoreProductCatalog
     if (!store || store.organizationId !== input.organizationId) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
     }
-    if (store.directedAssortment) throw new AppError("assortmentUseDirectedEditor", "CONFLICT", 409);
+    if (store.directedAssortment)
+      throw new AppError("assortmentUseDirectedEditor", "CONFLICT", 409);
     const requestedCatalogId = normalizeOptional(input.productCatalogId);
     const catalog =
       requestedCatalogId !== null
@@ -424,65 +442,103 @@ export const updateStoreProductCatalog = async (input: UpdateStoreProductCatalog
   });
 
 export const updateStorePolicy = async (input: UpdateStorePolicyInput) =>
-  prisma.$transaction(async (tx) => {
-    const store = await tx.store.findUnique({ where: { id: input.storeId } });
-    if (!store || store.organizationId !== input.organizationId) {
-      throw new AppError("storeNotFound", "NOT_FOUND", 404);
-    }
+  prisma.$transaction(
+    async (tx) => {
+      const store = await tx.store.findUnique({ where: { id: input.storeId } });
+      if (!store || store.organizationId !== input.organizationId) {
+        throw new AppError("storeNotFound", "NOT_FOUND", 404);
+      }
 
-    const updated = await tx.store.update({
-      where: { id: input.storeId },
-      data: { allowNegativeStock: input.allowNegativeStock, trackExpiryLots: input.trackExpiryLots },
-    });
+      if (!store.trackExpiryLots && input.trackExpiryLots)
+        await assertFeatureCanBeConfigured(input.organizationId, "expiryLots", tx);
 
-    if (!store.trackExpiryLots && input.trackExpiryLots) {
-      const snapshots = await tx.$queryRaw<InventorySnapshot[]>`
+      const updated = await tx.store.update({
+        where: { id: input.storeId },
+        data: {
+          allowNegativeStock: input.allowNegativeStock,
+          trackExpiryLots: input.trackExpiryLots,
+        },
+      });
+
+      if (!store.trackExpiryLots && input.trackExpiryLots) {
+        const snapshots = await tx.$queryRaw<InventorySnapshot[]>`
         SELECT * FROM "InventorySnapshot" WHERE "storeId" = ${input.storeId}
         ORDER BY "productId", "variantKey" FOR UPDATE
       `;
-      for (const snapshot of snapshots) {
-        const identity = { storeId: input.storeId, productId: snapshot.productId, variantId: snapshot.variantId };
-        const journal = await tx.stockMovement.aggregate({ where: identity, _sum: { qtyDelta: true } });
-        if ((journal._sum.qtyDelta ?? 0) !== snapshot.onHand) {
-          throw new AppError("inventoryReconciliationRequired", "CONFLICT", 409);
+        for (const snapshot of snapshots) {
+          const identity = {
+            storeId: input.storeId,
+            productId: snapshot.productId,
+            variantId: snapshot.variantId,
+          };
+          const journal = await tx.stockMovement.aggregate({
+            where: identity,
+            _sum: { qtyDelta: true },
+          });
+          if ((journal._sum.qtyDelta ?? 0) !== snapshot.onHand) {
+            throw new AppError("inventoryReconciliationRequired", "CONFLICT", 409);
+          }
+          const total = await tx.stockLot.aggregate({ where: identity, _sum: { onHandQty: true } });
+          const delta = snapshot.onHand - (total._sum.onHandQty ?? 0);
+          if (!delta) continue;
+          // Enabling/re-enabling expiry tracking must include stock that moved
+          // while it was disabled. Only the unallocated bucket can be inferred;
+          // dated lots, physical quantities and movement history stay intact.
+          const before = await tx.stockLot.findFirst({ where: { ...identity, expiryDate: null } });
+          const lot = before
+            ? await tx.stockLot.update({
+                where: { id: before.id },
+                data: { onHandQty: { increment: delta } },
+              })
+            : await tx.stockLot.create({
+                data: {
+                  ...identity,
+                  organizationId: input.organizationId,
+                  variantKey: snapshot.variantKey,
+                  onHandQty: delta,
+                },
+              });
+          await writeAuditLog(tx, {
+            organizationId: input.organizationId,
+            actorId: input.actorId,
+            action: "STOCK_LOT_TRACKING_BASELINE",
+            entity: "StockLot",
+            entityId: lot.id,
+            before: before ? toJson(before) : null,
+            after: toJson({
+              ...lot,
+              snapshotId: snapshot.id,
+              sourceOnHand: snapshot.onHand,
+              sourceVersion: snapshot.version,
+            }),
+            requestId: input.requestId,
+          });
         }
-        const total = await tx.stockLot.aggregate({ where: identity, _sum: { onHandQty: true } });
-        const delta = snapshot.onHand - (total._sum.onHandQty ?? 0);
-        if (!delta) continue;
-        // Enabling/re-enabling expiry tracking must include stock that moved
-        // while it was disabled. Only the unallocated bucket can be inferred;
-        // dated lots, physical quantities and movement history stay intact.
-        const before = await tx.stockLot.findFirst({ where: { ...identity, expiryDate: null } });
-        const lot = before
-          ? await tx.stockLot.update({ where: { id: before.id }, data: { onHandQty: { increment: delta } } })
-          : await tx.stockLot.create({ data: { ...identity, organizationId: input.organizationId,
-              variantKey: snapshot.variantKey, onHandQty: delta } });
-        await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId,
-          action: "STOCK_LOT_TRACKING_BASELINE", entity: "StockLot", entityId: lot.id,
-          before: before ? toJson(before) : null,
-          after: toJson({ ...lot, snapshotId: snapshot.id, sourceOnHand: snapshot.onHand, sourceVersion: snapshot.version }),
-          requestId: input.requestId });
       }
-    }
 
-    await tx.inventorySnapshot.updateMany({
-      where: { storeId: input.storeId, ...(input.allowNegativeStock ? {} : { onHand: { gte: 0 } }) },
-      data: { allowNegativeStock: input.allowNegativeStock },
-    });
+      await tx.inventorySnapshot.updateMany({
+        where: {
+          storeId: input.storeId,
+          ...(input.allowNegativeStock ? {} : { onHand: { gte: 0 } }),
+        },
+        data: { allowNegativeStock: input.allowNegativeStock },
+      });
 
-    await writeAuditLog(tx, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      action: "STORE_POLICY_UPDATE",
-      entity: "Store",
-      entityId: updated.id,
-      before: toJson(store),
-      after: toJson(updated),
-      requestId: input.requestId,
-    });
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "STORE_POLICY_UPDATE",
+        entity: "Store",
+        entityId: updated.id,
+        before: toJson(store),
+        after: toJson(updated),
+        requestId: input.requestId,
+      });
 
-    return updated;
-  }, { isolationLevel: "Serializable", timeout: 120_000 });
+      return updated;
+    },
+    { isolationLevel: "Serializable", timeout: 120_000 },
+  );
 
 export const updateStoreProductSettings = async (input: UpdateStoreProductSettingsInput) =>
   prisma.$transaction(async (tx) => {

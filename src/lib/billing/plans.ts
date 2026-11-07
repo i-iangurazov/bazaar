@@ -3,7 +3,7 @@
 export const PLAN_CODES = ["STARTER", "BUSINESS", "ENTERPRISE"] as const;
 export type PlanCode = (typeof PLAN_CODES)[number];
 
-export const PLAN_FEATURE_CODES = [
+export const LEGACY_PLAN_FEATURE_CODES = [
   "pos",
   "customerOrders",
   "priceTags",
@@ -18,6 +18,26 @@ export const PLAN_FEATURE_CODES = [
   "compliance",
   "supportToolkit",
   "kkm",
+] as const;
+export const PLAN_FEATURE_CODES = [
+  ...LEGACY_PLAN_FEATURE_CODES,
+  "bulkProducts",
+  "priceBooks",
+  "assortments",
+  "purchaseOrders",
+  "replenishment",
+  "loyalty",
+  "emailMarketing",
+  "marketingAutomation",
+  "ownSender",
+  "bazaarCatalog",
+  "bazaarApi",
+  "marketplaces",
+  "bakaiExport",
+  "bulkAiContent",
+  "imageStudio",
+  "initialImport",
+  "rawDataExport",
 ] as const;
 export type PlanFeature = (typeof PLAN_FEATURE_CODES)[number];
 

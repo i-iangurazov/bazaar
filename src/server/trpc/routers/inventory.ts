@@ -51,6 +51,7 @@ import {
   productMovementSortKeys,
 } from "@/server/services/productMovements";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
+import { getOrganizationPlan } from "@/server/services/planLimits";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
 import {
   assertUserCanAccessStore,
@@ -66,7 +67,13 @@ import { getProductStockCandidates } from "@/server/services/productStockIdentit
 import { reconcileTransferAttempt } from "@/server/services/transferRecovery";
 import { getInventoryProductPresentation } from "@/server/services/inventoryProductPresentation";
 
-const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
+const inventoryStockFilterSchema = z.enum([
+  "all",
+  "lowStock",
+  "outOfStock",
+  "negativeStock",
+  "notInAssortment",
+]);
 const inventorySortKeySchema = z.enum([
   "sku",
   "image",
@@ -185,7 +192,9 @@ const buildInventorySnapshotWhere = (
     product: {
       isDeleted: false,
       ...inventoryProductAccessWhere(input.storeId),
-      ...(input.stockFilter === "notInAssortment" ? { storeProducts: { none: { storeId: input.storeId, isActive: true } } } : {}),
+      ...(input.stockFilter === "notInAssortment"
+        ? { storeProducts: { none: { storeId: input.storeId, isActive: true } } }
+        : {}),
       ...buildInventoryProductSearchWhere(searchTokens),
     },
   };
@@ -529,6 +538,10 @@ export const inventoryRouter = router({
     }),
 
   list: protectedProcedure.input(inventoryListInputSchema).query(async ({ ctx, input }) => {
+    const canPlan = (await getOrganizationPlan(ctx.user.organizationId)).entitlements.features
+      .replenishment;
+    if (input.sortKey === "suggestedOrder" && !canPlan)
+      throw new TRPCError({ code: "FORBIDDEN", message: "featureLockedPlan" });
     const page = input.page ?? 1;
     const pageSize = input.pageSize ?? 25;
     const sortKey = input.sortKey;
@@ -666,11 +679,13 @@ export const inventoryRouter = router({
             ctx.prisma.reorderPolicy.findMany({
               where: { storeId: input.storeId, productId: { in: productIds } },
             }),
-            ctx.prisma.forecastSnapshot.findMany({
-              where: { storeId: input.storeId, productId: { in: productIds } },
-              orderBy: { generatedAt: "desc" },
-              distinct: ["productId"],
-            }),
+            canPlan
+              ? ctx.prisma.forecastSnapshot.findMany({
+                  where: { storeId: input.storeId, productId: { in: productIds } },
+                  orderBy: { generatedAt: "desc" },
+                  distinct: ["productId"],
+                })
+              : Promise.resolve([]),
           ])
         : [[], []];
     logProfileSection({
@@ -697,11 +712,9 @@ export const inventoryRouter = router({
         variant: snapshot.variant,
         minStock,
         lowStock: minStock > 0 && snapshot.onHand <= minStock,
-        reorder: buildReorderSuggestion(
-          snapshot,
-          policy,
-          forecastMap.get(snapshot.productId) ?? null,
-        ),
+        reorder: canPlan
+          ? buildReorderSuggestion(snapshot, policy, forecastMap.get(snapshot.productId) ?? null)
+          : null,
       };
     });
     const items = enrichedItems;
@@ -753,14 +766,19 @@ export const inventoryRouter = router({
           : buildInventoryProductSearchWhere(searchTokens, input.searchFields)),
       };
 
-      const rankedIds = input.search?.trim() && !input.productId
-        ? await findRankedProductIds({
-            prisma: ctx.prisma, organizationId: ctx.user.organizationId,
-            query: input.search, limit, fields: input.searchFields,
-            storeIds: [input.storeId], inventoryStoreId: input.storeId,
-            matchTokensAcrossFields: true,
-          })
-        : null;
+      const rankedIds =
+        input.search?.trim() && !input.productId
+          ? await findRankedProductIds({
+              prisma: ctx.prisma,
+              organizationId: ctx.user.organizationId,
+              query: input.search,
+              limit,
+              fields: input.searchFields,
+              storeIds: [input.storeId],
+              inventoryStoreId: input.storeId,
+              matchTokensAcrossFields: true,
+            })
+          : null;
       const products = await ctx.prisma.product.findMany({
         where: rankedIds ? { ...where, id: { in: rankedIds } } : where,
         select: {
@@ -791,13 +809,15 @@ export const inventoryRouter = router({
       });
 
       const positions = new Map(rankedIds?.map((id, index) => [id, index]));
-      if (rankedIds) products.sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
+      if (rankedIds)
+        products.sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
       return products.flatMap((product) => {
         // Inactive variants cannot be posted by any stock writer. Do not render
         // their historical snapshots as indistinguishable base-product choices.
-        const activeVariantIds = new Set(product.variants.map(variant => variant.id));
-        const eligibleSnapshots = product.inventorySnapshots.filter(snapshot =>
-          snapshot.variantId === null || activeVariantIds.has(snapshot.variantId));
+        const activeVariantIds = new Set(product.variants.map((variant) => variant.id));
+        const eligibleSnapshots = product.inventorySnapshots.filter(
+          (snapshot) => snapshot.variantId === null || activeVariantIds.has(snapshot.variantId),
+        );
         if (product.inventorySnapshots.length && !eligibleSnapshots.length) return [];
         const snapshots = product.inventorySnapshots.length
           ? eligibleSnapshots
@@ -848,11 +868,12 @@ export const inventoryRouter = router({
             variant,
             primaryBarcode: resultProduct.barcodes[0]?.value ?? null,
             unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
-            priceKgs: price?.priceKgs != null
-              ? Number(price.priceKgs)
-              : resultProduct.basePriceKgs
-                ? Number(resultProduct.basePriceKgs)
-                : null,
+            priceKgs:
+              price?.priceKgs != null
+                ? Number(price.priceKgs)
+                : resultProduct.basePriceKgs
+                  ? Number(resultProduct.basePriceKgs)
+                  : null,
           };
         });
       });
@@ -1279,19 +1300,30 @@ export const inventoryRouter = router({
 
   setOnHand: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-set-on-hand" }))
-    .input(z.object({
-      storeId: z.string().min(1), productId: z.string().min(1),
-      variantId: z.string().nullable().optional(),
-      targetOnHand: z.number().multipleOf(0.001).min(-2147483648).max(2147483647),
-      expectedOnHand: z.number().multipleOf(0.001), expectedVersion: z.number().int().nonnegative(),
-      reason: z.string().min(3), idempotencyKey: z.string().min(8),
-    }))
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        productId: z.string().min(1),
+        variantId: z.string().nullable().optional(),
+        targetOnHand: z.number().multipleOf(0.001).min(-2147483648).max(2147483647),
+        expectedOnHand: z.number().multipleOf(0.001),
+        expectedVersion: z.number().int().nonnegative(),
+        reason: z.string().min(3),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       try {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-        return await setStockOnHand({ ...input, actorId: ctx.user.id,
-          organizationId: ctx.user.organizationId, requestId: ctx.requestId });
-      } catch (error) { throw toTRPCError(error); }
+        return await setStockOnHand({
+          ...input,
+          actorId: ctx.user.id,
+          organizationId: ctx.user.organizationId,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
 
   adjust: managerProcedure
@@ -1494,16 +1526,28 @@ export const inventoryRouter = router({
     }),
 
   reconcileTransferAttempt: managerProcedure
-    .input(z.object({ fromStoreId: z.string().min(1), toStoreId: z.string().min(1), idempotencyKey: z.string().min(8).max(191) }))
+    .input(
+      z.object({
+        fromStoreId: z.string().min(1),
+        toStoreId: z.string().min(1),
+        idempotencyKey: z.string().min(8).max(191),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       try {
         await Promise.all([
           assertUserCanAccessStore(ctx.prisma, ctx.user, input.fromStoreId),
           assertUserCanAccessStore(ctx.prisma, ctx.user, input.toStoreId),
         ]);
-        return await reconcileTransferAttempt({ ...input, organizationId: ctx.user.organizationId,
-          actorId: ctx.user.id, requestId: ctx.requestId });
-      } catch (error) { throw toTRPCError(error); }
+        return await reconcileTransferAttempt({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
 
   productStockIdentity: managerProcedure
@@ -1536,28 +1580,47 @@ export const inventoryRouter = router({
     }),
 
   productPresentation: managerReadProcedure
-    .input(z.object({
-      storeId: z.string().min(1).max(191),
-      productIds: z.array(z.string().min(1).max(191)).min(1).max(500),
-      documentKey: z.string().min(1).max(300).optional(),
-    }))
+    .input(
+      z.object({
+        storeId: z.string().min(1).max(191),
+        productIds: z.array(z.string().min(1).max(191)).min(1).max(500),
+        documentKey: z.string().min(1).max(300).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       try {
         return await getInventoryProductPresentation(ctx.prisma, ctx.user, input);
-      } catch (error) { throw toTRPCError(error); }
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
 
   transferLineContext: managerProcedure
-    .input(z.object({ fromStoreId: z.string().min(1), toStoreId: z.string().min(1),
-      lines: z.array(z.object({ productId: z.string().min(1), variantId: z.string().nullable().optional() })).min(1).max(500) }))
+    .input(
+      z.object({
+        fromStoreId: z.string().min(1),
+        toStoreId: z.string().min(1),
+        lines: z
+          .array(
+            z.object({ productId: z.string().min(1), variantId: z.string().nullable().optional() }),
+          )
+          .min(1)
+          .max(500),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       try {
         await Promise.all([
           assertUserCanAccessStore(ctx.prisma, ctx.user, input.fromStoreId),
           assertUserCanAccessStore(ctx.prisma, ctx.user, input.toStoreId),
         ]);
-        return await getTransferLineContext(ctx.prisma, { ...input, organizationId: ctx.user.organizationId });
-      } catch (error) { throw toTRPCError(error); }
+        return await getTransferLineContext(ctx.prisma, {
+          ...input,
+          organizationId: ctx.user.organizationId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
 
   transfer: managerProcedure

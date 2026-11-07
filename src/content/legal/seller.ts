@@ -1,8 +1,7 @@
 import type { SellerDetails } from "./types";
 
-// The owner has not supplied the seller's public details yet. Never infer these
-// from a customer store, a developer account or FreedomPay's own requisites.
-// Filling this record does NOT publish the drafts or enable payment collection.
+// Safe public defaults only. Verified registration and banking details are loaded
+// on the server; committing a draft must never publish the owner's documents.
 export const sellerDraft: SellerDetails = {
   legalName: null,
   entrepreneurName: null,
@@ -12,10 +11,11 @@ export const sellerDraft: SellerDetails = {
   registrationAuthority: null,
   registeredAddress: null,
   correspondenceAddress: null,
-  phone: null,
-  email: null,
-  bankName: "KICB",
+  phone: "+996 709 911 300",
+  email: "support@bazaar.kg",
+  bankName: null,
   beneficiary: null,
   accountNumber: null,
+  accountCurrency: "KGS",
   bankCode: null,
 };

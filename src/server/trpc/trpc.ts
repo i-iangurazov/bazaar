@@ -10,7 +10,9 @@ import { getLogger } from "@/server/logging";
 import { ensureRequestId } from "@/server/middleware/requestContext";
 import { createRateLimiter, type RateLimitConfig } from "@/server/middleware/rateLimiter";
 import { Role } from "@prisma/client";
-import { assertTrialActive } from "@/server/services/planLimits";
+import { assertTrialActive, getOrganizationPlan } from "@/server/services/planLimits";
+import { requiredPlanFeature } from "@/server/billing/featurePolicy";
+import { getFeatureLockedErrorKey } from "@/server/billing/planCatalog";
 import {
   isHotTrpcPath,
   isPerfProfilingEnabled,
@@ -222,14 +224,21 @@ const isAuthed = t.middleware(({ ctx, next }) => {
 });
 
 const ensureActivePlan = t.middleware(async ({ ctx, next, type, path }) => {
-  if (!ctx.user || type !== "mutation") {
+  const feature = requiredPlanFeature(path);
+  if (!ctx.user || (type !== "mutation" && !feature)) {
     return next();
   }
   if (path.startsWith("billing.")) {
     return next();
   }
   try {
-    await assertTrialActive(ctx.user.organizationId);
+    const org = type === "mutation" ? await assertTrialActive(ctx.user.organizationId)
+      : await getOrganizationPlan(ctx.user.organizationId);
+    if (feature && !org.entitlements.features[feature]) {
+      const errorFeature = feature === "priceBooks" && org.billingCatalogVersion === "2026-10"
+        ? "storePrices" : feature;
+      throw new AppError(getFeatureLockedErrorKey(errorFeature), "FORBIDDEN", 403);
+    }
   } catch (error) {
     throw toTRPCError(error);
   }

@@ -12,9 +12,7 @@ describe("mobile inventory source", () => {
 
     expect(source).toContain("<ListToolbar");
     expect(source).toContain('id="inventory-stock"');
-    expect(source).toContain(
-      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"])',
-    );
+    expect(source).toMatch(/const inventoryStockFilterSchema = z\.enum\(\[\s*"all",\s*"lowStock",\s*"outOfStock",\s*"negativeStock",\s*"notInAssortment",?\s*\]\)/);
     expect(source).toContain('stockFilter: "all"');
     expect(source).toContain("data-inventory-page-summary");
     expect(source).toContain('href="/inventory/receiving"');
@@ -33,9 +31,7 @@ describe("mobile inventory source", () => {
   it("keeps mobile inventory operations on manager backend procedures", async () => {
     const routerSource = await readSource("src/server/trpc/routers/inventory.ts");
 
-    expect(routerSource).toContain(
-      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"])',
-    );
+    expect(routerSource).toMatch(/const inventoryStockFilterSchema = z\.enum\(\[\s*"all",\s*"lowStock",\s*"outOfStock",\s*"negativeStock",\s*"notInAssortment",?\s*\]\)/);
     expect(routerSource).toContain("normalizeInventorySearchTokens");
     expect(routerSource).toContain("buildInventoryProductSearchWhere");
     expect(routerSource).toContain("AND: searchTokens.map");

@@ -25,6 +25,8 @@ import {
   userHasAllStoreAccess,
 } from "@/server/services/storeAccess";
 import { toTRPCError } from "@/server/trpc/errors";
+import { assertProductExportAccess } from "@/server/billing/coreAccess";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import type {
   ProductListIdsInput,
   ProductListInput,
@@ -134,10 +136,14 @@ const buildProductListWhere = (
     filters.push({ id: { in: readinessProductIds.length ? readinessProductIds : ["__none__"] } });
   }
   if (input?.includeArchived && (input.storeId || scopedStoreIds)) {
-    filters.push({ storeProducts: { some: {
-      storeId: { in: input.storeId ? [input.storeId] : scopedStoreIds },
-      OR: [{ isActive: true }, { isHidden: true }],
-    } } });
+    filters.push({
+      storeProducts: {
+        some: {
+          storeId: { in: input.storeId ? [input.storeId] : scopedStoreIds },
+          OR: [{ isActive: true }, { isHidden: true }],
+        },
+      },
+    });
   } else if (input?.storeId) {
     filters.push(productStoreAssignmentWhere(input.storeId));
   } else if (scopedStoreIds) {
@@ -368,18 +374,21 @@ const buildStoreSellingPriceSql = (
   mode: "RETAIL" | "WHOLESALE" = "RETAIL",
   pricingTime?: Date,
 ) => {
-  const typedPrice = mode === "WHOLESALE"
-    ? Prisma.sql`COALESCE(extra."wholesalePriceKgs", extra."retailPriceKgs", price."priceKgs", p."basePriceKgs")`
-    : Prisma.sql`COALESCE(extra."retailPriceKgs", price."priceKgs", p."basePriceKgs", extra."wholesalePriceKgs")`;
+  const typedPrice =
+    mode === "WHOLESALE"
+      ? Prisma.sql`COALESCE(extra."wholesalePriceKgs", extra."retailPriceKgs", price."priceKgs", p."basePriceKgs")`
+      : Prisma.sql`COALESCE(extra."retailPriceKgs", price."priceKgs", p."basePriceKgs", extra."wholesalePriceKgs")`;
   const amount = Prisma.sql`CASE WHEN organization."retailWholesaleEnabled"
     THEN ${typedPrice} ELSE COALESCE(price."priceKgs", p."basePriceKgs") END`;
-  const effective = pricingTime ? Prisma.sql`CASE
+  const effective = pricingTime
+    ? Prisma.sql`CASE
     WHEN price."discountType" = 'PERCENTAGE'
       AND price."discountPercentage" > 0 AND price."discountPercentage" < 100
       AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= (${pricingTime}::timestamptz AT TIME ZONE 'UTC'))
       AND (price."discountEndsAt" IS NULL OR (${pricingTime}::timestamptz AT TIME ZONE 'UTC') < price."discountEndsAt")
     THEN ROUND((${amount}) * (100 - price."discountPercentage") / 100, 2)
-    ELSE ${amount} END` : amount;
+    ELSE ${amount} END`
+    : amount;
   return Prisma.sql`(
     SELECT ${effective} FROM "Organization" organization
     LEFT JOIN "StorePrice" price ON price."organizationId" = organization.id
@@ -456,9 +465,11 @@ export const buildProductSqlBase = ({
       )
     `);
   } else if (input?.readiness === "missingPrice") {
-    conditions.push(input?.storeId
-      ? Prisma.sql`${buildStoreSellingPriceSql(organizationId, input.storeId)} IS NULL`
-      : Prisma.sql`p."basePriceKgs" IS NULL`);
+    conditions.push(
+      input?.storeId
+        ? Prisma.sql`${buildStoreSellingPriceSql(organizationId, input.storeId)} IS NULL`
+        : Prisma.sql`p."basePriceKgs" IS NULL`,
+    );
   }
 
   // Filter the same BASE cost shown in the product table. An unfilled variant
@@ -485,9 +496,11 @@ export const buildProductSqlBase = ({
         SELECT 1 FROM "StoreProduct" assignment
         WHERE assignment."productId" = p.id
           AND assignment."storeId" IN (${Prisma.join(scopedStoreIds)})
-          AND ${input?.includeArchived
-            ? Prisma.sql`(assignment."isActive" = true OR assignment."isHidden" = true)`
-            : Prisma.sql`assignment."isActive" = true`}
+          AND ${
+            input?.includeArchived
+              ? Prisma.sql`(assignment."isActive" = true OR assignment."isHidden" = true)`
+              : Prisma.sql`assignment."isActive" = true`
+          }
       )`);
     }
   }
@@ -587,7 +600,12 @@ const buildProductSqlSortExpression = ({
       )`;
     case "salePrice":
       return input?.storeId
-        ? buildStoreSellingPriceSql(organizationId, input.storeId, input.priceMode ?? "RETAIL", pricingTime)
+        ? buildStoreSellingPriceSql(
+            organizationId,
+            input.storeId,
+            input.priceMode ?? "RETAIL",
+            pricingTime,
+          )
         : Prisma.sql`p."basePriceKgs"`;
     case "avgCost":
       return Prisma.sql`(
@@ -743,7 +761,9 @@ export const lookupProductScan = async ({
 }) => {
   try {
     if (storeId && user) await assertUserCanAccessStore(prisma, user, storeId);
-    const accessibleStoreIds = storeId ? [storeId] : await resolveProductStoreScopeIds(prisma, user);
+    const accessibleStoreIds = storeId
+      ? [storeId]
+      : await resolveProductStoreScopeIds(prisma, user);
     const scope = {
       productWhere: productStoreAssignmentInWhere(accessibleStoreIds),
       storeIds: accessibleStoreIds,
@@ -1091,7 +1111,15 @@ export const listProducts = async ({
   const advancedSqlPaginated = !paginatedOrderBy && !imageSortDbPaginated;
   const visibleSnapshotStoreIds = input?.storeId ? [input.storeId] : accessibleStoreIds;
   const pricingTime = new Date();
-  const priceTypesEnabled = Boolean(input?.storeId && (await prisma.organization.findUnique({where:{id:organizationId},select:{retailWholesaleEnabled:true}}))?.retailWholesaleEnabled);
+  const priceTypesEnabled = Boolean(
+    input?.storeId &&
+    (
+      await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { retailWholesaleEnabled: true },
+      })
+    )?.retailWholesaleEnabled,
+  );
 
   const baseReadStartedAt = Date.now();
   const [total, products] = advancedSqlPaginated
@@ -1226,15 +1254,31 @@ export const listProducts = async ({
   const purchasePriceByProductId = new Map(
     latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),
   );
-  const extraPrices = priceTypesEnabled && input?.storeId && productIds.length ? await prisma.storePriceTypes.findMany({ where: { organizationId, storeId: input.storeId, productId: { in: productIds }, variantKey: "BASE" } }) : [];
-  const standardByProduct = new Map(storePrices.map(row => [row.productId, row]));
-  const extrasByProduct = new Map(extraPrices.map(row => [row.productId, row]));
+  const extraPrices =
+    priceTypesEnabled && input?.storeId && productIds.length
+      ? await prisma.storePriceTypes.findMany({
+          where: {
+            organizationId,
+            storeId: input.storeId,
+            productId: { in: productIds },
+            variantKey: "BASE",
+          },
+        })
+      : [];
+  const standardByProduct = new Map(storePrices.map((row) => [row.productId, row]));
+  const extrasByProduct = new Map(extraPrices.map((row) => [row.productId, row]));
   const storePriceByProductId = new Map(
     products.flatMap((product) => {
       const storePrice = standardByProduct.get(product.id);
       const extra = extrasByProduct.get(product.id);
       if (!storePrice && !extra) return [];
-      const selectedPrice = resolveStoreSellingPrice({enabled: priceTypesEnabled, mode: input?.priceMode ?? "RETAIL", standard: storePrice?.priceKgs ?? product.basePriceKgs ?? null, retail: extra?.retailPriceKgs, wholesale: extra?.wholesalePriceKgs}).price;
+      const selectedPrice = resolveStoreSellingPrice({
+        enabled: priceTypesEnabled,
+        mode: input?.priceMode ?? "RETAIL",
+        standard: storePrice?.priceKgs ?? product.basePriceKgs ?? null,
+        retail: extra?.retailPriceKgs,
+        wholesale: extra?.wholesalePriceKgs,
+      }).price;
       if (selectedPrice === null) return [];
       const pricing = getEffectiveProductPrice({
         basePrice: selectedPrice,
@@ -1268,7 +1312,9 @@ export const listProducts = async ({
     wholesalePriceKgs: priceTypesEnabled
       ? decimalToNumber(extrasByProduct.get(product.id)?.wholesalePriceKgs)
       : null,
-    hiddenInStore: Boolean(input?.storeId && product.storeProducts.some((row) => row.storeId === input.storeId)),
+    hiddenInStore: Boolean(
+      input?.storeId && product.storeProducts.some((row) => row.storeId === input.storeId),
+    ),
   }));
 
   return {
@@ -1369,7 +1415,7 @@ export const getProductsBootstrap = async ({
       ? {
           stores: [],
           categories: [] as string[],
-          selectedStoreId: input.storeId === "all" ? null : input.storeId ?? null,
+          selectedStoreId: input.storeId === "all" ? null : (input.storeId ?? null),
         }
       : await getProductsListContext({ prisma, organizationId, user, input, logger });
   const list = await listProducts({
@@ -1416,7 +1462,9 @@ export const listProductIds = async ({
   if (input?.readiness === "missingCost" && user && !["ADMIN", "MANAGER"].includes(user.role))
     throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
   const base = buildProductSqlBase({ organizationId, input, accessibleStoreIds });
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT p.id ${base} ORDER BY p.id`);
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT p.id ${base} ORDER BY p.id`,
+  );
   return rows.map((row) => row.id);
 };
 
@@ -1665,17 +1713,31 @@ export const getProductPricing = async ({
       },
       select: { avgCostKgs: true },
     }),
-    storeId ? prisma.organization.findUnique({
-      where: { id: organizationId }, select: { retailWholesaleEnabled: true },
-    }) : Promise.resolve(null),
-    storeId ? prisma.storePriceTypes.findUnique({
-      where: { organizationId_storeId_productId_variantKey: { organizationId, storeId, productId, variantKey: "BASE" } },
-    }) : Promise.resolve(null),
+    storeId
+      ? prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { retailWholesaleEnabled: true },
+        })
+      : Promise.resolve(null),
+    storeId
+      ? prisma.storePriceTypes.findUnique({
+          where: {
+            organizationId_storeId_productId_variantKey: {
+              organizationId,
+              storeId,
+              productId,
+              variantKey: "BASE",
+            },
+          },
+        })
+      : Promise.resolve(null),
   ]);
   const selected = resolveStoreSellingPrice({
-    enabled: Boolean(organization?.retailWholesaleEnabled), mode: "RETAIL",
+    enabled: Boolean(organization?.retailWholesaleEnabled),
+    mode: "RETAIL",
     standard: storePrice?.priceKgs ?? product.basePriceKgs,
-    retail: extra?.retailPriceKgs, wholesale: extra?.wholesalePriceKgs,
+    retail: extra?.retailPriceKgs,
+    wholesale: extra?.wholesalePriceKgs,
   });
   return serializeProductPricing({
     basePriceKgs: product.basePriceKgs,
@@ -1845,17 +1907,23 @@ export const getProductStorePricing = async ({
       }),
     ]);
 
-  const extraPrices = await prisma.storePriceTypes.findMany({ where: { organizationId, productId, storeId: { in: storeIds } } });
-  const extraByKey = new Map(extraPrices.map(row => [`${row.storeId}:${row.variantKey}`, row]));
+  const extraPrices = await prisma.storePriceTypes.findMany({
+    where: { organizationId, productId, storeId: { in: storeIds } },
+  });
+  const extraByKey = new Map(extraPrices.map((row) => [`${row.storeId}:${row.variantKey}`, row]));
   const basePrice = decimalToNumber(product.basePriceKgs);
   const overrideByStore = new Map(
-    overrides.filter((override) => override.priceKgs != null).map((override) => [override.storeId, Number(override.priceKgs)]),
+    overrides
+      .filter((override) => override.priceKgs != null)
+      .map((override) => [override.storeId, Number(override.priceKgs)]),
   );
   const variantOverrideByStoreAndVariant = new Map(
-    variantOverrides.filter((override) => override.priceKgs != null).map((override) => [
-      `${override.storeId}:${override.variantId ?? override.variantKey}`,
-      Number(override.priceKgs),
-    ]),
+    variantOverrides
+      .filter((override) => override.priceKgs != null)
+      .map((override) => [
+        `${override.storeId}:${override.variantId ?? override.variantKey}`,
+        Number(override.priceKgs),
+      ]),
   );
   const onHandByStore = new Map(snapshots.map((snapshot) => [snapshot.storeId, snapshot.onHand]));
   const minStockByStore = new Map(policies.map((policy) => [policy.storeId, policy.minStock]));
@@ -1873,13 +1941,19 @@ export const getProductStorePricing = async ({
       const override = overrideByStore.get(store.id);
       const extras = extraByKey.get(`${store.id}:BASE`);
       const effective = resolveStoreSellingPrice({
-        enabled: organization.retailWholesaleEnabled, mode: "RETAIL", standard: override ?? basePrice,
-        retail: decimalToNumber(extras?.retailPriceKgs), wholesale: decimalToNumber(extras?.wholesalePriceKgs),
+        enabled: organization.retailWholesaleEnabled,
+        mode: "RETAIL",
+        standard: override ?? basePrice,
+        retail: decimalToNumber(extras?.retailPriceKgs),
+        wholesale: decimalToNumber(extras?.wholesalePriceKgs),
       }).price;
       return {
         storeId: store.id,
         storeName: store.name,
-        priceVersion: productPriceVersion([...overrides, ...variantOverrides].filter(p => p.storeId === store.id), extraPrices.filter(p => p.storeId === store.id)),
+        priceVersion: productPriceVersion(
+          [...overrides, ...variantOverrides].filter((p) => p.storeId === store.id),
+          extraPrices.filter((p) => p.storeId === store.id),
+        ),
         retailWholesaleEnabled: organization.retailWholesaleEnabled,
         retailPriceKgs: decimalToNumber(extraByKey.get(`${store.id}:BASE`)?.retailPriceKgs),
         wholesalePriceKgs: decimalToNumber(extraByKey.get(`${store.id}:BASE`)?.wholesalePriceKgs),
@@ -1899,13 +1973,21 @@ export const getProductStorePricing = async ({
           const variantOverride = variantOverrideByStoreAndVariant.get(`${store.id}:${variant.id}`);
           const variantExtras = extraByKey.get(`${store.id}:${variant.id}`);
           const variantPrice = resolveStoreSellingPrice({
-            enabled: organization.retailWholesaleEnabled, mode: "RETAIL", standard: variantOverride ?? effective, preferStandard: variantOverride !== undefined,
-            retail: decimalToNumber(variantExtras?.retailPriceKgs), wholesale: decimalToNumber(variantExtras?.wholesalePriceKgs),
+            enabled: organization.retailWholesaleEnabled,
+            mode: "RETAIL",
+            standard: variantOverride ?? effective,
+            preferStandard: variantOverride !== undefined,
+            retail: decimalToNumber(variantExtras?.retailPriceKgs),
+            wholesale: decimalToNumber(variantExtras?.wholesalePriceKgs),
           }).price;
           return {
             variantId: variant.id,
-            retailPriceKgs: decimalToNumber(extraByKey.get(`${store.id}:${variant.id}`)?.retailPriceKgs),
-            wholesalePriceKgs: decimalToNumber(extraByKey.get(`${store.id}:${variant.id}`)?.wholesalePriceKgs),
+            retailPriceKgs: decimalToNumber(
+              extraByKey.get(`${store.id}:${variant.id}`)?.retailPriceKgs,
+            ),
+            wholesalePriceKgs: decimalToNumber(
+              extraByKey.get(`${store.id}:${variant.id}`)?.wholesalePriceKgs,
+            ),
             variantName: variant.name,
             variantSku: variant.sku,
             attributes: variant.attributes,
@@ -1933,6 +2015,7 @@ export const exportProductTableBatch = async ({
   input,
   ids,
   afterId,
+  subscriptionChecked = false,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
@@ -1942,7 +2025,10 @@ export const exportProductTableBatch = async ({
   input?: ProductListIdsInput;
   ids?: string[];
   afterId?: string;
+  subscriptionChecked?: boolean;
 }) => {
+  if (!subscriptionChecked)
+    await assertProductExportAccess({ organizationId, actorId: user?.id, db: prisma });
   const accessibleStoreIds = storeId ? undefined : await resolveProductStoreScopeIds(prisma, user);
   if (storeId && user) {
     try {
@@ -1958,13 +2044,25 @@ export const exportProductTableBatch = async ({
       })
     : null;
   const exportStoreId = exportStore?.id;
-  if (storeId && !exportStore) throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+  if (storeId && !exportStore)
+    throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
   const canReadCost = !user || ["ADMIN", "MANAGER"].includes(user.role);
-  if (input?.readiness === "missingCost" && !canReadCost) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
-  const base = buildProductSqlBase({ organizationId, input: { ...input, storeId }, accessibleStoreIds });
-  const selectionSql = ids ? (ids.length ? Prisma.sql`AND p.id IN (${Prisma.join(ids)})` : Prisma.sql`AND false`) : Prisma.empty;
+  if (input?.readiness === "missingCost" && !canReadCost)
+    throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  const base = buildProductSqlBase({
+    organizationId,
+    input: { ...input, storeId },
+    accessibleStoreIds,
+  });
+  const selectionSql = ids
+    ? ids.length
+      ? Prisma.sql`AND p.id IN (${Prisma.join(ids)})`
+      : Prisma.sql`AND false`
+    : Prisma.empty;
   const cursorSql = afterId ? Prisma.sql`AND p.id > ${afterId}` : Prisma.empty;
-  const selected = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT p.id ${base} ${selectionSql} ${cursorSql} ORDER BY p.id LIMIT 500`);
+  const selected = await prisma.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT p.id ${base} ${selectionSql} ${cursorSql} ORDER BY p.id LIMIT 500`,
+  );
   const products = await prisma.product.findMany({
     where: { organizationId, id: { in: selected.map((row) => row.id) } },
     select: {
@@ -1978,7 +2076,16 @@ export const exportProductTableBatch = async ({
       photoUrl: true,
       barcodes: { select: { value: true } },
       basePriceKgs: true,
-      inventorySnapshots: { where: { ...(storeId ? { storeId } : accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : { store: { organizationId } }) }, select: { onHand: true } },
+      inventorySnapshots: {
+        where: {
+          ...(storeId
+            ? { storeId }
+            : accessibleStoreIds
+              ? { storeId: { in: accessibleStoreIds } }
+              : { store: { organizationId } }),
+        },
+        select: { onHand: true },
+      },
       images: {
         select: { url: true, position: true },
         orderBy: { position: "asc" },
@@ -2060,7 +2167,9 @@ export const exportProductTableBatch = async ({
   );
   const minStockByProductId = new Map(minStockRows.map((row) => [row.productId, row.minStock]));
   const storePriceByProductId = new Map(
-    storePrices.filter((price) => price.priceKgs != null).map((price) => [price.productId, decimalToNumber(price.priceKgs)]),
+    storePrices
+      .filter((price) => price.priceKgs != null)
+      .map((price) => [price.productId, decimalToNumber(price.priceKgs)]),
   );
 
   const serializeVariants = (product: (typeof products)[number]) =>
@@ -2091,9 +2200,11 @@ export const exportProductTableBatch = async ({
   };
 
   const selectedColumnSet = columns?.length ? new Set<ProductExportColumnKey>(columns) : null;
-  const selectedColumns = productExportColumns.filter((column) =>
-    (!selectedColumnSet || selectedColumnSet.has(column.key)) &&
-    (canReadCost || !["avgCostKgs", "purchasePriceKgs"].includes(column.key)));
+  const selectedColumns = productExportColumns.filter(
+    (column) =>
+      (!selectedColumnSet || selectedColumnSet.has(column.key)) &&
+      (canReadCost || !["avgCostKgs", "purchasePriceKgs"].includes(column.key)),
+  );
   const header = selectedColumns.map((column) => column.header);
   const keys = selectedColumns.map((column) => column.key);
   const rows = products.map((product) => {
@@ -2124,12 +2235,17 @@ export const exportProductTableBatch = async ({
   return { header, rows, keys, nextId: selected.at(-1)?.id, hasMore: selected.length === 500 };
 };
 export const exportProductsCsv = async (options: Parameters<typeof exportProductTableBatch>[0]) => {
+  await assertProductExportAccess({
+    organizationId: options.organizationId,
+    actorId: options.user?.id,
+    db: options.prisma,
+  });
   let afterId: string | undefined;
   const chunks: string[] = [];
   do {
-    const batch = await exportProductTableBatch({ ...options, afterId });
+    const batch = await exportProductTableBatch({ ...options, afterId, subscriptionChecked: true });
     const csv = toCsv(batch.header, batch.rows, batch.keys);
-    chunks.push(afterId ? batch.rows.length ? csv.slice(csv.indexOf("\r\n") + 2) : "" : csv);
+    chunks.push(afterId ? (batch.rows.length ? csv.slice(csv.indexOf("\r\n") + 2) : "") : csv);
     afterId = batch.hasMore ? batch.nextId : undefined;
   } while (afterId);
   return chunks.filter(Boolean).join("\r\n");
@@ -2146,6 +2262,7 @@ export const exportProductImagesData = async ({
   user?: StoreAccessUser;
   storeId?: string;
 }): Promise<{ name: string; images: string[] }[]> => {
+  await assertFeatureEnabled({ organizationId, feature: "bulkProducts" });
   const accessibleStoreIds = storeId ? undefined : await resolveProductStoreScopeIds(prisma, user);
   if (storeId && user) {
     try {

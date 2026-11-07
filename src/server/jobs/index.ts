@@ -215,6 +215,13 @@ const imageTaskScope = (payload: JobPayload) =>
     ? payload.jobId
     : undefined;
 const jobs: Record<string, JobDefinition> = {
+  "subscription-reminders": {
+    handler: async () => {
+      const { processSubscriptionReminders } = await import("@/server/billing/reminders");
+      return processSubscriptionReminders();
+    },
+    maxAttempts: 1,
+  },
   "subscription-payment-reconcile": {
     handler: async () => {
       const { reconcileSubscriptionPayments } =

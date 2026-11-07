@@ -23,3 +23,11 @@ export const extendSubscriptionMonth = (start: Date, anchorDay: number) => {
   next.setUTCDate(Math.min(anchorDay, lastDay));
   return next;
 };
+
+export const extendSubscriptionMonths = (start: Date, anchorDay: number, months: number) => {
+  if (![1, 6, 12].includes(months) || !Number.isInteger(anchorDay) || anchorDay < 1 || anchorDay > 31)
+    throw new AppError("billingInvalidAmount");
+  let end = new Date(start);
+  for (let index = 0; index < months; index++) end = extendSubscriptionMonth(end, anchorDay);
+  return end;
+};

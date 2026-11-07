@@ -39,6 +39,7 @@ describe("plan catalog limits", () => {
       analytics: false,
       compliance: false,
       stockCounts: false,
+      priceBooks: false,
       kkm: false,
     });
   });
@@ -58,13 +59,15 @@ describe("plan catalog limits", () => {
 
   it("resolves the same exact KGS override for public and billing catalog entries", () => {
     vi.stubEnv("PLAN_PRICE_STARTER_KGS", "1890.50");
-    expect(getPlanMonthlyPriceKgs("STARTER")).toBe(1890.5);
-    expect(getPlanCatalogEntries()[0].monthlyPriceKgs).toBe(1890.5);
+    expect(getPlanMonthlyPriceKgs("STARTER", "2026-10")).toBe(1890.5);
+    expect(getPlanCatalogEntries("2026-10")[0].monthlyPriceKgs).toBe(1890.5);
+    expect(getPlanMonthlyPriceKgs("STARTER", "2026-11")).toBe(2000);
+    expect(getPlanCatalogEntries("2026-11")[0].monthlyPriceKgs).toBe(2000);
   });
 
   it.each(["", "0", "-5", "NaN", "Infinity"])("ignores invalid price override %s", (value) => {
     vi.stubEnv("PLAN_PRICE_STARTER_KGS", value);
-    expect(getPlanCatalogEntries()[0].monthlyPriceKgs).toBe(1750);
+    expect(getPlanCatalogEntries("2026-10")[0].monthlyPriceKgs).toBe(1750);
   });
 
   it("preserves legacy PRO mapping and upgrade order", () => {

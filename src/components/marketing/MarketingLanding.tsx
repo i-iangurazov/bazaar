@@ -6,6 +6,10 @@ import { getMarketingCopy, type MarketingCopy } from "@/content/marketing";
 import { formatCurrency } from "@/lib/i18nFormat";
 import { MarketingLocaleSwitcher } from "./MarketingLocaleSwitcher";
 import { getPlanCatalogEntries } from "@/server/billing/planCatalog";
+import { legalPublicationState } from "@/lib/legalPublication";
+import { legalCopy } from "@/content/legal";
+import { legalDocumentIds } from "@/content/legal/types";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { MarketingPricing } from "./MarketingPricing";
 
 import { FeatureShowcase } from "./FeatureShowcase";
@@ -141,6 +145,8 @@ const IntegrationFlow = ({ copy }: { copy: MarketingCopy }) => {
 export const MarketingLanding = async () => {
   const [t, locale] = await Promise.all([getTranslations("billing"), getLocale()]);
   const plans = getPlanCatalogEntries();
+  const publishedLegal = legalPublicationState().published;
+  const documents = legalCopy[normalizeLocale(locale) ?? defaultLocale].documents;
   const copy = getMarketingCopy(locale);
   const previewData = getMarketingPreviewData(locale);
   const structuredData = {
@@ -440,7 +446,15 @@ export const MarketingLanding = async () => {
           </div>
           <div>
             <h3>{copy.footer.legal}</h3>
-            <a href={`${whatsappUrl}?text=Legal%20information`}>{copy.footer.legal}</a>
+            {publishedLegal ? (
+              legalDocumentIds.map((id) => (
+                <Link key={id} href={`/legal/${id}`}>
+                  {documents[id].title}
+                </Link>
+              ))
+            ) : (
+              <a href={`${whatsappUrl}?text=Legal%20information`}>{copy.footer.legal}</a>
+            )}
             <Link href="/privacy">{copy.footer.privacy}</Link>
           </div>
         </div>

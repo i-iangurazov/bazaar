@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { describe, expect, it } from "vitest";
+import { AppError } from "@/server/services/errors";
 
 import {
   chunkBakaiStoreItems,
@@ -10,6 +11,20 @@ import {
 } from "@/server/services/bakaiStore";
 
 describe("bakai store api helpers", () => {
+  it("preserves local subscription failures without labelling them as partner/network errors", () => {
+    expect(
+      normalizeBakaiApiError({
+        status: null,
+        body: null,
+        error: new AppError("billingUsageLimitReached", "CONFLICT", 409),
+      }),
+    ).toMatchObject({
+      code: "billingUsageLimitReached",
+      message: "billingUsageLimitReached",
+      status: 409,
+      retryable: false,
+    });
+  });
   it("omits optional nullish fields from payload objects", () => {
     expect(
       pruneOptionalBakaiFields({
@@ -49,10 +64,8 @@ describe("bakai store api helpers", () => {
     });
 
     expect(
-      validateBakaiImages([
-        "https://cdn.example.com/1.jpg",
-        "https://cdn.example.com/2.gif",
-      ]).issues,
+      validateBakaiImages(["https://cdn.example.com/1.jpg", "https://cdn.example.com/2.gif"])
+        .issues,
     ).toEqual(expect.arrayContaining(["NOT_ENOUGH_IMAGES", "INVALID_IMAGE_URL"]));
   });
 
@@ -68,8 +81,7 @@ describe("bakai store api helpers", () => {
           sku: "SKU-1",
           name: "Valid Bakai Name",
           category: "Sneakers",
-          description:
-            "Это достаточно длинное описание товара для проверки API-валидации Bakai.",
+          description: "Это достаточно длинное описание товара для проверки API-валидации Bakai.",
           basePriceKgs: new Prisma.Decimal("129.99"),
           photoUrl: null,
           supplier: { name: "Brand X" },
@@ -103,8 +115,7 @@ describe("bakai store api helpers", () => {
       sku: "SKU-1",
       price: 129.99,
       category_name: "Sneakers",
-      description:
-        "Это достаточно длинное описание товара для проверки API-валидации Bakai.",
+      description: "Это достаточно длинное описание товара для проверки API-валидации Bakai.",
       images: [
         "https://cdn.example.com/1.jpg",
         "https://cdn.example.com/2.png",

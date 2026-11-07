@@ -1,4 +1,6 @@
 import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
+import { reserveAiCallBudget } from "@/server/billing/aiOperationBudget";
+import { AppError } from "./errors";
 
 export type TextAiConfig = {
   provider: "deepseek" | "openai";
@@ -52,20 +54,49 @@ export function aiResponseBody(
   };
 }
 
-export function fetchAiResponse(
+export async function fetchAiResponse(
   config: TextAiConfig,
   body: Record<string, unknown>,
   signal: AbortSignal,
   options?: { reasoningEffort?: "none" | "low" },
 ) {
   assertExternalProviderCallAllowed(config.provider);
-  return fetch(config.url, {
+  const budget = reserveAiCallBudget(aiResponseBody(config, body, options));
+  if (budget.active && config.provider !== "deepseek")
+    throw new AppError("billingAiProviderUnavailable", "CONFLICT", 409);
+  const expenseModule = budget.active ? await import("@/server/billing/providerExpense") : null;
+  const expense = expenseModule && budget.organizationId ? await expenseModule.reserveProviderExpense({
+    organizationId: budget.organizationId, kind: budget.kind, operationKey: budget.expenseKey,
+    estimatedMinor: expenseModule.aiExpenseMinor(budget.inputTokens, budget.outputTokens, config.model),
+  }) : null;
+  try {
+  const response = await fetch(config.url, {
     method: "POST",
     redirect: "error",
     headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(aiResponseBody(config, body, options)),
+    body: JSON.stringify(budget.body),
     signal,
   });
+  if (budget.active) {
+    const result = await response.clone().json().catch(() => null) as {
+      usage?: { input_tokens?: number; output_tokens?: number; prompt_tokens?: number; completion_tokens?: number }
+    } | null;
+    budget.finish(result?.usage);
+    const input = result?.usage?.input_tokens ?? result?.usage?.prompt_tokens;
+    const output = result?.usage?.output_tokens ?? result?.usage?.completion_tokens;
+    const known = Number.isSafeInteger(input) && Number.isSafeInteger(output) && input! >= 0 && output! >= 0;
+    await expenseModule!.settleProviderExpense(expense, known
+      ? expenseModule!.aiExpenseMinor(input!, output!, config.model)
+      : response.status >= 400 && response.status < 500 && response.status !== 408 ? 0 : undefined);
+  }
+  return response;
+  } catch (error) {
+    // An uncertain attempt still occupies its request budget; retries cannot
+    // multiply the declared ceiling after provider or network failures.
+    budget.finish();
+    await expenseModule?.settleProviderExpense(expense);
+    throw error;
+  }
 }
 
 // Never render reasoning, refusals or tool arguments as an assistant answer.

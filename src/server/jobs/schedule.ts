@@ -13,7 +13,12 @@ export const scheduledJobGroups = {
     "product-description-generation",
     "product-image-studio-process",
   ],
-  email: ["email-campaign-send", "email-campaign-reconcile", "customer-order-follow-up"],
+  email: [
+    "subscription-reminders",
+    "email-campaign-send",
+    "email-campaign-reconcile",
+    "customer-order-follow-up",
+  ],
   maintenance: ["cleanup-idempotency-keys"],
 } as const;
 

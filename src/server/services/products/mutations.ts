@@ -19,6 +19,7 @@ import {
   updateProduct,
 } from "@/server/services/products";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
+import { assertProductImportAccess } from "@/server/billing/coreAccess";
 import { runProductImport } from "@/server/services/imports";
 import { previewProductImport } from "@/server/services/products/importPreview";
 import { decimalToNumber } from "@/server/services/products/serializers";
@@ -416,6 +417,7 @@ export const importProductsCsvMutation = async ({
 
     const result = await runProductImport({
       idempotencyKey: input.idempotencyKey,
+      initialImportChunk: input.initialImportChunk,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,
       requestId: ctx.requestId,
@@ -451,6 +453,7 @@ export const previewProductsCsvImportMutation = async ({
   logger?: Logger;
 }) => {
   try {
+    await assertProductImportAccess(organizationId);
     if (input.rows.length > 1000) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "importTooLarge" });
     }

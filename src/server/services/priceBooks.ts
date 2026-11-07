@@ -45,7 +45,7 @@ async function authorize(user: StoreAccessUser) {
   });
   if (!actor?.isActive || (actor.role !== "ADMIN" && !actor.isOrgOwner))
     throw new AppError("forbidden", "FORBIDDEN", 403);
-  await assertFeatureEnabled({ organizationId: user.organizationId, feature: "storePrices" });
+  await assertFeatureEnabled({ organizationId: user.organizationId, feature: "priceBooks" });
 }
 
 export async function createPriceBook(input: {

@@ -1,3 +1,4 @@
+import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { OrganizationSubscriptionStatus, PlanUpgradeRequestStatus } from "@prisma/client";
@@ -5,7 +6,8 @@ import { OrganizationSubscriptionStatus, PlanUpgradeRequestStatus } from "@prism
 import { platformOwnerProcedure, router } from "@/server/trpc/trpc";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
-import { getPlanMonthlyPrice, toPlanTier } from "@/server/services/planLimits";
+import { toPlanTier } from "@/server/services/planLimits";
+import { getConfirmedPaidMrr } from "@/server/billing/paidMrr";
 import {
   listPendingPlanUpgradeRequests,
   reviewPlanUpgradeRequest,
@@ -26,6 +28,7 @@ export const platformOwnerRouter = router({
         plan: true,
         subscriptionStatus: true,
         createdAt: true,
+        subscriptionContract: { select: { lifetimeAccess: true } },
       },
     });
 
@@ -34,26 +37,22 @@ export const platformOwnerRouter = router({
       BUSINESS: 0,
       ENTERPRISE: 0,
     };
-    let estimatedMrrKgs = 0;
 
     for (const organization of organizations) {
       const tier = toPlanTier(organization.plan);
       if (organization.subscriptionStatus === OrganizationSubscriptionStatus.ACTIVE) {
         activeByTier[tier] += 1;
-        estimatedMrrKgs += getPlanMonthlyPrice(organization.plan);
       }
     }
 
-    const paidCount = organizations.filter(
-      (organization) => organization.subscriptionStatus === OrganizationSubscriptionStatus.ACTIVE,
-    ).length;
+    const paid = await getConfirmedPaidMrr(ctx.prisma, organizations);
     const pendingUpgradeRequests = await ctx.prisma.planUpgradeRequest.count({
       where: { status: PlanUpgradeRequestStatus.PENDING },
     });
 
     return {
       organizationsTotal: organizations.length,
-      organizationsPaid: paidCount,
+      organizationsPaid: paid.organizationsPaid,
       organizationsPastDue: organizations.filter(
         (organization) =>
           organization.subscriptionStatus === OrganizationSubscriptionStatus.PAST_DUE,
@@ -65,7 +64,7 @@ export const platformOwnerRouter = router({
       pendingUpgradeRequests,
       paymentsAvailable: getSubscriptionPaymentConfig().ready,
       activeByTier,
-      estimatedMrrKgs,
+      confirmedPaidMrrKgs: paid.confirmedPaidMrrKgs,
     };
   }),
 
@@ -180,6 +179,11 @@ export const platformOwnerRouter = router({
         )
           throw new TRPCError({ code: "CONFLICT", message: "billingPaymentsUnavailable" });
 
+        const lifetime = await tx.subscriptionContract.findUnique({
+          where: { organizationId: before.id },
+        });
+        if (lifetime?.lifetimeAccess || LIFETIME_ORGANIZATION_IDS.has(before.id))
+          throw new TRPCError({ code: "FORBIDDEN", message: "billingLifetimeProtected" });
         const now = new Date();
         const dates = {
           ...(input.trialDays !== undefined

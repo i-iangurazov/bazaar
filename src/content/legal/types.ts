@@ -15,6 +15,7 @@ export const sellerFields = [
   "bankName",
   "beneficiary",
   "accountNumber",
+  "accountCurrency",
   "bankCode",
 ] as const;
 export type SellerField = (typeof sellerFields)[number];
@@ -25,6 +26,9 @@ export type LegalCopy = {
   navigation: string;
   contents: string;
   draft: string;
+  published: string;
+  paymentSystemsTitle: string;
+  paymentSystemsNotice: string;
   draftNotice: string;
   missing: string;
   sellerTitle: string;

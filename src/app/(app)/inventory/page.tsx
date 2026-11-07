@@ -136,7 +136,13 @@ import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const inventoryViewModeSchema = z.enum(["table", "grid"]);
-const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
+const inventoryStockFilterSchema = z.enum([
+  "all",
+  "lowStock",
+  "outOfStock",
+  "negativeStock",
+  "notInAssortment",
+]);
 const inventorySortKeySchema = z.enum([
   "sku",
   "image",
@@ -369,6 +375,13 @@ const InventoryPage = () => {
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
   const canManageStock = canManage;
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
+  const canPlan = Boolean(billing.data?.featureFlags.replenishment);
+  const canExpiryLots = Boolean(billing.data?.featureFlags.expiryLots);
+  const canTransfer = Boolean(billing.data?.access.hasAccess && billing.data.featureFlags.assortments);
   const router = useRouter();
   const pathname = usePathname() ?? "/inventory";
   const searchParams = useSearchParams();
@@ -466,7 +479,10 @@ const InventoryPage = () => {
     defaultValue: defaultInventoryTableState,
     parse: parseInventoryTableState,
   });
-  const defaultInventorySavedViewsState = useMemo(() => ({ views: [], defaultViewId: null, activeViewId: null }), []);
+  const defaultInventorySavedViewsState = useMemo(
+    () => ({ views: [], defaultViewId: null, activeViewId: null }),
+    [],
+  );
   const inventorySavedViewsStorageKey = useMemo(
     () =>
       buildScopedStorageKey({
@@ -503,8 +519,11 @@ const InventoryPage = () => {
     [setInventoryTableState],
   );
   const inventoryPageSize = inventoryTableState.pageSize;
-  const showPlanning = inventoryTableState.showPlanning;
-  const inventorySort = inventoryTableState.sort;
+  const showPlanning = inventoryTableState.showPlanning && canPlan;
+  const inventorySort =
+    inventoryTableState.sort.key === "suggestedOrder" && !canPlan
+      ? { ...inventoryTableState.sort, key: "product" as const }
+      : inventoryTableState.sort;
   const visibleInventoryColumns = inventoryTableState.visibleColumns;
   const setStoreId = useCallback(
     (nextValue: string) =>
@@ -596,7 +615,12 @@ const InventoryPage = () => {
     [locale, selectedStore],
   );
   const matchingInventorySavedView = useMemo(
-    () => findMatchingSavedTableView(inventorySavedViewsState.views, inventoryTableState, inventorySavedViewsState.activeViewId),
+    () =>
+      findMatchingSavedTableView(
+        inventorySavedViewsState.views,
+        inventoryTableState,
+        inventorySavedViewsState.activeViewId,
+      ),
     [inventorySavedViewsState.views, inventorySavedViewsState.activeViewId, inventoryTableState],
   );
   const baseInventoryColumnOptions = useMemo(
@@ -916,7 +940,7 @@ const InventoryPage = () => {
   );
   const expiringQuery = trpc.stockLots.expiringSoon.useQuery(
     { storeId: storeId ?? "", days: expiryWindow },
-    { enabled: Boolean(storeId && trackExpiryLots) },
+    { enabled: Boolean(storeId && trackExpiryLots && canExpiryLots) },
   );
   const movementsQuery = trpc.inventory.movements.useQuery(
     movementTarget && storeId
@@ -1824,6 +1848,7 @@ const InventoryPage = () => {
             },
             {
               key: "transfer",
+              hidden: !canTransfer,
               label: t("transferStock"),
               icon: TransferIcon,
               onSelect: () => router.push(buildTransferHref(item)),
@@ -1853,8 +1878,9 @@ const InventoryPage = () => {
         onSelect: () => openMovements(item),
       },
     ];
-    return actions.length
-      ? actions
+    const visibleActions = actions.filter((action) => !("hidden" in action && action.hidden));
+    return visibleActions.length
+      ? visibleActions
       : [
           {
             key: "view",
@@ -2211,14 +2237,16 @@ const InventoryPage = () => {
                       <AdjustIcon className="h-4 w-4" aria-hidden />
                       {t("stockAdjustment")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={!storeId || !canManageStock}
-                      onSelect={() => router.push(buildTransferHref())}
-                      data-tour="inventory-transfer"
-                    >
-                      <TransferIcon className="h-4 w-4" aria-hidden />
-                      {t("transferStock")}
-                    </DropdownMenuItem>
+                    {canTransfer ? (
+                      <DropdownMenuItem
+                        disabled={!storeId || !canManageStock}
+                        onSelect={() => router.push(buildTransferHref())}
+                        data-tour="inventory-transfer"
+                      >
+                        <TransferIcon className="h-4 w-4" aria-hidden />
+                        {t("transferStock")}
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuItem
                       disabled={!storeId || !canManageStock}
                       onSelect={() => router.push(buildWriteOffHref())}
@@ -2286,14 +2314,16 @@ const InventoryPage = () => {
         }
         extraCount={Number(showPlanning)}
         extra={
-          <label className="flex min-h-10 items-center gap-2 text-sm">
-            <Switch
-              checked={showPlanning}
-              onCheckedChange={setShowPlanning}
-              aria-label={t("showPlanning")}
-            />
-            {t("showPlanning")}
-          </label>
+          canPlan ? (
+            <label className="flex min-h-10 items-center gap-2 text-sm">
+              <Switch
+                checked={showPlanning}
+                onCheckedChange={setShowPlanning}
+                aria-label={t("showPlanning")}
+              />
+              {t("showPlanning")}
+            </label>
+          ) : null
         }
       >
         <ListSearch
@@ -2346,7 +2376,7 @@ const InventoryPage = () => {
         </p>
       ) : null}
 
-      {trackExpiryLots ? (
+      {trackExpiryLots && canExpiryLots ? (
         <Card className="mb-6">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>{t("expiringSoonTitle")}</CardTitle>
@@ -2663,7 +2693,10 @@ const InventoryPage = () => {
                                         row={item}
                                         value={item.snapshot.onHand}
                                         definition={inlineEditRegistry.inventory.onHand}
-                                        stockIdentity={{storeId:item.snapshot.storeId,productId:item.product.id}}
+                                        stockIdentity={{
+                                          storeId: item.snapshot.storeId,
+                                          productId: item.product.id,
+                                        }}
                                         context={{ stockAdjustReason: t("stockAdjustment") }}
                                         role={role}
                                         locale={locale}
@@ -2972,12 +3005,14 @@ const InventoryPage = () => {
                               </DropdownMenuItem>
                             ) : null}
                             {canManageStock ? (
-                              <DropdownMenuItem
-                                onSelect={() => router.push(buildTransferHref(item))}
-                              >
-                                <TransferIcon className="h-4 w-4" aria-hidden />
-                                {t("transferStock")}
-                              </DropdownMenuItem>
+                              canTransfer ? (
+                                <DropdownMenuItem
+                                  onSelect={() => router.push(buildTransferHref(item))}
+                                >
+                                  <TransferIcon className="h-4 w-4" aria-hidden />
+                                  {t("transferStock")}
+                                </DropdownMenuItem>
+                              ) : null
                             ) : null}
                             {canManageStock ? (
                               <DropdownMenuItem

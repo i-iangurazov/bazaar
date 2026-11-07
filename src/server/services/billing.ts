@@ -8,14 +8,14 @@ import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import {
   getLimitsForPlan,
+  getOrganizationLimits,
+  getOrganizationPlan,
   getPlanFeatures,
-  getPlanMonthlyPrice,
   resolveOrganizationAccessState,
   toPlanTier,
 } from "@/server/services/planLimits";
 import {
   getPlanCatalogEntries,
-  getPlanFeatureMap,
   getPlanMonthlyPriceKgsOverride,
 } from "@/server/billing/planCatalog";
 
@@ -24,23 +24,23 @@ const normalizeOptional = (value?: string | null) => {
   return trimmed ? trimmed : null;
 };
 
-export const getPlanCatalog = () => {
-  return getPlanCatalogEntries().map((entry) => {
+export const getPlanCatalog = (version: "2026-10" | "2026-11" = "2026-10") => {
+  return getPlanCatalogEntries(version).map((entry) => {
     const plan = entry.code;
     return {
       plan,
       planTier: plan,
-      limits: getLimitsForPlan(plan),
-      features: getPlanFeatures(plan),
+      limits: getLimitsForPlan(plan, version),
+      features: getPlanFeatures(plan, version),
       featureFlags: entry.features,
       monthlyPriceKgs: entry.monthlyPriceKgs,
-      monthlyPriceKgsOverride: getPlanMonthlyPriceKgsOverride(plan),
+      monthlyPriceKgsOverride: getPlanMonthlyPriceKgsOverride(plan, version),
     };
   });
 };
 
 export const getBillingSummary = async (input: { organizationId: string }) => {
-  const org = await prisma.organization.findUnique({
+  const storedOrg = await prisma.organization.findUnique({
     where: { id: input.organizationId },
     select: {
       id: true,
@@ -53,14 +53,15 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
       createdAt: true,
     },
   });
-  if (!org) {
+  if (!storedOrg) {
     return null;
   }
+  const org = await getOrganizationPlan(input.organizationId);
 
   const [stores, users, products, upgradeRequests] = await Promise.all([
     prisma.store.count({ where: { organizationId: org.id } }),
     prisma.user.count({ where: { organizationId: org.id, isActive: true } }),
-    prisma.product.count({ where: { organizationId: org.id } }),
+    prisma.product.count({ where: { organizationId: org.id, ...(org.entitlements.countArchivedProducts ? {} : { isDeleted: false }) } }),
     prisma.planUpgradeRequest.findMany({
       where: { organizationId: org.id },
       orderBy: { createdAt: "desc" },
@@ -78,7 +79,7 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     }),
   ]);
 
-  const limits = getLimitsForPlan(org.plan);
+  const limits = getOrganizationLimits(org);
   const now = new Date();
   const accessState = resolveOrganizationAccessState(org, now);
   const trialExpired = accessState.trialExpired;
@@ -95,21 +96,32 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     planTier: toPlanTier(org.plan),
     subscriptionStatus: org.subscriptionBillingMode === "SELF_SERVE" && org.subscriptionStatus === "ACTIVE" && !accessState.hasAccess ? "PAST_DUE" as const : org.subscriptionStatus,
     subscriptionBillingMode: org.subscriptionBillingMode,
+    lifetimeAccess: org.lifetimeAccess,
+    billingCatalogVersion: org.billingCatalogVersion,
+    subscriptionExtras: org.subscriptionExtras,
     trialEndsAt: org.trialEndsAt,
     currentPeriodEndsAt: org.currentPeriodEndsAt,
     trialExpired,
     subscriptionActive: accessState.subscriptionActive,
     trialActive: accessState.trialActive,
     hasAccess: accessState.hasAccess,
+    inGrace: accessState.inGrace,
+    graceEndsAt: accessState.graceEndsAt,
     usage: { stores, users, products },
     limits,
-    features: getPlanFeatures(org.plan),
-    featureFlags: getPlanFeatureMap(org.plan),
-    monthlyPriceKgs: getPlanMonthlyPrice(org.plan),
-    monthlyPriceKgsOverride: getPlanMonthlyPriceKgsOverride(org.plan),
+    features: Object.entries(org.entitlements.features).filter(([,enabled]) => enabled).map(([feature]) => feature),
+    featureFlags: org.entitlements.features,
+    usageLimits: org.entitlements.usageLimits,
+    monthlyPriceKgs: org.lifetimeAccess ? 0 : org.entitlements.monthlyPriceKgs,
+    monthlyPriceKgsOverride: null,
     limitState: hasLimitExceeded ? "LIMIT_EXCEEDED" : "OK",
     limitExceeded,
-    planCatalog: getPlanCatalog(),
+    planCatalog: getPlanCatalog(org.billingCatalogVersion).map((entry) => {
+      const agreed = org.contractTerms.plans[entry.planTier];
+      return { ...entry, limits: { maxStores: agreed.limits.maxStores, maxUsers: agreed.limits.maxActiveUsers, maxProducts: agreed.limits.maxProducts },
+        monthlyPriceKgs: agreed.monthlyPriceKgs, monthlyPriceKgsOverride: null, featureFlags: agreed.features,
+        features: Object.entries(agreed.features).filter(([,enabled]) => enabled).map(([feature]) => feature) };
+    }),
     upgradeRequests,
     pendingUpgradeRequest:
       upgradeRequests.find((request) => request.status === PlanUpgradeRequestStatus.PENDING) ??
@@ -120,15 +132,21 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
 export const getBillingFeatureSummary = async (input: { organizationId: string }) => {
   const org = await prisma.organization.findUnique({
     where: { id: input.organizationId },
-    select: { plan: true },
+    select: { id: true },
   });
   if (!org) {
     return null;
   }
+  const effective = await getOrganizationPlan(input.organizationId);
   return {
-    plan: org.plan,
-    features: getPlanFeatures(org.plan),
-    featureFlags: getPlanFeatureMap(org.plan),
+    plan: effective.plan,
+    subscriptionStatus: effective.subscriptionStatus,
+    billingCatalogVersion: effective.billingCatalogVersion,
+    lifetimeAccess: effective.lifetimeAccess,
+    selectedMarketplaceChannel: effective.subscriptionContract?.selectedMarketplaceChannel ?? null,
+    features: Object.entries(effective.entitlements.features).filter(([,enabled]) => enabled).map(([feature]) => feature),
+    featureFlags: effective.entitlements.features,
+    access: resolveOrganizationAccessState(effective),
   };
 };
 

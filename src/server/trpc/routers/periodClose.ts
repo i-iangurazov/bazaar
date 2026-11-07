@@ -26,7 +26,7 @@ const closeSchema = z.object({
 });
 
 export const periodCloseRouter = router({
-  list: periodCloseProcedure
+  list: managerProcedure
     .input(
       z
         .object({

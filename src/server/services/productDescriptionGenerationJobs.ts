@@ -23,6 +23,17 @@ import {
   type ProductContentSpecKind,
 } from "@/server/services/productContentGeneration";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
+import {
+  reserveSubscriptionUsageBatch,
+  resumeSubscriptionUsage,
+  startSubscriptionUsage,
+  settleSubscriptionUsage,
+  settleSubscriptionUsageBatch,
+  releaseUnusedSubscriptionUsage,
+  type UsageLease,
+} from "@/server/billing/subscriptionUsage";
+import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 
 export const PRODUCT_DESCRIPTION_GENERATION_JOB_NAME = "product-description-generation";
 
@@ -218,6 +229,7 @@ export const startProductDescriptionGenerationJob = async (input: {
   logger?: ProductDescriptionGenerationLogger;
   runImmediately?: boolean;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "bulkAiContent" });
   const productIds = normalizeProductIds(input.productIds);
   await assertActorCanWriteProducts(prisma, input.organizationId, input.actorId, productIds);
   if (!productIds.length) {
@@ -248,6 +260,12 @@ export const startProductDescriptionGenerationJob = async (input: {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
 
+  const aiProductIds = await loadJobAiEligibility(
+    input.organizationId,
+    productIds,
+    Boolean(input.overwriteExisting),
+  );
+
   const job = await prisma.$transaction(async (tx) => {
     const created = await tx.productDescriptionGenerationJob.create({
       data: {
@@ -272,6 +290,20 @@ export const startProductDescriptionGenerationJob = async (input: {
       select: { id: true },
     });
 
+    const items = await tx.productDescriptionGenerationJobItem.findMany({
+      where: { jobId: created.id },
+      select: { id: true, productId: true },
+    });
+    const meteredItems = items.filter((item) => aiProductIds.has(item.productId));
+    if (meteredItems.length)
+      await reserveSubscriptionUsageBatch(
+        {
+          organizationId: input.organizationId,
+          resource: "ai",
+          operationKeys: meteredItems.map((item) => `product-content:${item.id}`),
+        },
+        tx,
+      );
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -344,12 +376,162 @@ type ProductSpecTemplate = {
   autofillKind: ProductSpecAutofillKind | null;
 };
 
+const JOB_PRODUCT_SELECT = {
+  id: true,
+  sku: true,
+  name: true,
+  category: true,
+  isBundle: true,
+  description: true,
+  photoUrl: true,
+  supplier: { select: { name: true } },
+  images: {
+    where: { url: { not: { startsWith: "data:image/" } } },
+    select: { url: true },
+    orderBy: { position: "asc" },
+    take: MAX_IMAGES_PER_PRODUCT,
+  },
+  variants: {
+    where: { isActive: true },
+    select: { id: true, attributes: true, attributeValues: { select: { key: true, value: true } } },
+    orderBy: { createdAt: "asc" },
+  },
+} as const satisfies Prisma.ProductSelect;
+type JobProduct = Prisma.ProductGetPayload<{ select: typeof JOB_PRODUCT_SELECT }>;
+type JobSpecPlan = { templateSpecs: ProductSpecTemplate[]; generatedTemplateMode: boolean };
+
+const productSpecCurrentValues = (product: Pick<JobProduct, "variants">) => {
+  const values = new Map<string, string[]>();
+  for (const variant of product.variants) {
+    if (
+      variant.attributes &&
+      typeof variant.attributes === "object" &&
+      !Array.isArray(variant.attributes)
+    )
+      for (const [key, value] of Object.entries(variant.attributes))
+        addCurrentSpecValue(values, key, value);
+    for (const row of variant.attributeValues) addCurrentSpecValue(values, row.key, row.value);
+  }
+  return values;
+};
+
+// This mirrors only provable provider decisions in generateProductContent:
+// missing images cannot call either image provider; manufacturer/model are
+// deterministic. All uncertain image-backed fields reserve one card unit.
+export const productDescriptionJobNeedsAi = (input: {
+  product: Pick<JobProduct, "description" | "photoUrl" | "images" | "category" | "variants">;
+  overwriteExisting: boolean;
+  templateSpecs: ProductSpecTemplate[];
+}) => {
+  if (!collectProductImageUrls(input.product).length) return false;
+  if (input.overwriteExisting || !input.product.description?.trim()) return true;
+  if (!input.product.category?.trim()) return false;
+  const existing = productSpecCurrentValues(input.product);
+  return input.templateSpecs.some(
+    (spec) =>
+      spec.autofillKind &&
+      spec.autofillKind !== "manufacturer" &&
+      spec.autofillKind !== "model" &&
+      (input.overwriteExisting || !existing.get(spec.attributeKey)?.length),
+  );
+};
+
+const loadJobSpecPlans = async (
+  db: Prisma.TransactionClient,
+  organizationId: string,
+  categories: string[],
+) => {
+  const names = [...new Set(categories.map((category) => category.trim()).filter(Boolean))];
+  const rows = names.length
+    ? await db.categoryAttributeTemplate.findMany({
+        where: { organizationId, category: { in: names } },
+        select: {
+          category: true,
+          attributeKey: true,
+          order: true,
+          definition: {
+            select: {
+              labelRu: true,
+              type: true,
+              optionsRu: true,
+              isActive: true,
+            },
+          },
+        },
+        orderBy: [{ order: "asc" }, { attributeKey: "asc" }],
+      })
+    : [];
+  const plans = new Map<string, JobSpecPlan>();
+  for (const name of names) {
+    let templateSpecs: ProductSpecTemplate[] = rows
+      .filter(
+        (row) => row.category === name && row.definition?.isActive && row.definition.labelRu.trim(),
+      )
+      .map((row) => ({
+        attributeKey: row.attributeKey,
+        labelRu: row.definition!.labelRu.trim(),
+        type: row.definition!.type,
+        optionsRu: parseOptionStrings(row.definition!.optionsRu),
+        autofillKind: resolveProductSpecAutofillKind({
+          labelRu: row.definition!.labelRu,
+          attributeKey: row.attributeKey,
+        }),
+      }));
+    const generatedTemplateMode = templateSpecs.length === 0;
+    if (generatedTemplateMode)
+      templateSpecs = AI_GENERATED_SPEC_DEFINITIONS.map((definition) => ({
+        attributeKey: definition.key,
+        labelRu: definition.labelRu,
+        labelKg: definition.labelKg,
+        type: "TEXT",
+        optionsRu: [],
+        autofillKind: definition.kind,
+      }));
+    plans.set(name, { templateSpecs, generatedTemplateMode });
+  }
+  return plans;
+};
+
+const loadJobAiEligibility = async (
+  organizationId: string,
+  productIds: string[],
+  overwriteExisting: boolean,
+) => {
+  const eligible = new Set<string>();
+  for (let offset = 0; offset < productIds.length; offset += 100) {
+    const products = await prisma.product.findMany({
+      where: {
+        organizationId,
+        id: { in: productIds.slice(offset, offset + 100) },
+        isDeleted: false,
+      },
+      select: JOB_PRODUCT_SELECT,
+    });
+    const plans = await loadJobSpecPlans(
+      prisma,
+      organizationId,
+      products.map((product) => product.category ?? ""),
+    );
+    for (const product of products)
+      if (
+        productDescriptionJobNeedsAi({
+          product,
+          overwriteExisting,
+          templateSpecs: plans.get(product.category?.trim() ?? "")?.templateSpecs ?? [],
+        })
+      )
+        eligible.add(product.id);
+  }
+  return eligible;
+};
+
 type ProductSpecGenerationResult =
   | {
       status: "generated" | "overwritten";
       filledValueCount: number;
       previousValues: Record<string, string | null>;
       nextValues: Record<string, unknown>;
+      persist: (tx: Prisma.TransactionClient) => Promise<void>;
     }
   | {
       status: "skipped" | "failed";
@@ -411,7 +593,7 @@ const addCurrentSpecValue = (values: Map<string, string[]>, key: string, rawValu
   }
 };
 
-const generateAndPersistProductSpecs = async (input: {
+const prepareProductSpecs = async (input: {
   organizationId: string;
   actorId: string;
   requestId: string;
@@ -433,6 +615,7 @@ const generateAndPersistProductSpecs = async (input: {
       attributeValues: Array<{ key: string; value: Prisma.JsonValue }>;
     }>;
   };
+  preparedTemplates: JobSpecPlan;
   imageUrls: string[];
   overwriteExisting: boolean;
   logger: ProductDescriptionGenerationLogger;
@@ -442,66 +625,10 @@ const generateAndPersistProductSpecs = async (input: {
     return { status: "skipped", reason: "missingCategory", filledValueCount: 0 };
   }
 
-  const categoryTemplates = await prisma.categoryAttributeTemplate.findMany({
-    where: {
-      organizationId: input.organizationId,
-      category,
-    },
-    select: {
-      attributeKey: true,
-      order: true,
-      definition: {
-        select: {
-          labelRu: true,
-          type: true,
-          optionsRu: true,
-          isActive: true,
-        },
-      },
-    },
-    orderBy: [{ order: "asc" }, { attributeKey: "asc" }],
-  });
+  let { templateSpecs } = input.preparedTemplates;
+  const { generatedTemplateMode } = input.preparedTemplates;
 
-  let templateSpecs: ProductSpecTemplate[] = categoryTemplates
-    .filter((template) => template.definition?.isActive && template.definition.labelRu.trim())
-    .map((template) => ({
-      attributeKey: template.attributeKey,
-      labelRu: template.definition?.labelRu.trim() ?? template.attributeKey,
-      type: template.definition?.type ?? "TEXT",
-      optionsRu: parseOptionStrings(template.definition?.optionsRu),
-      autofillKind: resolveProductSpecAutofillKind({
-        labelRu: template.definition?.labelRu,
-        attributeKey: template.attributeKey,
-      }),
-    }));
-
-  const generatedTemplateMode = templateSpecs.length === 0;
-  if (generatedTemplateMode) {
-    templateSpecs = AI_GENERATED_SPEC_DEFINITIONS.map((definition) => ({
-      attributeKey: definition.key,
-      labelRu: definition.labelRu,
-      labelKg: definition.labelKg,
-      type: "TEXT",
-      optionsRu: [],
-      autofillKind: definition.kind,
-    }));
-  }
-
-  const currentValues = new Map<string, string[]>();
-  for (const variant of input.product.variants) {
-    if (
-      variant.attributes &&
-      typeof variant.attributes === "object" &&
-      !Array.isArray(variant.attributes)
-    ) {
-      for (const [key, value] of Object.entries(variant.attributes as Record<string, unknown>)) {
-        addCurrentSpecValue(currentValues, key, value);
-      }
-    }
-    for (const valueRow of variant.attributeValues) {
-      addCurrentSpecValue(currentValues, valueRow.key, valueRow.value);
-    }
-  }
+  const currentValues = productSpecCurrentValues(input.product);
 
   const nextValues = new Map<string, unknown>();
   const previousValues: Record<string, string | null> = {};
@@ -607,7 +734,7 @@ const generateAndPersistProductSpecs = async (input: {
     };
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const persist = async (tx: Prisma.TransactionClient) => {
     await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [input.product.id]);
     await assertProductDescriptionLease(tx, input.jobId, input.leaseToken);
     await assertProductDescriptionItemLease(tx, {
@@ -737,15 +864,14 @@ const generateAndPersistProductSpecs = async (input: {
         generationJobId: input.jobId,
       }),
     });
-
-    return nextValues.size;
-  });
+  };
 
   return {
     status: Object.values(previousValues).some((value) => value) ? "overwritten" : "generated",
-    filledValueCount: updated,
+    filledValueCount: nextValues.size,
     previousValues,
     nextValues: Object.fromEntries(nextValues),
+    persist,
   };
 };
 
@@ -1007,18 +1133,21 @@ const timeoutAbandonedProductDescriptionWork = async (
   );
 };
 
-const markItem = async (input: {
-  jobId: string;
-  leaseToken: string;
-  itemId: string;
-  itemLeaseToken: string;
-  status: ProductDescriptionGenerationItemStatus;
-  errorMessage?: string | null;
-  generatedDescription?: string | null;
-  previousDescription?: string | null;
-  imageCount?: number;
-}) =>
-  prisma.$transaction(async (tx) => {
+const markItem = async (
+  input: {
+    jobId: string;
+    leaseToken: string;
+    itemId: string;
+    itemLeaseToken: string;
+    status: ProductDescriptionGenerationItemStatus;
+    errorMessage?: string | null;
+    generatedDescription?: string | null;
+    previousDescription?: string | null;
+    imageCount?: number;
+  },
+  db?: Prisma.TransactionClient,
+) => {
+  const mark = async (tx: Prisma.TransactionClient) => {
     await assertProductDescriptionLease(tx, input.jobId, input.leaseToken);
     const completed = await tx.productDescriptionGenerationJobItem.updateMany({
       where: {
@@ -1041,9 +1170,12 @@ const markItem = async (input: {
       throw new ProductDescriptionLeaseLostError();
     }
     return completed;
-  });
+  };
+  return db ? mark(db) : prisma.$transaction(mark);
+};
 
 const processJobItem = async (input: {
+  usageLease?: UsageLease;
   job: {
     id: string;
     organizationId: string;
@@ -1085,42 +1217,7 @@ const processJobItem = async (input: {
       organizationId: input.job.organizationId,
       isDeleted: false,
     },
-    select: {
-      id: true,
-      sku: true,
-      name: true,
-      category: true,
-      isBundle: true,
-      description: true,
-      photoUrl: true,
-      supplier: {
-        select: { name: true },
-      },
-      images: {
-        where: {
-          url: {
-            not: { startsWith: "data:image/" },
-          },
-        },
-        select: { url: true },
-        orderBy: { position: "asc" },
-        take: MAX_IMAGES_PER_PRODUCT,
-      },
-      variants: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          attributes: true,
-          attributeValues: {
-            select: {
-              key: true,
-              value: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    select: JOB_PRODUCT_SELECT,
   });
 
   if (!product) {
@@ -1135,157 +1232,210 @@ const processJobItem = async (input: {
     return;
   }
 
-  const previousDescription = product.description?.trim() ?? "";
-  const imageUrls = collectProductImageUrls(product);
-  let generatedDescription: string | null = null;
-  let descriptionSkipReason: string | null = null;
-  let descriptionFailureReason: string | null = null;
-
-  const descriptionResult = await generateProductContent({
-    product: {
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      description: product.description,
-      isBundle: product.isBundle,
-      supplier: product.supplier,
-    },
-    category: product.category,
-    imageUrls,
-    locale: input.job.locale,
-    mode: input.job.overwriteExisting ? "overwrite" : "missing-only",
-    generateDescription: true,
-    generateSpecs: false,
-    overwriteDescription: input.job.overwriteExisting,
-    integrationContext: {
-      source: "product-description-generation-job",
-    },
-    logger: input.logger,
-  }).then(
-    (result) => result.description,
-    (error) => ({
-      status: "failed" as const,
-      value: null,
-      reason: toErrorMessage(error),
-    }),
-  );
-
-  if (descriptionResult.status === "generated" || descriptionResult.status === "overwritten") {
-    generatedDescription = descriptionResult.value;
-  } else if (descriptionResult.status === "failed") {
-    if (isSkipErrorMessage(descriptionResult.reason)) {
-      descriptionSkipReason = descriptionResult.reason;
-    } else {
-      descriptionFailureReason = descriptionResult.reason;
-    }
-    input.logger.warn(
-      {
-        jobId: input.job.id,
-        productId: product.id,
-        itemId: input.item.id,
-        error: descriptionResult.reason,
-      },
-      "product description generation failed for item",
-    );
-  } else {
-    descriptionSkipReason = descriptionResult.reason;
-  }
-
-  const specResult = await generateAndPersistProductSpecs({
-    organizationId: input.job.organizationId,
-    actorId: input.job.createdById,
-    requestId: randomUUID(),
-    jobId: input.job.id,
-    leaseToken: input.job.leaseToken,
-    itemId: input.item.id,
-    itemLeaseToken,
+  const specPlans = await loadJobSpecPlans(prisma, input.job.organizationId, [
+    product.category ?? "",
+  ]);
+  const preparedTemplates = specPlans.get(product.category?.trim() ?? "") ?? {
+    templateSpecs: [],
+    generatedTemplateMode: false,
+  };
+  const needsAi = productDescriptionJobNeedsAi({
     product,
-    imageUrls,
     overwriteExisting: input.job.overwriteExisting,
-    logger: input.logger,
+    templateSpecs: preparedTemplates.templateSpecs,
   });
-
-  if (generatedDescription) {
-    await prisma.$transaction(async (tx) => {
-      await assertActorCanWriteProducts(tx, input.job.organizationId, input.job.createdById, [
-        product.id,
-      ]);
-      await assertProductDescriptionLease(tx, input.job.id, input.job.leaseToken);
-      await assertProductDescriptionItemLease(tx, {
+  if (needsAi) {
+    try {
+      input.usageLease = await resumeSubscriptionUsage({
+        organizationId: input.job.organizationId,
+        resource: "ai",
+        operationKey: `product-content:${input.item.id}`,
+      });
+      await startSubscriptionUsage(input.usageLease);
+    } catch (error) {
+      await markItem({
+        jobId: input.job.id,
+        leaseToken: input.job.leaseToken,
+        itemLeaseToken,
         itemId: input.item.id,
-        leaseToken: itemLeaseToken,
+        status: ProductDescriptionGenerationItemStatus.FAILED,
+        errorMessage: toErrorMessage(error),
       });
-      await tx.product.update({
-        where: { id: product.id },
-        data: { description: generatedDescription },
-      });
-      await writeAuditLog(tx, {
+      throw error;
+    }
+  }
+  return withAiOperationBudget(
+    {
+      organizationId: input.job.organizationId,
+      operationKey: `product-content:${input.item.id}`,
+      enabled: input.usageLease != null,
+    },
+    async () => {
+      const previousDescription = product.description?.trim() ?? "";
+      const imageUrls = collectProductImageUrls(product);
+      let generatedDescription: string | null = null;
+      let descriptionSkipReason: string | null = null;
+      let descriptionFailureReason: string | null = null;
+
+      const descriptionResult = await generateProductContent({
+        product: {
+          id: product.id,
+          sku: product.sku,
+          name: product.name,
+          description: product.description,
+          isBundle: product.isBundle,
+          supplier: product.supplier,
+        },
+        category: product.category,
+        imageUrls,
+        locale: input.job.locale,
+        mode: input.job.overwriteExisting ? "overwrite" : "missing-only",
+        generateDescription: true,
+        generateSpecs: false,
+        overwriteDescription: input.job.overwriteExisting,
+        integrationContext: {
+          source: "product-description-generation-job",
+        },
+        logger: input.logger,
+      }).then(
+        (result) => result.description,
+        (error) => ({
+          status: "failed" as const,
+          value: null,
+          reason: toErrorMessage(error),
+        }),
+      );
+
+      if (descriptionResult.status === "generated" || descriptionResult.status === "overwritten") {
+        generatedDescription = descriptionResult.value;
+      } else if (descriptionResult.status === "failed") {
+        if (isSkipErrorMessage(descriptionResult.reason)) {
+          descriptionSkipReason = descriptionResult.reason;
+        } else {
+          descriptionFailureReason = descriptionResult.reason;
+        }
+        input.logger.warn(
+          {
+            jobId: input.job.id,
+            productId: product.id,
+            itemId: input.item.id,
+            error: descriptionResult.reason,
+          },
+          "product description generation failed for item",
+        );
+      } else {
+        descriptionSkipReason = descriptionResult.reason;
+      }
+
+      const specResult = await prepareProductSpecs({
         organizationId: input.job.organizationId,
         actorId: input.job.createdById,
-        action: "PRODUCT_UPDATE",
-        entity: "Product",
-        entityId: product.id,
         requestId: randomUUID(),
-        before: toJson({ description: previousDescription || null }),
-        after: toJson({
-          description: generatedDescription,
-          generated: true,
-          generationJobId: input.job.id,
-        }),
+        jobId: input.job.id,
+        leaseToken: input.job.leaseToken,
+        itemId: input.item.id,
+        itemLeaseToken,
+        product,
+        preparedTemplates,
+        imageUrls,
+        overwriteExisting: input.job.overwriteExisting,
+        logger: input.logger,
       });
-    });
-  }
 
-  const specsUpdated = specResult.status === "generated" || specResult.status === "overwritten";
+      const specsUpdated = specResult.status === "generated" || specResult.status === "overwritten";
+      if (generatedDescription || specsUpdated) {
+        await prisma.$transaction(async (tx) => {
+          if (specResult.status === "generated" || specResult.status === "overwritten")
+            await specResult.persist(tx);
+          if (generatedDescription) {
+            await assertActorCanWriteProducts(tx, input.job.organizationId, input.job.createdById, [
+              product.id,
+            ]);
+            await assertProductDescriptionLease(tx, input.job.id, input.job.leaseToken);
+            await assertProductDescriptionItemLease(tx, {
+              itemId: input.item.id,
+              leaseToken: itemLeaseToken,
+            });
+            const saved = await tx.product.updateMany({
+              where: {
+                id: product.id,
+                organizationId: input.job.organizationId,
+                isDeleted: false,
+                description: product.description,
+              },
+              data: { description: generatedDescription },
+            });
+            if (saved.count !== 1)
+              throw new AppError("aiDescriptionProductChanged", "CONFLICT", 409);
+            await writeAuditLog(tx, {
+              organizationId: input.job.organizationId,
+              actorId: input.job.createdById,
+              action: "PRODUCT_UPDATE",
+              entity: "Product",
+              entityId: product.id,
+              requestId: randomUUID(),
+              before: toJson({ description: previousDescription || null }),
+              after: toJson({
+                description: generatedDescription,
+                generated: true,
+                generationJobId: input.job.id,
+              }),
+            });
+          }
+          await settleSubscriptionUsage(input.usageLease ?? null, true, tx);
+          await markItem(
+            {
+              jobId: input.job.id,
+              leaseToken: input.job.leaseToken,
+              itemLeaseToken,
+              itemId: input.item.id,
+              status: ProductDescriptionGenerationItemStatus.SUCCESS,
+              generatedDescription,
+              previousDescription,
+              imageCount: imageUrls.length,
+            },
+            tx,
+          );
+        });
+        return;
+      }
 
-  if (generatedDescription || specsUpdated) {
-    await markItem({
-      jobId: input.job.id,
-      leaseToken: input.job.leaseToken,
-      itemLeaseToken,
-      itemId: input.item.id,
-      status: ProductDescriptionGenerationItemStatus.SUCCESS,
-      generatedDescription,
-      previousDescription,
-      imageCount: imageUrls.length,
-    });
-    return;
-  }
+      const failureReason =
+        descriptionFailureReason || (specResult.status === "failed" ? specResult.reason : null);
+      if (failureReason) {
+        await markItem({
+          jobId: input.job.id,
+          leaseToken: input.job.leaseToken,
+          itemLeaseToken,
+          itemId: input.item.id,
+          status: ProductDescriptionGenerationItemStatus.FAILED,
+          errorMessage: failureReason,
+          previousDescription,
+          imageCount: imageUrls.length,
+        });
+        return;
+      }
 
-  const failureReason =
-    descriptionFailureReason || (specResult.status === "failed" ? specResult.reason : null);
-  if (failureReason) {
-    await markItem({
-      jobId: input.job.id,
-      leaseToken: input.job.leaseToken,
-      itemLeaseToken,
-      itemId: input.item.id,
-      status: ProductDescriptionGenerationItemStatus.FAILED,
-      errorMessage: failureReason,
-      previousDescription,
-      imageCount: imageUrls.length,
-    });
-    return;
-  }
+      const skipReason =
+        descriptionSkipReason === "descriptionAlreadyExists" &&
+        specResult.status === "skipped" &&
+        specResult.reason === "specsAlreadyExist"
+          ? "descriptionAndSpecsAlreadyExist"
+          : (descriptionSkipReason ?? (specResult.status === "skipped" ? specResult.reason : null));
 
-  const skipReason =
-    descriptionSkipReason === "descriptionAlreadyExists" &&
-    specResult.status === "skipped" &&
-    specResult.reason === "specsAlreadyExist"
-      ? "descriptionAndSpecsAlreadyExist"
-      : (descriptionSkipReason ?? (specResult.status === "skipped" ? specResult.reason : null));
-
-  await markItem({
-    jobId: input.job.id,
-    leaseToken: input.job.leaseToken,
-    itemLeaseToken,
-    itemId: input.item.id,
-    status: ProductDescriptionGenerationItemStatus.SKIPPED,
-    errorMessage: skipReason ?? "aiDescriptionGenerationSkipped",
-    generatedDescription,
-    previousDescription,
-    imageCount: imageUrls.length,
-  });
+      await markItem({
+        jobId: input.job.id,
+        leaseToken: input.job.leaseToken,
+        itemLeaseToken,
+        itemId: input.item.id,
+        status: ProductDescriptionGenerationItemStatus.SKIPPED,
+        errorMessage: skipReason ?? "aiDescriptionGenerationSkipped",
+        generatedDescription,
+        previousDescription,
+        imageCount: imageUrls.length,
+      });
+    },
+  );
 };
 
 const getPayloadJobId = (value?: JobPayload) => {
@@ -1361,7 +1511,23 @@ const processQueuedProductDescriptionGenerationJob = async (
 
     while (pendingItems.length > 0) {
       for (const item of pendingItems) {
-        await processJobItem({ job: { ...job, leaseToken }, item, logger });
+        await assertFeatureEnabled({
+          organizationId: job.organizationId,
+          feature: "bulkAiContent",
+        });
+        const work = { job: { ...job, leaseToken }, item, logger, usageLease: null as UsageLease };
+        try {
+          await processJobItem(work);
+        } finally {
+          const result = await prisma.productDescriptionGenerationJobItem.findUnique({
+            where: { id: item.id },
+            select: { status: true },
+          });
+          await settleSubscriptionUsage(
+            work.usageLease,
+            result?.status === ProductDescriptionGenerationItemStatus.SUCCESS,
+          );
+        }
       }
       await refreshJobCounts(job.id, { leaseToken, complete: false });
       pendingItems = await prisma.productDescriptionGenerationJobItem.findMany({
@@ -1375,6 +1541,16 @@ const processQueuedProductDescriptionGenerationJob = async (
       });
     }
 
+    const unused = await prisma.productDescriptionGenerationJobItem.findMany({
+      where: { jobId: job.id, status: { not: ProductDescriptionGenerationItemStatus.SUCCESS } },
+      select: { id: true },
+    });
+    if (unused.length)
+      await releaseUnusedSubscriptionUsage({
+        organizationId: job.organizationId,
+        resource: "ai",
+        operationKeys: unused.map((item) => `product-content:${item.id}`),
+      });
     const finished = await refreshJobCounts(job.id, { leaseToken, complete: true });
     await writeAuditLog(prisma, {
       organizationId: finished.organizationId,
@@ -1413,19 +1589,51 @@ const processQueuedProductDescriptionGenerationJob = async (
       };
     }
     const errorMessage = toErrorMessage(error);
-    const failed = await prisma.productDescriptionGenerationJob.updateMany({
-      where: {
-        id: job.id,
-        status: ProductDescriptionGenerationJobStatus.PROCESSING,
-        leaseToken,
-      },
-      data: {
-        status: ProductDescriptionGenerationJobStatus.FAILED,
-        errorMessage,
-        completedAt: new Date(),
-        leaseToken: null,
-        leaseExpiresAt: null,
-      },
+    const failed = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${job.organizationId} FOR UPDATE`;
+      const claimed = await tx.productDescriptionGenerationJob.updateMany({
+        where: {
+          id: job.id,
+          status: ProductDescriptionGenerationJobStatus.PROCESSING,
+          leaseToken,
+        },
+        data: {
+          status: ProductDescriptionGenerationJobStatus.FAILED,
+          errorMessage,
+          completedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (claimed.count === 1) {
+        const pending = await tx.productDescriptionGenerationJobItem.findMany({
+          where: { jobId: job.id, status: ProductDescriptionGenerationItemStatus.PENDING },
+          select: { id: true },
+        });
+        await tx.productDescriptionGenerationJobItem.updateMany({
+          where: { jobId: job.id, status: ProductDescriptionGenerationItemStatus.PENDING },
+          data: {
+            status: ProductDescriptionGenerationItemStatus.FAILED,
+            errorMessage,
+            completedAt: new Date(),
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        // Only untouched pending rows are cancelled. Successful content and any
+        // processing row owned by another lease remain immutable.
+        if (pending.length)
+          await settleSubscriptionUsageBatch(
+            {
+              organizationId: job.organizationId,
+              resource: "ai",
+              operationKeys: pending.map((item) => `product-content:${item.id}`),
+              success: false,
+            },
+            tx,
+          );
+      }
+      return claimed;
     });
     if (failed.count !== 1) {
       return {
@@ -1434,6 +1642,16 @@ const processQueuedProductDescriptionGenerationJob = async (
         details: { jobId: job.id, reason: "leaseLost" },
       };
     }
+    const pending = await prisma.productDescriptionGenerationJobItem.findMany({
+      where: { jobId: job.id, status: { not: ProductDescriptionGenerationItemStatus.SUCCESS } },
+      select: { id: true },
+    });
+    if (pending.length)
+      await releaseUnusedSubscriptionUsage({
+        organizationId: job.organizationId,
+        resource: "ai",
+        operationKeys: pending.map((item) => `product-content:${item.id}`),
+      });
     logger.error(
       {
         jobId: job.id,

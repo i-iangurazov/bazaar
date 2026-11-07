@@ -45,6 +45,14 @@ import {
 } from "@/lib/currency";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
+import { getOrganizationPlan, resolveOrganizationAccessState } from "./planLimits";
+
+const canServePublicCatalog = async (organizationId: string, db: Prisma.TransactionClient = prisma) => {
+  const org = await getOrganizationPlan(organizationId, db);
+  // Preserve the public catalogs already granted under older contracts.
+  return org.lifetimeAccess || org.billingCatalogVersion !== "2026-11" ||
+    (org.entitlements.features.bazaarCatalog && resolveOrganizationAccessState(org).hasAccess);
+};
 
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const DEFAULT_FONT_FAMILY = BazaarCatalogFontFamily.NotoSans;
@@ -899,6 +907,7 @@ export const getPublicBazaarCatalog = async (
   if (!catalog || catalog.status !== BazaarCatalogStatus.PUBLISHED) {
     return null;
   }
+  if (!(await canServePublicCatalog(catalog.organizationId))) return null;
 
   const productIds = Array.from(
     new Set((options.productIds ?? []).map((value) => value.trim()).filter(Boolean)),
@@ -1258,6 +1267,8 @@ const createCatalogCheckoutOrderTx = async (
   if (!catalog || catalog.status !== BazaarCatalogStatus.PUBLISHED) {
     throw new AppError("catalogNotFound", "NOT_FOUND", 404);
   }
+  if (!(await canServePublicCatalog(catalog.organizationId, tx)))
+    throw new AppError("catalogNotFound", "NOT_FOUND", 404);
   if (
     expectedScope &&
     (catalog.id !== expectedScope.catalogId ||

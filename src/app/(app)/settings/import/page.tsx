@@ -11,6 +11,7 @@ import {
   type ImportDryRunPreviewData,
 } from "@/components/import-dry-run-preview";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1581,11 +1582,28 @@ const ImportPage = () => {
   const t = useTranslations("imports");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tBilling = useTranslations("billing");
   const locale = useLocale();
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const canUseImports = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const isForbidden = status === "authenticated" && !canUseImports;
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: status === "authenticated",
+    staleTime: 60_000,
+  });
+  const availability = trpc.imports.availability.useQuery(undefined, {
+    enabled: isAdmin,
+    staleTime: 15_000,
+  });
+  const fullImports = billing.data?.featureFlags.imports ?? false;
+  const canStartProductImport = Boolean(
+    billing.data?.access.hasAccess &&
+    (fullImports ||
+      (availability.data?.initialOnly &&
+        (availability.data.remaining !== 0 ||
+          (availability.data.session && !availability.data.session.complete)))),
+  );
   const { toast } = useToast();
   const pathname = usePathname();
   const router = useRouter();
@@ -1668,6 +1686,7 @@ const ImportPage = () => {
   );
 
   const importMutation = trpc.products.importCsv.useMutation();
+  const startInitialImportMutation = trpc.imports.startInitial.useMutation();
   const importCsvRef = useRef(importMutation.mutateAsync);
   const previewMutation = trpc.products.previewImportCsv.useMutation();
   const previewImportRef = useRef(previewMutation.mutateAsync);
@@ -2461,6 +2480,7 @@ const ImportPage = () => {
   };
 
   const handleApplyImport = async () => {
+    if (!canStartProductImport) return;
     if (!validation.rows.length) {
       toast({ variant: "error", description: t("importEmpty") });
       return;
@@ -2489,7 +2509,7 @@ const ImportPage = () => {
       return;
     }
 
-    const chunks = splitRowsForTransport(validation.rows, {
+    const transportBase = {
       source,
       storeId: targetStoreId,
       mode: importMode,
@@ -2498,7 +2518,29 @@ const ImportPage = () => {
       emptyValueBehavior,
       stockBehavior,
       rowActions: Object.values(productRowActions),
-    });
+    };
+    const pendingCounts = availability.data?.session?.complete
+      ? undefined
+      : availability.data?.session?.rowCounts;
+    if (
+      pendingCounts &&
+      pendingCounts.reduce((sum, count) => sum + count, 0) !== validation.rows.length
+    ) {
+      toast({ variant: "error", description: tErrors("initialImportSessionMismatch") });
+      return;
+    }
+    let offset = 0;
+    const chunks = pendingCounts
+      ? pendingCounts.map((count) => {
+          const rows = validation.rows.slice(offset, offset + count);
+          offset += count;
+          return { ...transportBase, rows };
+        })
+      : splitRowsForTransport(validation.rows, transportBase);
+    if (chunks.some((chunk) => jsonByteLength(chunk) > MAX_IMPORT_TRANSPORT_BYTES)) {
+      toast({ variant: "error", description: tErrors("importTooLarge") });
+      return;
+    }
     const operationSignature = JSON.stringify(chunks);
     const existingOperation = productImportOperationRef.current;
     const operationKey =
@@ -2528,10 +2570,18 @@ const ImportPage = () => {
     setImportElapsedSeconds(0);
 
     try {
+      const initialSession = availability.data?.initialOnly
+        ? await startInitialImportMutation.mutateAsync({
+            rowCounts: chunks.map((chunk) => chunk.rows.length),
+          })
+        : null;
       for (const [chunkIndex, chunk] of chunks.entries()) {
         const payload = await importCsvRef.current({
           ...chunk,
           idempotencyKey: `${operationKey}:${chunkIndex}`,
+          ...(initialSession
+            ? { initialImportChunk: { sessionId: initialSession.sessionId, chunkIndex } }
+            : {}),
         });
         const summary = payload.summary as ImportRunSummary;
         aggregateSummary.rows = (aggregateSummary.rows ?? 0) + (summary.rows ?? 0);
@@ -2556,6 +2606,8 @@ const ImportPage = () => {
         description: t("importSuccess", { count: aggregateSummary.rows ?? 0 }),
       });
       await batchesQuery.refetch();
+      await availability.refetch();
+      await availability.refetch();
       resetImportFormState({
         setRawRows,
         setHeaders,
@@ -2623,7 +2675,9 @@ const ImportPage = () => {
           </SelectTrigger>
           <SelectContent>
             {isAdmin ? <SelectItem value="products">{t("importType.products")}</SelectItem> : null}
-            <SelectItem value="customers">{t("importType.customers")}</SelectItem>
+            {fullImports ? (
+              <SelectItem value="customers">{t("importType.customers")}</SelectItem>
+            ) : null}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
@@ -2642,7 +2696,10 @@ const ImportPage = () => {
         <div className="max-w-sm space-y-2">
           <Select
             value={targetStoreId}
-            onValueChange={(value) => { setTargetStoreId(value); setProductRowActions({}); }}
+            onValueChange={(value) => {
+              setTargetStoreId(value);
+              setProductRowActions({});
+            }}
             disabled={storesQuery.isLoading || !stores.length || isImporting}
           >
             <SelectTrigger aria-label={t("targetStoreTitle")}>
@@ -2677,7 +2734,31 @@ const ImportPage = () => {
     );
   }
 
-  if (importType === "customers") {
+  if (billing.isLoading || (isAdmin && availability.isLoading))
+    return (
+      <p aria-live="polite" className="text-sm text-muted-foreground">
+        {tCommon("loading")}
+      </p>
+    );
+  if (billing.error || (isAdmin && availability.error))
+    return (
+      <QueryErrorState
+        error={billing.error ?? availability.error}
+        onRetry={() => {
+          void billing.refetch();
+          if (isAdmin) void availability.refetch();
+        }}
+      />
+    );
+  if (!isAdmin && !fullImports)
+    return (
+      <div>
+        <PageHeader title={t("title")} subtitle={tBilling("featureRequiresPlan")} />
+        <p className="mt-4 text-sm text-muted-foreground">{tBilling("featureAskOwner")}</p>
+      </div>
+    );
+
+  if (importType === "customers" && fullImports) {
     return (
       <div>
         <PageHeader
@@ -2724,6 +2805,27 @@ const ImportPage = () => {
       {importTypeCard}
       {targetStoreCard}
 
+      {availability.data?.initialOnly ? (
+        <Card className="mb-6">
+          <CardContent className="space-y-3 p-5">
+            <p className="text-sm text-muted-foreground">
+              {t(
+                availability.data.session?.complete
+                  ? "initialImportSpent"
+                  : availability.data.session
+                    ? "initialImportResumeHint"
+                    : "initialImportHint",
+              )}
+            </p>
+            {availability.data.session?.complete ? (
+              <Button variant="secondary" onClick={() => router.push("/billing")}>
+                {tBilling("viewPlans")}
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="bazaar-admin-surface mb-6">
         <CardHeader>
           <CardTitle>{t("uploadTitle")}</CardTitle>
@@ -2733,6 +2835,7 @@ const ImportPage = () => {
             aria-label={t("uploadTitle")}
             type="file"
             accept=".csv,text/csv,.xlsx,.xls"
+            disabled={!canStartProductImport}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
@@ -3001,9 +3104,13 @@ const ImportPage = () => {
                 <p className="text-sm font-medium text-foreground">{t("dryRunTitle")}</p>
                 <p className="text-xs text-muted-foreground">{t("dryRunSubtitle")}</p>
               </div>
-              <Button type="button" size="sm" variant="secondary"
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
                 disabled={!previewInput || dryRunPreviewPending || isImporting}
-                onClick={() => setPreviewRefreshKey((value) => value + 1)}>
+                onClick={() => setPreviewRefreshKey((value) => value + 1)}
+              >
                 {t("dryRunRefresh")}
               </Button>
               {dryRunPreviewPending ? (
@@ -3218,6 +3325,7 @@ const ImportPage = () => {
               type="button"
               onClick={() => void handleApplyImport()}
               disabled={
+                !canStartProductImport ||
                 isImporting ||
                 dryRunPreviewPending ||
                 missingRequired.length > 0 ||
@@ -3267,7 +3375,11 @@ const ImportPage = () => {
                   {t("targetStoreApplied", { store: lastImportSummary.targetStoreName })}
                 </p>
               ) : null}
-              {lastImportSummary.connected ? <p className="mt-2 text-xs">{t("connectedCount", { count: lastImportSummary.connected })}</p> : null}
+              {lastImportSummary.connected ? (
+                <p className="mt-2 text-xs">
+                  {t("connectedCount", { count: lastImportSummary.connected })}
+                </p>
+              ) : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
                 <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.created")}</p>
@@ -3351,16 +3463,18 @@ const ImportPage = () => {
                         const sourceLabel = summary.source
                           ? t(`source.${summary.source}`)
                           : t("source.csv");
-                        const actions = [
-                          {
-                            key: "rollback",
-                            label: t("rollbackAction"),
-                            icon: RestoreIcon,
-                            variant: "danger" as const,
-                            onSelect: () => setRollbackBatchId(batch.id),
-                            disabled: rollbackMutation.isLoading,
-                          },
-                        ];
+                        const actions = fullImports
+                          ? [
+                              {
+                                key: "rollback",
+                                label: t("rollbackAction"),
+                                icon: RestoreIcon,
+                                variant: "danger" as const,
+                                onSelect: () => setRollbackBatchId(batch.id),
+                                disabled: rollbackMutation.isLoading,
+                              },
+                            ]
+                          : [];
 
                         return (
                           <TableRow key={batch.id}>
@@ -3388,7 +3502,9 @@ const ImportPage = () => {
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {summary.updated ?? 0}
-                              {summary.connected ? <p>{t("connectedCount", { count: summary.connected })}</p> : null}
+                              {summary.connected ? (
+                                <p>{t("connectedCount", { count: summary.connected })}</p>
+                              ) : null}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {summary.skipped ?? 0}
@@ -3426,16 +3542,18 @@ const ImportPage = () => {
                 const sourceLabel = summary.source
                   ? t(`source.${summary.source}`)
                   : t("source.csv");
-                const actions = [
-                  {
-                    key: "rollback",
-                    label: t("rollbackAction"),
-                    icon: RestoreIcon,
-                    variant: "danger" as const,
-                    onSelect: () => setRollbackBatchId(batch.id),
-                    disabled: rollbackMutation.isLoading,
-                  },
-                ];
+                const actions = fullImports
+                  ? [
+                      {
+                        key: "rollback",
+                        label: t("rollbackAction"),
+                        icon: RestoreIcon,
+                        variant: "danger" as const,
+                        onSelect: () => setRollbackBatchId(batch.id),
+                        disabled: rollbackMutation.isLoading,
+                      },
+                    ]
+                  : [];
 
                 return (
                   <div className="bazaar-admin-mobile-card">
@@ -3478,7 +3596,9 @@ const ImportPage = () => {
                           {t("historyColumns.updated")}
                         </p>
                         <p className="text-foreground/90">{summary.updated ?? 0}</p>
-                        {summary.connected ? <p>{t("connectedCount", { count: summary.connected })}</p> : null}
+                        {summary.connected ? (
+                          <p>{t("connectedCount", { count: summary.connected })}</p>
+                        ) : null}
                       </div>
                       <div>
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">

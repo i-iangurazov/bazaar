@@ -58,6 +58,7 @@ vi.mock("@/lib/trpc", () => {
     "billing.get",
     "billing.requestUpgrade",
     "billing.payments.get",
+    "billing.payments.quote",
     "billing.payments.invoices",
     "billing.payments.checkout",
     "billing.payments.check",

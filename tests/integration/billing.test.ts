@@ -91,6 +91,69 @@ describeDb("billing", () => {
     );
   });
 
+  it("owner MRR counts verified live paid periods, excludes manual access and refund reviews", async () => {
+    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isPlatformOwner: true,
+    });
+    expect(await caller.platformOwner.summary()).toMatchObject({
+      organizationsPaid: 0,
+      confirmedPaidMrrKgs: 0,
+    });
+    const now = new Date();
+    const invoice = await prisma.subscriptionInvoice.create({
+      data: {
+        organizationId: org.id,
+        createdById: adminUser.id,
+        idempotencyKey: "owner-mrr-fixture",
+        plan: "BUSINESS",
+        amountMinor: 437500,
+        currency: "KGS",
+        status: "PAID",
+        merchantId: "synthetic-mrr-merchant",
+        isTest: false,
+        providerPaymentId: "777",
+        paidAt: now,
+        termsVersion: "synthetic-mrr-terms",
+        termsUrl: "https://example.invalid/legal/offer",
+        sellerName: "Synthetic seller",
+        expiresAt: new Date(now.getTime() + 900000),
+        events: {
+          create: {
+            deduplicationKey: "owner-mrr-event",
+            source: "RECONCILIATION",
+            state: "PAID",
+            payloadDigest: "synthetic",
+          },
+        },
+        period: {
+          create: {
+            organization: { connect: { id: org.id } },
+            plan: "BUSINESS",
+            startsAt: now,
+            endsAt: new Date(now.getTime() + 30 * 86400000),
+          },
+        },
+      },
+    });
+    expect(await caller.platformOwner.summary()).toMatchObject({
+      organizationsPaid: 1,
+      confirmedPaidMrrKgs: 4375,
+    });
+    await prisma.subscriptionInvoice.update({
+      where: { id: invoice.id },
+      data: { status: "REVIEW", lastIssue: "REFUND_REVIEW" },
+    });
+    expect(await caller.platformOwner.summary()).toMatchObject({
+      organizationsPaid: 0,
+      confirmedPaidMrrKgs: 0,
+    });
+  });
+
   it("does not let an expired trial block an active paid or approved subscription", async () => {
     const { org, adminUser, baseUnit } = await seedBase({ plan: "ENTERPRISE" });
     const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);

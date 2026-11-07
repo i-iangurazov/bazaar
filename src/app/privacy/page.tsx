@@ -13,12 +13,17 @@ export const generateMetadata = async (): Promise<Metadata> => {
 };
 
 const sections = [
+  "operator",
   "data",
   "purpose",
   "acquisition",
   "permissions",
   "security",
   "sharing",
+  "payments",
+  "ai",
+  "marketing",
+  "retention",
   "control",
 ] as const;
 

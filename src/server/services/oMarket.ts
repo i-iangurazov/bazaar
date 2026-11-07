@@ -1,3 +1,9 @@
+import {
+  assertMarketplaceFeature,
+  claimMarketplaceChannel,
+  releaseMarketplaceChannelIfUnused,
+  authorizeMarketplaceExchange,
+} from "./marketplaceSubscription";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
@@ -254,6 +260,17 @@ export const normalizeOMarketApiError = (input: {
   error?: unknown;
   token?: string | null;
 }) => {
+  if (
+    input.error instanceof AppError &&
+    /^(billing|featureLockedPlan$|subscriptionInactive$)/.test(input.error.message)
+  )
+    return {
+      code: input.error.message,
+      status: input.error.status,
+      retryable: false,
+      body: null,
+      message: input.error.message,
+    };
   const status = input.status ?? 0;
   const code: OMarketPreflightIssueCode =
     status === 401 || status === 403
@@ -1266,6 +1283,7 @@ export const updateOMarketSettings = async (input: {
   apiToken?: string | null;
   clearToken?: boolean;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   return prisma.$transaction(async (tx) => {
     const existing = await tx.oMarketIntegration.findUnique({
       where: { orgId: input.organizationId },
@@ -1295,6 +1313,7 @@ export const updateOMarketSettings = async (input: {
       hasToken: Boolean(nextTokenEncrypted),
       hasStoreMapping: mappedStoreCount > 0,
     });
+    if (nextTokenEncrypted) await claimMarketplaceChannel(input.organizationId, "OMARKET", tx);
     const saved = await tx.oMarketIntegration.upsert({
       where: { orgId: input.organizationId },
       update: {
@@ -1322,6 +1341,8 @@ export const updateOMarketSettings = async (input: {
         lastErrorSummary: true,
       },
     });
+    if (!nextTokenEncrypted)
+      await releaseMarketplaceChannelIfUnused(input.organizationId, "OMARKET", tx);
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -1352,6 +1373,7 @@ export const updateOMarketStoreMappings = async (input: {
   requestId: string;
   mappings: Array<{ storeId: string; locationId: string }>;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   const normalizedMappings = input.mappings.map((mapping) => ({
     storeId: mapping.storeId.trim(),
     locationId: mapping.locationId.trim(),
@@ -1423,6 +1445,7 @@ export const updateOMarketCategoryMappings = async (input: {
     attributesJson?: string | null;
   }>;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   const normalizedMappings = input.mappings
     .map((mapping) => ({
       bazaarCategory: mapping.bazaarCategory.trim(),
@@ -1673,6 +1696,7 @@ export const testOMarketConnection = async (input: {
   actorId: string;
   requestId: string;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   const integration = await prisma.oMarketIntegration.findUnique({
     where: { orgId: input.organizationId },
     select: { id: true, apiTokenEncrypted: true, baseUrl: true },
@@ -1788,6 +1812,7 @@ export const requestOMarketExport = async (input: {
   jobType?: OMarketJobType;
   mode?: OMarketExportMode;
 }) => {
+  await assertMarketplaceFeature(input.organizationId);
   await timeoutAbandonedOMarketExportJobs(input.organizationId);
 
   const integration = await prisma.oMarketIntegration.findUnique({
@@ -2106,6 +2131,7 @@ export const runOMarketExportJob = async (
   let plan: OMarketExportPlan | null = null;
   let token: string | null = null;
   try {
+    await assertMarketplaceFeature(job.orgId);
     const integration = await prisma.oMarketIntegration.findUnique({
       where: { orgId: job.orgId },
       select: { apiTokenEncrypted: true, baseUrl: true },
@@ -2144,6 +2170,12 @@ export const runOMarketExportJob = async (
         updated_at: new Date().toISOString(),
       }));
     } else {
+      await authorizeMarketplaceExchange({
+        organizationId: job.orgId,
+        channel: "OMARKET",
+        jobId: job.id,
+        full: job.jobType !== OMarketJobType.STOCK_PRICE_SYNC,
+      });
       const response =
         job.jobType === OMarketJobType.STOCK_PRICE_SYNC
           ? await updateOMarketStockPrice({

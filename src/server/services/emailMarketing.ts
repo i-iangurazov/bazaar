@@ -1,4 +1,17 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  assertFeatureEnabled,
+  assertFeatureCanBeConfigured,
+  getOrganizationPlan,
+  resolveOrganizationAccessState,
+} from "@/server/services/planLimits";
+import {
+  reserveSubscriptionUsageBatch,
+  startSubscriptionUsageBatch,
+  settleSubscriptionUsageBatch,
+  holdUncertainSubscriptionUsageBatch,
+  withSubscriptionUsage,
+} from "@/server/billing/subscriptionUsage";
 
 import {
   BazaarCatalogFontFamily,
@@ -36,6 +49,7 @@ import {
   type ResendDnsRecord,
 } from "@/server/services/email";
 import { AppError } from "@/server/services/errors";
+import { assertReadableFeature } from "@/server/billing/coreAccess";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
@@ -462,9 +476,7 @@ const primarySenderSortValue = (sender: EmailSenderWithDomain) =>
   sender.domain?.verifiedAt?.getTime() ?? sender.updatedAt.getTime() ?? sender.createdAt.getTime();
 
 const selectPrimaryVerifiedSender = (senders: EmailSenderWithDomain[]) =>
-  [...senders]
-    .filter(isVerifiedCustomSender)
-    .sort((left, right) => {
+  [...senders].filter(isVerifiedCustomSender).sort((left, right) => {
       const verifiedDiff = primarySenderSortValue(right) - primarySenderSortValue(left);
       if (verifiedDiff !== 0) return verifiedDiff;
       return right.createdAt.getTime() - left.createdAt.getTime();
@@ -490,13 +502,13 @@ export const resolveStorePrimaryVerifiedSender = async (input: {
     return null;
   }
   return {
-    id: sender.id,
-    fromEmail: sender.fromEmail,
-    from: formatEmailAddress({ name: sender.displayName, email: sender.fromEmail }),
-    replyTo: sender.replyToEmail,
-    displayName: sender.displayName,
-    demoOnly: false,
-  };
+        id: sender.id,
+        fromEmail: sender.fromEmail,
+        from: formatEmailAddress({ name: sender.displayName, email: sender.fromEmail }),
+        replyTo: sender.replyToEmail,
+        displayName: sender.displayName,
+        demoOnly: false,
+      };
 };
 
 export const resolveEmailMarketingAssetUrl = (value?: string | null) => {
@@ -548,16 +560,15 @@ const resolveEmailLinkUrl = (value?: string | null, baseUrl?: string | null) => 
   }
 };
 
-const assertEmailCampaignButtonUrlsValid = (
-  campaign: NormalizedEmailCampaign,
-  baseUrl: string,
-) => {
+const assertEmailCampaignButtonUrlsValid = (campaign: NormalizedEmailCampaign, baseUrl: string) => {
   const invalid = campaign.blocks.some((block) => {
     if (block.type === "button") {
       return Boolean(trimOptional(block.text)) && !resolveEmailLinkUrl(block.url, baseUrl);
     }
     if (block.type === "hero" || block.type === "promo") {
-      return Boolean(trimOptional(block.buttonText)) && !resolveEmailLinkUrl(block.buttonUrl, baseUrl);
+      return (
+        Boolean(trimOptional(block.buttonText)) && !resolveEmailLinkUrl(block.buttonUrl, baseUrl)
+      );
     }
     if (block.type !== "products" || !(block.showButton ?? true)) {
       return false;
@@ -680,7 +691,10 @@ const legacyBlocksFromInput = (input: EmailCampaignComposerInput): EmailCampaign
 const blockHasMeaningfulContent = (block: EmailCampaignBlock) => {
   switch (block.type) {
     case "header":
-      return Boolean(block.showStoreName ?? true) || Boolean(trimOptional(block.storeName) || trimOptional(block.heading));
+      return (
+        Boolean(block.showStoreName ?? true) ||
+        Boolean(trimOptional(block.storeName) || trimOptional(block.heading))
+      );
     case "hero":
       return Boolean(
         trimOptional(block.imageUrl) ||
@@ -859,7 +873,10 @@ const parseCampaignAudience = (
     customerIds: Array.isArray(record.customerIds)
       ? record.customerIds.filter((id): id is string => typeof id === "string")
       : fallback.customerIds,
-    source: typeof record.source === "string" ? (record.source as CustomerSource | "ALL") : fallback.source,
+    source:
+      typeof record.source === "string"
+        ? (record.source as CustomerSource | "ALL")
+        : fallback.source,
     recentDays:
       typeof record.recentDays === "number" && Number.isFinite(record.recentDays)
         ? record.recentDays
@@ -985,8 +1002,8 @@ export const unsubscribeCustomerFromEmailMarketing = async (input: {
       },
     });
     return matching.every((duplicate) => duplicate.emailMarketingUnsubscribedAt)
-      ? "already_unsubscribed" as const
-      : "unsubscribed" as const;
+      ? ("already_unsubscribed" as const)
+      : ("unsubscribed" as const);
   });
   return { status, email };
 };
@@ -995,23 +1012,23 @@ const getStoreBrand = async (input: { organizationId: string; storeId: string })
   const store = await prisma.store.findFirst({
     where: { id: input.storeId, organizationId: input.organizationId },
     select: {
-      id: true,
-      name: true,
-      legalName: true,
-      address: true,
-      phone: true,
-      currencyCode: true,
-      currencyRateKgsPerUnit: true,
-      enableSku: true,
-      enableBarcode: true,
-      bazaarCatalog: {
-        select: {
-          accentColor: true,
-          status: true,
-          publicUrlPath: true,
+          id: true,
+          name: true,
+          legalName: true,
+          address: true,
+          phone: true,
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
+          enableSku: true,
+          enableBarcode: true,
+          bazaarCatalog: {
+            select: {
+              accentColor: true,
+              status: true,
+              publicUrlPath: true,
+            },
+          },
         },
-      },
-    },
   });
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -1397,16 +1414,21 @@ export const getEmailMarketingOverview = async (input: {
   };
 };
 
-export const listEmailSenderSetup = async (input: {
-  user: StoreAccessUser;
-  storeId: string;
-}) => {
+export const listEmailSenderSetup = async (input: { user: StoreAccessUser; storeId: string }) => {
   await assertUserCanAccessStore(prisma, input.user, input.storeId);
+  const org = await getOrganizationPlan(input.user.organizationId);
+  const customSenderAllowed =
+    org.billingCatalogVersion !== "2026-11" ||
+    org.lifetimeAccess ||
+    org.entitlements.features.ownSender;
   const [domains, senders, activeSuppressions, deliveryStatusCounts] = await Promise.all([
     prisma.emailSenderDomain.findMany({
       where: {
         organizationId: input.user.organizationId,
-        storeId: input.storeId,
+        OR: [
+          { storeId: input.storeId },
+          { senders: { some: { storeId: input.storeId, archivedAt: null } } },
+        ],
       },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }),
@@ -1437,10 +1459,12 @@ export const listEmailSenderSetup = async (input: {
     }),
   ]);
   const config = getMarketingEmailConfiguration();
-  const primaryCustomSender = selectPrimaryVerifiedSender(senders);
+  const primaryCustomSender = customSenderAllowed ? selectPrimaryVerifiedSender(senders) : null;
   const visibleSenders = primaryCustomSender
     ? senders.filter((sender) => sender.id === primaryCustomSender.id)
-    : senders;
+    : customSenderAllowed
+      ? senders
+      : [];
   const primaryDomain = primaryCustomSender?.domain ?? null;
   const dnsRecords = Array.isArray(primaryDomain?.recordsJson)
     ? primaryDomain.recordsJson.flatMap((record) =>
@@ -1450,7 +1474,9 @@ export const listEmailSenderSetup = async (input: {
       )
     : [];
   const recordStatus = (record: Prisma.JsonObject) =>
-    String(record.status ?? "").trim().toLowerCase();
+    String(record.status ?? "")
+      .trim()
+      .toLowerCase();
   const recordText = (record: Prisma.JsonObject) =>
     [record.record, record.name, record.type, record.value]
       .map((value) => String(value ?? "").toLowerCase())
@@ -1464,17 +1490,12 @@ export const listEmailSenderSetup = async (input: {
         matches.every((record) => ["verified", "valid"].includes(recordStatus(record))),
     };
   };
-  const deliveryCounts = new Map(
-    deliveryStatusCounts.map((row) => [row.status, row._count._all]),
-  );
-  const acceptedTotal = deliveryStatusCounts.reduce(
-    (total, row) => total + row._count._all,
-    0,
-  );
+  const deliveryCounts = new Map(deliveryStatusCounts.map((row) => [row.status, row._count._all]));
+  const acceptedTotal = deliveryStatusCounts.reduce((total, row) => total + row._count._all, 0);
   const bounceCount = deliveryCounts.get(EmailCampaignRecipientStatus.BOUNCED) ?? 0;
   const complaintCount = deliveryCounts.get(EmailCampaignRecipientStatus.COMPLAINED) ?? 0;
   return {
-    domains,
+    domains: customSenderAllowed ? domains : [],
     senders: visibleSenders,
     primarySenderId: primaryCustomSender?.id ?? null,
     senderHealth: {
@@ -1519,6 +1540,11 @@ const ensureSenderDomainInput = (domain: string) => {
     throw new AppError("emailSenderPublicDomain", "BAD_REQUEST", 400);
   }
   return normalized;
+};
+
+export const isReservedBazaarSenderDomain = (domain: string) => {
+  const normalized = normalizeDomain(domain);
+  return normalized === "bazaar.kg" || normalized.endsWith(".bazaar.kg");
 };
 
 const normalizeResendRecords = (records?: ResendDnsRecord[] | null) =>
@@ -1583,7 +1609,7 @@ export const mapEmailSenderProviderError = (error: unknown): AppError => {
 
 const findExistingResendDomainByName = async (domainName: string) => {
   const response = await listResendDomains();
-  const domains = Array.isArray(response) ? response : response.data ?? [];
+  const domains = Array.isArray(response) ? response : (response.data ?? []);
   const match = domains.find((domain) => normalizeDomain(domain.name) === domainName) ?? null;
   return match ? retrieveResendDomain(match.id) : null;
 };
@@ -1600,49 +1626,86 @@ export const createEmailSenderIdentity = async (input: {
   await assertUserCanAccessStore(prisma, input.user, input.storeId);
   const { fromEmail, domain: domainName } = validateEmailSenderAddress(input.fromEmail);
   const replyToEmail = trimOptional(input.replyToEmail);
-  if (replyToEmail && !isValidEmail(replyToEmail)) {
+  if (replyToEmail && !isValidEmail(replyToEmail))
     throw new AppError("emailCampaignReplyToInvalid", "BAD_REQUEST", 400);
-  }
   ensureSenderDomainInput(domainName);
   const displayName = trimOptional(input.displayName) ?? domainName;
 
-  let remoteDomain: Awaited<ReturnType<typeof createResendDomain>> | null = null;
-  const existingDomain = await prisma.emailSenderDomain.findUnique({
-    where: {
-      organizationId_storeId_domain: {
-        organizationId: input.user.organizationId,
-        storeId: input.storeId,
-        domain: domainName,
-      },
-    },
+  // Claim before contacting the provider. Timeouts have an unknown external
+  // outcome, so they never release the chosen commercial domain.
+  const existingDomain = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.user.organizationId} FOR UPDATE`;
+    const org = await assertFeatureCanBeConfigured(input.user.organizationId, "ownSender", tx);
+    if (org.billingCatalogVersion === "2026-11" && !org.lifetimeAccess) {
+      if (isReservedBazaarSenderDomain(domainName))
+        throw new AppError("emailSenderReservedDomain", "BAD_REQUEST", 400);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`email-sender-domain:${domainName}`}))`;
+      const contract = await tx.subscriptionContract.findUniqueOrThrow({
+        where: { organizationId: org.id },
+      });
+      if (contract.selectedSenderDomain && contract.selectedSenderDomain !== domainName)
+        throw new AppError("emailSenderDomainLimitReached", "CONFLICT", 409);
+      const otherOwner = await tx.emailSenderDomain.findFirst({
+        where: { domain: domainName, organizationId: { not: org.id } },
+        select: { id: true },
+      });
+      const otherClaim = await tx.subscriptionContract.findFirst({
+        where: { selectedSenderDomain: domainName, organizationId: { not: org.id } },
+        select: { organizationId: true },
+      });
+      if (otherOwner || otherClaim)
+        throw new AppError("emailSenderDomainAlreadyExists", "CONFLICT", 409);
+      if (!contract.selectedSenderDomain)
+        await tx.subscriptionContract.update({
+          where: { organizationId: org.id },
+          data: { selectedSenderDomain: domainName },
+        });
+    }
+    return tx.emailSenderDomain.findFirst({
+      where: { organizationId: input.user.organizationId, domain: domainName },
+      orderBy: [{ resendDomainId: "desc" }, { createdAt: "asc" }],
+    });
   });
+
+  let remoteDomain: Awaited<ReturnType<typeof createResendDomain>> | null = null;
   if (!existingDomain?.resendDomainId) {
     try {
       remoteDomain = await createResendDomain(domainName);
     } catch (error) {
-      if (!isResendDomainAlreadyExistsError(error)) {
-        throw mapEmailSenderProviderError(error);
-      }
+      if (!isResendDomainAlreadyExistsError(error)) throw mapEmailSenderProviderError(error);
       try {
         remoteDomain = await findExistingResendDomainByName(domainName);
       } catch (listError) {
         throw mapEmailSenderProviderError(listError);
       }
-      if (!remoteDomain) {
-        throw mapEmailSenderProviderError(error);
-      }
+      if (!remoteDomain) throw mapEmailSenderProviderError(error);
     }
   }
 
-  const domain = await prisma.emailSenderDomain.upsert({
-    where: {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.user.organizationId} FOR UPDATE`;
+    await assertFeatureCanBeConfigured(input.user.organizationId, "ownSender", tx);
+    await assertUserCanAccessStore(tx, input.user, input.storeId);
+    // One provider domain is shared inside this organization, while each store
+    // keeps its own identity and permissions. resendDomainId is globally unique.
+    const reusable = await tx.emailSenderDomain.findFirst({
+      where: {
+        organizationId: input.user.organizationId,
+        domain: domainName,
+        resendDomainId: { not: null },
+      },
+    });
+    const domain =
+      reusable ??
+      (await tx.emailSenderDomain.upsert({
+        where: {
       organizationId_storeId_domain: {
         organizationId: input.user.organizationId,
         storeId: input.storeId,
         domain: domainName,
       },
     },
-    create: {
+        create: {
       organizationId: input.user.organizationId,
       storeId: input.storeId,
       domain: domainName,
@@ -1656,18 +1719,17 @@ export const createEmailSenderIdentity = async (input: {
           : null,
       lastCheckedAt: remoteDomain ? new Date() : null,
     },
-    update: {
-      resendDomainId: existingDomain?.resendDomainId ?? remoteDomain?.id ?? undefined,
-      resendStatus: remoteDomain?.status ?? existingDomain?.resendStatus ?? undefined,
-      recordsJson: remoteDomain?.records
-        ? (normalizeResendRecords(remoteDomain.records) as unknown as Prisma.InputJsonValue)
-        : undefined,
-      status: remoteDomain ? resendStatusToDomainStatus(remoteDomain.status) : undefined,
-      lastCheckedAt: remoteDomain ? new Date() : undefined,
-    },
-  });
-
-  const sender = await prisma.emailSenderIdentity.upsert({
+        update: {
+          resendDomainId: remoteDomain?.id ?? undefined,
+          resendStatus: remoteDomain?.status ?? undefined,
+          recordsJson: remoteDomain?.records
+            ? (normalizeResendRecords(remoteDomain.records) as unknown as Prisma.InputJsonValue)
+            : undefined,
+          status: remoteDomain ? resendStatusToDomainStatus(remoteDomain.status) : undefined,
+          lastCheckedAt: remoteDomain ? new Date() : undefined,
+        },
+      }));
+    const sender = await tx.emailSenderIdentity.upsert({
     where: { storeId_fromEmail: { storeId: input.storeId, fromEmail } },
     create: {
       organizationId: input.user.organizationId,
@@ -1693,8 +1755,7 @@ export const createEmailSenderIdentity = async (input: {
     },
     include: { domain: true },
   });
-
-  await writeAuditLog(prisma, {
+    await writeAuditLog(tx, {
     organizationId: input.user.organizationId,
     actorId: input.actorId,
     action: "EMAIL_SENDER_UPSERT",
@@ -1704,8 +1765,27 @@ export const createEmailSenderIdentity = async (input: {
     after: toJson({ storeId: input.storeId, fromEmail, domain: domainName }),
     requestId: input.requestId,
   });
+    return sender;
+  });
+};
 
-  return sender;
+const assertSenderDomainAccess = async (
+  db: Prisma.TransactionClient,
+  user: StoreAccessUser,
+  domain: { id: string; storeId: string },
+) => {
+  const storeIds = (await listAccessibleStores(db, user)).map((store) => store.id);
+  if (storeIds.includes(domain.storeId)) return;
+  const linked = await db.emailSenderIdentity.findFirst({
+    where: {
+      organizationId: user.organizationId,
+      domainId: domain.id,
+      storeId: { in: storeIds },
+      archivedAt: null,
+    },
+    select: { id: true },
+  });
+  if (!linked) throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
 };
 
 export const checkEmailSenderDomain = async (input: {
@@ -1724,7 +1804,10 @@ export const checkEmailSenderDomain = async (input: {
   if (!domain) {
     throw new AppError("emailSenderDomainNotFound", "NOT_FOUND", 404);
   }
-  await assertUserCanAccessStore(prisma, input.user, domain.storeId);
+  await assertSenderDomainAccess(prisma, input.user, domain);
+  await prisma.$transaction((tx) =>
+    assertFeatureCanBeConfigured(input.user.organizationId, "ownSender", tx),
+  );
   if (!domain.resendDomainId) {
     throw new AppError("emailSenderDomainNotConfigured", "BAD_REQUEST", 400);
   }
@@ -1733,7 +1816,10 @@ export const checkEmailSenderDomain = async (input: {
   }
   const remote = await retrieveResendDomain(domain.resendDomainId);
   const status = resendStatusToDomainStatus(remote.status);
-  const updated = await prisma.emailSenderDomain.update({
+  return prisma.$transaction(async (tx) => {
+    await assertFeatureCanBeConfigured(input.user.organizationId, "ownSender", tx);
+    await assertSenderDomainAccess(tx, input.user, domain);
+    const updated = await tx.emailSenderDomain.update({
     where: { id: domain.id },
     data: {
       status,
@@ -1757,7 +1843,7 @@ export const checkEmailSenderDomain = async (input: {
       },
     },
   });
-  await writeAuditLog(prisma, {
+    await writeAuditLog(tx, {
     organizationId: input.user.organizationId,
     actorId: input.actorId,
     action: input.triggerVerification ? "EMAIL_DOMAIN_VERIFY" : "EMAIL_DOMAIN_CHECK",
@@ -1767,7 +1853,8 @@ export const checkEmailSenderDomain = async (input: {
     after: toJson({ status: updated.status, resendStatus: updated.resendStatus }),
     requestId: input.requestId,
   });
-  return updated;
+    return updated;
+  });
 };
 
 export const archiveEmailSenderIdentity = async (input: {
@@ -1809,7 +1896,14 @@ const resolveCampaignSender = async (input: {
   replyToEmail?: string | null;
   requireVerified: boolean;
 }) => {
-  if (input.senderIdentityId) {
+  const org = await getOrganizationPlan(input.organizationId);
+  const customSenderAllowed =
+    org.billingCatalogVersion !== "2026-11" ||
+    org.lifetimeAccess ||
+    org.entitlements.features.ownSender;
+  if (!customSenderAllowed && input.senderIdentityId && input.user)
+    throw new AppError("featureLockedPlan", "FORBIDDEN", 403);
+  if (customSenderAllowed && input.senderIdentityId) {
     const sender = await prisma.emailSenderIdentity.findFirst({
       where: {
         id: input.senderIdentityId,
@@ -1834,10 +1928,12 @@ const resolveCampaignSender = async (input: {
     }
   }
 
-  const primarySender = await resolveStorePrimaryVerifiedSender({
-    organizationId: input.organizationId,
-    storeId: input.storeId,
-  });
+  const primarySender = customSenderAllowed
+    ? await resolveStorePrimaryVerifiedSender({
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+      })
+    : null;
   if (primarySender) {
     return primarySender;
   }
@@ -1859,7 +1955,6 @@ const resolveCampaignSender = async (input: {
 
   throw new AppError("emailSenderRequired", "BAD_REQUEST", 400);
 };
-
 
 export const listEmailMarketingCustomers = async (input: {
   user: StoreAccessUser;
@@ -2491,9 +2586,7 @@ const textToHtml = (value: string) =>
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) =>
-      part
-        .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/\n/g, "<br />"),
+      part.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br />"),
     )
     .join("<br /><br />");
 
@@ -2732,30 +2825,34 @@ export const renderEmailCampaign = (input: {
       }
     }
 
-	    if (block.type === "orderSummary") {
-	      const alignment = normalizeBlockAlignment(block.alignment);
-	      const title =
-	        trimOptional(renderVariables(block.title, variableContext)) ?? "Сводка заказа";
-	      const summaryText = trimOptional(
-	        renderVariables(block.summaryText ?? "Заказ {{orderNumber}} · {{orderStatus}}", variableContext),
-	      );
-	      const itemsLabel = trimOptional(renderVariables(block.itemsLabel ?? "Товары", variableContext));
-	      const totalLabel =
-	        trimOptional(renderVariables(block.totalLabel ?? "Итого", variableContext)) ?? "Итого";
-	      const emptyOrderText =
+    if (block.type === "orderSummary") {
+      const alignment = normalizeBlockAlignment(block.alignment);
+      const title = trimOptional(renderVariables(block.title, variableContext)) ?? "Сводка заказа";
+      const summaryText = trimOptional(
+        renderVariables(
+          block.summaryText ?? "Заказ {{orderNumber}} · {{orderStatus}}",
+          variableContext,
+        ),
+      );
+      const itemsLabel = trimOptional(
+        renderVariables(block.itemsLabel ?? "Товары", variableContext),
+      );
+      const totalLabel =
+        trimOptional(renderVariables(block.totalLabel ?? "Итого", variableContext)) ?? "Итого";
+      const emptyOrderText =
 	        trimOptional(
 	          renderVariables(
 	            block.emptyOrderText ?? "Данные заказа появятся при отправке автоматизации.",
 	            variableContext,
 	          ),
 	        ) ?? "";
-	      const quantitySeparator =
-	        trimOptional(renderVariables(block.quantitySeparator ?? "×", variableContext)) ?? "×";
-	      const showItems = block.showItems ?? true;
-	      const showTotals = block.showTotals ?? true;
-	      const showSummary = block.showSummary ?? true;
-	      const order = input.order;
-	      const itemRows =
+      const quantitySeparator =
+        trimOptional(renderVariables(block.quantitySeparator ?? "×", variableContext)) ?? "×";
+      const showItems = block.showItems ?? true;
+      const showTotals = block.showTotals ?? true;
+      const showSummary = block.showSummary ?? true;
+      const order = input.order;
+      const itemRows =
 	        order && showItems
 	          ? order.lines
 	              .map(
@@ -2792,9 +2889,9 @@ export const renderEmailCampaign = (input: {
 	          </div>
         </div>
       `);
-	      textParts.push(
-	        order
-	          ? [
+      textParts.push(
+        order
+          ? [
 	              title,
 	              showSummary ? summaryText : null,
 	              itemsLabel,
@@ -2803,12 +2900,9 @@ export const renderEmailCampaign = (input: {
 	            ]
 	              .filter(Boolean)
 	              .join("\n")
-	          : [
-	              title,
-	              emptyOrderText,
-	            ].join("\n")
-	      );
-	    }
+          : [title, emptyOrderText].join("\n"),
+      );
+    }
 
     if (block.type === "promo") {
       const alignment = normalizeBlockAlignment(block.alignment);
@@ -3045,7 +3139,14 @@ export const sendTestEmailCampaign = async (input: {
     recipient: sampleCustomer ?? { name: "клиент", email: testEmail },
     baseUrl,
   });
-  await sendMarketingEmail({
+  await withSubscriptionUsage(
+    {
+      organizationId: input.user.organizationId,
+      resource: "marketingEmails",
+      operationKey: `email-test:${input.actorId}:${input.requestId}`,
+    },
+    () =>
+      sendMarketingEmail({
     to: testEmail,
     subject: campaign.subject,
     html: rendered.html,
@@ -3056,7 +3157,8 @@ export const sendTestEmailCampaign = async (input: {
       { name: "category", value: "email_marketing_test" },
       { name: "store_id", value: campaign.storeId.slice(0, 64) },
     ],
-  });
+  }),
+  );
   await writeAuditLog(prisma, {
     organizationId: input.user.organizationId,
     actorId: input.actorId,
@@ -3225,6 +3327,10 @@ export const sendEmailCampaignToAudience = async (input: {
   idempotencyKey: string;
   campaign: EmailCampaignComposerInput;
 }) => {
+  await assertFeatureEnabled({
+    organizationId: input.user.organizationId,
+    feature: "emailMarketing",
+  });
   await assertUserCanAccessStore(prisma, input.user, input.campaign.storeId);
   const operationInput: RunOperationRequestInput = {
     organizationId: input.user.organizationId,
@@ -3329,6 +3435,14 @@ export const sendEmailCampaignToAudience = async (input: {
             },
           },
         });
+        await reserveSubscriptionUsageBatch(
+          {
+            organizationId: input.user.organizationId,
+            resource: "marketingEmails",
+            operationKeys: recipientRecords.map((row) => `email:${row.id}`),
+          },
+          tx,
+        );
         await writeAuditLog(tx, {
           organizationId: input.user.organizationId,
           actorId: input.actorId,
@@ -3514,6 +3628,14 @@ export const sendSavedEmailCampaignToAudience = async (input: {
         await tx.emailCampaignRecipient.createMany({
           data: recipientRecords,
         });
+        await reserveSubscriptionUsageBatch(
+          {
+            organizationId: input.user.organizationId,
+            resource: "marketingEmails",
+            operationKeys: recipientRecords.map((row) => `email:${row.id}`),
+          },
+          tx,
+        );
         await writeAuditLog(tx, {
           organizationId: input.user.organizationId,
           actorId: input.actorId,
@@ -3589,28 +3711,100 @@ const updateEmailCampaignDeliverySummary = async (input: {
   errorMessage?: string | null;
 }) => recomputeEmailCampaignDeliverySummary(input.campaignId, input.errorMessage);
 
+const safelyUnsubmittedCategories = [
+  EmailDeliveryErrorCategory.CONFIGURATION,
+  EmailDeliveryErrorCategory.INVALID_ADDRESS,
+  EmailDeliveryErrorCategory.SUPPRESSED,
+  EmailDeliveryErrorCategory.UNSUBSCRIBED,
+  EmailDeliveryErrorCategory.PROVIDER_PERMANENT,
+  EmailDeliveryErrorCategory.RATE_LIMIT,
+] as const;
+
+export const emailSubmissionOutcomeIsUncertain = (input: {
+  providerAttempted: boolean;
+  providerAcknowledged: boolean;
+  priorUncertain?: boolean;
+  error: unknown;
+}) => {
+  const rejected =
+    input.error instanceof EmailProviderError &&
+    input.error.status >= 400 &&
+    input.error.status < 500 &&
+    input.error.status !== 408;
+  return Boolean(input.priorUncertain) || input.providerAcknowledged || (input.providerAttempted && !rejected);
+};
+
+export const emailRecipientCanBeCancelled = (input: {
+  providerOperationKey: string | null;
+  normalizedErrorCategory: EmailDeliveryErrorCategory;
+}) =>
+  !input.providerOperationKey ||
+  (safelyUnsubmittedCategories as readonly EmailDeliveryErrorCategory[]).includes(
+    input.normalizedErrorCategory,
+  );
+
 const failPendingEmailCampaignRecipients = async (input: {
   campaignId: string;
+  organizationId: string;
+  sendLeaseToken: string;
   errorMessage: string;
 }) => {
-  await prisma.emailCampaignRecipient.updateMany({
-    where: {
-      campaignId: input.campaignId,
-      status: {
-        in: [EmailCampaignRecipientStatus.QUEUED, EmailCampaignRecipientStatus.SENDING],
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
+    const changed = await tx.$queryRaw<
+      Array<{ id: string; priorCategory: EmailDeliveryErrorCategory; attemptCount: number }>
+    >(Prisma.sql`
+      WITH owned AS (
+        SELECT id, "normalizedErrorCategory" AS "priorCategory", "attemptCount"
+        FROM "EmailCampaignRecipient"
+        WHERE "campaignId" = ${input.campaignId} AND "organizationId" = ${input.organizationId}
+          AND status = 'SENDING'::"EmailCampaignRecipientStatus" AND "sendLeaseToken" = ${input.sendLeaseToken}
+          AND "acceptedAt" IS NULL
+        FOR UPDATE
+      )
+      UPDATE "EmailCampaignRecipient" r SET status = 'FAILED'::"EmailCampaignRecipientStatus",
+        "normalizedErrorCategory" = 'CONFIGURATION'::"EmailDeliveryErrorCategory",
+        "providerReason" = ${input.errorMessage}, "errorMessage" = ${input.errorMessage},
+        "failedAt" = NOW(), "terminalAt" = NOW(), "retryAt" = NULL,
+        "sendLeaseToken" = NULL, "sendLeaseExpiresAt" = NULL, "updatedAt" = NOW()
+      FROM owned WHERE r.id = owned.id
+      RETURNING r.id, owned."priorCategory", owned."attemptCount"
+    `);
+    const safe = changed.filter(
+      (row) =>
+        row.attemptCount <= 1 ||
+        emailRecipientCanBeCancelled({
+          providerOperationKey: "prior-attempt",
+          normalizedErrorCategory: row.priorCategory,
+        }),
+    );
+    const safeIds = new Set(safe.map((row) => row.id));
+    const uncertain = changed.filter((row) => !safeIds.has(row.id));
+    await settleSubscriptionUsageBatch(
+      {
+        organizationId: input.organizationId,
+        resource: "marketingEmails",
+        operationKeys: safe.map((row) => `email:${row.id}`),
+        success: false,
       },
-    },
-    data: {
-      status: EmailCampaignRecipientStatus.FAILED,
-      normalizedErrorCategory: EmailDeliveryErrorCategory.CONFIGURATION,
-      providerReason: input.errorMessage,
-      errorMessage: input.errorMessage,
-      failedAt: new Date(),
-      terminalAt: new Date(),
-      retryAt: null,
-      sendLeaseToken: null,
-      sendLeaseExpiresAt: null,
-    },
+      tx,
+    );
+    await holdUncertainSubscriptionUsageBatch(
+      {
+        organizationId: input.organizationId,
+        operationKeys: uncertain.map((row) => `email:${row.id}`),
+      },
+      tx,
+    );
+    if (uncertain.length)
+      await tx.emailCampaignRecipient.updateMany({
+        where: { id: { in: uncertain.map((row) => row.id) } },
+        data: {
+          normalizedErrorCategory: EmailDeliveryErrorCategory.UNKNOWN,
+          providerReason: "emailProviderOutcomeUncertain",
+          errorMessage: "emailProviderOutcomeUncertain",
+        },
+      });
   });
   return updateEmailCampaignDeliverySummary({
     campaignId: input.campaignId,
@@ -3646,11 +3840,9 @@ const parseProviderEventDate = (value?: string | null) => {
 
 const providerFailureMessage = (event: ResendEmailWebhookPayload) => {
   const bounce = event.data?.bounce;
-  const parts = [
-    bounce?.type ?? null,
-    bounce?.subType ?? null,
-    bounce?.message ?? null,
-  ].filter((part): part is string => Boolean(part));
+  const parts = [bounce?.type ?? null, bounce?.subType ?? null, bounce?.message ?? null].filter(
+    (part): part is string => Boolean(part),
+  );
   if (parts.length) return parts.join(": ");
   return event.type === "email.bounced" ||
     event.type === "email.failed" ||
@@ -3808,17 +4000,17 @@ export const deliverEmailCampaign = async (input: {
           OR: [{ retryAt: null }, { retryAt: { lte: new Date() } }],
         },
         include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              storeId: true,
-              deletedAt: true,
-              emailMarketingUnsubscribedAt: true,
-            },
-          },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          storeId: true,
+          deletedAt: true,
+          emailMarketingUnsubscribedAt: true,
         },
+      },
+    },
         orderBy: { createdAt: "asc" },
         take: EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE,
       },
@@ -3926,6 +4118,8 @@ export const deliverEmailCampaign = async (input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : "emailCampaignConfigurationFailed";
     const summary = await failPendingEmailCampaignRecipients({
+      organizationId: campaign.organizationId,
+      sendLeaseToken,
       campaignId: campaign.id,
       errorMessage: message,
     });
@@ -3953,6 +4147,8 @@ export const deliverEmailCampaign = async (input: {
     async (error) => {
       const message = error instanceof Error ? error.message : "emailSenderRequired";
       const summary = await failPendingEmailCampaignRecipients({
+        organizationId: campaign.organizationId,
+        sendLeaseToken,
         campaignId: campaign.id,
         errorMessage: message,
       });
@@ -3982,6 +4178,8 @@ export const deliverEmailCampaign = async (input: {
     async (error) => {
       const message = error instanceof Error ? error.message : "emailCampaignProductInvalid";
       const summary = await failPendingEmailCampaignRecipients({
+        organizationId: campaign.organizationId,
+        sendLeaseToken,
         campaignId: campaign.id,
         errorMessage: message,
       });
@@ -4005,6 +4203,8 @@ export const deliverEmailCampaign = async (input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : "emailCampaignImagePublicUrlRequired";
     const summary = await failPendingEmailCampaignRecipients({
+      organizationId: campaign.organizationId,
+      sendLeaseToken,
       campaignId: campaign.id,
       errorMessage: message,
     });
@@ -4025,6 +4225,7 @@ export const deliverEmailCampaign = async (input: {
   let batch: Array<{
     recipientId: string;
     attemptCount: number;
+    priorUncertain: boolean;
     payload: {
       to: string;
       subject: string;
@@ -4042,15 +4243,49 @@ export const deliverEmailCampaign = async (input: {
     }
     const currentBatch = batch;
     batch = [];
+    let providerAttempted = false;
+    let providerAcknowledged = false;
     try {
+      await assertFeatureEnabled({
+        organizationId: campaign.organizationId,
+        feature: "emailMarketing",
+      });
+      await startSubscriptionUsageBatch({
+        organizationId: campaign.organizationId,
+        resource: "marketingEmails",
+        operationKeys: currentBatch.map((item) => `email:${item.recipientId}`),
+      });
+      providerAttempted = true;
       const results = await sendEmailBatch(
         currentBatch.map((item) => item.payload),
         {
           idempotencyKey: providerOperationKey,
         },
       );
+      providerAcknowledged = true;
       const acceptedAt = new Date();
       await prisma.$transaction(async (tx) => {
+        const owned = await tx.emailCampaignRecipient.count({
+          where: {
+            id: { in: currentBatch.map((item) => item.recipientId) },
+            sendLeaseToken,
+            status: EmailCampaignRecipientStatus.SENDING,
+          },
+        });
+        if (owned !== currentBatch.length) {
+          await holdUncertainSubscriptionUsageBatch({ organizationId: campaign.organizationId,
+            operationKeys: currentBatch.map(item => `email:${item.recipientId}`) }, tx);
+          return;
+        }
+        await settleSubscriptionUsageBatch(
+          {
+            organizationId: campaign.organizationId,
+            resource: "marketingEmails",
+            operationKeys: currentBatch.map((item) => `email:${item.recipientId}`),
+            success: true,
+          },
+          tx,
+        );
         for (const [index, item] of currentBatch.entries()) {
           const result = results[index];
           if (!result?.id) {
@@ -4105,10 +4340,28 @@ export const deliverEmailCampaign = async (input: {
         status: "FAILED",
         category,
       });
+      const uncertain = emailSubmissionOutcomeIsUncertain({
+        providerAttempted,
+        providerAcknowledged,
+        priorUncertain: currentBatch.some(item => item.priorUncertain),
+        error,
+      });
       const failedAt = new Date();
       await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${campaign.organizationId} FOR UPDATE`;
+        const holdKeys = uncertain ? currentBatch.map(item => `email:${item.recipientId}`) : [];
+        const releaseKeys: string[] = [];
         for (const item of currentBatch) {
-          const retryable = canRetry && item.attemptCount < 5;
+          const owned = await tx.emailCampaignRecipient.findFirst({
+            where: {
+              id: item.recipientId,
+              sendLeaseToken,
+              status: EmailCampaignRecipientStatus.SENDING,
+            },
+            select: { id: true },
+          });
+          if (!owned) continue;
+          const retryable = (canRetry || uncertain) && item.attemptCount < 5;
           const exponentialDelayMs = Math.min(
             60 * 60 * 1_000,
             60 * 1_000 * 2 ** Math.max(0, item.attemptCount - 1),
@@ -4128,8 +4381,11 @@ export const deliverEmailCampaign = async (input: {
               status: retryable
                 ? EmailCampaignRecipientStatus.QUEUED
                 : EmailCampaignRecipientStatus.FAILED,
-              providerReason: message.slice(0, 1_000),
-              normalizedErrorCategory: category as EmailDeliveryErrorCategory,
+              providerReason:
+                uncertain && !retryable ? "emailProviderOutcomeUncertain" : message.slice(0, 1_000),
+              normalizedErrorCategory: uncertain
+                ? EmailDeliveryErrorCategory.UNKNOWN
+                : (category as EmailDeliveryErrorCategory),
               errorMessage: retryable ? null : message.slice(0, 1_000),
               retryAt,
               failedAt: retryable ? null : failedAt,
@@ -4138,8 +4394,24 @@ export const deliverEmailCampaign = async (input: {
               sendLeaseExpiresAt: null,
             },
           });
-          if (!retryable) failed += 1;
+          if (!retryable) {
+            failed += 1;
+            if (!uncertain) releaseKeys.push(`email:${item.recipientId}`);
+          }
         }
+        await settleSubscriptionUsageBatch(
+          {
+            organizationId: campaign.organizationId,
+            resource: "marketingEmails",
+            operationKeys: releaseKeys,
+            success: false,
+          },
+          tx,
+        );
+        await holdUncertainSubscriptionUsageBatch(
+          { organizationId: campaign.organizationId, operationKeys: holdKeys },
+          tx,
+        );
       });
     }
   };
@@ -4172,11 +4444,17 @@ export const deliverEmailCampaign = async (input: {
       isSuppressed ||
       customerEmail !== recipientEmail
     ) {
-      skipped += 1;
       const failedAt = new Date();
-      await prisma.emailCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
+      const changed = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${campaign.organizationId} FOR UPDATE`;
+        const terminal = await tx.emailCampaignRecipient.updateMany({
+          where: {
+            id: recipient.id,
+            status: EmailCampaignRecipientStatus.SENDING,
+            sendLeaseToken,
+            acceptedAt: null,
+          },
+          data: {
           status: isSuppressed
             ? EmailCampaignRecipientStatus.SUPPRESSED
             : EmailCampaignRecipientStatus.FAILED,
@@ -4202,7 +4480,28 @@ export const deliverEmailCampaign = async (input: {
           sendLeaseToken: null,
           sendLeaseExpiresAt: null,
         },
+        });
+        if (terminal.count) {
+          const safe = recipient.attemptCount <= 1 || emailRecipientCanBeCancelled(recipient);
+          if (safe)
+            await settleSubscriptionUsageBatch(
+              {
+                organizationId: campaign.organizationId,
+                resource: "marketingEmails",
+                operationKeys: [`email:${recipient.id}`],
+                success: false,
+              },
+              tx,
+            );
+          else
+            await holdUncertainSubscriptionUsageBatch(
+              { organizationId: campaign.organizationId, operationKeys: [`email:${recipient.id}`] },
+              tx,
+            );
+        }
+        return terminal.count;
       });
+      if (changed) skipped += 1;
       continue;
     }
 
@@ -4224,6 +4523,7 @@ export const deliverEmailCampaign = async (input: {
     batch.push({
       recipientId: recipient.id,
       attemptCount: recipient.attemptCount,
+      priorUncertain: recipient.attemptCount > 1 && !emailRecipientCanBeCancelled(recipient),
       payload: {
         to: recipient.email,
         subject: campaign.subject,
@@ -4404,13 +4704,13 @@ export const retryEmailCampaignTransientFailures = async (input: {
       campaignId: campaign.id,
       status: EmailCampaignRecipientStatus.FAILED,
       normalizedErrorCategory: {
-        in: [
-          EmailDeliveryErrorCategory.PROVIDER_TIMEOUT,
-          EmailDeliveryErrorCategory.RATE_LIMIT,
-          EmailDeliveryErrorCategory.PROVIDER_TEMPORARY,
-          EmailDeliveryErrorCategory.RECIPIENT_TEMPORARY,
-        ],
-      },
+                in: [
+                  EmailDeliveryErrorCategory.PROVIDER_TIMEOUT,
+                  EmailDeliveryErrorCategory.RATE_LIMIT,
+                  EmailDeliveryErrorCategory.PROVIDER_TEMPORARY,
+                  EmailDeliveryErrorCategory.RECIPIENT_TEMPORARY,
+                ],
+              },
     },
     select: {
       id: true,
@@ -4481,20 +4781,49 @@ export const cancelEmailCampaignQueuedRecipients = async (input: {
 }) => {
   const campaign = await findAccessibleEmailCampaign(input);
   const cancelledAt = new Date();
-  const result = await prisma.emailCampaignRecipient.updateMany({
-    where: {
-      campaignId: campaign.id,
-      status: EmailCampaignRecipientStatus.QUEUED,
-    },
-    data: {
-      status: EmailCampaignRecipientStatus.CANCELLED,
-      providerReason: "cancelledByUserBeforeSubmission",
-      normalizedErrorCategory: EmailDeliveryErrorCategory.NONE,
-      retryAt: null,
-      terminalAt: cancelledAt,
-      sendLeaseToken: null,
-      sendLeaseExpiresAt: null,
-    },
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.user.organizationId} FOR UPDATE`;
+    const cancelled = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      UPDATE "EmailCampaignRecipient" SET status = 'CANCELLED'::"EmailCampaignRecipientStatus",
+        "providerReason" = 'cancelledByUserBeforeSubmission', "normalizedErrorCategory" = 'NONE'::"EmailDeliveryErrorCategory",
+        "retryAt" = NULL, "terminalAt" = ${cancelledAt}, "sendLeaseToken" = NULL, "sendLeaseExpiresAt" = NULL, "updatedAt" = NOW()
+      WHERE "campaignId" = ${campaign.id} AND "organizationId" = ${input.user.organizationId}
+        AND status = 'QUEUED'::"EmailCampaignRecipientStatus" AND "acceptedAt" IS NULL AND "providerMessageId" IS NULL
+        AND ("providerOperationKey" IS NULL OR "normalizedErrorCategory"::text IN (${Prisma.join([...safelyUnsubmittedCategories])}))
+      RETURNING id
+    `);
+    await settleSubscriptionUsageBatch(
+      {
+        organizationId: input.user.organizationId,
+        resource: "marketingEmails",
+        operationKeys: cancelled.map((row) => `email:${row.id}`),
+        success: false,
+      },
+      tx,
+    );
+    const uncertain = await tx.emailCampaignRecipient.findMany({
+      where: {
+        campaignId: campaign.id,
+        status: EmailCampaignRecipientStatus.QUEUED,
+        providerOperationKey: { not: null },
+        normalizedErrorCategory: {
+          in: [
+            EmailDeliveryErrorCategory.UNKNOWN,
+            EmailDeliveryErrorCategory.PROVIDER_TIMEOUT,
+            EmailDeliveryErrorCategory.PROVIDER_TEMPORARY,
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    await holdUncertainSubscriptionUsageBatch(
+      {
+        organizationId: input.user.organizationId,
+        operationKeys: uncertain.map((row) => `email:${row.id}`),
+      },
+      tx,
+    );
+    return { count: cancelled.length };
   });
   const summary = await updateEmailCampaignDeliverySummary({ campaignId: campaign.id });
   await writeAuditLog(prisma, {
@@ -4507,7 +4836,12 @@ export const cancelEmailCampaignQueuedRecipients = async (input: {
     after: toJson({ cancelled: result.count, status: summary.campaign.status }),
     requestId: input.requestId,
   });
-  return { cancelled: result.count, campaign: summary.campaign, counts: summary.counts };
+  return {
+    cancelled: result.count,
+    awaitingReview: summary.counts.QUEUED + summary.counts.SENDING,
+    campaign: summary.campaign,
+    counts: summary.counts,
+  };
 };
 
 export const listEmailCampaigns = async (input: {
@@ -4873,10 +5207,7 @@ const defaultAutomationBlocks = (
 ];
 
 const automationDefaults = (trigger: EmailAutomationTrigger, storeName?: string | null) => ({
-  name:
-    trigger === EmailAutomationTrigger.ORDER_CREATED
-      ? "Заказ создан"
-      : "Статус заказа изменен",
+  name: trigger === EmailAutomationTrigger.ORDER_CREATED ? "Заказ создан" : "Статус заказа изменен",
   subject:
     trigger === EmailAutomationTrigger.ORDER_CREATED
       ? "Ваш заказ {{orderNumber}} принят"
@@ -4916,20 +5247,23 @@ const ensureDefaultAutomations = async (input: {
   }
 };
 
-export const listEmailAutomations = async (input: {
-  user: StoreAccessUser;
-  storeId: string;
-}) => {
+export const listEmailAutomations = async (input: { user: StoreAccessUser; storeId: string }) => {
+  const org = await assertReadableFeature(input.user.organizationId, "marketingAutomation");
   await assertUserCanAccessStore(prisma, input.user, input.storeId);
   const store = await prisma.store.findFirst({
     where: { id: input.storeId, organizationId: input.user.organizationId },
     select: { name: true },
   });
-  await ensureDefaultAutomations({
-    organizationId: input.user.organizationId,
-    storeId: input.storeId,
-    storeName: store?.name,
-  });
+  if (
+    org.billingCatalogVersion !== "2026-11" ||
+    org.lifetimeAccess ||
+    resolveOrganizationAccessState(org).hasAccess
+  )
+    await ensureDefaultAutomations({
+      organizationId: input.user.organizationId,
+      storeId: input.storeId,
+      storeName: store?.name,
+    });
   return prisma.emailAutomation.findMany({
     where: {
       organizationId: input.user.organizationId,
@@ -4963,6 +5297,10 @@ export const updateEmailAutomation = async (input: {
 	  logoStoreId?: string | null;
 	  blocks?: EmailCampaignBlock[] | null;
 	}) => {
+  await assertFeatureEnabled({
+    organizationId: input.user.organizationId,
+    feature: "marketingAutomation",
+  });
   const automation = await prisma.emailAutomation.findFirst({
     where: { id: input.automationId, organizationId: input.user.organizationId },
   });
@@ -4980,9 +5318,13 @@ export const updateEmailAutomation = async (input: {
     });
   }
   const blocks =
-    input.blocks?.map(normalizeBlockId).filter(blockHasMeaningfulContent).slice(0, 30) ??
-    undefined;
-	  const updated = await prisma.emailAutomation.update({
+    input.blocks?.map(normalizeBlockId).filter(blockHasMeaningfulContent).slice(0, 30) ?? undefined;
+  return prisma.$transaction(async (tx) => {
+    if ((input.status ?? automation.status) === EmailAutomationStatus.ACTIVE)
+      await assertFeatureCanBeConfigured(input.user.organizationId, "marketingAutomation", tx);
+    if (input.senderIdentityId)
+      await assertFeatureCanBeConfigured(input.user.organizationId, "ownSender", tx);
+    const updated = await tx.emailAutomation.update({
 	    where: { id: automation.id },
 	    data: {
 	      status: input.status,
@@ -5032,7 +5374,7 @@ export const updateEmailAutomation = async (input: {
 	      contentVersion: emailContentVersion,
 	    },
 	  });
-  await writeAuditLog(prisma, {
+    await writeAuditLog(tx, {
     organizationId: input.user.organizationId,
     actorId: input.actorId,
     action: "EMAIL_AUTOMATION_UPDATE",
@@ -5042,7 +5384,8 @@ export const updateEmailAutomation = async (input: {
     after: toJson({ status: updated.status, senderIdentityId: updated.senderIdentityId }),
     requestId: input.requestId,
   });
-  return updated;
+    return updated;
+  });
 };
 
 const statusLabel = (status: CustomerOrderStatus | string) => {
@@ -5197,6 +5540,10 @@ export const testEmailAutomation = async (input: {
   automationId: string;
   to: string;
 }) => {
+  await assertFeatureEnabled({
+    organizationId: input.user.organizationId,
+    feature: "marketingAutomation",
+  });
   const automation = await prisma.emailAutomation.findFirst({
     where: { id: input.automationId, organizationId: input.user.organizationId },
   });
@@ -5237,12 +5584,12 @@ export const testEmailAutomation = async (input: {
     senderIdentityId: automation.senderIdentityId,
     requireVerified: true,
   });
-	  const logo = await resolveCampaignLogo({
+  const logo = await resolveCampaignLogo({
 	    user: input.user,
 	    campaignStoreId: automation.storeId,
 	    logoStoreId: campaign.logoStoreId ?? automation.storeId,
 	  });
-	  const rendered = renderEmailCampaign({
+  const rendered = renderEmailCampaign({
 	    campaign,
 	    store,
 	    logoUrl: logo.logoUrl,
@@ -5250,7 +5597,14 @@ export const testEmailAutomation = async (input: {
 	    order: orderData?.renderOrder ?? sampleOrderForPreview(store, campaign),
 	    baseUrl: getPublicAppBaseUrl(),
 	  });
-  await sendMarketingEmail({
+  await withSubscriptionUsage(
+    {
+      organizationId: input.user.organizationId,
+      resource: "marketingEmails",
+      operationKey: `automation-test:${input.actorId}:${input.requestId}`,
+    },
+    () =>
+      sendMarketingEmail({
     to,
     subject: renderVariables(campaign.subject, {
       customerName: orderData?.recipient.name,
@@ -5266,7 +5620,8 @@ export const testEmailAutomation = async (input: {
       { name: "category", value: "email_automation_test" },
       { name: "automation_id", value: automation.id.slice(0, 64) },
     ],
-  });
+  }),
+  );
   await writeAuditLog(prisma, {
     organizationId: input.user.organizationId,
     actorId: input.actorId,
@@ -5288,6 +5643,14 @@ export const processEmailAutomationTrigger = async (input: {
   oldStatus?: CustomerOrderStatus | string | null;
   newStatus?: CustomerOrderStatus | string | null;
 }) => {
+  const org = await getOrganizationPlan(input.organizationId);
+  if (
+    org.billingCatalogVersion === "2026-11" &&
+    !org.lifetimeAccess &&
+    (!org.entitlements.features.marketingAutomation ||
+      !resolveOrganizationAccessState(org).hasAccess)
+  )
+    return { processed: 0, sent: 0, failed: 0, skipped: 0 };
   const automations = await prisma.emailAutomation.findMany({
     where: {
       organizationId: input.organizationId,
@@ -5351,20 +5714,20 @@ export const processEmailAutomationTrigger = async (input: {
       continue;
     }
 
-	    try {
-	      const campaign = automationToCampaign({ automation, store: orderData.store });
-	      const renderOrder: EmailRenderOrder = {
+    try {
+      const campaign = automationToCampaign({ automation, store: orderData.store });
+      const renderOrder: EmailRenderOrder = {
 	        ...orderData.renderOrder,
 	        previousStatus: input.oldStatus ? statusLabel(input.oldStatus) : null,
 	        status: statusLabel(input.newStatus ?? orderData.order.status),
 	      };
-	      const sender = await resolveCampaignSender({
+      const sender = await resolveCampaignSender({
         organizationId: input.organizationId,
         storeId: input.storeId,
         senderIdentityId: automation.senderIdentityId,
         requireVerified: true,
       });
-	      const logo = await resolveCampaignLogo({
+      const logo = await resolveCampaignLogo({
 	        user: {
           id: "automation",
           organizationId: input.organizationId,
@@ -5374,7 +5737,7 @@ export const processEmailAutomationTrigger = async (input: {
 	        campaignStoreId: input.storeId,
 	        logoStoreId: campaign.logoStoreId ?? input.storeId,
 	      });
-	      const rendered = renderEmailCampaign({
+      const rendered = renderEmailCampaign({
 	        campaign,
 	        store: orderData.store,
 	        logoUrl: logo.logoUrl,
@@ -5382,7 +5745,14 @@ export const processEmailAutomationTrigger = async (input: {
 	        order: renderOrder,
 	        baseUrl: getPublicAppBaseUrl(),
 	      });
-      const result = await sendMarketingEmail({
+      const result = await withSubscriptionUsage(
+        {
+          organizationId: input.organizationId,
+          resource: "marketingEmails",
+          operationKey: `automation:${created.id}`,
+        },
+        () =>
+          sendMarketingEmail({
         to: recipientEmail,
         subject: renderVariables(campaign.subject, {
 	          customerName: orderData.recipient.name,
@@ -5400,7 +5770,8 @@ export const processEmailAutomationTrigger = async (input: {
           { name: "store_id", value: input.storeId.slice(0, 64) },
         ],
         idempotencyKey: `automation-${created.id}`,
-      });
+      }),
+      );
       await prisma.emailAutomationDelivery.update({
         where: { id: created.id },
         data: {

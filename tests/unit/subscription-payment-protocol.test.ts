@@ -13,6 +13,7 @@ import {
 } from "@/server/billing/paymentConfig";
 import { extendSubscriptionMonth, kgsToMinor, minorToKgs } from "@/server/billing/paymentMath";
 import { resolveOrganizationAccessState } from "@/server/services/planLimits";
+import { syntheticSellerEnvironment, syntheticSeller } from "../helpers/legalSeller";
 
 describe("subscription payment protocol and money", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -158,6 +159,15 @@ describe("merchant activation gates", () => {
         ...env,
         BILLING_PAYMENTS_MODE: "live",
         BILLING_LIVE_ACTIVATION_CONFIRMED: "1",
+        BILLING_PUBLIC_URL: "https://bazaar.kg",
+        BILLING_TERMS_URL: "https://bazaar.kg/legal/offer",
+        BILLING_TERMS_VERSION: "2026-11-07-v1",
+        BILLING_SELLER_NAME: syntheticSeller.legalName!,
+        ...syntheticSellerEnvironment,
+        BILLING_LEGAL_RELEASE_APPROVED: "2026-11-07-v1",
+        BILLING_SUPPORT_EMAIL_VERIFIED: "1",
+        BILLING_PUBLIC_CONTACT_ADDRESS:
+          "Кыргызстан, г. Бишкек, синтетический тестовый адрес для корреспонденции 1",
       }).ready,
     ).toBe(true);
     expect(getSubscriptionPaymentConfig({ ...env, VERCEL_ENV: "production" }).ready).toBe(false);

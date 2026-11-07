@@ -169,7 +169,10 @@ const PlatformPage = () => {
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <Card>
-          <CardContent role={isForbidden ? "alert" : "status"} className="py-8 text-sm text-muted-foreground">
+          <CardContent
+            role={isForbidden ? "alert" : "status"}
+            className="py-8 text-sm text-muted-foreground"
+          >
             {isForbidden ? tErrors("forbidden") : tCommon("loading")}
           </CardContent>
         </Card>
@@ -200,7 +203,7 @@ const PlatformPage = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">
-                {t("summary.activeSubscriptions")}
+                {t("summary.confirmedPaidSubscriptions")}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-foreground">
@@ -209,12 +212,20 @@ const PlatformPage = () => {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">{t("summary.estimatedMrr")}</CardTitle>
+              <CardTitle className="text-sm font-medium">{t("summary.confirmedPaidMrr")}</CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-foreground">
-              {formatKgsMoney(summaryQuery.data.estimatedMrrKgs, locale, baseAccountingCurrency, {
-                maximumFractionDigits: 0,
-              })}
+              {formatKgsMoney(
+                summaryQuery.data.confirmedPaidMrrKgs,
+                locale,
+                baseAccountingCurrency,
+                {
+                  maximumFractionDigits: 0,
+                },
+              )}
+              <p className="mt-2 text-xs font-normal leading-5 text-muted-foreground">
+                {t("summary.confirmedPaidMrrNote")}
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -263,7 +274,10 @@ const PlatformPage = () => {
         </CardHeader>
         <CardContent>
           {upgradeRequestsQuery.error ? (
-            <QueryErrorState error={upgradeRequestsQuery.error} onRetry={() => void upgradeRequestsQuery.refetch()} />
+            <QueryErrorState
+              error={upgradeRequestsQuery.error}
+              onRetry={() => void upgradeRequestsQuery.refetch()}
+            />
           ) : upgradeRequestsQuery.isLoading ? (
             <div className="py-6">
               <Spinner className="h-5 w-5" />

@@ -36,6 +36,7 @@ export async function withReportRead<T>(
         actor.id,
         options.storeId,
         options.requireAnalytics ?? true,
+        true,
       );
       if (
         access.organizationId !== actor.organizationId ||
@@ -54,6 +55,7 @@ export async function withReportRead<T>(
       actor.id,
       options.storeId,
       options.requireAnalytics ?? true,
+      true,
     );
     if (
       current.organizationId !== result.access.organizationId ||

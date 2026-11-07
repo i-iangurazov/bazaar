@@ -14,7 +14,7 @@ describeDb("bundles", () => {
   });
 
   it("assembles bundles idempotently", async () => {
-    const { org, store, adminUser, baseUnit } = await seedBase();
+    const { org, store, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
 
     const component = await createProduct({
       organizationId: org.id,

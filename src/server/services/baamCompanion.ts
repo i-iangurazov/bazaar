@@ -38,6 +38,13 @@ import {
   cancelActiveWorkflow,
 } from "./baamWorkflows";
 import { workflowCatalog } from "./baamWorkflowCatalog";
+import {
+  reserveSubscriptionUsage,
+  startSubscriptionUsage,
+  settleSubscriptionUsage,
+  type UsageLease,
+} from "@/server/billing/subscriptionUsage";
+import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 export { baamToolSchema, baamOptionalValues } from "./baamToolContract";
 const controllers = new Map<string, AbortController>();
 export const abortBaamGeneration = (conversationId: string) =>
@@ -60,6 +67,13 @@ export async function baamCompanionCapabilities(ctx: Context) {
 }
 
 export async function sendBaamMessage(ctx: Context, input: BaamSend) {
+  if (!ctx.user) throw new AppError("unauthorized", "UNAUTHORIZED", 401);
+  return withAiOperationBudget(
+    { organizationId: ctx.user.organizationId, operationKey: input.clientRequestId },
+    () => sendBudgetedBaamMessage(ctx, input),
+  );
+}
+async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
   const started = performance.now();
   let modelCalls = 0;
   let analyzedAttachment = false;
@@ -75,7 +89,18 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
   const controller = new AbortController();
   controllers.set(conversation.id, controller);
   const timeout = setTimeout(() => controller.abort(), 45000);
+  let usageLease: UsageLease = null;
   try {
+    // claimBaamTurn already validated and consumed this exact transcription
+    // for this conversation. Its successful transcript used one shared unit.
+    if (!input.transcriptionId) {
+      usageLease = await reserveSubscriptionUsage({
+        organizationId: conversation.organizationId,
+        resource: "ai",
+        operationKey: `baam:${turn.id}`,
+      });
+      await startSubscriptionUsage(usageLease);
+    }
     const active = conversation.activeWorkflowId
       ? await prisma.baamWorkflow.findUnique({ where: { id: conversation.activeWorkflowId } })
       : null;
@@ -533,7 +558,7 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
         ];
     }
     await assertBaamTurnActive(ctx, turn.id);
-    await finishBaamTurn(ctx, turn.id, "COMPLETED", text, parts);
+    await finishBaamTurn(ctx, turn.id, "COMPLETED", text, parts, usageLease);
     const reportExecution = async (completed: Awaited<ReturnType<typeof submitBaamWorkflow>>) => {
       const message =
         completed.status === "COMPLETED"
@@ -645,6 +670,13 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
   } finally {
     clearTimeout(timeout);
     if (controllers.get(conversation.id) === controller) controllers.delete(conversation.id);
+    if (usageLease) {
+      const completed = await prisma.baamTurn.findUnique({
+        where: { id: turn.id },
+        select: { status: true },
+      });
+      await settleSubscriptionUsage(usageLease, completed?.status === "COMPLETED");
+    }
     console.info("baam.request", {
       turnId: turn.id,
       ms: Math.round(performance.now() - started),
@@ -665,15 +697,18 @@ async function finishBaamTurn(
   status: string,
   text: string,
   parts: BaamPart[],
+  usageLease?: UsageLease,
 ) {
-  const { turn } = await assertBaamTurnActive(ctx, turnId);
+  const { turn, scope } = await assertBaamTurnActive(ctx, turnId);
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${scope.organizationId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "BaamConversation" WHERE "id" = ${turn.conversationId} FOR UPDATE`;
     const won = await tx.baamTurn.updateMany({
       where: { id: turnId, status: "RUNNING", cancelRequested: false },
       data: { status, completedAt: new Date() },
     });
     if (!won.count) throw new AppError("baamStopped", "CONFLICT", 409);
+    if (status === "COMPLETED") await settleSubscriptionUsage(usageLease ?? null, true, tx);
     await appendBaamMessage(tx, {
       conversationId: turn.conversationId,
       turnId,

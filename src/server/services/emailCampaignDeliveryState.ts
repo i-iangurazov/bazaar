@@ -9,6 +9,10 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import {
+  settleSubscriptionUsageBatch,
+  holdUncertainSubscriptionUsageBatch,
+} from "@/server/billing/subscriptionUsage";
 import { EmailProviderError, retrieveResendEmail } from "@/server/services/email";
 import {
   buildEmailProviderEventIdentity,
@@ -217,7 +221,7 @@ const processEmailProviderRecipientEventTx = async (
       provider,
       providerMessageId: input.providerMessageId,
     },
-    select: { id: true, campaignId: true },
+    select: { id: true, campaignId: true, campaign: { select: { organizationId: true } } },
   });
   if (!candidate) {
     // A signed, tagged callback can beat persistence of the batch response.
@@ -246,6 +250,8 @@ const processEmailProviderRecipientEventTx = async (
     }
     return { processed: false as const, reason: "recipient_not_found" as const };
   }
+  // Subscription quota precedes campaign and recipient locks everywhere.
+  await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${candidate.campaign.organizationId} FOR UPDATE`;
   // Campaign first, recipient second is the canonical lock order. This prevents
   // different-recipient webhooks from holding recipient/FK locks while each waits
   // to serialize the same campaign summary.
@@ -391,6 +397,29 @@ const processEmailProviderRecipientEventTx = async (
   }
 
   if (decision.apply) {
+    if (!input.reconciliation?.localFailure && eventStatus && eventStatus !== "QUEUED") {
+      // An authoritative provider event with a message identity confirms
+      // acceptance, including a later bounce/drop. Delivery failure is not a
+      // refund of the provider operation already performed.
+      await settleSubscriptionUsageBatch(
+        {
+          organizationId: recipient.campaign.organizationId,
+          resource: "marketingEmails",
+          operationKeys: [`email:${recipient.id}`],
+          success: true,
+        },
+        tx,
+      );
+    } else if (input.reconciliation?.localFailure && !recipient.acceptedAt) {
+      // A missing lookup or exhausted reconciliation is still ambiguous.
+      await holdUncertainSubscriptionUsageBatch(
+        {
+          organizationId: recipient.campaign.organizationId,
+          operationKeys: [`email:${recipient.id}`],
+        },
+        tx,
+      );
+    }
     const category = normalizeEmailDeliveryError({
       status: decision.nextStatus,
       reason: input.providerReason,

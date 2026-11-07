@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { middleware } from "@/middleware";
+import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import { syntheticSellerEnvironment } from "../helpers/legalSeller";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -50,4 +52,18 @@ describe("unpublished legal HTTP responses", () => {
       expect(response.headers.get("x-middleware-next")).toBe("1");
     },
   );
+
+  it("passes the approved public pages only after all publication checks", async () => {
+    for (const [key, value] of Object.entries(syntheticSellerEnvironment)) vi.stubEnv(key, value);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BILLING_LEGAL_RELEASE_APPROVED", LEGAL_TERMS_VERSION);
+    vi.stubEnv("BILLING_SUPPORT_EMAIL_VERIFIED", "1");
+    vi.stubEnv("BILLING_PUBLIC_CONTACT_ADDRESS", "Кыргызстан, Бишкек, тестовый адрес 1");
+    for (const id of ["offer", "refunds", "requisites", "payment"]) {
+      const response = await middleware(new NextRequest(`https://bazaar.kg/legal/${id}`));
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    }
+    vi.stubEnv("BILLING_SUPPORT_EMAIL_VERIFIED", "0");
+    expect((await middleware(new NextRequest("https://bazaar.kg/legal/offer"))).status).toBe(404);
+  });
 });

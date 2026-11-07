@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   OperationRequestPrincipalType,
   Prisma,
@@ -25,16 +25,43 @@ import {
 } from "@/server/services/products/importMatching";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { assertCapacity, assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertProductImportAccess } from "@/server/billing/coreAccess";
+import {
+  checkInitialProductImportChunk,
+  recordInitialProductImportChunk,
+  type InitialImportChunkInput,
+} from "@/server/billing/initialProductImport";
 import {
   OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
   runOperationRequest,
+  operationPrincipalKey,
+  type RunOperationRequestInput,
+  canonicalizeOperationPayload,
 } from "@/server/services/operationRequests";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 
 export type RunProductImportInput = Omit<ImportProductsInput, "batchId"> & {
   idempotencyKey?: string;
   source?: string;
+  initialImportChunk?: InitialImportChunkInput;
 };
+type ProductImportSummary = {
+  source: string;
+  mode: string;
+  updateMask: NonNullable<ImportProductsInput["updateMask"]> | null;
+  existingBehavior: string;
+  emptyValueBehavior: string;
+  stockBehavior: string;
+  targetStoreId: string | null;
+  targetStoreName: string | null;
+  rows: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  connected?: number;
+  images: { downloaded: number; fallback: number; missing: number };
+};
+type ProductImportResponse = { batchId: string; summary: ProductImportSummary };
 
 const resolveImportTransactionTimeout = () => {
   const parsed = Number(process.env.IMPORT_TRANSACTION_TIMEOUT_MS);
@@ -54,7 +81,7 @@ const importTransactionOptions = {
 } as const;
 
 export const runProductImport = async (input: RunProductImportInput) => {
-  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  const { initialOnly } = await assertProductImportAccess(input.organizationId);
   const importMode = input.mode ?? "full";
   const stockBehavior =
     input.stockBehavior ??
@@ -68,6 +95,100 @@ export const runProductImport = async (input: RunProductImportInput) => {
     (importMode === "full" || input.updateMask?.includes("stockQty"));
   if ((hasMinStockImport || hasStockImport) && !input.storeId) {
     throw new AppError("storeRequired", "BAD_REQUEST", 400);
+  }
+  const chunkRowNumbers = new Set(input.rows.map((row, index) => row.sourceRowNumber ?? index + 1));
+  const operationInput: RunOperationRequestInput = {
+    organizationId: input.organizationId,
+    storeId: input.storeId ?? null,
+    scope: "products.importCsv",
+    principal: {
+      type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+      id: input.actorId,
+    },
+    idempotencyKey: input.idempotencyKey ?? input.requestId,
+    payload: {
+      version: "products.importCsv.v1",
+      value: toJson({
+        rows: input.rows,
+        source: input.source ?? "csv",
+        storeId: input.storeId ?? null,
+        mode: importMode,
+        updateMask: input.updateMask ?? [],
+        existingBehavior: input.existingBehavior ?? "update",
+        emptyValueBehavior: input.emptyValueBehavior ?? "keep",
+        stockBehavior,
+        rowActions: initialOnly
+          ? (input.rowActions ?? []).filter((row) => chunkRowNumbers.has(row.sourceRowNumber))
+          : (input.rowActions ?? []),
+        ...(input.initialImportChunk ? { initialImportChunk: input.initialImportChunk } : {}),
+      }),
+    },
+    allowedResponsePaths: [
+      "batchId",
+      "summary",
+      "summary.source",
+      "summary.mode",
+      "summary.updateMask",
+      "summary.existingBehavior",
+      "summary.emptyValueBehavior",
+      "summary.stockBehavior",
+      "summary.targetStoreId",
+      "summary.targetStoreName",
+      "summary.rows",
+      "summary.created",
+      "summary.updated",
+      "summary.skipped",
+      "summary.connected",
+      "summary.images",
+      "summary.images.downloaded",
+      "summary.images.fallback",
+      "summary.images.missing",
+    ],
+    transactionOptions: importTransactionOptions,
+    classifyFailure: (error) => classifyDatabaseOperationFailure(error, "productsImportFailed"),
+  };
+  if (initialOnly) {
+    const prior = await prisma.operationRequest.findUnique({
+      where: {
+        organizationId_scope_principalKey_idempotencyKey: {
+          organizationId: input.organizationId,
+          scope: operationInput.scope,
+          principalKey: operationPrincipalKey(operationInput.principal),
+          idempotencyKey: operationInput.idempotencyKey,
+        },
+      },
+      select: { status: true },
+    });
+    if (prior?.status === "COMPLETED") {
+      const replay = await runOperationRequest<ProductImportResponse>(operationInput, async () => {
+        throw new AppError("operationRequestUnavailable", "CONFLICT", 409);
+      });
+      const batch = await prisma.importBatch.findFirst({
+        where: { id: String(replay.response.batchId), organizationId: input.organizationId },
+      });
+      if (!batch) throw new AppError("importBatchNotFound", "NOT_FOUND", 404);
+      return { batch, summary: replay.response.summary };
+    }
+  }
+  const initialChunk = initialOnly ? input.initialImportChunk : undefined;
+  if (initialOnly && !initialChunk)
+    throw new AppError("initialImportSessionRequired", "BAD_REQUEST", 400);
+  const payloadHash = createHash("sha256")
+    .update(canonicalizeOperationPayload(operationInput.payload))
+    .digest("hex");
+  if (initialChunk) {
+    const receipt = await prisma.$transaction((tx) =>
+      checkInitialProductImportChunk(tx, {
+        organizationId: input.organizationId,
+        chunk: initialChunk,
+        rowCount: input.rows.length,
+        payloadHash,
+      }),
+    );
+    if (receipt) {
+      const batch = await prisma.importBatch.findUniqueOrThrow({ where: { id: receipt.batchId } });
+      return { batch, summary: receipt.summary as unknown as ProductImportSummary };
+    }
   }
   const targetStore = input.storeId
     ? await prisma.store.findFirst({
@@ -98,7 +219,8 @@ export const runProductImport = async (input: RunProductImportInput) => {
     input.rows.map((row, index) => {
       const action = rowDecisionByNumber.get(row.sourceRowNumber ?? index + 1)?.action;
       return action === "connect" || action === "skip"
-        ? { ...row, photoUrl: undefined, images: undefined } : row;
+        ? { ...row, photoUrl: undefined, images: undefined }
+        : row;
     }),
     input.organizationId,
   );
@@ -151,6 +273,23 @@ export const runProductImport = async (input: RunProductImportInput) => {
     });
   }
   const executeImport = async (tx: Prisma.TransactionClient) => {
+    if (initialChunk) {
+      const receipt = await checkInitialProductImportChunk(tx, {
+        organizationId: input.organizationId,
+        chunk: initialChunk,
+        rowCount: rows.length,
+        payloadHash,
+      });
+      if (receipt)
+        return {
+          response: {
+            batchId: receipt.batchId,
+            summary: receipt.summary as unknown as ProductImportSummary,
+          },
+          responseStatus: 201,
+          resource: { type: "ImportBatch", id: receipt.batchId },
+        };
+    }
     const batch = await tx.importBatch.create({
       data: {
         organizationId: input.organizationId,
@@ -202,11 +341,19 @@ export const runProductImport = async (input: RunProductImportInput) => {
         missing: photoResolution.summary.missing,
       },
     };
-
     const updatedBatch = await tx.importBatch.update({
       where: { id: batch.id },
       data: { summary },
     });
+    if (initialChunk)
+      await recordInitialProductImportChunk(tx, {
+        organizationId: input.organizationId,
+        chunk: initialChunk,
+        rowCount: rows.length,
+        payloadHash,
+        batchId: updatedBatch.id,
+        summary: toJson(summary),
+      });
 
     return {
       response: { batchId: updatedBatch.id, summary },
@@ -214,57 +361,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
       resource: { type: "ImportBatch", id: updatedBatch.id },
     };
   };
-  const operation = await runOperationRequest(
-    {
-      organizationId: input.organizationId,
-      storeId: input.storeId ?? null,
-      scope: "products.importCsv",
-      principal: {
-        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
-        id: input.actorId,
-      },
-      idempotencyKey: input.idempotencyKey ?? input.requestId,
-      payload: {
-        version: "products.importCsv.v1",
-        value: toJson({
-          rows: input.rows,
-          source: input.source ?? "csv",
-          storeId: input.storeId ?? null,
-          mode: importMode,
-          updateMask: input.updateMask ?? [],
-          existingBehavior: input.existingBehavior ?? "update",
-          emptyValueBehavior: input.emptyValueBehavior ?? "keep",
-          stockBehavior,
-          rowActions: input.rowActions ?? [],
-        }),
-      },
-      allowedResponsePaths: [
-        "batchId",
-        "summary",
-        "summary.source",
-        "summary.mode",
-        "summary.updateMask",
-        "summary.existingBehavior",
-        "summary.emptyValueBehavior",
-        "summary.stockBehavior",
-        "summary.targetStoreId",
-        "summary.targetStoreName",
-        "summary.rows",
-        "summary.created",
-        "summary.updated",
-        "summary.skipped",
-        "summary.connected",
-        "summary.images",
-        "summary.images.downloaded",
-        "summary.images.fallback",
-        "summary.images.missing",
-      ],
-      transactionOptions: importTransactionOptions,
-      classifyFailure: (error) =>
-        classifyDatabaseOperationFailure(error, "productsImportFailed"),
-    },
-    executeImport,
-  );
+  const operation = await runOperationRequest<ProductImportResponse>(operationInput, executeImport);
 
   const batch = await prisma.importBatch.findFirst({
     where: { id: operation.response.batchId, organizationId: input.organizationId },
@@ -279,7 +376,11 @@ export const runProductImport = async (input: RunProductImportInput) => {
 
   if (!operation.replayed) {
     await publishAssortmentChange(input.organizationId);
-    if (input.storeId) eventBus.publish({ type: "inventory.updated", payload: { storeId: input.storeId, productId: "*" } });
+    if (input.storeId)
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: input.storeId, productId: "*" },
+      });
     await recordFirstEvent({
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -297,7 +398,7 @@ export const listImportBatches = async (input: {
   page?: number;
   pageSize?: number;
 }) => {
-  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  await assertProductImportAccess(input.organizationId, true);
   const page = Math.max(1, input.page ?? 1);
   const pageSize = Math.max(1, Math.min(input.pageSize ?? 25, 100));
   const where: Prisma.ImportBatchWhereInput = {
@@ -323,7 +424,7 @@ export const listImportBatches = async (input: {
 };
 
 export const getImportBatch = async (input: { organizationId: string; batchId: string }) => {
-  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
+  await assertProductImportAccess(input.organizationId, true);
   const batch = await prisma.importBatch.findUnique({
     where: { id: input.batchId },
     include: {
@@ -464,10 +565,7 @@ export const rollbackImportBatch = async (input: {
             },
           });
 
-          const affectedCosts = new Map<
-            string,
-            { productId: string; variantId: string | null }
-          >();
+          const affectedCosts = new Map<string, { productId: string; variantId: string | null }>();
 
           for (const movement of movements) {
             const poLine = po.lines.find(
@@ -504,8 +602,7 @@ export const rollbackImportBatch = async (input: {
               qtyDelta: -movement.qtyDelta,
               type: StockMovementType.ADJUSTMENT,
               unitCostKgs: unitCostKgs ?? undefined,
-              lineTotalKgs:
-                receivedLineTotalKgs === null ? undefined : -receivedLineTotalKgs,
+              lineTotalKgs: receivedLineTotalKgs === null ? undefined : -receivedLineTotalKgs,
               referenceType: "IMPORT_ROLLBACK",
               referenceId: po.id,
               note: "importRollback",
@@ -542,9 +639,7 @@ export const rollbackImportBatch = async (input: {
                   (line.variantId ?? null) === (movement.variantId ?? null),
               );
               const movementUnitCost =
-                movement.unitCostKgs === null
-                  ? poLine?.unitCost
-                  : movement.unitCostKgs;
+                movement.unitCostKgs === null ? poLine?.unitCost : movement.unitCostKgs;
               return movementUnitCost === null || movementUnitCost === undefined
                 ? new Prisma.Decimal(Number.NaN)
                 : sum.plus(movementUnitCost.mul(movement.qtyDelta));
@@ -597,17 +692,28 @@ export const rollbackImportBatch = async (input: {
     // Product imports also write stock without a PurchaseOrder. Undo their
     // recorded deltas before archiving imported catalog entries, preserving all
     // subsequent sales/receipts. The batch lock makes this reversal once-only.
-    const importedStock = await tx.stockMovement.findMany({ where: {
-      referenceType: "IMPORT", referenceId: batch.id,
-      store: { organizationId: input.organizationId },
-    }, orderBy: [{ storeId: "asc" }, { productId: "asc" }, { id: "asc" }] });
+    const importedStock = await tx.stockMovement.findMany({
+      where: {
+        referenceType: "IMPORT",
+        referenceId: batch.id,
+        store: { organizationId: input.organizationId },
+      },
+      orderBy: [{ storeId: "asc" }, { productId: "asc" }, { id: "asc" }],
+    });
     for (const movement of importedStock) {
       await applyStockMovement(tx, {
-        storeId: movement.storeId, productId: movement.productId, variantId: movement.variantId,
-        stockLotId: movement.stockLotId, qtyDelta: -movement.qtyDelta,
-        type: StockMovementType.ADJUSTMENT, referenceType: "IMPORT_ROLLBACK",
-        referenceId: batch.id, note: "importRollback", actorId: input.actorId,
-        organizationId: input.organizationId, allowNegativeStock: true,
+        storeId: movement.storeId,
+        productId: movement.productId,
+        variantId: movement.variantId,
+        stockLotId: movement.stockLotId,
+        qtyDelta: -movement.qtyDelta,
+        type: StockMovementType.ADJUSTMENT,
+        referenceType: "IMPORT_ROLLBACK",
+        referenceId: batch.id,
+        note: "importRollback",
+        actorId: input.actorId,
+        organizationId: input.organizationId,
+        allowNegativeStock: true,
       });
       adjustments += 1;
     }
@@ -723,8 +829,12 @@ export const rollbackImportBatch = async (input: {
 
     return { batchId: batch.id, reportId: report.id, summary };
   });
-  const stores = await prisma.store.findMany({ where: { organizationId: input.organizationId }, select: { id: true } });
-  for (const store of stores) eventBus.publish({ type: "inventory.updated", payload: { storeId: store.id, productId: "*" } });
+  const stores = await prisma.store.findMany({
+    where: { organizationId: input.organizationId },
+    select: { id: true },
+  });
+  for (const store of stores)
+    eventBus.publish({ type: "inventory.updated", payload: { storeId: store.id, productId: "*" } });
   return result;
 };
 import { publishAssortmentChange } from "@/server/services/assortmentPolicy";

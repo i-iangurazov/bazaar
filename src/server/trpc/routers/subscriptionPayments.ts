@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { PLAN_CODES } from "@/lib/billing/plans";
 import { adminProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { getSubscriptionQuote, subscriptionQuoteInputSchema } from "@/server/billing/subscriptionQuotes";
 import {
   checkSubscriptionInvoice,
   createSubscriptionCheckout,
@@ -17,6 +18,13 @@ const paymentProcedure = adminProcedure.use(({ ctx, next }) => {
 });
 
 export const subscriptionPaymentsRouter = router({
+  quote: paymentProcedure
+    .use(rateLimit({ max: 60, windowMs: 60_000, prefix: "billing-quote" }))
+    .input(subscriptionQuoteInputSchema)
+    .query(async ({ ctx, input }) => {
+      try { return await getSubscriptionQuote(ctx.user.organizationId, input); }
+      catch (error) { throw toTRPCError(error); }
+    }),
   get: paymentProcedure.query(async ({ ctx }) => {
     try {
       return await getSubscriptionPaymentState(ctx.user.organizationId);
@@ -38,6 +46,10 @@ export const subscriptionPaymentsRouter = router({
     .input(
       z.object({
         plan: z.enum(PLAN_CODES),
+        months: subscriptionQuoteInputSchema.shape.months,
+        extras: subscriptionQuoteInputSchema.shape.extras,
+        action: subscriptionQuoteInputSchema.shape.action,
+        quoteToken: z.string().max(12000).optional(),
         idempotencyKey: z.string().uuid(),
         termsVersion: z.string().min(1).max(100),
         expectedAmountMinor: z.number().int().positive().max(2147483647),

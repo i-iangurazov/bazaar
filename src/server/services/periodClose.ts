@@ -1,3 +1,4 @@
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import { Prisma, StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -44,6 +45,7 @@ export const listPeriodCloses = async (
 };
 
 export const closePeriod = async (input: ClosePeriodInput) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "periodClose" });
   try {
     return await prisma.$transaction(async (tx) => {
       const store = await tx.store.findFirst({

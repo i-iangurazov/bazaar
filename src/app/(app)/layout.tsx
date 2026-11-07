@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
+import { SubscriptionFeatureBoundary } from "@/components/billing/subscription-feature-boundary";
+import { SubscriptionAccessBanner } from "@/components/billing/subscription-access-banner";
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const token = await getServerAuthToken();
@@ -20,13 +22,11 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
     typeof (token as { emailVerified?: boolean } | null)?.emailVerified === "boolean"
       ? Boolean((token as { emailVerified?: boolean } | null)?.emailVerified)
       : true;
-  let impersonation:
-    | {
-        targetName?: string | null;
-        targetEmail?: string | null;
-        expiresAt: string;
-      }
-    | null = null;
+  let impersonation: {
+    targetName?: string | null;
+    targetEmail?: string | null;
+    expiresAt: string;
+  } | null = null;
 
   if (impersonationId && token.role === "ADMIN") {
     const session = await prisma.impersonationSession.findUnique({
@@ -38,7 +38,12 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
       },
     });
 
-    if (session && !session.revokedAt && session.expiresAt > new Date() && session.createdById === token.sub) {
+    if (
+      session &&
+      !session.revokedAt &&
+      session.expiresAt > new Date() &&
+      session.createdById === token.sub
+    ) {
       role = session.targetUser.role;
       displayName = session.targetUser.name ?? null;
       displayEmail = session.targetUser.email ?? null;
@@ -58,14 +63,18 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
         name: displayName,
         email: displayEmail,
         role,
-        organizationId: (token as { organizationId?: string | null } | null)?.organizationId ?? null,
+        organizationId:
+          (token as { organizationId?: string | null } | null)?.organizationId ?? null,
         isPlatformOwner: Boolean((token as { isPlatformOwner?: boolean } | null)?.isPlatformOwner),
         isOrgOwner,
         emailVerified,
       }}
       impersonation={impersonation}
     >
-      {children}
+      <SubscriptionAccessBanner canManage={role === "ADMIN"} />
+      <SubscriptionFeatureBoundary canManage={role === "ADMIN"}>
+        {children}
+      </SubscriptionFeatureBoundary>
     </AppShell>
   );
 };

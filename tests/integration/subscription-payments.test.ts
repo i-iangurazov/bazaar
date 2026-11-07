@@ -14,7 +14,9 @@ import { createAuthToken } from "@/server/services/authTokens";
 import { registerBusinessFromToken } from "@/server/services/signup";
 import { appRouter } from "@/server/trpc/routers/_app";
 import { getLogger } from "@/server/logging";
-import { assertTrialActive } from "@/server/services/planLimits";
+import { getBillingSummary } from "@/server/services/billing";
+import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
+import { assertTrialActive, assertCapacity, getOrganizationPlan } from "@/server/services/planLimits";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -54,7 +56,7 @@ describeDb("subscription payments with real database and signed provider protoco
   const providerPayments = new Map<string, Fields>();
   const checkout = (plan: "STARTER" | "BUSINESS" | "ENTERPRISE" = "STARTER", key = randomUUID()) =>
     caller.billing.payments.checkout({
-      expectedAmountMinor: kgsToMinor(getPlanMonthlyPriceKgs(plan)),
+      expectedAmountMinor: kgsToMinor(getPlanMonthlyPriceKgs(plan, "2026-10")),
       plan,
       idempotencyKey: key,
       termsVersion: "qa-v1",
@@ -327,10 +329,12 @@ describeDb("subscription payments with real database and signed provider protoco
         await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })
       ).currentPeriodEndsAt?.toISOString(),
     ).toBe("2028-03-31T10:00:00.000Z");
-    await expect(checkout("BUSINESS")).rejects.toHaveProperty(
-      "message",
-      "billingPlanChangeAfterPeriod",
-    );
+    const scheduled = await checkout("BUSINESS");
+    await notify(scheduled.id);
+    expect((await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).plan).toBe("STARTER");
+    const scheduledPeriod = await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { invoiceId: scheduled.id } });
+    expect(scheduledPeriod.startsAt.toISOString()).toBe("2028-03-31T10:00:00.000Z");
+    expect(scheduledPeriod.endsAt.toISOString()).toBe("2028-04-30T10:00:00.000Z");
   });
   it("preserves manual approval applied while checkout was pending, and flags the received payment for review", async () => {
     const invoice = await checkout();
@@ -504,6 +508,7 @@ describeDb("subscription payments with real database and signed provider protoco
     await prisma.subscriptionInvoice.createMany({
       data: Array.from({ length: 22 }, (_, i) => ({
         ...snapshot,
+        purchaseSnapshot: snapshot.purchaseSnapshot ?? undefined,
         id: randomUUID(),
         idempotencyKey: randomUUID(),
         providerPaymentId: null,
@@ -673,4 +678,170 @@ describeDb("subscription payments with real database and signed provider protoco
     expect(org.plan).toBe("STARTER");
     expect(org.subscriptionBillingMode).toBe("SELF_SERVE");
   });
+  const modernContract = async () => {
+    // A new single-owner contract; historical fixture users remain as inactive records.
+    await prisma.user.updateMany({ where: { organizationId: f.org.id, id: { not: f.adminUser.id } }, data: { isActive: false } });
+    await prisma.subscriptionContract.create({ data: { organizationId: f.org.id, catalogVersion: "2026-11" } });
+    await prisma.organization.update({ where: { id: f.org.id }, data: { trialEndsAt: null, currentPeriodEndsAt: null } });
+  };
+  const purchase = async (
+    plan: "STARTER" | "BUSINESS" | "ENTERPRISE", months: 1 | 6 | 12 = 1,
+    extras = { stores: 0, productPacks: 0, userPacks: 0 }, action: "RENEW" | "CHANGE" = "RENEW",
+    idempotencyKey = randomUUID(),
+  ) => {
+    const quote = await caller.billing.payments.quote({ plan, months, extras, action });
+    const request = { plan, months: quote.months, extras, action, quoteToken: quote.quoteToken,
+      expectedAmountMinor: quote.amountMinor, idempotencyKey, termsVersion: "qa-v1" as const,
+      acceptedTerms: true as const, locale: "ru" as const };
+    return { quote, request, invoice: await caller.billing.payments.checkout(request) };
+  };
+
+  it.each([
+    ["STARTER", 6, 1140000], ["STARTER", 12, 2040000],
+    ["BUSINESS", 6, 1995000], ["BUSINESS", 12, 3570000],
+    ["ENTERPRISE", 6, 3135000], ["ENTERPRISE", 12, 5610000],
+  ] as const)("v2: charges %s for %s months once and grants the complete term", async (plan, months, expected) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-01-31T10:00:00.000Z"));
+    await modernContract();
+    const result = await purchase(plan, months);
+    expect(result.invoice.amountMinor).toBe(expected);
+    await Promise.all([notify(result.invoice.id), notify(result.invoice.id), notify(result.invoice.id)]);
+    expect(await prisma.subscriptionPeriod.count()).toBe(1);
+    const period = await prisma.subscriptionPeriod.findFirstOrThrow();
+    expect(period.endsAt.toISOString()).toBe(months === 6 ? "2027-07-31T10:00:00.000Z" : "2028-01-31T10:00:00.000Z");
+    expect((await getOrganizationPlan(f.org.id)).plan).toBe(plan);
+  });
+
+  it("v2: bills extra capacity with the term discount and enforces purchased store capacity", async () => {
+    await modernContract();
+    const result = await purchase("BUSINESS", 6, { stores: 1, productPacks: 1, userPacks: 0 });
+    expect(result.invoice.amountMinor).toBe(2850000);
+    await notify(result.invoice.id);
+    const summary = await caller.billing.get();
+    expect(summary?.limits).toEqual({ maxStores: 2, maxProducts: 6000, maxUsers: 7 });
+    await assertCapacity({ organizationId: f.org.id, kind: "stores", add: 1 });
+    await prisma.store.create({ data: { organizationId: f.org.id, name: "Extra store", code: "EXT" } });
+    await expect(assertCapacity({ organizationId: f.org.id, kind: "stores", add: 1 })).rejects.toThrow();
+    expect((await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: result.invoice.id } })).purchaseSnapshot).toMatchObject({ extras: { stores: 1, productPacks: 1, userPacks: 0 } });
+  });
+
+  it("v2: prorates successive annual upgrades and preserves the original end date and every prior invoice", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const start = new Date("2027-01-01T00:00:00.000Z");
+    vi.setSystemTime(start);
+    await modernContract();
+    const first = await purchase("STARTER", 12);
+    await notify(first.invoice.id);
+    const end = new Date("2028-01-01T00:00:00.000Z");
+    vi.setSystemTime(new Date(start.getTime() + (end.getTime() - start.getTime()) / 2));
+    const second = await purchase("BUSINESS", 12, { stores: 0, productPacks: 0, userPacks: 0 }, "CHANGE");
+    expect(second.quote.creditMinor).toBe(1020000);
+    expect(second.invoice.amountMinor).toBe(765000);
+    await notify(second.invoice.id);
+    expect((await getOrganizationPlan(f.org.id)).plan).toBe("BUSINESS");
+    vi.setSystemTime(new Date(start.getTime() + (end.getTime() - start.getTime()) * 3 / 4));
+    const third = await purchase("ENTERPRISE", 12, { stores: 0, productPacks: 0, userPacks: 0 }, "CHANGE");
+    expect(third.quote.creditMinor).toBe(892500);
+    expect(third.invoice.amountMinor).toBe(510000);
+    await notify(third.invoice.id);
+    expect((await getOrganizationPlan(f.org.id)).plan).toBe("ENTERPRISE");
+    expect((await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).currentPeriodEndsAt).toEqual(end);
+    expect((await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: first.invoice.id } })).amountMinor).toBe(2040000);
+    expect(await prisma.subscriptionPeriod.count()).toBe(3);
+  });
+
+  it("v2: schedules a downgrade without removing current access, then applies its features at the boundary", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-01-01T00:00:00.000Z"));
+    await modernContract();
+    const first = await purchase("ENTERPRISE", 1);
+    await notify(first.invoice.id);
+    vi.setSystemTime(new Date("2027-01-10T00:00:00.000Z"));
+    await expect(caller.billing.payments.quote({ plan: "STARTER", action: "CHANGE" })).rejects.toThrow("billingDowngradeNextPeriod");
+    const second = await purchase("STARTER", 1);
+    await notify(second.invoice.id);
+    expect((await getOrganizationPlan(f.org.id)).plan).toBe("ENTERPRISE");
+    vi.setSystemTime(new Date("2027-02-01T00:00:01.000Z"));
+    expect((await getOrganizationPlan(f.org.id)).plan).toBe("STARTER");
+    const features = await caller.billing.features();
+    expect(features?.featureFlags.analytics).toBe(false);
+    expect(await prisma.user.count({ where: { organizationId: f.org.id } })).toBe(4);
+    expect(await prisma.product.count({ where: { organizationId: f.org.id } })).toBe(1);
+  });
+
+  it("v2: rejects altered amounts and stale/foreign quotes before contacting the provider", async () => {
+    await modernContract();
+    const quote = await caller.billing.payments.quote({ plan: "STARTER", months: 12 });
+    const request = { plan: "STARTER" as const, months: 12 as const, quoteToken: quote.quoteToken,
+      expectedAmountMinor: 1, termsVersion: "qa-v1", acceptedTerms: true as const, locale: "ru" as const,
+      idempotencyKey: randomUUID() };
+    await expect(caller.billing.payments.checkout(request)).rejects.toThrow("billingPriceChanged");
+    const bad = quote.quoteToken.split(".");
+    bad[0] = Buffer.from(JSON.stringify({ ...quote, amountMinor: 1 })).toString("base64url");
+    await expect(caller.billing.payments.checkout({ ...request, quoteToken: bad.join(".") })).rejects.toThrow("billingQuoteChanged");
+    expect(transport).not.toHaveBeenCalled();
+    expect(await prisma.subscriptionInvoice.count()).toBe(0);
+  });
+
+  it("v2: retries preserve the full selection and cannot reuse a payment key for different add-ons", async () => {
+    await modernContract();
+    const result = await purchase("BUSINESS", 12, { stores: 1, productPacks: 0, userPacks: 0 });
+    expect((await caller.billing.payments.checkout(result.request)).id).toBe(result.invoice.id);
+    await expect(caller.billing.payments.checkout({ ...result.request, extras: { stores: 2, productPacks: 0, userPacks: 0 } })).rejects.toThrow("idempotencyConflict");
+    expect(transport).toHaveBeenCalledTimes(1);
+    await expect(prisma.subscriptionInvoice.update({ where: { id: result.invoice.id }, data: { purchaseSnapshot: { amountMinor: 1 } } })).rejects.toThrow();
+  });
+
+  it("preserves all five lifetime grants by identity, after renaming, without charging or altering their plans", async () => {
+    for (const id of LIFETIME_ORGANIZATION_IDS) {
+      const organization = await prisma.organization.create({ data: {
+        id, name: `Renamed ${id}`, plan: "ENTERPRISE", subscriptionStatus: "ACTIVE",
+        subscriptionBillingMode: "MANUAL", trialEndsAt: new Date(0), currentPeriodEndsAt: new Date(0),
+        subscriptionContract: { create: { catalogVersion: "2026-10", lifetimeAccess: true } },
+      } });
+      const user = await prisma.user.create({ data: { organizationId: id, name: "Lifetime admin", email: `${id}@example.invalid`, passwordHash: "hash", role: "ADMIN", isOrgOwner: true, emailVerifiedAt: new Date() } });
+      const customer = createTestCaller({ ...user, organizationId: id });
+      expect((await getOrganizationPlan(id)).lifetimeAccess).toBe(true);
+      await assertTrialActive(id);
+      const state = await customer.billing.payments.get();
+      expect(state.canPurchase).toBe(false);
+      expect((await customer.billing.get())?.monthlyPriceKgs).toBe(0);
+      await expect(customer.billing.payments.quote({ plan: "STARTER", months: 12 })).rejects.toThrow("billingLifetimeProtected");
+      await expect(prisma.organization.update({ where: { id }, data: { subscriptionBillingMode: "SELF_SERVE" } })).rejects.toThrow();
+      await expect(prisma.subscriptionContract.update({ where: { organizationId: id }, data: { lifetimeAccess: false } })).rejects.toThrow();
+      expect(await prisma.organization.findUniqueOrThrow({ where: { id } })).toEqual(organization);
+    }
+    const namesake = await prisma.organization.create({ data: { name: "Avant", subscriptionContract: { create: { catalogVersion: "2026-11" } } } });
+    expect((await getOrganizationPlan(namesake.id)).lifetimeAccess).toBe(false);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it("legacy terms retain their old prices and capacities while new registrations use the new catalog", async () => {
+    await prisma.subscriptionContract.create({ data: { organizationId: f.org.id, catalogVersion: "2026-10" } });
+    await prisma.organization.update({ where: { id: f.org.id }, data: { plan: "ENTERPRISE" } });
+    const state = await caller.billing.get();
+    expect(state?.monthlyPriceKgs).toBe(8750);
+    expect(state?.limits.maxUsers).toBe(20);
+    expect(state?.billingCatalogVersion).toBe("2026-10");
+    const modern = await prisma.organization.create({ data: { name: "New customer", plan: "ENTERPRISE", subscriptionContract: { create: { catalogVersion: "2026-11" } } } });
+    const summary = await getBillingSummary({ organizationId: modern.id });
+    expect(summary?.monthlyPriceKgs).toBe(5500);
+    expect(summary?.limits.maxUsers).toBe(15);
+  });
+
+  it("rejects a rollback-era one-month grant for a six-month invoice without corrupting payment recovery", async () => {
+    await modernContract();
+    const result = await purchase("STARTER", 6);
+    const now = new Date();
+    await expect(prisma.subscriptionPeriod.create({ data: {
+      invoiceId: result.invoice.id, organizationId: f.org.id, plan: "STARTER",
+      startsAt: now, endsAt: new Date(now.getTime() + 30 * 86400000),
+    } })).rejects.toThrow();
+    expect(await prisma.subscriptionPeriod.count()).toBe(0);
+    await notify(result.invoice.id);
+    expect(await prisma.subscriptionPeriod.count()).toBe(1);
+    expect((await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: result.invoice.id } })).status).toBe("PAID");
+  });
+
 });

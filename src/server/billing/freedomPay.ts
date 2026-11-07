@@ -4,6 +4,7 @@ import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { AppError } from "@/server/services/errors";
 import { getSubscriptionPaymentConfig } from "./paymentConfig";
 import { minorToKgs } from "./paymentMath";
+import { readPurchaseSnapshot } from "./purchaseSnapshot";
 
 export type SignedValue = string | SignedValue[] | { [key: string]: SignedValue };
 export type SignedFields = Record<string, SignedValue>;
@@ -200,8 +201,26 @@ export const initializeFreedomPay = async (input: {
   plan: string;
   isTest: boolean;
   locale: string;
+  purchaseSnapshot?: unknown;
 }) => {
   const config = getPaymentCredentials(input.merchantId);
+  const purchase = readPurchaseSnapshot(input.purchaseSnapshot);
+  const months = purchase?.months ?? 1;
+  const descriptions = {
+    en:
+      purchase?.kind === "UPGRADE"
+        ? `upgrade, current ${months}-month term`
+        : `access for ${months} month${months === 1 ? "" : "s"}`,
+    ru:
+      purchase?.kind === "UPGRADE"
+        ? `повышение тарифа, текущий период ${months} мес.`
+        : `доступ на ${months} мес.`,
+    kg:
+      purchase?.kind === "UPGRADE"
+        ? `тарифти жогорулатуу, учурдагы ${months} айлык мөөнөт`
+        : `${months} айга жеткилик`,
+  };
+  const description = `Bazaar ${input.plan}: ${descriptions[input.locale === "en" || input.locale === "kg" ? input.locale : "ru"]}`;
   const returnUrl = `${config.publicOrigin}/billing?invoice=${encodeURIComponent(input.id)}`;
   const fields = await call(
     "init_payment.php",
@@ -210,7 +229,7 @@ export const initializeFreedomPay = async (input: {
       pg_order_id: input.id,
       pg_amount: minorToKgs(input.amountMinor),
       pg_currency: "KGS",
-      pg_description: `Bazaar ${input.plan}: 1 month`,
+      pg_description: description,
       pg_testing_mode: input.isTest ? "1" : "0",
       pg_lifetime: "900",
       pg_postpone_payment: "0",

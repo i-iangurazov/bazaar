@@ -15,7 +15,7 @@ import { getOperationsReport, operationViews } from "@/server/services/reporting
 import { businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
 import { managerProcedure, router, type Context } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
-import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertReadableFeature } from "@/server/billing/coreAccess";
 import {
   getShrinkageReport,
   getSlowMoversReport,
@@ -102,7 +102,7 @@ const resolveRange = (input: { days?: number; dateFrom?: string; dateTo?: string
 
 const reportsProcedure = managerProcedure.use(async ({ ctx, next }) => {
   try {
-    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+    await assertReadableFeature(ctx.user.organizationId, "analytics");
   } catch (error) {
     throw toTRPCError(error);
   }
@@ -127,13 +127,15 @@ const resolveReportStoreScope = async (
 };
 
 export const reportsRouter = router({
-  fillMissingSalesCosts: reportsProcedure.input(salesReportSchema).mutation(async ({ ctx, input }) => {
-    try {
-      return await fillMissingSalesCosts(ctx.user, input, ctx.requestId);
-    } catch (error) {
-      throw toTRPCError(error);
-    }
-  }),
+  fillMissingSalesCosts: reportsProcedure
+    .input(salesReportSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await fillMissingSalesCosts(ctx.user, input, ctx.requestId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   filterOptions: reportsProcedure
     .input(z.object({ storeId: z.string().min(1).optional() }).strict())
     .query(async ({ ctx, input }) => {

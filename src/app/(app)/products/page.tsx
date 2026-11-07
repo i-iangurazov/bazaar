@@ -354,6 +354,23 @@ const ProductsPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const canSelectProducts = canManageProducts;
   const canManagePrices = canManageProducts;
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
+  const features = billing.data?.featureFlags;
+  const canBulkProducts =
+    canManageProducts && Boolean(billing.data?.access.hasAccess && features?.bulkProducts);
+  const canBulkAi =
+    canManageProducts && Boolean(billing.data?.access.hasAccess && features?.bulkAiContent);
+  const canBulkPrices = canManagePrices && Boolean(billing.data?.access.hasAccess && features?.priceBooks);
+  const canAssortments =
+    canManageProducts && Boolean(billing.data?.access.hasAccess && features?.assortments);
+  const canUseBundles = canManageProducts && Boolean(billing.data?.access.hasAccess && features?.bundles);
+  const canExpandedExports = Boolean(features?.exports);
+  const canRawExport =
+    canExpandedExports ||
+    Boolean(features?.rawDataExport && (isAdmin || session?.user?.isOrgOwner));
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
@@ -470,7 +487,10 @@ const ProductsPage = () => {
     defaultValue: defaultProductsTableState,
     parse: parseProductsTableState,
   });
-  const defaultProductsSavedViewsState = useMemo(() => ({ views: [], defaultViewId: null, activeViewId: null }), []);
+  const defaultProductsSavedViewsState = useMemo(
+    () => ({ views: [], defaultViewId: null, activeViewId: null }),
+    [],
+  );
   const productsSavedViewsStorageKey = useMemo(
     () =>
       buildScopedStorageKey({
@@ -677,9 +697,13 @@ const ProductsPage = () => {
     trpc: { abortOnUnmount: true },
   });
   const storeId = resolvedStoreId ?? (rawStoreId === "all" ? "" : rawStoreId);
-  const listMatchesStore = productsContextQuery.isSuccess && productsBootstrapQuery.data?.selectedStoreId === (storeId || null);
+  const listMatchesStore =
+    productsContextQuery.isSuccess &&
+    productsBootstrapQuery.data?.selectedStoreId === (storeId || null);
   const productsError = productsContextQuery.error ?? productsBootstrapQuery.error;
-  const productsLoading = !productsError && (productsContextQuery.isLoading || productsBootstrapQuery.isLoading || !listMatchesStore);
+  const productsLoading =
+    !productsError &&
+    (productsContextQuery.isLoading || productsBootstrapQuery.isLoading || !listMatchesStore);
   const stores = useMemo(
     () => productsContextQuery.data?.stores ?? [],
     [productsContextQuery.data?.stores],
@@ -715,7 +739,11 @@ const ProductsPage = () => {
   );
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
-  const wholesalePricesEnabled = Boolean(storeId && storeId === productsBootstrapQuery.data?.selectedStoreId && productsBootstrapQuery.data?.list.priceTypesEnabled);
+  const wholesalePricesEnabled = Boolean(
+    storeId &&
+    storeId === productsBootstrapQuery.data?.selectedStoreId &&
+    productsBootstrapQuery.data?.list.priceTypesEnabled,
+  );
   const productSearchPlaceholder = useMemo(() => {
     if (enableSku && enableBarcode) {
       return t("searchPlaceholderFull");
@@ -744,10 +772,12 @@ const ProductsPage = () => {
   );
   const productExportColumns = useMemo(
     () =>
-      productExportColumnKeys.filter((key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key)).map((key) => ({
-        key,
-        label: t(`exportColumns.${key}`),
-      })),
+      productExportColumnKeys
+        .filter((key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key))
+        .map((key) => ({
+          key,
+          label: t(`exportColumns.${key}`),
+        })),
     [t, canManageProducts],
   );
   const selectedExportColumnSet = useMemo(
@@ -793,7 +823,7 @@ const ProductsPage = () => {
   );
   const printProfileSettings = printProfileQuery.data?.settings;
   const products = useMemo(
-    () => listMatchesStore ? productsBootstrapQuery.data?.list.items ?? [] : [],
+    () => (listMatchesStore ? (productsBootstrapQuery.data?.list.items ?? []) : []),
     [listMatchesStore, productsBootstrapQuery.data?.list.items],
   );
   useEffect(() => {
@@ -826,7 +856,7 @@ const ProductsPage = () => {
     productsReturnStateStorageKey,
     productsTableStateReady,
   ]);
-  const productsTotal = listMatchesStore ? productsBootstrapQuery.data?.list.total ?? 0 : 0;
+  const productsTotal = listMatchesStore ? (productsBootstrapQuery.data?.list.total ?? 0) : 0;
   const hasProductFilters = Boolean(
     search || category || readiness !== "all" || productType !== "all" || showArchived,
   );
@@ -900,28 +930,58 @@ const ProductsPage = () => {
     [productsBootstrapInput, showArchived, productsBootstrapUtils],
   );
   const storeVisibilityMutation = trpc.products.setStoreVisibility.useMutation();
-  const { mutateAsync: setStoreVisibility, isLoading: changingStoreVisibility } = storeVisibilityMutation;
-  const changeStoreVisibility = useCallback(async (productIds: string[], hidden: boolean) => {
-    if (!storeId || !productIds.length || changingStoreVisibility) return;
-    if (!(await confirm({ description: t(hidden ? "confirmHideInStore" : "confirmShowInStore", {
-      store: selectedStore?.name ?? storeId, count: productIds.length,
-    }) }))) return;
-    try {
-      for (let index = 0; index < productIds.length; index += 500) {
+  const { mutateAsync: setStoreVisibility, isLoading: changingStoreVisibility } =
+    storeVisibilityMutation;
+  const changeStoreVisibility = useCallback(
+    async (productIds: string[], hidden: boolean) => {
+      if (!storeId || !productIds.length || changingStoreVisibility) return;
+      if (
+        !(await confirm({
+          description: t(hidden ? "confirmHideInStore" : "confirmShowInStore", {
+            store: selectedStore?.name ?? storeId,
+            count: productIds.length,
+          }),
+        }))
+      )
+        return;
+      try {
+        for (let index = 0; index < productIds.length; index += 500) {
         const batch = productIds.slice(index, index + 500);
         await setStoreVisibility({ storeId, productIds: batch, hidden });
         setSelectedIds((current) => new Set([...current].filter((id) => !batch.includes(id))));
       }
-      toast({ variant: "success", description: t(hidden ? "hiddenInStoreSuccess" : "shownInStoreSuccess") });
-    } catch (error) {
-      toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+        toast({
+          variant: "success",
+          description: t(hidden ? "hiddenInStoreSuccess" : "shownInStoreSuccess"),
+        });
+      } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+      });
     } finally {
-      await Promise.all([
-        productsBootstrapUtils.invalidate(), productsListUtils.invalidate(),
-        trpcUtils.products.byIds.invalidate(), trpcUtils.inventory.searchProducts.invalidate(),
-      ]);
-    }
-  }, [confirm, selectedStore?.name, storeId, setStoreVisibility, changingStoreVisibility, t, tErrors, toast, trpcUtils, productsBootstrapUtils, productsListUtils]);
+        await Promise.all([
+          productsBootstrapUtils.invalidate(),
+          productsListUtils.invalidate(),
+          trpcUtils.products.byIds.invalidate(),
+          trpcUtils.inventory.searchProducts.invalidate(),
+        ]);
+      }
+    },
+    [
+      confirm,
+      selectedStore?.name,
+      storeId,
+      setStoreVisibility,
+      changingStoreVisibility,
+      t,
+      tErrors,
+      toast,
+      trpcUtils,
+      productsBootstrapUtils,
+      productsListUtils,
+    ],
+  );
   const archiveMutation = trpc.products.archive.useMutation({
     onMutate: async ({ productId }) => {
       await productsBootstrapUtils.cancel(productsBootstrapInput);
@@ -1140,10 +1200,7 @@ const ProductsPage = () => {
     trpc.products.retryDescriptionGenerationJobFailed.useMutation({
       onSuccess: async (job) => {
         setDescriptionGenerationJobId(job.id);
-        await Promise.all([
-          productsBootstrapUtils.invalidate(),
-          productsListUtils.invalidate(),
-        ]);
+        await Promise.all([productsBootstrapUtils.invalidate(), productsListUtils.invalidate()]);
       },
       onError: (error) => {
         toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1156,10 +1213,7 @@ const ProductsPage = () => {
       refetchInterval: (job) => (isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false),
       onSuccess: async (job) => {
         if (!isDescriptionGenerationJobRunning(job.status)) {
-          await Promise.all([
-            productsBootstrapUtils.invalidate(),
-            productsListUtils.invalidate(),
-          ]);
+          await Promise.all([productsBootstrapUtils.invalidate(), productsListUtils.invalidate()]);
           if (job.status === ProductDescriptionGenerationJobStatus.DONE && job.failedCount === 0) {
             setSelectedIds(new Set());
           }
@@ -1433,11 +1487,17 @@ const ProductsPage = () => {
   );
 
   useSse({
-    "products.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
+    "products.updated": () => {
+      void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions);
+    },
     // A live event must not cancel the refresh awaited by an inline save.
     // Otherwise that save can finish with the previous stock revision cached.
-    "assortment.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
-    "pricing.updated": () => { void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions); },
+    "assortment.updated": () => {
+      void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions);
+    },
+    "pricing.updated": () => {
+      void trpcUtils.products.invalidate(undefined, undefined, liveQueryRefreshOptions);
+    },
     "inventory.updated": () => {
       void productsBootstrapUtils.invalidate(undefined, undefined, liveQueryRefreshOptions);
     },
@@ -1942,13 +2002,24 @@ const ProductsPage = () => {
     [],
   );
   type ProductRow = NonNullable<typeof products>[number];
-  const wholesalePriceCell = useCallback((product: ProductRow) => (
+  const wholesalePriceCell = useCallback(
+    (product: ProductRow) => (
     <InlineEditableCell rowId={product.id} row={product} value={product.wholesalePriceKgs}
       definition={inlineEditRegistry.products.wholesalePrice} context={inlineProductsContext}
       role={role} locale={locale} columnLabel={t("wholesalePrice")} tTable={t} tCommon={tCommon}
       enabled={inlineEditingEnabled && !product.hiddenInStore} executeMutation={executeInlineProductMutation}
       className="justify-end font-semibold text-foreground" />
-  ), [inlineProductsContext, role, locale, t, tCommon, inlineEditingEnabled, executeInlineProductMutation]);
+  ),
+    [
+      inlineProductsContext,
+      role,
+      locale,
+      t,
+      tCommon,
+      inlineEditingEnabled,
+      executeInlineProductMutation,
+    ],
+  );
   const renderWholesalePrice = (product: ProductRow, className = "flex items-center justify-between gap-2") =>
     visibleProductColumnSet.has("wholesalePrice") ? (
       <div className={className} data-product-wholesale-price>
@@ -2372,11 +2443,26 @@ const ProductsPage = () => {
       }
 
       if (product.hiddenInStore && !product.isDeleted) {
-        return [{
-          key: "show-in-store", label: t("showInStore"), icon: RestoreIcon,
-          disabled: storeVisibilityMutation.isLoading,
-          onSelect: () => changeStoreVisibility([product.id], false),
-        }, ...(role === "ADMIN" ? [{ key: "delete-permanent", label: t("deletePermanent"), icon: DeleteIcon, variant: "danger" as const, onSelect: () => setDeleteTarget(product.id) }] : [])];
+        return [
+          {
+            key: "show-in-store",
+            label: t("showInStore"),
+            icon: RestoreIcon,
+            disabled: storeVisibilityMutation.isLoading,
+            onSelect: () => changeStoreVisibility([product.id], false),
+          },
+          ...(role === "ADMIN"
+            ? [
+                {
+                  key: "delete-permanent",
+                  label: t("deletePermanent"),
+                  icon: DeleteIcon,
+                  variant: "danger" as const,
+                  onSelect: () => setDeleteTarget(product.id),
+                },
+              ]
+            : []),
+        ];
       }
       const managementActions = product.isDeleted
         ? [
@@ -2440,11 +2526,17 @@ const ProductsPage = () => {
                 setDuplicateTarget({ id: product.id, name: product.name });
               },
             },
-            ...(storeId ? [{
-              key: "hide-in-store", label: t("hideInStore"), icon: ArchiveIcon,
-              disabled: storeVisibilityMutation.isLoading,
-              onSelect: () => changeStoreVisibility([product.id], true),
-            }] : []),
+            ...(storeId
+              ? [
+                  {
+                    key: "hide-in-store",
+                    label: t("hideInStore"),
+                    icon: ArchiveIcon,
+                    disabled: storeVisibilityMutation.isLoading,
+                    onSelect: () => changeStoreVisibility([product.id], true),
+                  },
+                ]
+              : []),
             {
               key: "archive",
               label: t("archiveEverywhere"),
@@ -2461,7 +2553,18 @@ const ProductsPage = () => {
             },
           ];
 
-      return role === "ADMIN" ? [...managementActions, { key: "delete-permanent", label: t("deletePermanent"), icon: DeleteIcon, variant: "danger" as const, onSelect: () => setDeleteTarget(product.id) }] : managementActions;
+      return role === "ADMIN"
+        ? [
+            ...managementActions,
+            {
+              key: "delete-permanent",
+              label: t("deletePermanent"),
+              icon: DeleteIcon,
+              variant: "danger" as const,
+              onSelect: () => setDeleteTarget(product.id),
+            },
+          ]
+        : managementActions;
     },
     [
       archiveProduct,
@@ -2474,7 +2577,8 @@ const ProductsPage = () => {
       enableBarcode,
       openPrintForProducts,
       persistProductsReturnState,
-      duplicateProduct, duplicatingProduct,
+      duplicateProduct,
+      duplicatingProduct,
       restoreProduct,
       storeId,
       t,
@@ -2607,7 +2711,9 @@ const ProductsPage = () => {
                     className="font-semibold text-foreground"
                   />
                   {product.isBundle ? <Badge variant="muted">{t("typeBundle")}</Badge> : null}
-                  {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
+                  {product.hiddenInStore ? (
+                    <Badge variant="muted">{t("hiddenInStore")}</Badge>
+                  ) : null}
                   {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
                 </div>
               </div>
@@ -2755,8 +2861,14 @@ const ProductsPage = () => {
         id: "wholesalePrice",
         header: t("wholesalePrice"),
         enableSorting: false,
-        cell: ({ row }) => <div data-product-wholesale-price>{wholesalePriceCell(row.original)}</div>,
-        meta: { className: "min-w-[9rem]", headerClassName: "text-right", cellClassName: "text-right" },
+        cell: ({ row }) => (
+          <div data-product-wholesale-price>{wholesalePriceCell(row.original)}</div>
+        ),
+        meta: {
+          className: "min-w-[9rem]",
+          headerClassName: "text-right",
+          cellClassName: "text-right",
+        },
       });
     }
 
@@ -3012,15 +3124,34 @@ const ProductsPage = () => {
     }
     // Native form download keeps large exports out of application/browser memory.
     const form = document.createElement("form");
-    form.method = "POST"; form.action = "/api/products/export";
+    form.method = "POST";
+    form.action = "/api/products/export";
     form.target = "_blank";
-    const payload = { search: search || undefined, category: category || undefined, type: productType === "all" ? undefined : productType, readiness: readiness === "all" ? undefined : readiness, includeArchived: showArchived, storeId: storeId || undefined,
-      columns: selectedColumns.filter((key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key)),
-      ids: selectedIds.size && !allResultsSelected ? Array.from(selectedIds) : undefined };
-    for (const [name, value] of Object.entries({ payload: JSON.stringify(payload), format: exportFormat })) {
-      const input = document.createElement("input"); input.type = "hidden"; input.name = name; input.value = value; form.appendChild(input);
+    const payload = {
+      search: search || undefined,
+      category: category || undefined,
+      type: productType === "all" ? undefined : productType,
+      readiness: readiness === "all" ? undefined : readiness,
+      includeArchived: showArchived,
+      storeId: storeId || undefined,
+      columns: selectedColumns.filter(
+        (key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key),
+      ),
+      ids: selectedIds.size && !allResultsSelected ? Array.from(selectedIds) : undefined,
+    };
+    for (const [name, value] of Object.entries({
+      payload: JSON.stringify(payload),
+      format: exportFormat,
+    })) {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
     }
-    document.body.appendChild(form); form.submit(); form.remove();
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
     setExportDialogOpen(false);
   };
 
@@ -3406,12 +3537,14 @@ const ProductsPage = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[240px]">
-                    <DropdownMenuItem asChild>
-                      <Link href={newBundleHref} onClick={persistProductsReturnState}>
-                        <AddIcon className="h-4 w-4" aria-hidden />
-                        {t("newBundle")}
-                      </Link>
-                    </DropdownMenuItem>
+                    {canUseBundles ? (
+                      <DropdownMenuItem asChild>
+                        <Link href={newBundleHref} onClick={persistProductsReturnState}>
+                          <AddIcon className="h-4 w-4" aria-hidden />
+                          {t("newBundle")}
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
                     {isAdmin ? (
                       <DropdownMenuItem asChild>
                         <Link href={importProductsHref}>
@@ -3420,16 +3553,29 @@ const ProductsPage = () => {
                         </Link>
                       </DropdownMenuItem>
                     ) : null}
-                    {isAdmin && storeId ? <DropdownMenuItem asChild>
-                      <Link href={`/settings/store-groups?storeId=${encodeURIComponent(storeId)}`}>
-                        {t("configureStoreAssortment")}
-                      </Link>
-                    </DropdownMenuItem> : null}
-                    {isAdmin ? <DropdownMenuItem asChild><Link href="/products/review"><ViewIcon className="h-4 w-4" aria-hidden />{t("reviewDuplicates")}</Link></DropdownMenuItem> : null}
-                    <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
-                      <CopyIcon className="h-4 w-4" aria-hidden />
-                      {t("addExistingProducts")}
-                    </DropdownMenuItem>
+                    {isAdmin && storeId && canAssortments ? (
+                      <DropdownMenuItem asChild>
+                        <Link
+                          href={`/settings/store-groups?storeId=${encodeURIComponent(storeId)}`}
+                        >
+                          {t("configureStoreAssortment")}
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
+                    {isAdmin && canBulkProducts ? (
+                      <DropdownMenuItem asChild>
+                        <Link href="/products/review">
+                          <ViewIcon className="h-4 w-4" aria-hidden />
+                          {t("reviewDuplicates")}
+                        </Link>
+                      </DropdownMenuItem>
+                    ) : null}
+                    {canAssortments ? (
+                      <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
+                        <CopyIcon className="h-4 w-4" aria-hidden />
+                        {t("addExistingProducts")}
+                      </DropdownMenuItem>
+                    ) : null}
                     {enableBarcode ? (
                       <DropdownMenuItem onSelect={openPrintSettings}>
                         <PrintIcon className="h-4 w-4" aria-hidden />
@@ -3437,7 +3583,7 @@ const ProductsPage = () => {
                       </DropdownMenuItem>
                     ) : null}
                     <DropdownMenuSeparator />
-                    {canManagePrices ? (
+                    {canBulkPrices ? (
                       <DropdownMenuItem
                         disabled={!stores.length}
                         onSelect={() => setBulkOpen(true)}
@@ -3446,63 +3592,71 @@ const ProductsPage = () => {
                         {t("bulkPriceUpdate")}
                       </DropdownMenuItem>
                     ) : null}
-                    <DropdownMenuItem
+                    {canBulkProducts ? (
+                      <DropdownMenuItem
                       disabled={
                         aiFeaturesVisuallyDisabled || !products.length || arrangeCategoriesRunning
                       }
                       onSelect={() => void handleArrangeCategoriesWithAi()}
                     >
-                      {arrangeCategoriesRunning ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <SparklesIcon className="h-4 w-4" aria-hidden />
-                      )}
-                      {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
-                      {aiFeaturesVisuallyDisabled ? <Badge variant="muted" className="ml-auto">
-                        {t("aiUnavailableBadge")}
-                      </Badge> : null}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={
-                        aiDescriptionGenerationDisabled ||
-                        bulkDescriptionRunning ||
-                        selectingAllResults ||
-                        productsTotal <= 0
-                      }
-                      onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
-                    >
-                      {selectingAllResults || bulkDescriptionRunning ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <SparklesIcon className="h-4 w-4" aria-hidden />
-                      )}
-                      {t("bulkGenerateDescriptions")} ({productsTotal})
-                      {aiDescriptionGenerationDisabled ? (
-                        <Badge variant="muted" className="ml-auto">
-                          {t("aiUnavailableBadge")}
-                        </Badge>
-                      ) : null}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={
-                        aiDescriptionGenerationDisabled ||
-                        bulkDescriptionRunning ||
-                        selectingAllResults ||
-                        productsTotal <= 0
-                      }
-                      onSelect={() =>
-                        void handleBulkGenerateDescriptionsForCurrentFilter({
-                          overwriteExisting: false,
-                        })
-                      }
-                    >
-                      {selectingAllResults || bulkDescriptionRunning ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <SparklesIcon className="h-4 w-4" aria-hidden />
-                      )}
-                      {t("bulkGenerateMissingDescriptions")} ({productsTotal})
-                    </DropdownMenuItem>
+                        {arrangeCategoriesRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                        {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
+                        {aiFeaturesVisuallyDisabled ? (
+                          <Badge variant="muted" className="ml-auto">
+                            {t("aiUnavailableBadge")}
+                          </Badge>
+                        ) : null}
+                      </DropdownMenuItem>
+                    ) : null}
+                    {canBulkAi ? (
+                      <DropdownMenuItem
+                            disabled={
+                              aiDescriptionGenerationDisabled ||
+                              bulkDescriptionRunning ||
+                              selectingAllResults ||
+                              productsTotal <= 0
+                            }
+                            onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
+                          >
+                        {selectingAllResults || bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                        {t("bulkGenerateDescriptions")} ({productsTotal})
+                        {aiDescriptionGenerationDisabled ? (
+                          <Badge variant="muted" className="ml-auto">
+                            {t("aiUnavailableBadge")}
+                          </Badge>
+                        ) : null}
+                      </DropdownMenuItem>
+                    ) : null}
+                    {canBulkAi ? (
+                      <DropdownMenuItem
+                            disabled={
+                              aiDescriptionGenerationDisabled ||
+                              bulkDescriptionRunning ||
+                              selectingAllResults ||
+                              productsTotal <= 0
+                            }
+                            onSelect={() =>
+                              void handleBulkGenerateDescriptionsForCurrentFilter({
+                                overwriteExisting: false,
+                              })
+                            }
+                          >
+                        {selectingAllResults || bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                        {t("bulkGenerateMissingDescriptions")} ({productsTotal})
+                      </DropdownMenuItem>
+                    ) : null}
                     {enableBarcode && selectedList.length ? (
                       <>
                         <DropdownMenuItem
@@ -3523,23 +3677,28 @@ const ProductsPage = () => {
                       </>
                     ) : null}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        openExportDialog("csv");
-                      }}
-                    >
-                      <DownloadIcon className="h-4 w-4" aria-hidden />
-                      {t("exportCsv")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        openExportDialog("xlsx");
-                      }}
-                    >
-                      <DownloadIcon className="h-4 w-4" aria-hidden />
-                      {t("exportXlsx")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
+                    {canRawExport ? (
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          openExportDialog("csv");
+                        }}
+                      >
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                        {t("exportCsv")}
+                      </DropdownMenuItem>
+                    ) : null}
+                    {canExpandedExports ? (
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          openExportDialog("xlsx");
+                        }}
+                      >
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                        {t("exportXlsx")}
+                      </DropdownMenuItem>
+                    ) : null}
+                    {canBulkProducts ? (
+                      <DropdownMenuItem
                       disabled={Boolean(
                         exportImagesProgress &&
                         exportImagesProgress.status !== "done" &&
@@ -3549,9 +3708,10 @@ const ProductsPage = () => {
                         handleExportImages();
                       }}
                     >
-                      <DownloadIcon className="h-4 w-4" aria-hidden />
-                      {t("exportImagesZip")}
-                    </DropdownMenuItem>
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
+                        {t("exportImagesZip")}
+                      </DropdownMenuItem>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -3561,7 +3721,11 @@ const ProductsPage = () => {
       />
       <ListToolbar
         total={productsTotal}
-        loading={!productsTableStateReady || productsContextQuery.isFetching || productsBootstrapQuery.isFetching}
+        loading={
+          !productsTableStateReady ||
+          productsContextQuery.isFetching ||
+          productsBootstrapQuery.isFetching
+        }
         filters={[
           ...(search
             ? [
@@ -3645,7 +3809,9 @@ const ProductsPage = () => {
                   ) : null}
                   <SelectItem value="missingImage">{t("missingImage")}</SelectItem>
                   <SelectItem value="missingPrice">{t("missingPrice")}</SelectItem>
-                  {canManageProducts ? <SelectItem value="missingCost">{t("missingCost")}</SelectItem> : null}
+                  {canManageProducts ? (
+                    <SelectItem value="missingCost">{t("missingCost")}</SelectItem>
+                  ) : null}
                   <SelectItem value="outOfStock">{t("outOfStock")}</SelectItem>
                   <SelectItem value="lowStock">{t("lowStock")}</SelectItem>
                   <SelectItem value="negativeStock">{t("negativeStock")}</SelectItem>
@@ -3666,7 +3832,18 @@ const ProductsPage = () => {
         }
       >
         <ProductListSearch
-          scopeKey={JSON.stringify([productsTableStorageKey, storeId, category, productType, readiness, showArchived, productsPage, productsPageSize, productSort.key, productSort.direction])}
+          scopeKey={JSON.stringify([
+            productsTableStorageKey,
+            storeId,
+            category,
+            productType,
+            readiness,
+            showArchived,
+            productsPage,
+            productsPageSize,
+            productSort.key,
+            productSort.direction,
+          ])}
           dataTour="products-search"
           id="products-search"
           label={tCommon("search")}
@@ -3872,7 +4049,7 @@ const ProductsPage = () => {
                       {quickPrintLoading ? tCommon("loading") : t("printLabels")}
                     </Button>
                   ) : null}
-                  {canManageProducts ? (
+                  {canBulkProducts ? (
                     <Button
                       type="button"
                       variant="secondary"
@@ -3886,17 +4063,20 @@ const ProductsPage = () => {
                   ) : null}
                   {canManagePrices ? (
                     <>
-                      <Button
+                      {canBulkPrices ? (
+                        <Button
                         type="button"
                         variant="secondary"
                         size="sm"
                         className="w-full sm:w-auto"
                         onClick={() => setBulkStorePriceOpen(true)}
                       >
-                        <PriceIcon className="h-4 w-4" aria-hidden />
-                        {t("bulkSetStorePrice")}
-                      </Button>
-                      <Button
+                          <PriceIcon className="h-4 w-4" aria-hidden />
+                          {t("bulkSetStorePrice")}
+                        </Button>
+                      ) : null}
+                      {canBulkPrices ? (
+                        <Button
                         type="button"
                         variant="secondary"
                         size="sm"
@@ -3904,10 +4084,12 @@ const ProductsPage = () => {
                         disabled={!storeId}
                         onClick={() => setCatalogDiscountMode("APPLY")}
                       >
-                        <PriceIcon className="h-4 w-4" aria-hidden />
-                        {t("applyCatalogDiscount")}
-                      </Button>
-                      <Button
+                          <PriceIcon className="h-4 w-4" aria-hidden />
+                          {t("applyCatalogDiscount")}
+                        </Button>
+                      ) : null}
+                      {canBulkPrices ? (
+                        <Button
                         type="button"
                         variant="secondary"
                         size="sm"
@@ -3915,8 +4097,9 @@ const ProductsPage = () => {
                         disabled={!storeId}
                         onClick={() => setCatalogDiscountMode("REMOVE")}
                       >
-                        {t("removeCatalogDiscount")}
-                      </Button>
+                          {t("removeCatalogDiscount")}
+                        </Button>
+                      ) : null}
                     </>
                   ) : null}
                   <DropdownMenu>
@@ -3943,79 +4126,105 @@ const ProductsPage = () => {
                         requestAnimationFrame(openConfirmation);
                       }}
                     >
-                      <DropdownMenuItem
-                        onSelect={() => openExportDialog("csv")}
-                      >
-                        <DownloadIcon className="h-4 w-4" aria-hidden />
-                        {t("exportCsv")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => openExportDialog("xlsx")}
-                      >
-                        <DownloadIcon className="h-4 w-4" aria-hidden />
-                        {t("exportXlsx")}
-                      </DropdownMenuItem>
+                      {canRawExport ? (
+                        <DropdownMenuItem onSelect={() => openExportDialog("csv")}>
+                          <DownloadIcon className="h-4 w-4" aria-hidden />
+                          {t("exportCsv")}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {canExpandedExports ? (
+                        <DropdownMenuItem onSelect={() => openExportDialog("xlsx")}>
+                          <DownloadIcon className="h-4 w-4" aria-hidden />
+                          {t("exportXlsx")}
+                        </DropdownMenuItem>
+                      ) : null}
                       {canManageProducts ? (
                         <>
-                          {storeId ? <>
-                            <DropdownMenuItem disabled={storeVisibilityMutation.isLoading || hasArchivedSelected && !hasOffPageSelected}
-                              onSelect={() => { pendingBulkConfirmationRef.current = () => void changeStoreVisibility(selectedList, true); }}>
-                              <ArchiveIcon className="h-4 w-4" aria-hidden />{t("hideInStore")}
-                            </DropdownMenuItem>
-                            {showArchived ? <DropdownMenuItem disabled={storeVisibilityMutation.isLoading}
-                              onSelect={() => { pendingBulkConfirmationRef.current = () => void changeStoreVisibility(selectedList, false); }}>
-                              <RestoreIcon className="h-4 w-4" aria-hidden />{t("showInStore")}
-                            </DropdownMenuItem> : null}
-                          </> : null}
+                          {storeId ? (
+                            <>
+                              <DropdownMenuItem
+                                disabled={
+                                  storeVisibilityMutation.isLoading ||
+                                  (hasArchivedSelected && !hasOffPageSelected)
+                                }
+                                onSelect={() => {
+                                  pendingBulkConfirmationRef.current = () =>
+                                    void changeStoreVisibility(selectedList, true);
+                                }}
+                              >
+                                <ArchiveIcon className="h-4 w-4" aria-hidden />
+                                {t("hideInStore")}
+                              </DropdownMenuItem>
+                              {showArchived ? (
+                                <DropdownMenuItem
+                                  disabled={storeVisibilityMutation.isLoading}
+                                  onSelect={() => {
+                                    pendingBulkConfirmationRef.current = () =>
+                                      void changeStoreVisibility(selectedList, false);
+                                  }}
+                                >
+                                  <RestoreIcon className="h-4 w-4" aria-hidden />
+                                  {t("showInStore")}
+                                </DropdownMenuItem>
+                              ) : null}
+                            </>
+                          ) : null}
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem
+                          {canBulkProducts ? (
+                            <DropdownMenuItem
                             disabled={aiFeaturesVisuallyDisabled || arrangeCategoriesRunning}
                             onSelect={() => void handleArrangeCategoriesWithAi()}
                           >
-                            {arrangeCategoriesRunning ? (
+                              {arrangeCategoriesRunning ? (
                               <Spinner className="h-4 w-4" />
                             ) : (
                               <SparklesIcon className="h-4 w-4" aria-hidden />
                             )}
-                            {arrangeCategoriesRunning
-                              ? tCommon("loading")
-                              : t("aiArrangeCategories")}
-                            <Badge variant="muted" className="ml-auto">
-                              {t("aiUnavailableBadge")}
-                            </Badge>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
-                            onSelect={() => void handleBulkGenerateDescriptions()}
-                          >
-                            {bulkDescriptionRunning ? (
-                              <Spinner className="h-4 w-4" />
-                            ) : (
-                              <SparklesIcon className="h-4 w-4" aria-hidden />
-                            )}
-                            {bulkDescriptionRunning
-                              ? tCommon("loading")
-                              : t("bulkGenerateDescriptions")}
-                            {aiDescriptionGenerationDisabled ? (
+                              {arrangeCategoriesRunning
+                                ? tCommon("loading")
+                                : t("aiArrangeCategories")}
                               <Badge variant="muted" className="ml-auto">
                                 {t("aiUnavailableBadge")}
                               </Badge>
-                            ) : null}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
+                            </DropdownMenuItem>
+                          ) : null}
+                          {canBulkAi ? (
+                            <DropdownMenuItem
                             disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
-                            onSelect={() => void handleBulkGenerateMissingDescriptions()}
+                            onSelect={() => void handleBulkGenerateDescriptions()}
                           >
-                            {bulkDescriptionRunning ? (
+                              {bulkDescriptionRunning ? (
                               <Spinner className="h-4 w-4" />
                             ) : (
                               <SparklesIcon className="h-4 w-4" aria-hidden />
                             )}
-                            {bulkDescriptionRunning
-                              ? tCommon("loading")
-                              : t("bulkGenerateMissingDescriptions")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
+                              {bulkDescriptionRunning
+                                ? tCommon("loading")
+                                : t("bulkGenerateDescriptions")}
+                              {aiDescriptionGenerationDisabled ? (
+                                <Badge variant="muted" className="ml-auto">
+                                  {t("aiUnavailableBadge")}
+                                </Badge>
+                              ) : null}
+                            </DropdownMenuItem>
+                          ) : null}
+                          {canBulkAi ? (
+                            <DropdownMenuItem
+                            disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
+                            onSelect={() => void handleBulkGenerateMissingDescriptions()}
+                          >
+                              {bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                              {bulkDescriptionRunning
+                                ? tCommon("loading")
+                                : t("bulkGenerateMissingDescriptions")}
+                            </DropdownMenuItem>
+                          ) : null}
+                          {canBulkAi ? (
+                            <DropdownMenuItem
                             disabled={
                               aiDescriptionGenerationDisabled ||
                               bulkDescriptionRunning ||
@@ -4024,14 +4233,16 @@ const ProductsPage = () => {
                             }
                             onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
                           >
-                            {selectingAllResults || bulkDescriptionRunning ? (
+                              {selectingAllResults || bulkDescriptionRunning ? (
                               <Spinner className="h-4 w-4" />
                             ) : (
                               <SparklesIcon className="h-4 w-4" aria-hidden />
                             )}
-                            {t("bulkGenerateDescriptions")} ({productsTotal})
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
+                              {t("bulkGenerateDescriptions")} ({productsTotal})
+                            </DropdownMenuItem>
+                          ) : null}
+                          {canBulkAi ? (
+                            <DropdownMenuItem
                             disabled={
                               aiDescriptionGenerationDisabled ||
                               bulkDescriptionRunning ||
@@ -4044,14 +4255,15 @@ const ProductsPage = () => {
                               })
                             }
                           >
-                            {selectingAllResults || bulkDescriptionRunning ? (
+                              {selectingAllResults || bulkDescriptionRunning ? (
                               <Spinner className="h-4 w-4" />
                             ) : (
                               <SparklesIcon className="h-4 w-4" aria-hidden />
                             )}
-                            {t("bulkGenerateMissingDescriptions")} ({productsTotal})
-                          </DropdownMenuItem>
-                          {enableBarcode ? (
+                              {t("bulkGenerateMissingDescriptions")} ({productsTotal})
+                            </DropdownMenuItem>
+                          ) : null}
+                          {enableBarcode && canBulkProducts ? (
                             <DropdownMenuItem
                               disabled={
                                 bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
@@ -4156,13 +4368,13 @@ const ProductsPage = () => {
                         >
                           <div className="relative aspect-[4/3] bg-muted/45">
                             {previewImageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={previewImageUrl}
-                                alt={product.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={previewImageUrl}
+                              alt={product.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
                               <div className="flex h-full w-full items-center justify-center border-b border-dashed border-border/70 bg-muted/60">
                                 <EmptyIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
                               </div>
@@ -4170,12 +4382,12 @@ const ProductsPage = () => {
                             {canSelectProducts ? (
                               <label className="absolute right-2 top-2">
                                 <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                  checked={selectedIds.has(product.id)}
-                                  onChange={() => toggleSelect(product.id)}
-                                  aria-label={t("selectProduct", { name: product.name })}
-                                />
+                                type="checkbox"
+                                className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                checked={selectedIds.has(product.id)}
+                                onChange={() => toggleSelect(product.id)}
+                                aria-label={t("selectProduct", { name: product.name })}
+                              />
                               </label>
                             ) : null}
                           </div>
@@ -4200,7 +4412,9 @@ const ProductsPage = () => {
                               <Badge variant="muted">
                                 {product.isBundle ? t("typeBundle") : t("typeProduct")}
                               </Badge>
-                              {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
+                              {product.hiddenInStore ? (
+                                <Badge variant="muted">{t("hiddenInStore")}</Badge>
+                              ) : null}
                               {product.isDeleted ? (
                                 <Badge variant="muted">{t("archived")}</Badge>
                               ) : null}
@@ -4320,11 +4534,11 @@ const ProductsPage = () => {
                           </p>
                         </div>
                         <RowActions
-                          actions={mobileActions}
-                          maxInline={1}
-                          moreLabel={tCommon("tooltips.moreActions")}
-                          className="shrink-0"
-                        />
+                        actions={mobileActions}
+                        maxInline={1}
+                        moreLabel={tCommon("tooltips.moreActions")}
+                        className="shrink-0"
+                      />
                       </div>
                       <div className="mt-3 flex items-start gap-3">
                         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border/70 bg-muted/45">
@@ -4354,16 +4568,16 @@ const ProductsPage = () => {
                         </div>
                         <div className="min-w-0 flex-1 space-y-2">
                           {enableSku ? (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {product.sku}
-                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{product.sku}</p>
                           ) : null}
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="muted">
                               {product.isBundle ? t("typeBundle") : t("typeProduct")}
                             </Badge>
-                            {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
-                              {product.isDeleted ? (
+                            {product.hiddenInStore ? (
+                              <Badge variant="muted">{t("hiddenInStore")}</Badge>
+                            ) : null}
+                            {product.isDeleted ? (
                               <Badge variant="muted">{t("archived")}</Badge>
                             ) : null}
                             <Badge variant={readinessSummary.variant}>
@@ -4482,8 +4696,10 @@ const ProductsPage = () => {
                             <Badge variant="muted">
                               {product.isBundle ? t("typeBundle") : t("typeProduct")}
                             </Badge>
-                            {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
-                              {product.isDeleted ? (
+                            {product.hiddenInStore ? (
+                              <Badge variant="muted">{t("hiddenInStore")}</Badge>
+                            ) : null}
+                            {product.isDeleted ? (
                               <Badge variant="muted">{t("archived")}</Badge>
                             ) : null}
                             <Badge variant={readinessSummary.variant}>
@@ -4673,7 +4889,10 @@ const ProductsPage = () => {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => { if (productsContextQuery.isError) void productsContextQuery.refetch(); else void productsBootstrapQuery.refetch(); }}
+                onClick={() => {
+                  if (productsContextQuery.isError) void productsContextQuery.refetch();
+                  else void productsBootstrapQuery.refetch();
+                }}
               >
                 {tErrors("tryAgain")}
               </Button>
@@ -5105,9 +5324,11 @@ const ProductsPage = () => {
                   <FormLabel>{t("category")}</FormLabel>
                   <FormControl>
                     <Select
-                      value={field.value || "all"}
-                      onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
-                    >
+                                value={field.value || "all"}
+                                onValueChange={(value) =>
+                                  field.onChange(value === "all" ? "" : value)
+                                }
+                              >
                       <SelectTrigger>
                         <SelectValue placeholder={t("allCategories")} />
                       </SelectTrigger>
@@ -5207,7 +5428,11 @@ const ProductsPage = () => {
           }
         }}
         title={t("exportModalTitle")}
-        subtitle={selectedIds.size ? t("exportSelected", { count: selectedIds.size }) : t("exportFiltered", { count: productsTotal })}
+        subtitle={
+          selectedIds.size
+            ? t("exportSelected", { count: selectedIds.size })
+            : t("exportFiltered", { count: productsTotal })
+        }
       >
         <div className="space-y-5">
           <div className="space-y-2">
@@ -5221,7 +5446,7 @@ const ProductsPage = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="csv">{t("exportCsv")}</SelectItem>
-                <SelectItem value="xlsx">{t("exportXlsx")}</SelectItem>
+                {canRawExport ? <SelectItem value="xlsx">{t("exportXlsx")}</SelectItem> : null}
               </SelectContent>
             </Select>
           </div>
@@ -5279,7 +5504,9 @@ const ProductsPage = () => {
               disabled={!selectedExportColumns.length}
             >
               <DownloadIcon className="h-4 w-4" aria-hidden />
-              {selectedIds.size ? t("exportSelected", { count: selectedIds.size }) : t("exportFiltered", { count: productsTotal })}
+              {selectedIds.size
+                ? t("exportSelected", { count: selectedIds.size })
+                : t("exportFiltered", { count: productsTotal })}
             </Button>
           </ModalFooter>
         </div>
@@ -5333,9 +5560,7 @@ const ProductsPage = () => {
                 {tCommon("loading")}
               </div>
             ) : productsError ? (
-              <p className="text-sm text-danger">
-                {translateError(tErrors, productsError)}
-              </p>
+              <p className="text-sm text-danger">{translateError(tErrors, productsError)}</p>
             ) : categories.length ? (
               <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto">
                 {categories.map((item) => (
@@ -6034,7 +6259,19 @@ const ProductsPage = () => {
         productName={duplicateTarget?.name ?? ""}
         storeId={storeId}
       />
-      {deleteTarget ? <ProductDeletionDialog open onOpenChange={(open) => { if (!open) setDeleteTarget(null); }} productId={deleteTarget} onDeleted={() => { setSelectedIds(new Set()); void productsBootstrapQuery.refetch(); }} /> : null}
+      {deleteTarget ? (
+        <ProductDeletionDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null);
+          }}
+          productId={deleteTarget}
+          onDeleted={() => {
+            setSelectedIds(new Set());
+            void productsBootstrapQuery.refetch();
+          }}
+        />
+      ) : null}
       {confirmDialog}
     </div>
   );

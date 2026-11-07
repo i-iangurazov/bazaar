@@ -1,3 +1,4 @@
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import { roundQuantity } from "@/lib/quantity";
 import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { randomUUID } from "node:crypto";
@@ -387,6 +388,7 @@ const dispatchPurchaseOrderCreated = async (
 };
 
 export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const result = await prisma.$transaction((tx) => createPurchaseOrderTx(tx, input));
   await dispatchPurchaseOrderCreated(input, result);
   return result;
@@ -414,6 +416,7 @@ const classifyPurchaseOrderOperationFailure = (error: unknown): OperationFailure
 export const createPurchaseOrderOperation = async (
   input: CreatePurchaseOrderInput & { idempotencyKey: string },
 ) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   let createdResult: PurchaseOrderCreateResult | null = null;
   const operation = await runOperationRequest<PurchaseOrderCreateOperationResponse>(
     {
@@ -473,6 +476,7 @@ export const createPurchaseOrderOperation = async (
 };
 
 export const createDraftsFromReorder = async (input: CreateDraftsFromReorderInput) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "replenishment" });
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
@@ -610,6 +614,7 @@ export const submitPurchaseOrder = async (input: {
   organizationId: string;
   requestId: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const logger = getLogger(input.requestId);
   let affectedProductIds: string[] = [];
   let affectedStoreId = "";
@@ -694,6 +699,7 @@ export const approvePurchaseOrder = async (input: {
   organizationId: string;
   requestId: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
@@ -754,6 +760,7 @@ export const receivePurchaseOrder = async (input: {
   lines?: { lineId: string; qtyReceived: number; unitId?: string | null; packId?: string | null }[];
   allowOverReceive?: boolean;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const logger = getLogger(input.requestId);
   let affectedProductIds: string[] = [];
   let affectedStoreId = "";
@@ -768,7 +775,7 @@ export const receivePurchaseOrder = async (input: {
       },
       async () => {
         await assertBaamReviewedVersion(tx, "PurchaseOrder", input.purchaseOrderId);
-          await tx.$queryRaw`
+        await tx.$queryRaw`
           SELECT id FROM "PurchaseOrder" WHERE id = ${input.purchaseOrderId} FOR UPDATE
         `;
 
@@ -872,7 +879,6 @@ export const receivePurchaseOrder = async (input: {
             actorId: input.actorId,
             organizationId: input.organizationId,
           });
-
 
           const onOrderDelta = -Math.min(receiveQty, Math.max(remaining, 0));
           if (onOrderDelta !== 0) {
@@ -981,6 +987,7 @@ export const cancelPurchaseOrder = async (input: {
   organizationId: string;
   requestId: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const logger = getLogger(input.requestId);
   let affectedProductIds: string[] = [];
   let affectedStoreId = "";
@@ -1188,6 +1195,7 @@ export const bulkCancelPurchaseOrders = async (input: {
   organizationId: string;
   requestId: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const purchaseOrderIds = normalizeBulkPurchaseOrderIds(input.purchaseOrderIds);
   let createdResult: BulkPurchaseOrderCancelResult | null = null;
   const operation = await runOperationRequest<BulkPurchaseOrderCancelOperationResponse>(
@@ -1255,14 +1263,11 @@ export const addPurchaseOrderLine = async (input: {
   organizationId: string;
   requestId: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
-    await lockPurchaseOrderForOrganization(
-      tx,
-      input.purchaseOrderId,
-      input.organizationId,
-    );
+    await lockPurchaseOrderForOrganization(tx, input.purchaseOrderId, input.organizationId);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
     });
@@ -1379,6 +1384,7 @@ export const updatePurchaseOrderLine = async (input: {
   organizationId: string;
   requestId: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
@@ -1465,6 +1471,7 @@ export const removePurchaseOrderLine = async (input: {
   organizationId: string;
   requestId: string;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "purchaseOrders" });
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {

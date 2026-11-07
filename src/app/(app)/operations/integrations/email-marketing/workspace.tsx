@@ -567,10 +567,8 @@ const campaignStatusLabel = (status: EmailCampaignStatus) => {
 };
 
 const campaignStatusVariant = (status: EmailCampaignStatus) => {
-  if (
-    status === EmailCampaignStatus.COMPLETED ||
-    status === EmailCampaignStatus.SENT
-  ) return "success" as const;
+  if (status === EmailCampaignStatus.COMPLETED || status === EmailCampaignStatus.SENT)
+    return "success" as const;
   if (
     status === EmailCampaignStatus.QUEUED ||
     status === EmailCampaignStatus.SENDING ||
@@ -645,7 +643,11 @@ const EditableText = ({
 }) => {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (ref.current && document.activeElement !== ref.current && ref.current.textContent !== (value ?? "")) {
+    if (
+      ref.current &&
+      document.activeElement !== ref.current &&
+      ref.current.textContent !== (value ?? "")
+    ) {
       ref.current.textContent = value ?? "";
     }
   }, [value]);
@@ -717,7 +719,9 @@ const SortableBlock = ({
       }}
       className={cn(
         "group relative rounded-md border bg-card shadow-sm transition",
-        selected ? "border-primary ring-2 ring-primary/15" : "border-transparent hover:border-border",
+        selected
+          ? "border-primary ring-2 ring-primary/15"
+          : "border-transparent hover:border-border",
         isDragging && "z-20 opacity-70",
       )}
       data-email-block-id={block.id}
@@ -813,8 +817,15 @@ const useMediaQuery = (query: string) => {
 export const EmailMarketingWorkspace = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tBilling = useTranslations("billing");
   const { data: session } = useSession();
   const canView = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: canView,
+    staleTime: 60_000,
+  });
+  const canAutomations = Boolean(billing.data?.featureFlags.marketingAutomation);
+  const canOwnSender = Boolean(billing.data?.featureFlags.ownSender);
   const locale = useLocale();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -826,6 +837,14 @@ export const EmailMarketingWorkspace = () => {
 
   const [storeId, setStoreId] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("campaigns");
+  useEffect(() => {
+    if (
+      billing.data &&
+      ((activeTab === "automations" && !canAutomations) ||
+        (activeTab === "senders" && !canOwnSender))
+    )
+      setActiveTab("campaigns");
+  }, [activeTab, billing.data, canAutomations, canOwnSender]);
   const [builderMode, setBuilderMode] = useState<BuilderMode>("campaign");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [campaignId, setCampaignId] = useState<string | null>(null);
@@ -858,15 +877,23 @@ export const EmailMarketingWorkspace = () => {
   const [buttonColor, setButtonColor] = useState(defaultBrandColor);
   const [buttonTextColor, setButtonTextColor] = useState(defaultButtonTextColor);
   const [backgroundColor, setBackgroundColor] = useState(defaultEmailBackgroundColor);
-  const [contentBackgroundColor, setContentBackgroundColor] = useState(defaultEmailContentBackgroundColor);
+  const [contentBackgroundColor, setContentBackgroundColor] = useState(
+    defaultEmailContentBackgroundColor,
+  );
   const [textColor, setTextColor] = useState(defaultEmailTextColor);
   const [mutedTextColor, setMutedTextColor] = useState(defaultEmailMutedTextColor);
   const [borderColor, setBorderColor] = useState(defaultEmailBorderColor);
-  const [fontFamily, setFontFamily] = useState<EmailCampaignFontFamily>(EmailCampaignFontFamily.INTER);
+  const [fontFamily, setFontFamily] = useState<EmailCampaignFontFamily>(
+    EmailCampaignFontFamily.INTER,
+  );
   const [logoStoreId, setLogoStoreId] = useState("");
   const [bannerImageUrl, setBannerImageUrl] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [senderForm, setSenderForm] = useState({ displayName: "", fromEmail: "", replyToEmail: "" });
+  const [senderForm, setSenderForm] = useState({
+    displayName: "",
+    fromEmail: "",
+    replyToEmail: "",
+  });
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
@@ -931,7 +958,7 @@ export const EmailMarketingWorkspace = () => {
   );
   const automationsQuery = trpc.emailMarketing.automations.useQuery(
     { storeId },
-    { enabled: canView && Boolean(storeId) },
+    { enabled: canView && canAutomations && Boolean(storeId) },
   );
   const { refetch: refetchEmailMarketingOverview } = overviewQuery;
   const logoGalleryQuery = trpc.emailMarketing.logoGallery.useQuery(undefined, {
@@ -969,20 +996,26 @@ export const EmailMarketingWorkspace = () => {
     },
   );
 
-  const senderOptions = useMemo(() => sendersQuery.data?.senders ?? [], [sendersQuery.data?.senders]);
+  const senderOptions = useMemo(
+    () => sendersQuery.data?.senders ?? [],
+    [sendersQuery.data?.senders],
+  );
   const senderOptionsKey = useMemo(
     () => senderOptions.map((sender) => sender.id).join(","),
     [senderOptions],
   );
   const primarySenderId = sendersQuery.data?.primarySenderId ?? null;
-  const effectiveSenderIdentityId = senderIdentityId ?? primarySenderId;
+  const effectiveSenderIdentityId = canOwnSender ? (senderIdentityId ?? primarySenderId) : null;
   const selectedSender = useMemo(
     () => senderOptions.find((sender) => sender.id === effectiveSenderIdentityId) ?? null,
     [effectiveSenderIdentityId, senderOptions],
   );
   const defaultSender = sendersQuery.data?.defaultSender ?? null;
-  const defaultSenderReady = defaultSender?.status === "VERIFIED" || defaultSender?.status === "AVAILABLE";
-  const currentSenderReady = effectiveSenderIdentityId ? selectedSender?.status === "VERIFIED" : defaultSenderReady;
+  const defaultSenderReady =
+    defaultSender?.status === "VERIFIED" || defaultSender?.status === "AVAILABLE";
+  const currentSenderReady = effectiveSenderIdentityId
+    ? selectedSender?.status === "VERIFIED"
+    : defaultSenderReady;
   const currentSenderLabel = selectedSender?.fromEmail ?? defaultSender?.fromEmail ?? "Bazaar KG";
 
   useEffect(() => {
@@ -992,7 +1025,11 @@ export const EmailMarketingWorkspace = () => {
       return;
     }
     const stateSender = senderOptions.find((sender) => sender.id === senderIdentityId);
-    if (!primarySenderId && senderIdentityId && (!stateSender || stateSender.status !== "VERIFIED")) {
+    if (
+      !primarySenderId &&
+      senderIdentityId &&
+      (!stateSender || stateSender.status !== "VERIFIED")
+    ) {
       setSenderIdentityId(null);
     }
   }, [primarySenderId, senderIdentityId, senderOptions, senderOptionsKey, sendersQuery.data]);
@@ -1006,7 +1043,9 @@ export const EmailMarketingWorkspace = () => {
     return () => window.clearInterval(interval);
   }, [canView, hasSendingCampaigns, refetchCampaignHistory, refetchEmailMarketingOverview]);
 
-  const selectedBlockIndex = selectedBlock ? blocks.findIndex((block) => block.id === selectedBlock.id) : -1;
+  const selectedBlockIndex = selectedBlock
+    ? blocks.findIndex((block) => block.id === selectedBlock.id)
+    : -1;
   const productItems = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
   const selectedProductMap = useMemo(
     () => new Map(productItems.map((product) => [product.id, product])),
@@ -1014,9 +1053,8 @@ export const EmailMarketingWorkspace = () => {
   );
   const selectedLogo = useMemo(
     () =>
-      (logoGalleryQuery.data ?? []).find(
-        (logo) => logo.storeId === (logoStoreId || storeId),
-      ) ?? null,
+      (logoGalleryQuery.data ?? []).find((logo) => logo.storeId === (logoStoreId || storeId)) ??
+      null,
     [logoGalleryQuery.data, logoStoreId, storeId],
   );
   const selectedLogoUrl = selectedLogo?.logoUrl ?? null;
@@ -1027,7 +1065,9 @@ export const EmailMarketingWorkspace = () => {
       id: campaignId,
       storeId,
       campaignType:
-        builderMode === "automation" ? EmailCampaignType.TRANSACTIONAL : EmailCampaignType.MARKETING,
+        builderMode === "automation"
+          ? EmailCampaignType.TRANSACTIONAL
+          : EmailCampaignType.MARKETING,
       senderIdentityId: effectiveSenderIdentityId,
       name: campaignName,
       audience: {
@@ -1188,7 +1228,10 @@ export const EmailMarketingWorkspace = () => {
       sendOperationRef.current = null;
       setConfirmOpen(false);
       setBuilderOpen(false);
-      await Promise.all([utils.emailMarketing.history.invalidate(), utils.emailMarketing.overview.invalidate()]);
+      await Promise.all([
+        utils.emailMarketing.history.invalidate(),
+        utils.emailMarketing.overview.invalidate(),
+      ]);
       const sentNow = result.delivery?.sent ?? 0;
       toast({
         variant: "success",
@@ -1229,7 +1272,10 @@ export const EmailMarketingWorkspace = () => {
   });
   const resumeCampaignMutation = trpc.emailMarketing.resumeCampaign.useMutation({
     onSuccess: async (result) => {
-      await Promise.all([utils.emailMarketing.history.invalidate(), utils.emailMarketing.overview.invalidate()]);
+      await Promise.all([
+        utils.emailMarketing.history.invalidate(),
+        utils.emailMarketing.overview.invalidate(),
+      ]);
       toast({
         variant: result.sent > 0 ? "success" : "info",
         description:
@@ -1272,7 +1318,15 @@ export const EmailMarketingWorkspace = () => {
         utils.emailMarketing.history.invalidate(),
         utils.emailMarketing.detail.invalidate(),
       ]);
-      toast({ variant: "success", description: `Отменено получателей в очереди: ${result.cancelled}.` });
+      toast({
+        variant: "success",
+        description: `Отменено получателей в очереди: ${result.cancelled}.`,
+      });
+      if (result.awaitingReview)
+        toast({
+          variant: "info",
+          description: tBilling("emailCancellationPending", { count: result.awaitingReview }),
+        });
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
@@ -1280,7 +1334,16 @@ export const EmailMarketingWorkspace = () => {
     onSuccess: (result) => {
       const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
       const rows = [
-        ["email", "name", "status", "category", "providerStatus", "providerReason", "attempts", "failedAt"],
+        [
+          "email",
+          "name",
+          "status",
+          "category",
+          "providerStatus",
+          "providerReason",
+          "attempts",
+          "failedAt",
+        ],
         ...result.recipients.map((recipient) => [
           recipient.email,
           recipient.customer.name,
@@ -1307,11 +1370,15 @@ export const EmailMarketingWorkspace = () => {
   });
   const autoResumeCampaignMutation = trpc.emailMarketing.resumeCampaign.useMutation({
     onSuccess: async () => {
-      await Promise.all([utils.emailMarketing.history.invalidate(), utils.emailMarketing.overview.invalidate()]);
+      await Promise.all([
+        utils.emailMarketing.history.invalidate(),
+        utils.emailMarketing.overview.invalidate(),
+      ]);
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
-  const { mutate: autoResumeCampaign, isLoading: autoResumeCampaignLoading } = autoResumeCampaignMutation;
+  const { mutate: autoResumeCampaign, isLoading: autoResumeCampaignLoading } =
+    autoResumeCampaignMutation;
   const updateAutomationMutation = trpc.emailMarketing.updateAutomation.useMutation({
     onSuccess: async () => {
       await utils.emailMarketing.automations.invalidate();
@@ -1508,20 +1575,55 @@ export const EmailMarketingWorkspace = () => {
     setPreheader(campaign.preheader ?? "");
     setSenderIdentityId(campaign.senderIdentityId ?? null);
     setReplyToEmail(campaign.replyToEmail ?? "");
-    setBrandColor(campaign.brandColor && colorPattern.test(campaign.brandColor) ? campaign.brandColor : defaultBrandColor);
-    setButtonColor(campaign.buttonColor && colorPattern.test(campaign.buttonColor) ? campaign.buttonColor : defaultBrandColor);
-    setButtonTextColor(campaign.buttonTextColor && colorPattern.test(campaign.buttonTextColor) ? campaign.buttonTextColor : defaultButtonTextColor);
-    setBackgroundColor(campaign.backgroundColor && colorPattern.test(campaign.backgroundColor) ? campaign.backgroundColor : defaultEmailBackgroundColor);
-    setContentBackgroundColor(campaign.contentBackgroundColor && colorPattern.test(campaign.contentBackgroundColor) ? campaign.contentBackgroundColor : defaultEmailContentBackgroundColor);
-    setTextColor(campaign.textColor && colorPattern.test(campaign.textColor) ? campaign.textColor : defaultEmailTextColor);
-    setMutedTextColor(campaign.mutedTextColor && colorPattern.test(campaign.mutedTextColor) ? campaign.mutedTextColor : defaultEmailMutedTextColor);
-    setBorderColor(campaign.borderColor && colorPattern.test(campaign.borderColor) ? campaign.borderColor : defaultEmailBorderColor);
+    setBrandColor(
+      campaign.brandColor && colorPattern.test(campaign.brandColor)
+        ? campaign.brandColor
+        : defaultBrandColor,
+    );
+    setButtonColor(
+      campaign.buttonColor && colorPattern.test(campaign.buttonColor)
+        ? campaign.buttonColor
+        : defaultBrandColor,
+    );
+    setButtonTextColor(
+      campaign.buttonTextColor && colorPattern.test(campaign.buttonTextColor)
+        ? campaign.buttonTextColor
+        : defaultButtonTextColor,
+    );
+    setBackgroundColor(
+      campaign.backgroundColor && colorPattern.test(campaign.backgroundColor)
+        ? campaign.backgroundColor
+        : defaultEmailBackgroundColor,
+    );
+    setContentBackgroundColor(
+      campaign.contentBackgroundColor && colorPattern.test(campaign.contentBackgroundColor)
+        ? campaign.contentBackgroundColor
+        : defaultEmailContentBackgroundColor,
+    );
+    setTextColor(
+      campaign.textColor && colorPattern.test(campaign.textColor)
+        ? campaign.textColor
+        : defaultEmailTextColor,
+    );
+    setMutedTextColor(
+      campaign.mutedTextColor && colorPattern.test(campaign.mutedTextColor)
+        ? campaign.mutedTextColor
+        : defaultEmailMutedTextColor,
+    );
+    setBorderColor(
+      campaign.borderColor && colorPattern.test(campaign.borderColor)
+        ? campaign.borderColor
+        : defaultEmailBorderColor,
+    );
     setFontFamily(campaign.fontFamily);
     setLogoStoreId("");
     setBannerImageUrl(
       campaign.bannerImageUrl ??
-        (parsedBlocks.find((block) => block.type === "hero") as Extract<CampaignBlock, { type: "hero" }> | undefined)
-          ?.imageUrl ??
+        (
+          parsedBlocks.find((block) => block.type === "hero") as
+            | Extract<CampaignBlock, { type: "hero" }>
+            | undefined
+        )?.imageUrl ??
         "",
     );
     setBlocks(parsedBlocks);
@@ -1535,7 +1637,9 @@ export const EmailMarketingWorkspace = () => {
       return;
     }
     const parsedBlocks = parseBlocks(automation.blocksJson, null);
-    const initialBlocks = parsedBlocks.length ? parsedBlocks : defaultAutomationBlocks(automation.trigger);
+    const initialBlocks = parsedBlocks.length
+      ? parsedBlocks
+      : defaultAutomationBlocks(automation.trigger);
     setBuilderMode("automation");
     setAutomationId(automation.id);
     setCampaignId(null);
@@ -1547,18 +1651,20 @@ export const EmailMarketingWorkspace = () => {
     setBrandColor(
       automation.brandColor && colorPattern.test(automation.brandColor)
         ? automation.brandColor
-        : overviewQuery.data?.store?.brandColor && colorPattern.test(overviewQuery.data.store.brandColor)
+        : overviewQuery.data?.store?.brandColor &&
+            colorPattern.test(overviewQuery.data.store.brandColor)
           ? overviewQuery.data.store.brandColor
-        : defaultBrandColor,
+          : defaultBrandColor,
     );
     setButtonColor(
       automation.buttonColor && colorPattern.test(automation.buttonColor)
         ? automation.buttonColor
         : automation.brandColor && colorPattern.test(automation.brandColor)
           ? automation.brandColor
-          : overviewQuery.data?.store?.brandColor && colorPattern.test(overviewQuery.data.store.brandColor)
+          : overviewQuery.data?.store?.brandColor &&
+              colorPattern.test(overviewQuery.data.store.brandColor)
             ? overviewQuery.data.store.brandColor
-          : defaultBrandColor,
+            : defaultBrandColor,
     );
     setButtonTextColor(
       automation.buttonTextColor && colorPattern.test(automation.buttonTextColor)
@@ -1645,9 +1751,19 @@ export const EmailMarketingWorkspace = () => {
       duplicatesRemoved: 0,
     };
   const validation = previewMutation.data?.validationChecklist ?? [
-    { key: "sender", label: "Отправитель подтвержден", ok: Boolean(currentSenderReady), critical: true },
+    {
+      key: "sender",
+      label: "Отправитель подтвержден",
+      ok: Boolean(currentSenderReady),
+      critical: true,
+    },
     { key: "subject", label: "Тема письма указана", ok: Boolean(subject.trim()), critical: true },
-    { key: "content", label: "Письмо содержит контент", ok: blocks.some(blockHasContent), critical: true },
+    {
+      key: "content",
+      label: "Письмо содержит контент",
+      ok: blocks.some(blockHasContent),
+      critical: true,
+    },
   ];
   const canSend =
     canView &&
@@ -1709,8 +1825,18 @@ export const EmailMarketingWorkspace = () => {
             className="h-9 max-w-[360px] border-transparent bg-transparent px-2 text-base font-semibold shadow-none focus-visible:border-border"
             aria-label="Название"
           />
-          <Badge variant={saveDraftMutation.isLoading || updateAutomationMutation.isLoading ? "warning" : "muted"}>
-            {saveDraftMutation.isLoading || updateAutomationMutation.isLoading ? "Сохранение" : campaignId || automationId ? "Сохранено" : "Новый черновик"}
+          <Badge
+            variant={
+              saveDraftMutation.isLoading || updateAutomationMutation.isLoading
+                ? "warning"
+                : "muted"
+            }
+          >
+            {saveDraftMutation.isLoading || updateAutomationMutation.isLoading
+              ? "Сохранение"
+              : campaignId || automationId
+                ? "Сохранено"
+                : "Новый черновик"}
           </Badge>
           <div className="ml-auto flex items-center gap-2">
             <Button
@@ -1764,22 +1890,24 @@ export const EmailMarketingWorkspace = () => {
               Блоки
             </p>
             <div className="mt-3 space-y-2">
-              {(builderMode === "automation" ? automationBlockTypeOptions : blockTypeOptions).map((type) => (
-                <button
+              {(builderMode === "automation" ? automationBlockTypeOptions : blockTypeOptions).map(
+                (type) => (
+                  <button
                   key={type}
                   type="button"
                   className="bazaar-admin-choice-card w-full"
                   onClick={() => addBlock(type)}
                 >
-                  <span className="flex items-center gap-2 text-sm font-semibold">
-                    <AddIcon className="h-4 w-4" aria-hidden />
-                    {blockLabels[type]}
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                    {blockDescriptions[type]}
-                  </span>
-                </button>
-              ))}
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <AddIcon className="h-4 w-4" aria-hidden />
+                      {blockLabels[type]}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      {blockDescriptions[type]}
+                    </span>
+                  </button>
+                ),
+              )}
             </div>
             <div className="bazaar-admin-notice mt-5 text-xs leading-5">
               Переменные:{" "}
@@ -1794,28 +1922,39 @@ export const EmailMarketingWorkspace = () => {
                   <Field label="Тема письма">
                     <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
                   </Field>
-                  <Field label="Отправитель">
-                    <Select
+                  {canOwnSender ? (
+                    <Field label="Отправитель">
+                      <Select
                       value={effectiveSenderIdentityId ?? "__none__"}
                       onValueChange={(value) => setSenderIdentityId(value === "__none__" ? null : value)}
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Выберите" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {defaultSender ? (
-                          <SelectItem value="__none__">
-                            Bazaar KG{defaultSender.fromEmail ? ` · ${defaultSender.fromEmail}` : ""}
-                          </SelectItem>
-                        ) : null}
-                        {senderOptions.map((sender) => (
-                          <SelectItem key={sender.id} value={sender.id} disabled={sender.status !== "VERIFIED"}>
-                            {sender.displayName} · {sender.fromEmail}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Выберите" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {defaultSender ? (
+                            <SelectItem value="__none__">
+                              Bazaar KG
+                              {defaultSender.fromEmail ? ` · ${defaultSender.fromEmail}` : ""}
+                            </SelectItem>
+                          ) : null}
+                          {senderOptions.map((sender) => (
+                            <SelectItem
+                              key={sender.id}
+                              value={sender.id}
+                              disabled={sender.status !== "VERIFIED"}
+                            >
+                              {sender.displayName} · {sender.fromEmail}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  ) : (
+                    <p className="self-center text-xs text-muted-foreground">
+                      {tBilling("managedEmailSender")}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1826,8 +1965,15 @@ export const EmailMarketingWorkspace = () => {
                 )}
                 style={{ backgroundColor: contentBackgroundColor, color: textColor }}
               >
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={blocks.map((block) => block.id)} strategy={verticalListSortingStrategy}>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={blocks.map((block) => block.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
                     <div className="space-y-1 p-3">
                       {blocks.map((block, index) => (
                         <div key={block.id}>
@@ -1855,7 +2001,7 @@ export const EmailMarketingWorkspace = () => {
                             onDuplicate={() => duplicateBlock(block.id)}
                             onDelete={() => void deleteBlock(block.id)}
                           >
-	                            <EmailBlockPreview
+                            <EmailBlockPreview
 	                              block={block}
 	                              selected={selectedBlockId === block.id}
 	                              brandColor={brandColor}
@@ -1903,7 +2049,9 @@ export const EmailMarketingWorkspace = () => {
               <section className="space-y-3">
                 <div>
                   <h2 className="text-sm font-semibold">Проверка</h2>
-                  <p className="text-xs text-muted-foreground">Критичные пункты блокируют отправку.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Критичные пункты блокируют отправку.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   {validation.map((item) => (
@@ -1925,10 +2073,13 @@ export const EmailMarketingWorkspace = () => {
                 <section className="space-y-3">
                   <h2 className="text-sm font-semibold">Аудитория</h2>
                   <Field label="Режим">
-                    <Select value={audienceMode} onValueChange={(value) => setAudienceMode(value as AudienceMode)}>
+                    <Select
+                      value={audienceMode}
+                      onValueChange={(value) => setAudienceMode(value as AudienceMode)}
+                    >
                       <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="segment">Сегмент</SelectItem>
                         <SelectItem value="manual">Вручную</SelectItem>
@@ -1937,10 +2088,13 @@ export const EmailMarketingWorkspace = () => {
                   </Field>
                   {audienceMode === "segment" ? (
                     <Field label="Сегмент">
-                      <Select value={audienceSegment} onValueChange={(value) => setAudienceSegment(value as AudienceSegment)}>
+                      <Select
+                        value={audienceSegment}
+                        onValueChange={(value) => setAudienceSegment(value as AudienceSegment)}
+                      >
                         <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Все клиенты с email</SelectItem>
                           <SelectItem value="new">Новые клиенты</SelectItem>
@@ -1963,10 +2117,13 @@ export const EmailMarketingWorkspace = () => {
                     />
                   )}
                   <Field label="Источник">
-                    <Select value={source} onValueChange={(value) => setSource(value as "ALL" | CustomerSource)}>
+                    <Select
+                      value={source}
+                      onValueChange={(value) => setSource(value as "ALL" | CustomerSource)}
+                    >
                       <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">Все источники</SelectItem>
                         {sourceValues.map((value) => (
@@ -2030,13 +2187,19 @@ export const EmailMarketingWorkspace = () => {
                   <Input value={preheader} onChange={(event) => setPreheader(event.target.value)} />
                 </Field>
                 <Field label="Reply-to">
-                  <Input value={replyToEmail} onChange={(event) => setReplyToEmail(event.target.value)} />
+                  <Input
+                    value={replyToEmail}
+                    onChange={(event) => setReplyToEmail(event.target.value)}
+                  />
                 </Field>
                 <Field label="Магазин логотипа">
-                  <Select value={logoStoreId || storeId || "__none__"} onValueChange={(value) => setLogoStoreId(value === "__none__" ? "" : value)}>
+                  <Select
+                    value={logoStoreId || storeId || "__none__"}
+                    onValueChange={(value) => setLogoStoreId(value === "__none__" ? "" : value)}
+                  >
                     <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Текущий магазин</SelectItem>
                       {(logoGalleryQuery.data ?? []).map((logo) => (
@@ -2071,7 +2234,8 @@ export const EmailMarketingWorkspace = () => {
                   </div>
                   {!bannerUrlLooksDirect && bannerImageUrl.trim() ? (
                     <p className="text-xs leading-5 text-warning">
-                      Ссылка похожа на страницу, а не на файл изображения. Для email лучше использовать URL, который заканчивается на .jpg, .png или .webp.
+                      Ссылка похожа на страницу, а не на файл изображения. Для email лучше
+                      использовать URL, который заканчивается на .jpg, .png или .webp.
                     </p>
                   ) : null}
                 </Field>
@@ -2090,7 +2254,9 @@ export const EmailMarketingWorkspace = () => {
                           {selectedLogo?.storeName ?? selectedStore?.name ?? "Текущий магазин"}
                         </p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {selectedLogoUrl ? "Логотип выбран" : "Загрузите логотип для шапки письма"}
+                          {selectedLogoUrl
+                            ? "Логотип выбран"
+                            : "Загрузите логотип для шапки письма"}
                         </p>
                       </div>
                     </div>
@@ -2102,7 +2268,11 @@ export const EmailMarketingWorkspace = () => {
                       onClick={() => logoInputRef.current?.click()}
                     >
                       <ImagePlusIcon className="h-4 w-4" aria-hidden />
-                      {uploadingLogo ? "Загрузка..." : selectedLogoUrl ? "Заменить логотип" : "Загрузить логотип"}
+                      {uploadingLogo
+                        ? "Загрузка..."
+                        : selectedLogoUrl
+                          ? "Заменить логотип"
+                          : "Загрузить логотип"}
                     </Button>
                   </div>
                 </Field>
@@ -2111,23 +2281,40 @@ export const EmailMarketingWorkspace = () => {
           </aside>
         </div>
 
-        <Modal open={previewOpen} onOpenChange={setPreviewOpen} title="Предпросмотр" className="max-w-4xl">
-          <div ref={previewContentRef} className="bazaar-admin-preview-frame max-h-[70vh] overflow-auto bg-card p-0">
+        <Modal
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          title="Предпросмотр"
+          className="max-w-4xl"
+        >
+          <div
+            ref={previewContentRef}
+            className="bazaar-admin-preview-frame max-h-[70vh] overflow-auto bg-card p-0"
+          >
             {previewHtml ? (
               <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
             ) : (
-              <div className="p-8 text-sm text-muted-foreground">Предпросмотр появится после сохранения полей.</div>
+              <div className="p-8 text-sm text-muted-foreground">
+                Предпросмотр появится после сохранения полей.
+              </div>
             )}
           </div>
         </Modal>
 
-        <Modal open={testOpen} onOpenChange={setTestOpen} title="Отправить тест" className="max-w-lg">
+        <Modal
+          open={testOpen}
+          onOpenChange={setTestOpen}
+          title="Отправить тест"
+          className="max-w-lg"
+        >
           <div className="space-y-4">
             <Field label="Email">
               <Input value={testEmail} onChange={(event) => setTestEmail(event.target.value)} placeholder="test@example.com" />
             </Field>
             <ModalFooter>
-              <Button type="button" variant="secondary" onClick={() => setTestOpen(false)}>Отмена</Button>
+              <Button type="button" variant="secondary" onClick={() => setTestOpen(false)}>
+                Отмена
+              </Button>
               <Button
                 type="button"
                 disabled={!testEmail || testMutation.isLoading || testAutomationMutation.isLoading}
@@ -2137,10 +2324,16 @@ export const EmailMarketingWorkspace = () => {
                     testAutomationMutation.mutate({ automationId, to: testEmail });
                     return;
                   }
-                  testMutation.mutate({ campaign: campaignInput, to: testEmail, sampleCustomerId: selectedCustomerIds[0] ?? null });
+                  testMutation.mutate({
+                    campaign: campaignInput,
+                    to: testEmail,
+                    sampleCustomerId: selectedCustomerIds[0] ?? null,
+                  });
                 }}
               >
-                {testMutation.isLoading || testAutomationMutation.isLoading ? tCommon("loading") : "Отправить"}
+                {testMutation.isLoading || testAutomationMutation.isLoading
+                  ? tCommon("loading")
+                  : "Отправить"}
               </Button>
             </ModalFooter>
           </div>
@@ -2173,17 +2366,16 @@ export const EmailMarketingWorkspace = () => {
               </p>
             </div>
             <ModalFooter>
-              <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Отмена</Button>
+              <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
+                Отмена
+              </Button>
               <Button type="button" disabled={!canSend || sendCampaignMutation.isLoading} onClick={() => void sendCurrentCampaign()}>
                 {sendCampaignMutation.isLoading ? tCommon("loading") : "Подтвердить отправку"}
               </Button>
             </ModalFooter>
           </div>
         </Modal>
-        <LogoFileInput
-	        inputRef={logoInputRef}
-	        onFile={(file) => void handleLogoUpload(file)}
-	      />
+        <LogoFileInput inputRef={logoInputRef} onFile={(file) => void handleLogoUpload(file)} />
         {uploadingLogo ? <span className="sr-only">Загрузка логотипа</span> : null}
         {confirmDialog}
       </div>
@@ -2263,12 +2455,20 @@ export const EmailMarketingWorkspace = () => {
                   <AddIcon className="h-4 w-4" aria-hidden />
                   Создать кампанию
                 </Button>
-                <Button type="button" variant="secondary" onClick={() => setActiveTab("automations")}>
-                  Автоматизация
-                </Button>
-                <Button type="button" variant="secondary" onClick={() => setActiveTab("senders")}>
-                  Отправитель
-                </Button>
+                {canAutomations ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setActiveTab("automations")}
+                  >
+                    Автоматизация
+                  </Button>
+                ) : null}
+                {canOwnSender ? (
+                  <Button type="button" variant="secondary" onClick={() => setActiveTab("senders")}>
+                    Отправитель
+                  </Button>
+                ) : null}
               </div>
             </div>
           </CardContent>
@@ -2283,20 +2483,27 @@ export const EmailMarketingWorkspace = () => {
               />
             ) : (
               <div className="flex items-start gap-3">
-              {sendersQuery.data?.senders.some((sender) => sender.status === "VERIFIED") ? (
-                <StatusSuccessIcon className="mt-0.5 h-5 w-5 text-success" aria-hidden />
-              ) : (
-                <StatusPendingIcon className="mt-0.5 h-5 w-5 text-warning" aria-hidden />
-              )}
-              <div>
-                <p className="font-semibold">Отправители</p>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  {sendersQuery.data?.senders.some((sender) => sender.status === "VERIFIED")
+                {defaultSenderReady ||
+                sendersQuery.data?.senders.some((sender) => sender.status === "VERIFIED") ? (
+                  <StatusSuccessIcon className="mt-0.5 h-5 w-5 text-success" aria-hidden />
+                ) : (
+                  <StatusPendingIcon className="mt-0.5 h-5 w-5 text-warning" aria-hidden />
+                )}
+                <div>
+                  <p className="font-semibold">Отправители</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {!canOwnSender
+                      ? tBilling(
+                          defaultSenderReady
+                            ? "managedEmailSender"
+                            : "managedEmailSenderUnavailable",
+                        )
+                      : sendersQuery.data?.senders.some((sender) => sender.status === "VERIFIED")
                     ? "Есть подтвержденный домен для брендированной отправки."
                     : "Добавьте домен и подтвердите DNS перед реальной отправкой."}
-                </p>
+                  </p>
+                </div>
               </div>
-            </div>
             )}
           </CardContent>
         </Card>
@@ -2309,11 +2516,20 @@ export const EmailMarketingWorkspace = () => {
             ["automations", "Автоматизации"],
             ["senders", "Отправители"],
             ["templates", "Шаблоны"],
-          ].map(([key, label]) => (
-            <TabsTrigger key={key} active={activeTab === key} onClick={() => setActiveTab(key as TabKey)}>
-              {label}
-            </TabsTrigger>
-          ))}
+          ]
+            .filter(
+              ([key]) =>
+                (key !== "automations" || canAutomations) && (key !== "senders" || canOwnSender),
+            )
+            .map(([key, label]) => (
+              <TabsTrigger
+                key={key}
+                active={activeTab === key}
+                onClick={() => setActiveTab(key as TabKey)}
+              >
+                {label}
+              </TabsTrigger>
+            ))}
         </TabsList>
 
         {activeTab === "campaigns" ? (
@@ -2365,25 +2581,28 @@ export const EmailMarketingWorkspace = () => {
           </TabsPanel>
         ) : null}
 
-        {activeTab === "senders" ? (
+        {activeTab === "senders" && canOwnSender ? (
           <TabsPanel>
             {!sendersQuery.error ? (
               <SendersPanel
-              data={sendersQuery.data}
-              loading={sendersQuery.isLoading}
-              form={senderForm}
-              setForm={setSenderForm}
-              onCreate={() => createSenderMutation.mutate({ storeId, ...senderForm })}
-              creating={createSenderMutation.isLoading}
-              onCheck={(domainId, triggerVerification) => checkDomainMutation.mutate({ domainId, triggerVerification })}
-              checking={checkDomainMutation.isLoading}
-              onArchive={(senderId) => archiveSenderMutation.mutate({ senderId })}
-            />
+                readOnly={!billing.data?.access.hasAccess}
+                data={sendersQuery.data}
+                loading={sendersQuery.isLoading}
+                form={senderForm}
+                setForm={setSenderForm}
+                onCreate={() => createSenderMutation.mutate({ storeId, ...senderForm })}
+                creating={createSenderMutation.isLoading}
+                onCheck={(domainId, triggerVerification) =>
+                  checkDomainMutation.mutate({ domainId, triggerVerification })
+                }
+                checking={checkDomainMutation.isLoading}
+                onArchive={(senderId) => archiveSenderMutation.mutate({ senderId })}
+              />
             ) : null}
           </TabsPanel>
         ) : null}
 
-        {activeTab === "automations" ? (
+        {activeTab === "automations" && canAutomations ? (
           <TabsPanel>
             {automationsQuery.error ? (
               <QueryErrorState
@@ -2392,13 +2611,14 @@ export const EmailMarketingWorkspace = () => {
               />
             ) : (
               <AutomationsPanel
-              automations={automationsQuery.data ?? []}
-              loading={automationsQuery.isLoading}
-              senders={sendersQuery.data?.senders ?? []}
-              primarySenderId={sendersQuery.data?.primarySenderId ?? null}
-              builderAvailable={builderDesktopReady}
-              onEdit={openAutomation}
-              onToggle={(automation) =>
+                readOnly={!billing.data?.access.hasAccess}
+                automations={automationsQuery.data ?? []}
+                loading={automationsQuery.isLoading}
+                senders={sendersQuery.data?.senders ?? []}
+                primarySenderId={sendersQuery.data?.primarySenderId ?? null}
+                builderAvailable={builderDesktopReady}
+                onEdit={openAutomation}
+                onToggle={(automation) =>
                 updateAutomationMutation.mutate({
                   automationId: automation.id,
                   status:
@@ -2407,16 +2627,18 @@ export const EmailMarketingWorkspace = () => {
                       : EmailAutomationStatus.ACTIVE,
                 })
               }
-              onSender={(automationId, value) =>
+                onSender={(automationId, value) =>
                 updateAutomationMutation.mutate({
                   automationId,
                   senderIdentityId: value === "__none__" ? null : value,
                 })
               }
-              testEmail={testEmail}
-              setTestEmail={setTestEmail}
-              onTest={(automationId) => testAutomationMutation.mutate({ automationId, to: testEmail })}
-            />
+                testEmail={testEmail}
+                setTestEmail={setTestEmail}
+                onTest={(automationId) =>
+                  testAutomationMutation.mutate({ automationId, to: testEmail })
+                }
+              />
             )}
           </TabsPanel>
         ) : null}
@@ -2425,7 +2647,8 @@ export const EmailMarketingWorkspace = () => {
           <TabsPanel>
             <Card className="bazaar-admin-surface">
               <CardContent className="p-8 text-sm text-muted-foreground">
-                Базовые шаблоны доступны при создании блоков. Отдельная библиотека шаблонов готова к расширению, но без фиктивных шаблонов.
+                Базовые шаблоны доступны при создании блоков. Отдельная библиотека шаблонов готова к
+                расширению, но без фиктивных шаблонов.
               </CardContent>
             </Card>
           </TabsPanel>
@@ -2559,8 +2782,7 @@ export const EmailMarketingWorkspace = () => {
                 size="sm"
                 variant="secondary"
                 disabled={
-                  recipientDetailPage >=
-                  (campaignDetailQuery.data?.recipientPage.pageCount ?? 1)
+                  recipientDetailPage >= (campaignDetailQuery.data?.recipientPage.pageCount ?? 1)
                 }
                 onClick={() => setRecipientDetailPage((page) => page + 1)}
               >
@@ -2574,10 +2796,7 @@ export const EmailMarketingWorkspace = () => {
         </div>
       </Modal>
 
-      <LogoFileInput
-	        inputRef={logoInputRef}
-	        onFile={(file) => void handleLogoUpload(file)}
-	      />
+      <LogoFileInput inputRef={logoInputRef} onFile={(file) => void handleLogoUpload(file)} />
       {uploadingLogo ? <span className="sr-only">Загрузка логотипа</span> : null}
       {confirmDialog}
     </div>
@@ -2591,7 +2810,15 @@ const Metric = ({ label, value }: { label: string; value: number }) => (
   </div>
 );
 
-const ColorField = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => (
+const ColorField = ({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) => (
   <div className="space-y-1.5">
     <Label>{label}</Label>
     <div className="grid grid-cols-[38px_minmax(0,1fr)] gap-2">
@@ -2801,13 +3028,22 @@ const EmailBlockPreview = ({
   if (block.type === "products") {
     const ids = block.productIds ?? [];
     return (
-      <div className={cn("grid gap-3 px-6 py-5", block.layout === "one" ? "grid-cols-1" : "sm:grid-cols-2")}>
+      <div
+        className={cn(
+          "grid gap-3 px-6 py-5",
+          block.layout === "one" ? "grid-cols-1" : "sm:grid-cols-2",
+        )}
+      >
         {ids.length ? (
           ids.map((id) => {
             const product = products.get(id);
             const buttonHref = productButtonUrlForPreview(block, id);
             return (
-              <div key={id} className={cn("rounded-md border p-3", alignedClassName)} style={{ borderColor }}>
+              <div
+                key={id}
+                className={cn("rounded-md border p-3", alignedClassName)}
+                style={{ borderColor }}
+              >
                 {block.showImage === false ? null : (
                 <PreviewImageFrame
                   src={product?.imageUrl}
@@ -2819,10 +3055,10 @@ const EmailBlockPreview = ({
               )}
                 <p className="mt-3 truncate font-semibold">{product?.name ?? id}</p>
                 {block.showDescription === false || !product?.description ? null : (
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                  {product.description}
-                </p>
-              )}
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                    {product.description}
+                  </p>
+                )}
                 {block.showPrice === false ? null : (
                   <p className="text-sm text-muted-foreground">
                     {product?.priceText ?? "Цена не указана"}
@@ -3088,7 +3324,10 @@ const BlockSettings = ({
       <div className="space-y-3">
         <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
         <Field label="Заголовок">
-          <Input value={block.heading ?? ""} onChange={(event) => update({ heading: event.target.value })} />
+          <Input
+            value={block.heading ?? ""}
+            onChange={(event) => update({ heading: event.target.value })}
+          />
         </Field>
         <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
           <Button
@@ -3098,7 +3337,9 @@ const BlockSettings = ({
             aria-pressed={block.bodyBold ?? false}
             onClick={applyBodyBold}
           >
-            <span className="font-bold" aria-hidden>B</span>
+            <span className="font-bold" aria-hidden>
+              B
+            </span>
             Жирный
           </Button>
           <Field label="Размер текста">
@@ -3253,7 +3494,8 @@ const BlockSettings = ({
               <span className="min-w-0">
                 <span className="block truncate font-semibold">{product.name}</span>
                 <span className="block truncate text-xs text-muted-foreground">
-                  {[product.sku, product.barcode].filter(Boolean).join(" · ") || "Без SKU/штрихкода"}
+                  {[product.sku, product.barcode].filter(Boolean).join(" · ") ||
+                    "Без SKU/штрихкода"}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {product.priceText ?? "Нет цены"}
@@ -3263,15 +3505,20 @@ const BlockSettings = ({
           ))}
           {!products.length ? (
             <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-              {productSearch.trim() ? "По запросу ничего не найдено." : "Товары магазина не найдены."}
+              {productSearch.trim()
+                ? "По запросу ничего не найдено."
+                : "Товары магазина не найдены."}
             </div>
           ) : null}
         </div>
         <Field label="Макет">
-          <Select value={block.layout ?? "two"} onValueChange={(value) => update({ layout: value as "one" | "two" })}>
+          <Select
+            value={block.layout ?? "two"}
+            onValueChange={(value) => update({ layout: value as "one" | "two" })}
+          >
             <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="one">Один товар в ряд</SelectItem>
               <SelectItem value="two">Два товара в ряд</SelectItem>
@@ -3298,7 +3545,10 @@ const BlockSettings = ({
           <Input value={block.buttonText ?? ""} onChange={(event) => update({ buttonText: event.target.value })} />
         </Field>
         <Field label="Общая ссылка">
-          <Input value={block.buttonUrl ?? ""} onChange={(event) => update({ buttonUrl: event.target.value })} />
+          <Input
+            value={block.buttonUrl ?? ""}
+            onChange={(event) => update({ buttonUrl: event.target.value })}
+          />
         </Field>
       </div>
     );
@@ -3537,7 +3787,9 @@ const CampaignsDashboard = ({
       <div>
         <CardTitle>Кампании</CardTitle>
         {!builderAvailable ? (
-          <p className="mt-1 text-sm text-muted-foreground">Создание и редактирование доступны с компьютера.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Создание и редактирование доступны с компьютера.
+          </p>
         ) : null}
       </div>
       <Button
@@ -3582,9 +3834,15 @@ const CampaignsDashboard = ({
               {campaign.status !== EmailCampaignStatus.DRAFT ? (
                 <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   Доставлено: {campaign.deliveredCount} / {campaign.recipientCount} (
-                  {campaign.recipientCount > 0 ? Math.round((campaign.deliveredCount / campaign.recipientCount) * 100) : 0}
+                  {campaign.recipientCount > 0
+                    ? Math.round((campaign.deliveredCount / campaign.recipientCount) * 100)
+                    : 0}
                   %). Ожидает сверки: {campaign.unresolvedCount}. Постоянные ошибки:{" "}
-                  {campaign.bouncedCount + campaign.droppedCount + campaign.suppressedCount + campaign.complainedCount + campaign.failedCount}
+                  {campaign.bouncedCount +
+                    campaign.droppedCount +
+                    campaign.suppressedCount +
+                    campaign.complainedCount +
+                    campaign.failedCount}
                   .
                 </p>
               ) : null}
@@ -3650,15 +3908,29 @@ const CampaignsDashboard = ({
                         Отменить очередь ({campaign.queuedCount})
                       </ActionMenuItem>
                     ) : null}
-                    {campaign.bouncedCount + campaign.droppedCount + campaign.suppressedCount + campaign.complainedCount + campaign.failedCount > 0 ? (
+                    {campaign.bouncedCount +
+                      campaign.droppedCount +
+                      campaign.suppressedCount +
+                      campaign.complainedCount +
+                      campaign.failedCount >
+                    0 ? (
                       <ActionMenuItem onSelect={() => onExportFailed(campaign.id)}>
                         Экспорт ошибок
                       </ActionMenuItem>
                     ) : null}
-                    <ActionMenuItem onSelect={() => onDuplicate(campaign.id)}>Дублировать</ActionMenuItem>
-                    <ActionMenuItem onSelect={() => onArchive(campaign.id)}>Архивировать</ActionMenuItem>
+                    <ActionMenuItem onSelect={() => onDuplicate(campaign.id)}>
+                      Дублировать
+                    </ActionMenuItem>
+                    <ActionMenuItem onSelect={() => onArchive(campaign.id)}>
+                      Архивировать
+                    </ActionMenuItem>
                     {campaign.status === EmailCampaignStatus.DRAFT ? (
-                      <ActionMenuItem onSelect={() => onDelete(campaign.id)} className="text-danger">Удалить</ActionMenuItem>
+                      <ActionMenuItem
+                        onSelect={() => onDelete(campaign.id)}
+                        className="text-danger"
+                      >
+                        Удалить
+                      </ActionMenuItem>
                     ) : null}
                   </ActionMenu>
                   {actionCampaignId === campaign.id ? <Spinner className="h-4 w-4" /> : null}
@@ -3671,7 +3943,9 @@ const CampaignsDashboard = ({
         <div className="bazaar-admin-empty min-h-[14rem]">
           <SparklesIcon className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
           <p className="mt-3 font-semibold">{loading ? "Загрузка..." : "Кампаний пока нет"}</p>
-          <p className="mt-1 text-sm text-muted-foreground">Создайте первую рассылку из блоков и товаров магазина.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Создайте первую рассылку из блоков и товаров магазина.
+          </p>
           <Button
             type="button"
             className="mt-4"
@@ -3703,13 +3977,7 @@ const copyTextToClipboard = async (value: string) => {
   textarea.remove();
 };
 
-const CopyDnsValue = ({
-  value,
-  label,
-}: {
-  value: string;
-  label: string;
-}) => {
+const CopyDnsValue = ({ value, label }: { value: string; label: string }) => {
   const [copied, setCopied] = useState(false);
   const disabled = !value.trim();
 
@@ -3739,6 +4007,7 @@ const CopyDnsValue = ({
 };
 
 const SendersPanel = ({
+  readOnly = false,
   data,
   loading,
   form,
@@ -3749,6 +4018,7 @@ const SendersPanel = ({
   checking,
   onArchive,
 }: {
+  readOnly?: boolean;
   data?: {
     defaultSender: { fromEmail: string; status: string; demoOnly: boolean } | null;
     primarySenderId?: string | null;
@@ -3786,15 +4056,38 @@ const SendersPanel = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <Field label="Имя отправителя">
-          <Input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} placeholder="Avantehnik" />
+          <Input
+            value={form.displayName}
+            onChange={(event) => setForm({ ...form, displayName: event.target.value })}
+            placeholder="Avantehnik"
+            disabled={readOnly}
+          />
         </Field>
-        <Field label="From email" hint="Адрес должен принадлежать домену, который вы подтвердите через DNS.">
-          <Input value={form.fromEmail} onChange={(event) => setForm({ ...form, fromEmail: event.target.value })} placeholder="news@example.kg" />
+        <Field
+          label="From email"
+          hint="Адрес должен принадлежать домену, который вы подтвердите через DNS."
+        >
+          <Input
+            value={form.fromEmail}
+            onChange={(event) => setForm({ ...form, fromEmail: event.target.value })}
+            placeholder="news@example.kg"
+            disabled={readOnly}
+          />
         </Field>
         <Field label="Reply-to">
-          <Input value={form.replyToEmail} onChange={(event) => setForm({ ...form, replyToEmail: event.target.value })} placeholder="support@example.kg" />
+          <Input
+            value={form.replyToEmail}
+            onChange={(event) => setForm({ ...form, replyToEmail: event.target.value })}
+            placeholder="support@example.kg"
+            disabled={readOnly}
+          />
         </Field>
-        <Button type="button" className="w-full" disabled={creating || !form.displayName || !form.fromEmail} onClick={onCreate}>
+        <Button
+          type="button"
+          className="w-full"
+          disabled={readOnly || creating || !form.displayName || !form.fromEmail}
+          onClick={onCreate}
+        >
           {creating ? <Spinner className="h-4 w-4" /> : <AddIcon className="h-4 w-4" aria-hidden />}
           Добавить отправителя
         </Button>
@@ -3814,19 +4107,37 @@ const SendersPanel = ({
             </div>
             <p className="break-all text-xs text-muted-foreground">
               Фактически используется: {data.senderHealth.activeFromEmail}.{" "}
-              {data.senderHealth.fallbackPermitted ? "Fallback Bazaar разрешен: подтвержденного custom-домена нет." : "Fallback Bazaar заблокирован: используется подтвержденный custom-домен."}
+              {data.senderHealth.fallbackPermitted
+                ? "Fallback Bazaar разрешен: подтвержденного custom-домена нет."
+                : "Fallback Bazaar заблокирован: используется подтвержденный custom-домен."}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Badge variant={data.senderHealth.customDomainVerified ? "success" : data.senderHealth.customDomainRequired ? "danger" : "muted"}>
+              <Badge
+                variant={
+                  data.senderHealth.customDomainVerified
+                    ? "success"
+                    : data.senderHealth.customDomainRequired
+                      ? "danger"
+                      : "muted"
+                }
+              >
                 Домен {data.senderHealth.customDomainVerified ? "подтвержден" : "не подтвержден"}
               </Badge>
               <Badge variant={data.senderHealth.dkim.verified ? "success" : "warning"}>
                 DKIM{" "}
-                {data.senderHealth.dkim.verified ? "OK" : data.senderHealth.dkim.visible ? "ожидает" : "нет данных"}
+                {data.senderHealth.dkim.verified
+                  ? "OK"
+                  : data.senderHealth.dkim.visible
+                    ? "ожидает"
+                    : "нет данных"}
               </Badge>
               <Badge variant={data.senderHealth.spfOrMailFrom.verified ? "success" : "warning"}>
                 SPF / MAIL FROM{" "}
-                {data.senderHealth.spfOrMailFrom.verified ? "OK" : data.senderHealth.spfOrMailFrom.visible ? "ожидает" : "нет данных"}
+                {data.senderHealth.spfOrMailFrom.verified
+                  ? "OK"
+                  : data.senderHealth.spfOrMailFrom.visible
+                    ? "ожидает"
+                    : "нет данных"}
               </Badge>
               <Badge variant={data.senderHealth.dmarc.visible ? "success" : "warning"}>
                 DMARC {data.senderHealth.dmarc.visible ? "виден" : "нет данных"}
@@ -3880,10 +4191,25 @@ const SendersPanel = ({
                   {data?.primarySenderId === sender.id ? (
                     <Badge variant="success">Основной</Badge>
                   ) : null}
-                  <Badge variant={sender.status === "VERIFIED" ? "success" : sender.status === "FAILED" ? "danger" : "warning"}>
+                  <Badge
+                    variant={
+                      sender.status === "VERIFIED"
+                        ? "success"
+                        : sender.status === "FAILED"
+                          ? "danger"
+                          : "warning"
+                    }
+                  >
                     {senderStatusLabel(sender.status)}
                   </Badge>
-                  <Button type="button" size="icon" variant="ghost" onClick={() => onArchive(sender.id)} aria-label="Архивировать">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onArchive(sender.id)}
+                    aria-label="Архивировать"
+                    disabled={readOnly}
+                  >
                     <ArchiveIcon className="h-4 w-4" />
                   </Button>
                 </div>
@@ -3912,10 +4238,20 @@ const SendersPanel = ({
                   <div>
                     <p className="font-semibold">{domain.domain}</p>
                     <p className="text-xs text-muted-foreground">
-                      {domain.lastCheckedAt ? `Проверен: ${formatDateTime(domain.lastCheckedAt, "ru")}` : "Еще не проверялся"}
+                      {domain.lastCheckedAt
+                        ? `Проверен: ${formatDateTime(domain.lastCheckedAt, "ru")}`
+                        : "Еще не проверялся"}
                     </p>
                   </div>
-                  <Badge variant={domain.status === "VERIFIED" ? "success" : domain.status === "FAILED" ? "danger" : "warning"}>
+                  <Badge
+                    variant={
+                      domain.status === "VERIFIED"
+                        ? "success"
+                        : domain.status === "FAILED"
+                          ? "danger"
+                          : "warning"
+                    }
+                  >
                     {senderStatusLabel(domain.status)}
                   </Badge>
                 </div>
@@ -3960,7 +4296,9 @@ const SendersPanel = ({
                   </Table>
                 </div>
                 <div className="bazaar-admin-notice mt-3">
-                  <p className="text-xs font-semibold text-muted-foreground">Рекомендуется добавить DMARC TXT</p>
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    Рекомендуется добавить DMARC TXT
+                  </p>
                   <div className="mt-2 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)]">
                     <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2 rounded-md bg-background px-2 py-1.5">
                       <code className="truncate text-xs" title={dmarcName}>
@@ -3977,14 +4315,31 @@ const SendersPanel = ({
                   </div>
                 </div>
                 <div className="mt-3 flex gap-2">
-                  <Button type="button" size="sm" variant="secondary" disabled={checking} onClick={() => onCheck(domain.id, false)}>Проверить DNS</Button>
-                  <Button type="button" size="sm" disabled={checking} onClick={() => onCheck(domain.id, true)}>Запустить проверку</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={readOnly || checking}
+                    onClick={() => onCheck(domain.id, false)}
+                  >
+                    Проверить DNS
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={readOnly || checking}
+                    onClick={() => onCheck(domain.id, true)}
+                  >
+                    Запустить проверку
+                  </Button>
                 </div>
               </div>
             );
           })}
           {!loading && !(data?.domains ?? []).length ? (
-            <p className="text-sm text-muted-foreground">Добавьте отправителя, чтобы получить DNS записи Resend.</p>
+            <p className="text-sm text-muted-foreground">
+              Добавьте отправителя, чтобы получить DNS записи Resend.
+            </p>
           ) : null}
         </CardContent>
       </Card>
@@ -3993,6 +4348,7 @@ const SendersPanel = ({
 );
 
 const AutomationsPanel = ({
+  readOnly = false,
   automations,
   loading,
   senders,
@@ -4005,6 +4361,7 @@ const AutomationsPanel = ({
   setTestEmail,
   onTest,
 }: {
+  readOnly?: boolean;
   automations: AutomationDashboardItem[];
   loading: boolean;
   senders: Array<{ id: string; displayName: string; fromEmail: string; status: string }>;
@@ -4038,12 +4395,18 @@ const AutomationsPanel = ({
             <div className="bazaar-admin-info-tile p-2">
               <p className="text-xs text-muted-foreground">Последний запуск</p>
               <p className="mt-1 truncate text-xs font-semibold">
-                {automation.lastTriggeredAt ? formatDateTime(automation.lastTriggeredAt, "ru") : "Нет"}
+                {automation.lastTriggeredAt
+                  ? formatDateTime(automation.lastTriggeredAt, "ru")
+                  : "Нет"}
               </p>
             </div>
           </div>
           <Field label="Отправитель">
-            <Select value={automation.senderIdentityId ?? primarySenderId ?? "__none__"} onValueChange={(value) => onSender(automation.id, value)}>
+            <Select
+              value={automation.senderIdentityId ?? primarySenderId ?? "__none__"}
+              onValueChange={(value) => onSender(automation.id, value)}
+              disabled={readOnly}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -4052,28 +4415,44 @@ const AutomationsPanel = ({
                   <SelectItem value="__none__">Автоматически: Bazaar KG</SelectItem>
                 )}
                 {senders.map((sender) => (
-                          <SelectItem key={sender.id} value={sender.id} disabled={sender.status !== "VERIFIED"}>
-                            {sender.displayName} · {sender.fromEmail}
-                          </SelectItem>
-                        ))}
+                  <SelectItem
+                    key={sender.id}
+                    value={sender.id}
+                    disabled={sender.status !== "VERIFIED"}
+                  >
+                    {sender.displayName} · {sender.fromEmail}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <Input value={testEmail} onChange={(event) => setTestEmail(event.target.value)} placeholder="test@example.com" />
-            <Button type="button" variant="secondary" disabled={!testEmail} onClick={() => onTest(automation.id)}>Тест</Button>
+            <Input
+              value={testEmail}
+              onChange={(event) => setTestEmail(event.target.value)}
+              placeholder="test@example.com"
+              disabled={readOnly}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={readOnly || !testEmail}
+              onClick={() => onTest(automation.id)}
+            >
+              Тест
+            </Button>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
               variant="secondary"
               onClick={() => onEdit(automation)}
-              disabled={!builderAvailable}
+              disabled={readOnly || !builderAvailable}
               title={!builderAvailable ? builderUnavailableMessage : undefined}
             >
               Редактировать письмо
             </Button>
-            <Button type="button" onClick={() => onToggle(automation)}>
+            <Button type="button" onClick={() => onToggle(automation)} disabled={readOnly}>
               {automation.status === EmailAutomationStatus.ACTIVE ? "Пауза" : "Активировать"}
             </Button>
           </div>
@@ -4087,7 +4466,9 @@ const AutomationsPanel = ({
     ))}
     {!loading && !automations.length ? (
       <Card className="bazaar-admin-surface xl:col-span-2">
-        <CardContent className="bazaar-admin-empty m-4 min-h-[10rem]">Автоматизации будут созданы после выбора магазина.</CardContent>
+        <CardContent className="bazaar-admin-empty m-4 min-h-[10rem]">
+          Автоматизации будут созданы после выбора магазина.
+        </CardContent>
       </Card>
     ) : null}
   </div>

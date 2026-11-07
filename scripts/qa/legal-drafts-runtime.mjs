@@ -1,7 +1,9 @@
-// Read-only legal-page QA. No .env secrets, database services or payment provider
-// credentials are inherited. Never use this launcher for real application use.
+// Read-only legal-page QA. No database services or API/payment credentials are
+// inherited. Explicit local dev preview receives only verified seller fields.
+// Never use this launcher for real application use.
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import fs from "node:fs";
 
 const require = createRequire(import.meta.url);
 const mode = process.argv[2];
@@ -34,6 +36,29 @@ const env = {
   SIGNUP_MODE: "invite_only",
   BAZAAR_LEGAL_PREVIEW: mode === "dev-disabled" ? "0" : "1",
 };
+if (mode === "dev" && fs.existsSync(".env.local")) {
+  const allowed = new Set([
+    "BILLING_SELLER_LEGAL_NAME",
+    "BILLING_SELLER_ENTREPRENEUR_NAME",
+    "BILLING_SELLER_TAX_ID",
+    "BILLING_SELLER_REGISTRATION_NUMBER",
+    "BILLING_SELLER_REGISTRATION_DATE",
+    "BILLING_SELLER_REGISTRATION_AUTHORITY",
+    "BILLING_SELLER_PHONE",
+    "BILLING_SELLER_EMAIL",
+    "BILLING_SELLER_BANK_NAME",
+    "BILLING_SELLER_BENEFICIARY",
+    "BILLING_SELLER_ACCOUNT_NUMBER",
+    "BILLING_SELLER_ACCOUNT_CURRENCY",
+    "BILLING_SELLER_BANK_CODE",
+  ]);
+  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
+    const match = /^(BILLING_SELLER_[A-Z_]+)=(.*)$/.exec(line.trim());
+    if (!match || !allowed.has(match[1])) continue;
+    const raw = match[2].trim();
+    env[match[1]] = raw.startsWith('"') ? JSON.parse(raw) : raw.replace(/^'|'$/g, "");
+  }
+}
 const args =
   mode === "build"
     ? ["build"]

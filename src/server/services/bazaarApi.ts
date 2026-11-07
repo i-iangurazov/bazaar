@@ -1,4 +1,6 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { withSubscriptionUsage } from "@/server/billing/subscriptionUsage";
 import {
   CustomerOrderSource,
   CustomerOrderStatus,
@@ -793,6 +795,11 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
   if (!apiKey || apiKey.revokedAt) {
     throw new AppError("apiUnauthorized", "UNAUTHORIZED", 401);
   }
+  await assertFeatureEnabled({ organizationId: apiKey.organizationId, feature: "bazaarApi" });
+  // Count verified external requests only. Internal POS calls and public
+  // catalogue views never pass through key authentication.
+  await withSubscriptionUsage({ organizationId: apiKey.organizationId, resource: "externalApi",
+    operationKey: randomUUID() }, async () => undefined);
 
   const now = new Date();
   const staleBefore = new Date(now.getTime() - API_KEY_LAST_USED_UPDATE_INTERVAL_MS);

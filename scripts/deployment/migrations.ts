@@ -8,6 +8,13 @@ import { resolveMigrationDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20261107100000_subscription_contracts": "b792622c58aa01afa2bb47b86083873ff40ace5dbb2b131f4c1c81774e69ac33",
+  "20261107110000_subscription_usage": "ec1cfb3e4722d7abc30d32162fba84a1bb9036647eee526707d1bf3f2a87f3fc",
+  "20261107120000_subscription_marketplace_channel": "5d89deff84d1d22c4cddb75a800ce4d620ef870fcc8f5b8e9e5ee7e1af9d3fb8",
+  "20261107130000_subscription_scheduled_limits": "8e9588d8659b050e5f830ddd72718729b8e2a4528af3f8c93f303764fca1b850",
+  "20261107140000_initial_product_import_session": "94ee450aab07088e2c6f1c63aca2fe16157018c06ad59dcfe4507ff9f2a8181d",
+  "20261107150000_subscription_provider_budget": "85882c774830a2f36392c76c34e1e35c62d1a875237712dca8d517305b9f3bb5",
+  "20261107160000_subscription_reminders": "a8b4ab417af6a4f8bef9ece05445f8d4582d807c954e0ae457a8d48699bd28a0",
   "20261103120000_signup_attribution": "3726afa7b924f95f71a4fd3ec43c86514a6febd51d417e6b4e62a0510a4b4f74",
   "20261030100000_catalog_visibility_and_order_archive": "c3fe73baae37a01f36ce410a409a1c500a0970387c8435fdaac30415388f52dd",
   "20261021170000_subscription_payments": "82dce9c6cf1511cb8c970071d9849bf54e9f919bdcf2db639dc131de86275203",

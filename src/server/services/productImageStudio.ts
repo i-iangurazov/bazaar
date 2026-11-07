@@ -1,5 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { reserveSubscriptionUsage, resumeSubscriptionUsage, startSubscriptionUsage,
+  settleSubscriptionUsage, type UsageLease } from "@/server/billing/subscriptionUsage";
+import { reserveProviderExpense, settleProviderExpense, imageExpenseMinor } from "@/server/billing/providerExpense";
+import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 import { extname, resolve, sep } from "node:path";
 
 import sharp from "sharp";
@@ -102,6 +107,7 @@ type ProductImageStudioSourceImage = {
 };
 
 type OpenAiImageResponseBody = {
+  usage?: unknown;
   data?: Array<{ b64_json?: string | null; revised_prompt?: string | null }>;
   id?: string | null;
   status?: string | null;
@@ -589,6 +595,7 @@ export const prepareStudioPhotoAnalysis = async (sourceImage: ProductImageStudio
 };
 
 export const callOpenAiImageEnhancement = async (input: {
+  organizationId?: string;
   jobId: string;
   sourceImage: ProductImageStudioSourceImage;
   prompt: string;
@@ -652,6 +659,11 @@ export const callOpenAiImageEnhancement = async (input: {
 
   const deadline = Date.now() + PRODUCT_IMAGE_STUDIO_PROVIDER_TIMEOUT_MS;
   for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
+    const expense = input.organizationId ? await reserveProviderExpense({
+      organizationId: input.organizationId, kind: "image",
+      operationKey: `image-provider:${input.jobId}:${attempt}:${randomUUID()}`,
+      estimatedMinor: imageExpenseMinor(null, Boolean(input.presets.highQuality), config.imageModel),
+    }) : null;
     let response: Response;
     let responseBody: OpenAiImageResponseBody | null = null;
     try {
@@ -665,6 +677,7 @@ export const callOpenAiImageEnhancement = async (input: {
       });
       responseBody = (await response.json().catch(() => null)) as OpenAiImageResponseBody | null;
     } catch (error) {
+      await settleProviderExpense(expense);
       const normalized = normalizeProviderError({ error });
       // A timeout may leave a paid image request running. Never launch another
       // generation after an uncertain network outcome.
@@ -675,6 +688,8 @@ export const callOpenAiImageEnhancement = async (input: {
       });
     }
     if (!response.ok) {
+      await settleProviderExpense(expense,
+        response.status >= 400 && response.status < 500 && response.status !== 408 ? 0 : undefined);
       const normalized = normalizeProviderError({ status: response.status, body: responseBody });
       // Only an explicit rate-limit response is safe to repeat. A server 5xx
       // can follow a paid generation, just like a network timeout.
@@ -694,6 +709,8 @@ export const callOpenAiImageEnhancement = async (input: {
         requestId: response.headers.get("x-request-id")?.slice(0, 120) ?? null,
       });
     }
+    await settleProviderExpense(expense,
+      imageExpenseMinor(responseBody?.usage, Boolean(input.presets.highQuality), config.imageModel));
     const result = responseBody?.data?.[0]?.b64_json;
     if (typeof result !== "string" || !result.trim()) {
       throw new AppError("productImageStudioProviderOutputMissing", "INTERNAL_SERVER_ERROR", 502);
@@ -1027,6 +1044,7 @@ export const createProductImageStudioJob = async (input: {
   brighterPresentation?: boolean;
   highQuality?: boolean;
 }) => {
+  await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imageStudio" });
   const presets: ProductImageStudioPresetInput = {
     backgroundMode: input.backgroundMode,
     outputFormat: input.outputFormat,
@@ -1117,6 +1135,9 @@ export const createProductImageStudioJob = async (input: {
       if (inserted.count !== 1) {
         return null;
       }
+
+      await reserveSubscriptionUsage({ organizationId: input.organizationId,
+        resource: "images", operationKey: `image:${candidateId}` }, new Date(), tx);
 
       await writeAuditLog(tx, {
         organizationId: input.organizationId,
@@ -1446,12 +1467,18 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
     where: { id: job.id },
   });
 
+  let usageLease: UsageLease = null;
   try {
+    await assertFeatureEnabled({ organizationId: running.organizationId, feature: "imageStudio" });
+    usageLease = await resumeSubscriptionUsage({ organizationId: running.organizationId,
+      resource: "images", operationKey: `image:${running.id}` });
+    await startSubscriptionUsage(usageLease);
     const sourceImage = await validateUploadedImage({
       organizationId: running.organizationId,
       sourceImageUrl: running.sourceImageUrl,
     });
-    const providerResult = await callOpenAiImageEnhancement({
+    const providerResult = await withAiOperationBudget({ organizationId: running.organizationId, kind: "image", enabled: usageLease !== null }, () => callOpenAiImageEnhancement({
+      organizationId: usageLease ? running.organizationId : undefined,
       jobId: running.id,
       sourceImage,
       prompt:
@@ -1475,7 +1502,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
         tighterCrop: running.tighterCrop,
         brighterPresentation: running.brighterPresentation,
       },
-    });
+    }));
     const stillOwned = await prisma.productImageStudioJob.findFirst({
       where: {
         id: running.id,
@@ -1522,6 +1549,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
       if (completed.count !== 1) {
         return null;
       }
+      await settleSubscriptionUsage(usageLease, true, tx);
       const completedJob = await tx.productImageStudioJob.findUniqueOrThrow({
         where: { id: running.id },
       });
@@ -1613,6 +1641,13 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
         status: failed.status,
       },
     };
+  } finally {
+    if (usageLease) {
+      const completed = await prisma.productImageStudioJob.findUnique({
+        where: { id: running.id }, select: { status: true },
+      });
+      await settleSubscriptionUsage(usageLease, completed?.status === ProductImageStudioJobStatus.SUCCEEDED);
+    }
   }
 };
 

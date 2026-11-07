@@ -100,7 +100,9 @@ export async function readBaamData(
       ? "customerOrders"
       : request.dataset === "stock_counts"
         ? "stockCounts"
-        : undefined;
+        : request.dataset === "purchases"
+          ? "purchaseOrders"
+          : undefined;
   if (feature) await assertFeatureEnabled({ organizationId: scope.organizationId, feature });
 
   if (request.dataset === "sales_metrics") {

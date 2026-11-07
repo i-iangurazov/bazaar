@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ADDITIONAL_STORE_CAPS, CURRENT_CATALOG_VERSION, EMPTY_SUBSCRIPTION_EXTRAS, type SubscriptionExtras, type SubscriptionMonths } from "@/lib/billing/subscriptionPricing";
 import { QueryErrorState } from "@/components/query-error-state";
 import {
   Select,
@@ -32,9 +33,19 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
     { getNextPageParam: (page) => page.nextCursor },
   );
   const [selected, setSelected] = useState<PlanCode | null>(null);
+  const [months, setMonths] = useState<SubscriptionMonths>(1);
+  const [extras, setExtras] = useState<SubscriptionExtras | null>(null);
+  const [action, setAction] = useState<"RENEW" | "CHANGE">("RENEW");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [consent, setConsent] = useState<{
     plan: PlanCode;
+    months: SubscriptionMonths;
+    extras: SubscriptionExtras;
+    action: "RENEW" | "CHANGE";
+    quoteToken: string;
+    startsAt: string;
+    endsAt: string;
+    creditMinor: number;
     amount: number;
     termsVersion: string;
     termsUrl: string;
@@ -103,7 +114,13 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
     return () => window.clearInterval(timer);
   }, [pendingId, pendingStatus]);
   const plan = selected ?? toPlanCode(settings.data?.currentPlan ?? "STARTER");
-  const amount = settings.data?.catalog.find((item) => item.plan === plan)?.amountMinor ?? 0;
+  const selectedExtras = extras ?? settings.data?.currentExtras ?? EMPTY_SUBSCRIPTION_EXTRAS;
+  const selectedMonths = action === "CHANGE" ? settings.data?.currentMonths ?? 1 : months;
+  const quote = trpc.billing.payments.quote.useQuery(
+    { plan, months: selectedMonths, extras: selectedExtras, action },
+    { enabled: Boolean(settings.data?.canPurchase), retry: false, staleTime: 30_000 },
+  );
+  const amount = quote.data?.amountMinor ?? 0;
   const money = (minor: number) => formatCurrencyKGS(minor / 100, locale);
   const name = (code: string) => plans(`${toPlanCode(code).toLowerCase()}.name`);
   const records = history.data?.pages.flatMap((page) => page.items) ?? [];
@@ -130,8 +147,8 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 {t("sandbox")}
               </p>
             ) : null}
-            {settings.data.billingMode === "MANUAL" ? (
-              <p className="text-sm text-muted-foreground">{t("manualAccess")}</p>
+            {settings.data.lifetimeAccess || settings.data.billingMode === "MANUAL" ? (
+              <p className="text-sm text-muted-foreground">{t(settings.data.lifetimeAccess ? "lifetimeAccess" : "manualAccess")}</p>
             ) : settings.data.accountPaused ? (
               <p className="text-sm text-muted-foreground">{t("accountPaused")}</p>
             ) : !settings.data.available ? (
@@ -178,6 +195,18 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
             ) : settings.data.canPurchase ? (
               <div className="space-y-3" data-checkout-form>
                 <p className="text-sm text-muted-foreground">{t("description")}</p>
+                {settings.data.canChange ? (
+                  <div className="max-w-sm space-y-2">
+                    <label htmlFor="subscription-action" className="block text-sm font-medium">{t("purchaseAction")}</label>
+                    <Select value={action} onValueChange={(value) => { setAction(value as "RENEW" | "CHANGE"); requestKey.current = ""; }}>
+                      <SelectTrigger id="subscription-action"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="RENEW">{t("renewAction")}</SelectItem>
+                        <SelectItem value="CHANGE">{t("changeAction")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
                 <label htmlFor="subscription-plan" className="block text-sm font-medium">
                   {t("plan")}
                 </label>
@@ -187,6 +216,8 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                       value={plan}
                       onValueChange={(value) => {
                         setSelected(value as PlanCode);
+                        setExtras({ ...selectedExtras, stores: Math.min(selectedExtras.stores,
+                          ADDITIONAL_STORE_CAPS[value as PlanCode]) });
                         requestKey.current = "";
                       }}
                     >
@@ -198,30 +229,31 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                           <SelectItem
                             key={item.plan}
                             value={item.plan}
-                            disabled={
-                              !settings.data?.mayChangePlan &&
-                              item.plan !== settings.data.currentPlan
-                            }
                           >
-                            {name(item.plan)} · {money(item.amountMinor)}
+                            {name(item.plan)}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <Button
+                    disabled={!quote.data || quote.isFetching || quote.isError}
                     onClick={() => {
-                      if (!settings.data) return;
+                      if (!settings.data || !quote.data) return;
                       if (
                         !requestKey.current ||
-                        (consent &&
-                          (consent.plan !== plan ||
-                            consent.amount !== amount ||
-                            consent.termsVersion !== settings.data.termsVersion))
+                        (consent && consent.quoteToken !== quote.data.quoteToken)
                       )
                         requestKey.current = crypto.randomUUID();
                       setConsent({
                         plan,
+                        months: quote.data.months,
+                        extras: quote.data.extras,
+                        action,
+                        quoteToken: quote.data.quoteToken,
+                        startsAt: quote.data.startsAt,
+                        endsAt: quote.data.endsAt,
+                        creditMinor: quote.data.creditMinor,
                         amount,
                         termsVersion: settings.data.termsVersion,
                         termsUrl: settings.data.termsUrl,
@@ -232,12 +264,45 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                       setConfirmOpen(true);
                     }}
                   >
-                    {t("pay", { amount: money(amount) })}
+                    {quote.isFetching ? common("loading") : t("pay", { amount: money(amount) })}
                   </Button>
                 </div>
-                {!settings.data.mayChangePlan ? (
-                  <p className="text-xs text-muted-foreground">{t("planChangeHint")}</p>
+                <div className="space-y-2 sm:max-w-xs">
+                  <label htmlFor="subscription-months" className="block text-sm font-medium">{t("term")}</label>
+                  <Select value={String(selectedMonths)} disabled={action === "CHANGE"} onValueChange={(value) => { setMonths(Number(value) as SubscriptionMonths); requestKey.current = ""; }}>
+                    <SelectTrigger id="subscription-months"><SelectValue /></SelectTrigger>
+                    <SelectContent>{([1, 6, 12] as const).map((term) => <SelectItem key={term} value={String(term)}>{t(`term${term}`)}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                {settings.data.catalogVersion === CURRENT_CATALOG_VERSION ? <fieldset className="space-y-3">
+                  <legend className="text-sm font-medium">{t("extrasTitle")}</legend>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label htmlFor="subscription-extra-stores" className="block text-sm">{t("extrastores")}</label>
+                      {ADDITIONAL_STORE_CAPS[plan] > 0 ? <Select value={String(selectedExtras.stores)}
+                        onValueChange={(value) => { setExtras({ ...selectedExtras, stores: Number(value) }); requestKey.current = ""; }}>
+                        <SelectTrigger id="subscription-extra-stores"><SelectValue /></SelectTrigger>
+                        <SelectContent>{Array.from({ length: ADDITIONAL_STORE_CAPS[plan] + 1 }, (_, count) =>
+                          <SelectItem key={count} value={String(count)}>{t("extraStoreCount", { count })}</SelectItem>)}</SelectContent>
+                      </Select> : <p className="text-sm text-muted-foreground">{t("starterOneStore")}</p>}
+                    </div>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-input p-3">
+                      <Checkbox checked={selectedExtras.productPacks === 1}
+                        onCheckedChange={(checked) => { setExtras({ ...selectedExtras, productPacks: checked === true ? 1 : 0 }); requestKey.current = ""; }} />
+                      <span className="text-sm">{t("extraproductPacks")}</span>
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t("extrasHint")}</p>
+                </fieldset> : null}
+                {quote.isError ? <QueryErrorState error={quote.error} onRetry={() => void quote.refetch()} /> : quote.data ? (
+                  <div className="space-y-2 rounded-md border border-input p-4" aria-live="polite" data-subscription-quote>
+                    <p className="font-semibold">{t("total", { amount: money(quote.data.amountMinor) })}</p>
+                    <p className="text-sm text-muted-foreground">{t(quote.data.kind === "UPGRADE" ? "upgradeDates" : "renewDates", { start: formatDateTime(quote.data.startsAt, locale), end: formatDateTime(quote.data.endsAt, locale) })}</p>
+                    {quote.data.kind === "UPGRADE" ? <p className="text-sm">{t("credit", { amount: money(quote.data.creditMinor) })}</p> : <p className="text-sm">{t("discount", { percent: quote.data.discountBps / 100 })}</p>}
+                    <p className="text-xs text-muted-foreground">{t("oneTimePayment")}</p>
+                  </div>
                 ) : null}
+                <p className="text-xs text-muted-foreground">{t("planChangeHint")}</p>
               </div>
             ) : null}
             <p
@@ -303,6 +368,14 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                             </div>
                           ) : null}
                           <div>
+                            <dt>{t("term")}</dt>
+                            <dd>{t(`term${invoice.purchase?.months ?? 1}`)}</dd>
+                          </div>
+                          {invoice.purchase ? <div>
+                            <dt>{t("extrasTitle")}</dt>
+                            <dd>{t("extrasSummary", { stores: invoice.purchase.extras.stores, products: invoice.purchase.extras.productPacks * 1000, users: invoice.purchase.catalogVersion === CURRENT_CATALOG_VERSION ? invoice.purchase.extras.productPacks * 2 : invoice.purchase.extras.userPacks * 5 })}</dd>
+                          </div> : null}
+                          <div>
                             <dt>{t("seller")}</dt>
                             <dd>{invoice.sellerName}</dd>
                           </div>
@@ -352,6 +425,10 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                   checkout.mutate({
                     expectedAmountMinor: consent.amount,
                     plan: consent.plan,
+                    months: consent.months,
+                    extras: consent.extras,
+                    action: consent.action,
+                    quoteToken: consent.quoteToken,
                     idempotencyKey: requestKey.current,
                     termsVersion: consent.termsVersion,
                     acceptedTerms: true,
@@ -365,6 +442,10 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                     amount: money(consent?.amount ?? amount),
                   })}
                 </p>
+                <p className="text-sm">{t(`term${consent?.months ?? selectedMonths}`)}</p>
+                <p className="text-sm">{t("extrasSummary", { stores: consent?.extras.stores ?? 0, products: (consent?.extras.productPacks ?? 0) * 1000, users: settings.data?.catalogVersion === CURRENT_CATALOG_VERSION ? (consent?.extras.productPacks ?? 0) * 2 : (consent?.extras.userPacks ?? 0) * 5 })}</p>
+                {consent ? <p className="text-sm">{t(consent.action === "CHANGE" ? "upgradeDates" : "renewDates", { start: formatDateTime(consent.startsAt, locale), end: formatDateTime(consent.endsAt, locale) })}</p> : null}
+                {consent?.creditMinor ? <p className="text-sm">{t("credit", { amount: money(consent.creditMinor) })}</p> : null}
                 <p className="text-sm text-muted-foreground">{t("renewalPolicy")}</p>
                 <p className="text-xs text-muted-foreground">{consent?.sellerName}</p>
                 <div className="flex items-start gap-3">

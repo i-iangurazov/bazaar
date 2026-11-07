@@ -46,8 +46,11 @@ vi.mock("@/components/page-header", () => ({
   ),
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
-vi.mock("@/lib/trpc", () => {
+vi.mock("@/lib/trpc", async () => {
+  const { getPlanCatalogEntry } = await import("@/server/billing/planCatalog");
+  const legacyPlan = getPlanCatalogEntry("ENTERPRISE", "2026-10");
   const paths = [
+    "billing.features",
     "bakaiStore.apiSyncNow",
     "bakaiStore.apiSyncReadyNow",
     "bakaiStore.exportNow",
@@ -154,6 +157,16 @@ vi.mock("@/lib/trpc", () => {
             ? { message: "serviceUnavailable", data: { code: "INTERNAL_SERVER_ERROR" } }
             : null;
         let data: unknown;
+        if (path === "billing.features")
+          data = {
+            billingCatalogVersion: "2026-10",
+            lifetimeAccess: false,
+            selectedMarketplaceChannel: null,
+            access: { hasAccess: true },
+            featureFlags: legacyPlan.features,
+            limits: legacyPlan.limits,
+            usageLimits: legacyPlan.usageLimits,
+          };
         if (path === "stores.list") data = state.emptyStores ? [] : state.stores;
         if (["bazaarApi.listStores", "bazaarCatalog.listStores"].includes(path))
           data = state.emptyStores ? [] : state.catalogStores;

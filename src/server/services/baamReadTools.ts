@@ -39,7 +39,9 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
       ? "customerOrders"
       : input.kind === "stock_counts"
         ? "stockCounts"
-        : undefined;
+        : input.kind === "purchases"
+          ? "purchaseOrders"
+          : undefined;
   if (feature) await assertFeatureEnabled({ organizationId, feature });
   const storeIds = input.storeId ? [input.storeId] : scope.storeIds;
   const storeId = { in: storeIds };

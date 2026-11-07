@@ -7,6 +7,7 @@ import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertProductExportAccess } from "@/server/billing/coreAccess";
 import {
   normalizeOptionalCustomerAddress,
   normalizeOptionalCustomerPhone,
@@ -545,6 +546,10 @@ export const listCustomersForExport = async (input: {
   sortBy?: "createdAt" | "name" | "orderCount" | "lastOrderAt";
   sortDirection?: "asc" | "desc";
 }) => {
+  await assertProductExportAccess({
+    organizationId: input.user.organizationId,
+    actorId: input.user.id,
+  });
   const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
   if (!accessibleStoreIds.length) {
     return [];
@@ -605,9 +610,22 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
   await assertUserCanAccessStore(prisma, input.user, customer.storeId);
 
   const customerMatches: Prisma.CustomerOrderWhereInput[] = [];
-  if (customer.email && await prisma.customer.count({ where: { organizationId: input.user.organizationId, email: { equals: customer.email, mode: "insensitive" } } }) === 1)
+  if (
+    customer.email &&
+    (await prisma.customer.count({
+      where: {
+        organizationId: input.user.organizationId,
+        email: { equals: customer.email, mode: "insensitive" },
+      },
+    })) === 1
+  )
     customerMatches.push({ customerEmail: { equals: customer.email, mode: "insensitive" } });
-  if (customer.phone && await prisma.customer.count({ where: { organizationId: input.user.organizationId, phone: customer.phone } }) === 1)
+  if (
+    customer.phone &&
+    (await prisma.customer.count({
+      where: { organizationId: input.user.organizationId, phone: customer.phone },
+    })) === 1
+  )
     customerMatches.push({ customerPhone: customer.phone, customerEmail: null });
 
   const recentOrders = await prisma.customerOrder.findMany({
@@ -617,7 +635,10 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
       isPosSale: true,
       status: CustomerOrderStatus.COMPLETED,
       isHeld: false,
-      OR: [{ customerId: customer.id }, ...(customerMatches.length ? [{ customerId: null, OR: customerMatches }] : [])],
+      OR: [
+        { customerId: customer.id },
+        ...(customerMatches.length ? [{ customerId: null, OR: customerMatches }] : []),
+      ],
     },
     select: {
       id: true,
@@ -1161,11 +1182,16 @@ export const upsertCustomerFromOrderTx = async (
   },
 ) => {
   const link = async (customer: { id: string } | null) => {
-    if (input.orderId) await tx.customerOrder.updateMany({
-      where: { id: input.orderId, organizationId: input.organizationId, storeId: input.storeId,
-        ...(input.replaceCustomerIdentity ? {} : { customerId: null }) },
-      data: { customerId: customer?.id ?? null },
-    });
+    if (input.orderId)
+      await tx.customerOrder.updateMany({
+        where: {
+          id: input.orderId,
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          ...(input.replaceCustomerIdentity ? {} : { customerId: null }),
+        },
+        data: { customerId: customer?.id ?? null },
+      });
   };
   const email = normalizeCustomerEmail(input.customerEmail);
   let phone: string | null = null;

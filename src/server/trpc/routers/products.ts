@@ -88,6 +88,7 @@ import {
 } from "@/server/services/productDescriptionGenerationJobs";
 import { isProductDescriptionGenerationConfigured } from "@/server/services/productDescriptions";
 import { isAiDescriptionGenerationEnabled } from "@/lib/featureFlags";
+import { withSubscriptionUsage } from "@/server/billing/subscriptionUsage";
 import { updateProductImages } from "@/server/services/products";
 import { productStorePreparationSchema, productStorePreparationApplySchema } from "@/lib/productStorePreparation";
 import { previewProductStorePreparation, applyProductStorePreparation, reconcileProductStorePreparation } from "@/server/services/productStorePreparation";
@@ -450,10 +451,11 @@ export const productsRouter = router({
     .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "products-description-generate" }))
     .input(generateProductDescriptionInputSchema)
     .mutation(({ ctx, input }) =>
-      generateProductDescriptionMutation({
+      withSubscriptionUsage({ organizationId: ctx.user.organizationId, resource: "ai",
+        operationKey: `product-description:${ctx.user.id}:${ctx.requestId}` }, () => generateProductDescriptionMutation({
         input,
         logger: ctx.logger,
-      }),
+      })),
     ),
 
   bulkGenerateBarcodes: managerProcedure

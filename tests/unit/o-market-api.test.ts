@@ -1,5 +1,6 @@
 import { Prisma, OMarketJobType } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AppError } from "@/server/services/errors";
 
 import {
   createOrUpdateOMarketProducts,
@@ -14,17 +15,32 @@ import {
 } from "@/server/services/oMarket";
 
 describe("o-market api helpers", () => {
+  it("preserves local subscription failures without labelling them as partner/network errors", () => {
+    expect(
+      normalizeOMarketApiError({
+        status: null,
+        body: null,
+        error: new AppError("billingUsageLimitReached", "CONFLICT", 409),
+      }),
+    ).toMatchObject({
+      code: "billingUsageLimitReached",
+      message: "billingUsageLimitReached",
+      status: 409,
+      retryable: false,
+    });
+  });
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
   });
 
   it("constructs create/update requests with the documented X-Access-Token header", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ result: { task_id: 42 }, status: "success" }), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ result: { task_id: 42 }, status: "success" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
     ) as unknown as typeof fetch;
 
     const response = await createOrUpdateOMarketProducts({
@@ -49,11 +65,12 @@ describe("o-market api helpers", () => {
   });
 
   it("uses the documented stock and price update endpoint", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ result: { task_id: 7 }, status: "success" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ result: { task_id: 7 }, status: "success" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
     ) as unknown as typeof fetch;
 
     await updateOMarketStockPrice({
@@ -69,11 +86,12 @@ describe("o-market api helpers", () => {
   });
 
   it("fetches import status by task id", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify([{ sku: "SKU-1", status: "success", error_data: [] }]), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify([{ sku: "SKU-1", status: "success", error_data: [] }]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
     ) as unknown as typeof fetch;
 
     await getOMarketImportStatus({ token: "token", taskId: 42, fetchImpl });
@@ -240,11 +258,12 @@ describe("o-market api helpers", () => {
     vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "live");
     vi.resetModules();
     const { uploadOMarketImageFile } = await import("@/server/services/oMarketApiClient");
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ result: { url: "https://cdn.example.com/image.png" } }), {
-        status: 201,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ result: { url: "https://cdn.example.com/image.png" } }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }),
     ) as unknown as typeof fetch;
 
     const response = await uploadOMarketImageFile({

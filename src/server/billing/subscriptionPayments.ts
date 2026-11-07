@@ -4,17 +4,31 @@ import type { Prisma, SubscriptionInvoice } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
-import { getPlanCatalogEntries, getPlanMonthlyPriceKgs } from "./planCatalog";
+import { contractPlan } from "./contractTerms";
 import { getSubscriptionPaymentConfig } from "./paymentConfig";
-import { extendSubscriptionMonth, kgsToMinor } from "./paymentMath";
+import { extendSubscriptionMonths, kgsToMinor } from "./paymentMath";
 import { getFreedomPayStatus, initializeFreedomPay, scalar, type SignedFields } from "./freedomPay";
 import type { PlanCode } from "@/lib/billing/plans";
+import {
+  EMPTY_SUBSCRIPTION_EXTRAS,
+  subscriptionPrice,
+  type SubscriptionMonths,
+  type SubscriptionExtras,
+} from "@/lib/billing/subscriptionPricing";
+import { getOrganizationPlan } from "@/server/services/planLimits";
+import { calculateSubscriptionQuote } from "./subscriptionQuotes";
+import { readPurchaseSnapshot, verifyPurchaseQuote } from "./purchaseSnapshot";
+import { LIFETIME_ORGANIZATION_IDS } from "./lifetimeOrganizations";
+import { assertSubscriptionSelectionReady } from "./subscriptionPreparation";
 
 const nowPlus = (milliseconds: number) => new Date(Date.now() + milliseconds);
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const lockOrganization = async (tx: Prisma.TransactionClient, organizationId: string) => {
   await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
-  return tx.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  return tx.organization.findUniqueOrThrow({
+    where: { id: organizationId },
+    include: { subscriptionContract: true },
+  });
 };
 
 export const presentInvoice = (
@@ -22,6 +36,7 @@ export const presentInvoice = (
 ) => ({
   id: invoice.id,
   plan: invoice.plan,
+  purchase: readPurchaseSnapshot(invoice.purchaseSnapshot),
   amountMinor: invoice.amountMinor,
   currency: invoice.currency,
   status: invoice.status,
@@ -41,7 +56,7 @@ export const presentInvoice = (
 export const getSubscriptionPaymentState = async (organizationId: string) => {
   const config = getSubscriptionPaymentConfig();
   const [organization, pending, lastPeriod] = await Promise.all([
-    prisma.organization.findUniqueOrThrow({ where: { id: organizationId } }),
+    getOrganizationPlan(organizationId),
     prisma.subscriptionInvoice.findFirst({
       where: { organizationId, OR: [{ pendingSlot: organizationId }, { status: "REVIEW" }] },
       orderBy: { createdAt: "desc" },
@@ -56,10 +71,17 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
     termsUrl: config.termsUrl,
     termsVersion: config.termsVersion,
     billingMode: organization.subscriptionBillingMode,
+    lifetimeAccess: organization.lifetimeAccess,
+    catalogVersion: organization.billingCatalogVersion,
+    currentExtras: organization.subscriptionExtras,
+    currentMonths: organization.activePurchase?.months ?? 1,
+    canChange: Boolean(organization.activeSubscriptionPeriod),
+    paidUntil: organization.currentPeriodEndsAt,
     accountPaused: organization.subscriptionStatus === "CANCELED",
     canPurchase:
       config.ready &&
       organization.subscriptionBillingMode === "SELF_SERVE" &&
+      !organization.lifetimeAccess &&
       organization.subscriptionStatus !== "CANCELED" &&
       !pending,
     currentPlan: organization.plan,
@@ -67,9 +89,11 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
       !lastPeriod ||
       !organization.currentPeriodEndsAt ||
       organization.currentPeriodEndsAt <= new Date(),
-    catalog: getPlanCatalogEntries().map((entry) => ({
+    catalog: Object.values(organization.contractTerms.plans).map((entry) => ({
       plan: entry.code,
       amountMinor: kgsToMinor(entry.monthlyPriceKgs),
+      limits: entry.limits,
+      features: entry.features,
     })),
     pendingInvoice: pending ? presentInvoice(pending) : null,
   };
@@ -101,6 +125,10 @@ export const createSubscriptionCheckout = async (input: {
   organizationId: string;
   actorId: string;
   plan: PlanCode;
+  months?: SubscriptionMonths;
+  extras?: SubscriptionExtras;
+  action?: "RENEW" | "CHANGE";
+  quoteToken?: string;
   idempotencyKey: string;
   termsVersion: string;
   expectedAmountMinor: number;
@@ -109,10 +137,10 @@ export const createSubscriptionCheckout = async (input: {
 }) => {
   const config = getSubscriptionPaymentConfig();
   if (!config.ready) throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
-  if (input.termsVersion !== config.termsVersion)
-    throw new AppError("billingTermsChanged", "CONFLICT", 409);
   const invoice = await prisma.$transaction(async (tx) => {
     const org = await lockOrganization(tx, input.organizationId);
+    if (org.subscriptionContract?.lifetimeAccess || LIFETIME_ORGANIZATION_IDS.has(org.id))
+      throw new AppError("billingLifetimeProtected", "FORBIDDEN", 403);
     if (org.subscriptionBillingMode !== "SELF_SERVE" || org.subscriptionStatus === "CANCELED")
       throw new AppError("billingManualAccessProtected", "CONFLICT", 409);
     const prior = await tx.subscriptionInvoice.findUnique({
@@ -124,7 +152,19 @@ export const createSubscriptionCheckout = async (input: {
       },
     });
     if (prior) {
-      if (prior.plan !== input.plan || prior.createdById !== input.actorId)
+      const purchase = readPurchaseSnapshot(prior.purchaseSnapshot);
+      const extras = input.extras ?? EMPTY_SUBSCRIPTION_EXTRAS;
+      if (
+        (purchase &&
+          (purchase.months !== (input.months ?? 1) ||
+            purchase.extras.stores !== extras.stores ||
+            purchase.extras.productPacks !== extras.productPacks ||
+            purchase.extras.userPacks !== extras.userPacks ||
+            purchase.kind !== ((input.action ?? "RENEW") === "CHANGE" ? "UPGRADE" : "RENEWAL"))) ||
+        prior.amountMinor !== input.expectedAmountMinor ||
+        prior.plan !== input.plan ||
+        prior.createdById !== input.actorId
+      )
         throw new AppError("idempotencyConflict", "CONFLICT", 409);
       return { value: prior, initialize: false };
     }
@@ -137,18 +177,49 @@ export const createSubscriptionCheckout = async (input: {
         "CONFLICT",
         409,
       );
-    const priorPayment = await tx.subscriptionPeriod.findFirst({
-      where: { organizationId: org.id },
-      select: { id: true },
-    });
+    if (input.termsVersion !== config.termsVersion)
+      throw new AppError("billingTermsChanged", "CONFLICT", 409);
+    const selection = {
+      plan: input.plan,
+      months: input.months ?? 1,
+      extras: input.extras ?? EMPTY_SUBSCRIPTION_EXTRAS,
+      action: input.action ?? "RENEW",
+    } as const;
+    const snapshot = input.quoteToken
+      ? verifyPurchaseQuote(input.quoteToken, org.id)
+      : await calculateSubscriptionQuote(org.id, selection, tx);
+    const effective = await getOrganizationPlan(org.id, tx);
+    await assertSubscriptionSelectionReady(
+      effective,
+      contractPlan(effective.contractTerms, input.plan, selection.extras),
+      tx,
+    );
     if (
-      priorPayment &&
-      org.currentPeriodEndsAt &&
-      org.currentPeriodEndsAt > new Date() &&
-      input.plan !== org.plan
+      snapshot.plan !== input.plan ||
+      snapshot.months !== selection.months ||
+      snapshot.extras.stores !== selection.extras.stores ||
+      snapshot.extras.productPacks !== selection.extras.productPacks ||
+      snapshot.extras.userPacks !== selection.extras.userPacks ||
+      snapshot.kind !== (selection.action === "CHANGE" ? "UPGRADE" : "RENEWAL") ||
+      snapshot.catalogVersion !== effective.billingCatalogVersion ||
+      snapshot.expectedPlan !== org.plan ||
+      (snapshot.kind === "UPGRADE" &&
+        snapshot.sourcePeriodId !== effective.activeSubscriptionPeriod?.id) ||
+      snapshot.expectedPeriodEnd !== (org.currentPeriodEndsAt?.toISOString() ?? null)
     )
-      throw new AppError("billingPlanChangeAfterPeriod", "CONFLICT", 409);
-    const amountMinor = kgsToMinor(getPlanMonthlyPriceKgs(input.plan));
+      throw new AppError("billingQuoteChanged", "CONFLICT", 409);
+    if (
+      snapshot.monthlyMinor !==
+      subscriptionPrice(
+        kgsToMinor(
+          contractPlan(effective.contractTerms, input.plan, selection.extras).monthlyPriceKgs,
+        ),
+        snapshot.months,
+        snapshot.extras,
+      ).monthlyMinor
+    )
+      throw new AppError("billingPriceChanged", "CONFLICT", 409);
+    const amountMinor = snapshot.amountMinor;
     if (input.expectedAmountMinor !== amountMinor)
       throw new AppError("billingPriceChanged", "CONFLICT", 409);
     const created = await tx.subscriptionInvoice.create({
@@ -159,6 +230,7 @@ export const createSubscriptionCheckout = async (input: {
         pendingSlot: org.id,
         plan: input.plan,
         amountMinor,
+        purchaseSnapshot: snapshot,
         merchantId: config.merchantId,
         isTest: config.mode === "sandbox",
         termsVersion: config.termsVersion,
@@ -314,7 +386,10 @@ export const applyVerifiedPayment = async (input: {
     if (
       refunded ||
       (settled &&
-        (org.subscriptionBillingMode !== "SELF_SERVE" || org.subscriptionStatus === "CANCELED"))
+        (org.subscriptionBillingMode !== "SELF_SERVE" ||
+          org.subscriptionStatus === "CANCELED" ||
+          org.subscriptionContract?.lifetimeAccess ||
+          LIFETIME_ORGANIZATION_IDS.has(org.id)))
     ) {
       return tx.subscriptionInvoice.update({
         where: { id: invoice.id },
@@ -334,33 +409,87 @@ export const applyVerifiedPayment = async (input: {
           where: { id: invoice.id },
           data: { ...update, status: "PAID", pendingSlot: null },
         });
-      const anyPeriod = await tx.subscriptionPeriod.findFirst({
-        where: { organizationId: org.id },
-        select: { id: true },
-      });
       const now = new Date();
+      const purchase = readPurchaseSnapshot(invoice.purchaseSnapshot);
+      const effective = await getOrganizationPlan(org.id, tx);
+      if (purchase?.entitlements) {
+        try {
+          await assertSubscriptionSelectionReady(effective, purchase.entitlements, tx);
+        } catch (error) {
+          if (!(error instanceof AppError)) throw error;
+          return tx.subscriptionInvoice.update({
+            where: { id: invoice.id },
+            data: { ...update, status: "REVIEW", lastIssue: "ACCESS_CHANGED" },
+          });
+        }
+      }
       if (
-        anyPeriod &&
-        org.currentPeriodEndsAt &&
-        org.currentPeriodEndsAt > now &&
-        org.plan !== invoice.plan
+        purchase &&
+        (purchase.expectedPlan !== org.plan ||
+          purchase.expectedPeriodEnd !== (org.currentPeriodEndsAt?.toISOString() ?? null) ||
+          (purchase.kind === "UPGRADE" &&
+            (effective.activeSubscriptionPeriod?.id !== purchase.sourcePeriodId ||
+              new Date(purchase.endsAt) <= now)))
       )
         return tx.subscriptionInvoice.update({
           where: { id: invoice.id },
-          data: { ...update, status: "REVIEW", lastIssue: "PLAN_CHANGED" },
+          data: { ...update, status: "REVIEW", lastIssue: "ACCESS_CHANGED" },
         });
-      const startsAt = new Date(
-        Math.max(
-          now.getTime(),
-          org.currentPeriodEndsAt?.getTime() ?? 0,
-          org.trialEndsAt?.getTime() ?? 0,
-        ),
-      );
+      // Pre-v2 invoices keep their original one-month grant semantics.
+      if (!purchase) {
+        const anyPeriod = await tx.subscriptionPeriod.findFirst({
+          where: { organizationId: org.id },
+          select: { id: true },
+        });
+        if (
+          anyPeriod &&
+          org.currentPeriodEndsAt &&
+          org.currentPeriodEndsAt > now &&
+          org.plan !== invoice.plan
+        )
+          return tx.subscriptionInvoice.update({
+            where: { id: invoice.id },
+            data: { ...update, status: "REVIEW", lastIssue: "PLAN_CHANGED" },
+          });
+      }
+      const startsAt =
+        purchase?.kind === "UPGRADE"
+          ? new Date(purchase.startsAt)
+          : new Date(
+              Math.max(
+                now.getTime(),
+                org.currentPeriodEndsAt?.getTime() ?? 0,
+                org.trialEndsAt?.getTime() ?? 0,
+              ),
+            );
       const anchorDay =
-        org.currentPeriodEndsAt?.getTime() === startsAt.getTime() && org.billingAnchorDay
-          ? org.billingAnchorDay
-          : startsAt.getUTCDate();
-      const endsAt = extendSubscriptionMonth(startsAt, anchorDay);
+        purchase?.kind === "UPGRADE"
+          ? purchase.anchorDay
+          : org.currentPeriodEndsAt?.getTime() === startsAt.getTime() && org.billingAnchorDay
+            ? org.billingAnchorDay
+            : startsAt.getUTCDate();
+      const endsAt =
+        purchase?.kind === "UPGRADE"
+          ? new Date(purchase.endsAt)
+          : extendSubscriptionMonths(startsAt, anchorDay, purchase?.months ?? 1);
+      const grantedPurchase = purchase
+        ? {
+            ...purchase,
+            startsAt: startsAt.toISOString(),
+            endsAt: endsAt.toISOString(),
+            ...(purchase.kind === "RENEWAL"
+              ? {
+                  cycleStartsAt: startsAt.toISOString(),
+                  cycleEndsAt: endsAt.toISOString(),
+                  anchorDay,
+                }
+              : {}),
+          }
+        : undefined;
+      const hasPriorPeriod = await tx.subscriptionPeriod.findFirst({
+        where: { organizationId: org.id },
+        select: { id: true },
+      });
       await tx.subscriptionPeriod.create({
         data: {
           invoiceId: invoice.id,
@@ -368,12 +497,13 @@ export const applyVerifiedPayment = async (input: {
           plan: invoice.plan,
           startsAt,
           endsAt,
+          ...(grantedPurchase ? { purchaseSnapshot: grantedPurchase } : {}),
         },
       });
       await tx.organization.update({
         where: { id: org.id },
         data: {
-          plan: invoice.plan,
+          plan: startsAt <= now || !hasPriorPeriod ? invoice.plan : org.plan,
           subscriptionStatus: "ACTIVE",
           currentPeriodEndsAt: endsAt,
           billingAnchorDay: anchorDay,
@@ -486,27 +616,66 @@ export const checkSubscriptionInvoice = async (organizationId: string, invoiceId
 };
 
 export const verifyInvoiceCanBePaid = async (invoiceId: string, fields: SignedFields) => {
-  const invoice = await prisma.subscriptionInvoice.findUnique({
+  const seed = await prisma.subscriptionInvoice.findUnique({
     where: { id: invoiceId },
-    include: {
-      organization: { select: { subscriptionBillingMode: true, subscriptionStatus: true } },
-    },
+    select: { organizationId: true },
   });
-  if (
-    !invoice ||
-    invoice.expiresAt <= new Date() ||
-    !["CREATING", "PENDING"].includes(invoice.status) ||
-    invoice.organization.subscriptionBillingMode !== "SELF_SERVE" ||
-    invoice.organization.subscriptionStatus === "CANCELED" ||
-    scalar(fields, "pg_currency") !== "KGS" ||
-    !sameAmount(fields, invoice.amountMinor) ||
-    (scalar(fields, "pg_testing_mode") !== undefined &&
-      scalar(fields, "pg_testing_mode") !== (invoice.isTest ? "1" : "0")) ||
-    (scalar(fields, "pg_merchant_id") !== undefined &&
-      scalar(fields, "pg_merchant_id") !== invoice.merchantId) ||
-    (invoice.providerPaymentId && scalar(fields, "pg_payment_id") !== invoice.providerPaymentId)
-  )
-    throw new AppError("billingPaymentMismatch", "CONFLICT", 409);
+  if (!seed) throw new AppError("billingPaymentMismatch", "CONFLICT", 409);
+  return prisma.$transaction(async (tx) => {
+    const org = await lockOrganization(tx, seed.organizationId);
+    const invoice = await tx.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
+    const now = new Date();
+    if (
+      invoice.expiresAt <= now ||
+      !["CREATING", "PENDING"].includes(invoice.status) ||
+      org.subscriptionBillingMode !== "SELF_SERVE" ||
+      org.subscriptionStatus === "CANCELED" ||
+      org.subscriptionContract?.lifetimeAccess ||
+      LIFETIME_ORGANIZATION_IDS.has(org.id) ||
+      scalar(fields, "pg_currency") !== "KGS" ||
+      !sameAmount(fields, invoice.amountMinor) ||
+      (scalar(fields, "pg_testing_mode") !== undefined &&
+        scalar(fields, "pg_testing_mode") !== (invoice.isTest ? "1" : "0")) ||
+      (invoice.isTest && process.env.VERCEL_ENV === "production") ||
+      (scalar(fields, "pg_merchant_id") !== undefined &&
+        scalar(fields, "pg_merchant_id") !== invoice.merchantId) ||
+      (invoice.providerPaymentId && scalar(fields, "pg_payment_id") !== invoice.providerPaymentId)
+    )
+      throw new AppError("billingPaymentMismatch", "CONFLICT", 409);
+    const purchase = readPurchaseSnapshot(invoice.purchaseSnapshot);
+    const effective = await getOrganizationPlan(org.id, tx);
+    if (
+      purchase &&
+      (purchase.expectedPlan !== org.plan ||
+        purchase.expectedPeriodEnd !== (org.currentPeriodEndsAt?.toISOString() ?? null) ||
+        purchase.catalogVersion !== effective.billingCatalogVersion ||
+        (purchase.kind === "UPGRADE" &&
+          (effective.activeSubscriptionPeriod?.id !== purchase.sourcePeriodId ||
+            new Date(purchase.endsAt) <= now)))
+    )
+      throw new AppError("billingQuoteChanged", "CONFLICT", 409);
+    if (!purchase) {
+      const prior = await tx.subscriptionPeriod.findFirst({
+        where: { organizationId: org.id },
+        select: { id: true },
+      });
+      if (
+        prior &&
+        org.currentPeriodEndsAt &&
+        org.currentPeriodEndsAt > now &&
+        org.plan !== invoice.plan
+      )
+        throw new AppError("billingQuoteChanged", "CONFLICT", 409);
+    }
+    await assertSubscriptionSelectionReady(
+      effective,
+      purchase?.entitlements ??
+        contractPlan(effective.contractTerms, invoice.plan, purchase?.extras),
+      tx,
+    );
+    // The provider has not collected yet. This check deliberately changes no
+    // invoice/access state; settlement repeats these checks after confirmation.
+  });
 };
 
 export const reconcileSubscriptionPayments = async () => {

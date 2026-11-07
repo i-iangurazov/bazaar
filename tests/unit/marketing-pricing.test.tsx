@@ -24,7 +24,7 @@ describe("public tariff rendering", () => {
     root.innerHTML = renderToStaticMarkup(
       <MarketingPricing plans={getPlanCatalogEntries()} locale={locale} t={t} />,
     );
-    const billing = getPlanCatalog();
+    const billing = getPlanCatalog("2026-11");
     expect(root.querySelectorAll("article")).toHaveLength(3);
     for (const plan of billing) {
       const card = root.querySelector(`article[data-plan="${plan.plan}"]`)!;
@@ -38,6 +38,10 @@ describe("public tariff rendering", () => {
     }
     for (const feature of PLAN_FEATURE_CODES) {
       const cells = root.querySelectorAll(`tr[data-feature="${feature}"] td`);
+      if (["supportToolkit", "compliance", "kkm"].includes(feature)) {
+        expect(cells).toHaveLength(0);
+        continue;
+      }
       expect([...cells].map((cell) => cell.getAttribute("data-included"))).toEqual(
         billing.map((p) => String(p.featureFlags[feature])),
       );
@@ -49,14 +53,15 @@ describe("public tariff rendering", () => {
     expect(root.textContent).not.toContain("undefined");
   });
 
-  it("renders an exact fractional KGS override in both the card and comparison", () => {
+  it("preserves an agreed legacy fractional KGS override without changing the public catalog", () => {
     vi.stubEnv("PLAN_PRICE_STARTER_KGS", "1890.50");
     const t = createTranslator({ locale: "en", messages: en, namespace: "billing" });
     const html = renderToStaticMarkup(
-      <MarketingPricing plans={getPlanCatalogEntries()} locale="en" t={t} />,
+      <MarketingPricing plans={getPlanCatalogEntries("2026-10")} locale="en" t={t} />,
     );
     expect(html).toContain("1,890.5");
     expect(html).toContain("1,890.5 KGS/month");
-    expect(getPlanCatalog()[0].monthlyPriceKgs).toBe(1890.5);
+    expect(getPlanCatalog("2026-10")[0].monthlyPriceKgs).toBe(1890.5);
+    expect(getPlanCatalog("2026-11")[0].monthlyPriceKgs).toBe(2000);
   });
 });

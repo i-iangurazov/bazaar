@@ -61,12 +61,7 @@ import {
   ShieldCheckIcon,
   SettingsIcon,
 } from "@/components/icons";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
@@ -85,6 +80,13 @@ const StoresPage = () => {
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
   const canManageProductSettings = isAdmin || Boolean(session?.user?.isOrgOwner);
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
+  const canConfigureExpiry = Boolean(
+    billing.data?.access.hasAccess && billing.data.featureFlags.expiryLots,
+  );
   const pathname = usePathname() ?? "/stores";
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -469,29 +471,35 @@ const StoresPage = () => {
                 <TooltipProvider>
                   <InlineEditTableProvider>
                     <Table className="min-w-[760px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("name")}</TableHead>
-                        <TableHead className="hidden sm:table-cell">{t("code")}</TableHead>
-                        <TableHead className="hidden lg:table-cell">{t("productCatalog")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("legalType")}</TableHead>
-                        <TableHead className="hidden lg:table-cell">{t("inn")}</TableHead>
-                        <TableHead>{t("allowNegativeStock")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("trackExpiryLots")}</TableHead>
-                        <TableHead className="hidden lg:table-cell">{t("complianceStatus")}</TableHead>
-                        <TableHead>{tCommon("actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visibleItems.map((store) => {
-                        const isUpdating =
-                          updatePolicyMutation.isLoading &&
-                          updatePolicyMutation.variables?.storeId === store.id;
-                        const complianceBadge = resolveComplianceBadge(store);
-                        return (
-                          <TableRow key={store.id}>
-                            <TableCell className="font-medium">
-                              <InlineEditableCell
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t("name")}</TableHead>
+                          <TableHead className="hidden sm:table-cell">{t("code")}</TableHead>
+                          <TableHead className="hidden lg:table-cell">
+                            {t("productCatalog")}
+                          </TableHead>
+                          <TableHead className="hidden md:table-cell">{t("legalType")}</TableHead>
+                          <TableHead className="hidden lg:table-cell">{t("inn")}</TableHead>
+                          <TableHead>{t("allowNegativeStock")}</TableHead>
+                          <TableHead className="hidden md:table-cell">
+                            {t("trackExpiryLots")}
+                          </TableHead>
+                          <TableHead className="hidden lg:table-cell">
+                            {t("complianceStatus")}
+                          </TableHead>
+                          <TableHead>{tCommon("actions")}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((store) => {
+                          const isUpdating =
+                            updatePolicyMutation.isLoading &&
+                            updatePolicyMutation.variables?.storeId === store.id;
+                          const complianceBadge = resolveComplianceBadge(store);
+                          return (
+                            <TableRow key={store.id}>
+                              <TableCell className="font-medium">
+                                <InlineEditableCell
                                 rowId={store.id}
                                 row={store}
                                 value={store.name}
@@ -505,9 +513,9 @@ const StoresPage = () => {
                                 enabled={inlineEditingEnabled}
                                 executeMutation={executeInlineStoreMutation}
                               />
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                              <InlineEditableCell
+                              </TableCell>
+                              <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
+                                <InlineEditableCell
                                 rowId={store.id}
                                 row={store}
                                 value={store.code}
@@ -521,12 +529,12 @@ const StoresPage = () => {
                                 enabled={inlineEditingEnabled}
                                 executeMutation={executeInlineStoreMutation}
                               />
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                              {store.productCatalog?.name ?? t("productCatalogStandalone")}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
-                              <InlineEditableCell
+                              </TableCell>
+                              <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                                {store.productCatalog?.name ?? t("productCatalogStandalone")}
+                              </TableCell>
+                              <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                                <InlineEditableCell
                                 rowId={store.id}
                                 row={store}
                                 value={store.legalEntityType}
@@ -540,9 +548,9 @@ const StoresPage = () => {
                                 enabled={inlineEditingEnabled}
                                 executeMutation={executeInlineStoreMutation}
                               />
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">
-                              <InlineEditableCell
+                              </TableCell>
+                              <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                                <InlineEditableCell
                                 rowId={store.id}
                                 row={store}
                                 value={store.inn}
@@ -556,9 +564,9 @@ const StoresPage = () => {
                                 enabled={inlineEditingEnabled}
                                 executeMutation={executeInlineStoreMutation}
                               />
-                            </TableCell>
-                            <TableCell>
-                              <InlineEditableCell
+                              </TableCell>
+                              <TableCell>
+                                <InlineEditableCell
                                 rowId={store.id}
                                 row={store}
                                 value={store.allowNegativeStock}
@@ -572,72 +580,75 @@ const StoresPage = () => {
                                 enabled={inlineEditingEnabled}
                                 executeMutation={executeInlineStoreMutation}
                               />
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <InlineEditableCell
-                                rowId={store.id}
-                                row={store}
-                                value={store.trackExpiryLots}
-                                definition={inlineEditRegistry.stores.trackExpiryLots}
-                                context={{}}
-                                role={role}
-                                locale={locale}
-                                columnLabel={t("trackExpiryLots")}
-                                tTable={t}
-                                tCommon={tCommon}
-                                enabled={inlineEditingEnabled}
-                                executeMutation={executeInlineStoreMutation}
-                              />
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell">
-                              <Badge variant={complianceBadge.variant}>
-                                {complianceBadge.icon}
-                                {complianceBadge.label}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {canManage ? (
-                                <DropdownMenu>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex">
-                                        <DropdownMenuTrigger asChild>
-                                          <Button
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell">
+                                <InlineEditableCell
+                                  rowId={store.id}
+                                  row={store}
+                                  value={store.trackExpiryLots}
+                                  definition={inlineEditRegistry.stores.trackExpiryLots}
+                                  context={{}}
+                                  role={role}
+                                  locale={locale}
+                                  columnLabel={t("trackExpiryLots")}
+                                  tTable={t}
+                                  tCommon={tCommon}
+                                  enabled={
+                                    inlineEditingEnabled &&
+                                    (canConfigureExpiry || store.trackExpiryLots)
+                                  }
+                                  executeMutation={executeInlineStoreMutation}
+                                />
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell">
+                                <Badge variant={complianceBadge.variant}>
+                                  {complianceBadge.icon}
+                                  {complianceBadge.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {canManage ? (
+                                  <DropdownMenu>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex">
+                                          <DropdownMenuTrigger asChild>
+                                            <Button
                                             type="button"
                                             variant="ghost"
                                             size="icon"
                                             className="shadow-none"
                                             aria-label={tCommon("actions")}
                                           >
-                                            <MoreIcon className="h-4 w-4" aria-hidden />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>{tCommon("actions")}</TooltipContent>
-                                  </Tooltip>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => setViewingStore(store)}>
-                                    <ViewIcon className="h-4 w-4" aria-hidden />
-                                      {tCommon("view")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                      <Link href={`/stores/${store.id}/compliance`}>
-                                      <ShieldCheckIcon className="h-4 w-4" aria-hidden />
-                                        {t("complianceSettings")}
-                                      </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                      <Link href={`/stores/${store.id}/hardware`}>
-                                      <SettingsIcon className="h-4 w-4" aria-hidden />
-                                        {t("hardwareSettings")}
-                                      </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => openEditDialog(store)}>
-                                    <EditIcon className="h-4 w-4" aria-hidden />
-                                      {t("edit")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
+                                              <MoreIcon className="h-4 w-4" aria-hidden />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{tCommon("actions")}</TooltipContent>
+                                    </Tooltip>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onSelect={() => setViewingStore(store)}>
+                                        <ViewIcon className="h-4 w-4" aria-hidden />
+                                        {tCommon("view")}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem asChild>
+                                        <Link href={`/stores/${store.id}/compliance`}>
+                                          <ShieldCheckIcon className="h-4 w-4" aria-hidden />
+                                          {t("complianceSettings")}
+                                        </Link>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem asChild>
+                                        <Link href={`/stores/${store.id}/hardware`}>
+                                          <SettingsIcon className="h-4 w-4" aria-hidden />
+                                          {t("hardwareSettings")}
+                                        </Link>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onSelect={() => openEditDialog(store)}>
+                                        <EditIcon className="h-4 w-4" aria-hidden />
+                                        {t("edit")}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
                                       onSelect={() =>
                                         updatePolicyMutation.mutate({
                                           storeId: store.id,
@@ -647,36 +658,47 @@ const StoresPage = () => {
                                       }
                                       disabled={isUpdating}
                                     >
-                                    {isUpdating ? <Spinner className="h-3 w-3" /> : <AdjustIcon className="h-4 w-4" aria-hidden />}
-                                      {isUpdating
+                                        {isUpdating ? (
+                                          <Spinner className="h-3 w-3" />
+                                        ) : (
+                                          <AdjustIcon className="h-4 w-4" aria-hidden />
+                                        )}
+                                        {isUpdating
                                         ? tCommon("loading")
                                         : store.allowNegativeStock
                                         ? t("disableNegative")
                                         : t("enableNegative")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onSelect={() =>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onSelect={() =>
                                         updatePolicyMutation.mutate({
                                           storeId: store.id,
                                           allowNegativeStock: store.allowNegativeStock,
                                           trackExpiryLots: !store.trackExpiryLots,
                                         })
                                       }
-                                      disabled={isUpdating}
-                                    >
-                                    {isUpdating ? <Spinner className="h-3 w-3" /> : <AdjustIcon className="h-4 w-4" aria-hidden />}
-                                      {isUpdating
+                                        disabled={
+                                          isUpdating ||
+                                          (!canConfigureExpiry && !store.trackExpiryLots)
+                                        }
+                                      >
+                                        {isUpdating ? (
+                                          <Spinner className="h-3 w-3" />
+                                        ) : (
+                                          <AdjustIcon className="h-4 w-4" aria-hidden />
+                                        )}
+                                        {isUpdating
                                         ? tCommon("loading")
                                         : store.trackExpiryLots
                                           ? t("disableExpiryLots")
                                           : t("enableExpiryLots")}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              ) : (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
                                       type="button"
                                       variant="ghost"
                                       size="icon"
@@ -684,18 +706,18 @@ const StoresPage = () => {
                                       aria-label={tCommon("view")}
                                       onClick={() => setViewingStore(store)}
                                     >
-                                      <ViewIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{tCommon("view")}</TooltipContent>
-                                </Tooltip>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                                        <ViewIcon className="h-4 w-4" aria-hidden />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{tCommon("view")}</TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </InlineEditTableProvider>
                 </TooltipProvider>
               </div>
@@ -734,7 +756,9 @@ const StoresPage = () => {
                       },
                       {
                         key: "toggle-negative",
-                        label: store.allowNegativeStock ? t("disableNegative") : t("enableNegative"),
+                        label: store.allowNegativeStock
+                          ? t("disableNegative")
+                          : t("enableNegative"),
                         icon: StatusWarningIcon,
                         disabled: isUpdating,
                         onSelect: () =>
@@ -746,9 +770,11 @@ const StoresPage = () => {
                       },
                       {
                         key: "toggle-expiry",
-                        label: store.trackExpiryLots ? t("disableExpiryLots") : t("enableExpiryLots"),
+                        label: store.trackExpiryLots
+                          ? t("disableExpiryLots")
+                          : t("enableExpiryLots"),
                         icon: StatusWarningIcon,
-                        disabled: isUpdating,
+                        disabled: isUpdating || (!canConfigureExpiry && !store.trackExpiryLots),
                         onSelect: () =>
                           updatePolicyMutation.mutate({
                             storeId: store.id,
@@ -799,7 +825,9 @@ const StoresPage = () => {
                     </Badge>
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {store.legalEntityType ? legalTypeLabels[store.legalEntityType] : tCommon("notAvailable")}
+                    {store.legalEntityType
+                      ? legalTypeLabels[store.legalEntityType]
+                      : tCommon("notAvailable")}
                     {store.inn ? ` · ${store.inn}` : ""}
                   </div>
                 </div>
@@ -1029,9 +1057,7 @@ const StoresPage = () => {
             <FormSection
               title={t("productCatalogTitle")}
               description={
-                canManageProductSettings
-                  ? t("productCatalogHint")
-                  : t("productCatalogAdminOnly")
+                canManageProductSettings ? t("productCatalogHint") : t("productCatalogAdminOnly")
               }
             >
               <FormField
@@ -1099,7 +1125,11 @@ const StoresPage = () => {
                         <FormDescription>{t("trackExpiryHint")}</FormDescription>
                       </div>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canConfigureExpiry && !editingStore?.trackExpiryLots}
+                        />
                       </FormControl>
                     </div>
                     <FormMessage />
@@ -1424,20 +1454,12 @@ const StoresPage = () => {
             </FormSection>
 
             <FormActions>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setStoreDialogOpen(false)}
-              >
+              <Button type="button" variant="ghost" onClick={() => setStoreDialogOpen(false)}>
                 {tCommon("cancel")}
               </Button>
               <Button type="submit" disabled={isSaving}>
                 {isSaving ? <Spinner className="h-4 w-4" /> : null}
-                {isSaving
-                  ? tCommon("loading")
-                  : editingStore
-                    ? t("save")
-                    : t("create")}
+                {isSaving ? tCommon("loading") : editingStore ? t("save") : t("create")}
               </Button>
             </FormActions>
           </form>

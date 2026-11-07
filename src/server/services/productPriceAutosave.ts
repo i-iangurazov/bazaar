@@ -9,7 +9,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "./errors";
 import { assertUserCanAccessStore } from "./storeAccess";
 import { assertUserCanAccessProduct } from "./productAccess";
-import { assertTrialActive, hasPlanFeature } from "./planLimits";
+import { assertTrialActive } from "./planLimits";
 import { productPriceVersion, readProductPriceVersion } from "./productPriceVersion";
 import { resolveProductFormRetailPrice } from "./productFormPricing";
 import { saveProductPriceTypes } from "./productPriceTypes";
@@ -58,7 +58,7 @@ async function authorize(tx: Tx, input: Input) {
     allowShared: true,
   });
   const org = await assertTrialActive(input.organizationId, tx);
-  if (!hasPlanFeature(org.plan, "storePrices"))
+  if (!org.entitlements.features.storePrices)
     throw new AppError("featureLockedStorePrices", "FORBIDDEN", 403);
   const assignment = await tx.storeProduct.findFirst({
     where: {

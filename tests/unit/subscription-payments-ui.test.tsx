@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     accountPaused: false,
     canPurchase: true,
     currentPlan: "STARTER",
+    catalogVersion: "2026-10",
     mayChangePlan: true,
     catalog: [{ plan: "STARTER", amountMinor: 175000 }],
     sellerName: "Synthetic seller",
@@ -45,6 +46,17 @@ vi.mock("@/lib/trpc", () => ({
             isLoading: false,
             isError: false,
             refetch: mocks.refetch,
+          }),
+        },
+        quote: {
+          useQuery: (input: { plan: string; months: number; extras: { stores: number; productPacks: number; userPacks: number }; action: string }) => ({
+            data: {
+              plan: input.plan, months: input.months, extras: input.extras,
+              amountMinor: mocks.data.catalog.find((p) => p.plan === input.plan)?.amountMinor ?? 0,
+              quoteToken: `quote:${input.plan}:${mocks.data.catalog[0].amountMinor}:${input.months}:${JSON.stringify(input.extras)}`,
+              startsAt: "2027-01-01T00:00:00.000Z", endsAt: "2027-02-01T00:00:00.000Z",
+              creditMinor: 0, discountBps: 0, kind: input.action === "CHANGE" ? "UPGRADE" : "RENEWAL",
+            }, isFetching: false, isError: false, refetch: mocks.refetch,
           }),
         },
         invoices: {
@@ -87,6 +99,7 @@ beforeEach(() => {
     available: true,
     billingMode: "SELF_SERVE",
     canPurchase: true,
+    catalogVersion: "2026-10",
     termsVersion: "qa-v1",
     catalog: [{ plan: "STARTER", amountMinor: 175000 }],
   });
@@ -97,6 +110,16 @@ afterEach(() => {
 });
 
 describe("subscription payment consent and recovery", () => {
+  it("offers only the reserve pack on Starter and discloses its two additional users", () => {
+    Object.assign(mocks.data, { catalogVersion: "2026-11" });
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    expect(screen.getByText("billing.payments.starterOneStore")).toBeTruthy();
+    expect(document.getElementById("subscription-extra-stores")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: /billing.payments.extraproductPacks/ }));
+    open();
+    expect(screen.getByText(/^billing.payments.extrasSummary/).textContent)
+      .toContain('"products":1000,"users":2');
+  });
   it("requires consent and freezes the quoted amount and terms through background updates and failed retries", () => {
     const view = render(<SubscriptionPayments onUpdated={vi.fn()} />);
     open();

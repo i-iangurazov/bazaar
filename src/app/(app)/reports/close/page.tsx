@@ -49,9 +49,16 @@ const PeriodClosePage = () => {
   const t = useTranslations("periodClose");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tBilling = useTranslations("billing");
   const locale = useLocale();
   const { data: session, status } = useSession();
   const canView = ["ADMIN", "MANAGER"].includes(session?.user?.role ?? "");
+  const billing = trpc.billing.features.useQuery(undefined, {
+    enabled: status === "authenticated",
+    staleTime: 60_000,
+  });
+  const canExport = Boolean(billing.data?.access.hasAccess && billing.data.featureFlags.exports);
+  const canClose = Boolean(billing.data?.access.hasAccess && billing.data.featureFlags.periodClose);
   const { toast } = useToast();
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: status === "authenticated" });
@@ -96,7 +103,9 @@ const PeriodClosePage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p role="alert" className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role="alert" className="mt-4 text-sm text-danger">
+          {tErrors("forbidden")}
+        </p>
       </div>
     );
   }
@@ -114,45 +123,52 @@ const PeriodClosePage = () => {
     <div>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>{t("closeTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {storesQuery.error ? (
-            <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
-          ) : null}
-          <FormGrid>
-            <Field htmlFor="close-storeLabel" label={t("storeLabel")}>
-              <Select value={storeId} onValueChange={setStoreId}>
-                <SelectTrigger id="close-storeLabel">
-                  <SelectValue placeholder={tCommon("selectStore")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(storesQuery.data ?? []).map((store) => (
-                    <SelectItem key={store.id} value={store.id}>
-                      {store.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field htmlFor="close-monthLabel" label={t("monthLabel")}>
-              <Input
-                id="close-monthLabel"
-                type="month"
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
+      {canClose ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>{t("closeTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {storesQuery.error ? (
+              <QueryErrorState
+                error={storesQuery.error}
+                onRetry={() => void storesQuery.refetch()}
               />
-            </Field>
-          </FormGrid>
-          <FormActions>
-            <Button type="button" onClick={handleClose} disabled={closeMutation.isLoading}>
-              {closeMutation.isLoading ? tCommon("loading") : t("closeAction")}
-            </Button>
-          </FormActions>
-        </CardContent>
-      </Card>
+            ) : null}
+            <FormGrid>
+              <Field htmlFor="close-storeLabel" label={t("storeLabel")}>
+                <Select value={storeId} onValueChange={setStoreId}>
+                  <SelectTrigger id="close-storeLabel">
+                    <SelectValue placeholder={tCommon("selectStore")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(storesQuery.data ?? []).map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field htmlFor="close-monthLabel" label={t("monthLabel")}>
+                <Input
+                  id="close-monthLabel"
+                  type="month"
+                  value={month}
+                  onChange={(event) => setMonth(event.target.value)}
+                />
+              </Field>
+            </FormGrid>
+            <FormActions>
+              <Button type="button" onClick={handleClose} disabled={closeMutation.isLoading}>
+                {closeMutation.isLoading ? tCommon("loading") : t("closeAction")}
+              </Button>
+            </FormActions>
+          </CardContent>
+        </Card>
+      ) : (
+        <p className="mt-6 text-sm text-muted-foreground">{tBilling("featureRequiresPlan")}</p>
+      )}
 
       <Card className="mt-6">
         <CardHeader>
@@ -202,21 +218,23 @@ const PeriodClosePage = () => {
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((close) => {
-                        const actions = [
-                          {
-                            key: "download",
-                            label: t("download"),
-                            icon: DownloadIcon,
-                            onSelect: () =>
-                              exportMutation.mutate({
-                                storeId: close.storeId,
-                                type: PERIOD_CLOSE_EXPORT_TYPE,
-                                periodStart: close.periodStart,
-                                periodEnd: close.periodEnd,
-                              }),
-                            disabled: exportMutation.isLoading,
-                          },
-                        ];
+                        const actions = canExport
+                          ? [
+                              {
+                                key: "download",
+                                label: t("download"),
+                                icon: DownloadIcon,
+                                onSelect: () =>
+                                  exportMutation.mutate({
+                                    storeId: close.storeId,
+                                    type: PERIOD_CLOSE_EXPORT_TYPE,
+                                    periodStart: close.periodStart,
+                                    periodEnd: close.periodEnd,
+                                  }),
+                                disabled: exportMutation.isLoading,
+                              },
+                            ]
+                          : [];
 
                         return (
                           <TableRow key={close.id}>
@@ -260,21 +278,25 @@ const PeriodClosePage = () => {
                   </div>
                   <div className="mt-3 flex items-center justify-end">
                     <RowActions
-                      actions={[
-                        {
-                          key: "download",
-                          label: t("download"),
-                          icon: DownloadIcon,
-                          onSelect: () =>
-                            exportMutation.mutate({
-                              storeId: close.storeId,
-                              type: PERIOD_CLOSE_EXPORT_TYPE,
-                              periodStart: close.periodStart,
-                              periodEnd: close.periodEnd,
-                            }),
-                          disabled: exportMutation.isLoading,
-                        },
-                      ]}
+                      actions={
+                        canExport
+                          ? [
+                              {
+                                key: "download",
+                                label: t("download"),
+                                icon: DownloadIcon,
+                                onSelect: () =>
+                                  exportMutation.mutate({
+                                    storeId: close.storeId,
+                                    type: PERIOD_CLOSE_EXPORT_TYPE,
+                                    periodStart: close.periodStart,
+                                    periodEnd: close.periodEnd,
+                                  }),
+                                disabled: exportMutation.isLoading,
+                              },
+                            ]
+                          : []
+                      }
                       maxInline={1}
                       moreLabel={tCommon("tooltips.moreActions")}
                     />
