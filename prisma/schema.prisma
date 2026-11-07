@@ -505,6 +505,10 @@ enum MobilePlatform {
 }
 
 model Organization {
+  whatsappConnections      WhatsAppConnection[]
+  whatsappMonths           WhatsAppMonth[]
+  whatsappCreditLots       WhatsAppCreditLot[]
+  whatsappInvoices         WhatsAppInvoice[]
   priceBooks              PriceBook[]
   id                      String                         @id @default(cuid())
   name                    String
@@ -931,6 +935,7 @@ model MobileDevice {
 }
 
 model Store {
+  whatsappConnections       WhatsAppConnection[]
   priceBookBinding          PriceBookStore?
   priceBookItems            PriceBookStoreItem[]
   catalogSourcesConfigured  Boolean              @default(false)
@@ -1021,9 +1026,262 @@ model Store {
   categoryPreferences         StoreCategoryPreference[]
 
   @@unique([organizationId, code])
+  @@unique([id, organizationId])
   @@index([organizationId])
   @@index([organizationId, productCatalogId])
   @@index([organizationId, name])
+}
+
+// WhatsApp is an additive customer channel. It owns no inventory or payment state of stores.
+model WhatsAppConnection {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  storeId               String
+  providerAppId         String?  @unique
+  providerAppName        String?
+  phoneNumber           String?
+  phoneNumberId         String?
+  messagingAccountId    String?
+  encryptedAppToken     String?
+  encryptedWebhookKey   String?
+  onboardingStateHash   String?
+  onboardingExpiresAt   DateTime?
+  state                 String   @default("DRAFT")
+  mode                  String   @default("STANDARD")
+  aiEnabled             Boolean  @default(false)
+  profile               Json
+  knowledge             Json
+  knowledgePublished    Boolean  @default(false)
+  configVersion         Int      @default(1)
+  lastIssue             String?
+  lastWebhookAt         DateTime?
+  lastProviderCheckAt   DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  store                 Store @relation(fields: [storeId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  conversations         WhatsAppConversation[]
+  events                WhatsAppEvent[]
+
+  @@unique([organizationId, storeId])
+  @@unique([id, organizationId, storeId])
+  @@index([state, aiEnabled])
+}
+
+model WhatsAppConversation {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  storeId               String
+  connectionId          String
+  externalIdentity      String
+  phone                 String?
+  bsuid                 String?
+  buyerCountry          String?
+  customerName          String?
+  mode                  String   @default("AI")
+  needsHuman            Boolean  @default(false)
+  archived              Boolean  @default(false)
+  generationVersion     Int      @default(1)
+  inboundSequence       Int      @default(0)
+  lastInboundAt         DateTime?
+  lastMessageAt         DateTime @default(now())
+  lastIssue             String?
+  redactedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  connection            WhatsAppConnection @relation(fields: [connectionId, organizationId, storeId], references: [id, organizationId, storeId], onDelete: Restrict)
+  messages              WhatsAppMessage[]
+  readCursors           WhatsAppReadCursor[]
+
+  @@unique([connectionId, externalIdentity])
+  @@unique([id, organizationId, storeId])
+  @@index([organizationId, storeId, archived, lastMessageAt])
+  @@index([organizationId, needsHuman, lastMessageAt])
+}
+
+model WhatsAppMessage {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  storeId               String
+  conversationId        String
+  direction             String
+  kind                  String
+  body                  String   @default("") @db.Text
+  providerMessageId     String?
+  providerEventKey       String   @unique
+  responseToId          String?  @unique
+  media                 Json?
+  facts                 Json?
+  state                 String   @default("RECEIVED")
+  inboundSequence       Int?
+  generationVersion     Int?
+  configVersion         Int?
+  actorId               String?
+  attempts              Int      @default(0)
+  nextAttemptAt         DateTime @default(now())
+  leaseToken            String?
+  leaseUntil            DateTime?
+  sendStartedAt         DateTime?
+  deliveredAt           DateTime?
+  lastIssue             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  conversation          WhatsAppConversation @relation(fields: [conversationId, organizationId, storeId], references: [id, organizationId, storeId], onDelete: Cascade)
+  usage                 WhatsAppCreditUse?
+
+  @@unique([id, organizationId])
+  @@unique([conversationId, providerMessageId, direction])
+  @@index([direction, state, nextAttemptAt, leaseUntil])
+  @@index([conversationId, createdAt, id])
+}
+
+model WhatsAppReadCursor {
+  conversationId        String
+  organizationId        String
+  storeId               String
+  userId                String
+  inboundSequence       Int      @default(0)
+  updatedAt             DateTime @updatedAt
+  conversation          WhatsAppConversation @relation(fields: [conversationId, organizationId, storeId], references: [id, organizationId, storeId], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([organizationId, userId])
+}
+
+model WhatsAppEvent {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  storeId               String
+  connectionId          String
+  eventKey              String   @unique
+  eventType             String
+  providerMessageId     String?
+  providerStatus        String?
+  opaqueMessageId       String?
+  providerAt            DateTime?
+  processedAt           DateTime?
+  createdAt             DateTime @default(now())
+  connection            WhatsAppConnection @relation(fields: [connectionId, organizationId, storeId], references: [id, organizationId, storeId], onDelete: Restrict)
+
+  @@index([connectionId, createdAt])
+  @@index([eventType, processedAt])
+}
+
+model WhatsAppMonth {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  period                String
+  includedUsed          Int      @default(0)
+  includedReserved      Int      @default(0)
+  inboundCount          Int      @default(0)
+  deliveredCount        Int      @default(0)
+  aiInputTokens         Int      @default(0)
+  aiOutputTokens        Int      @default(0)
+  estimatedSpendMicros   BigInt   @default(0)
+  aiReservedMicros       BigInt   @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  uses                  WhatsAppCreditUse[]
+
+  @@unique([organizationId, period])
+  @@unique([id, organizationId])
+}
+
+model WhatsAppCreditLot {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  invoiceId             String   @unique
+  total                 Int
+  used                  Int      @default(0)
+  reserved              Int      @default(0)
+  revoked               Boolean  @default(false)
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoice               WhatsAppInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  uses                  WhatsAppCreditUse[]
+
+  @@unique([id, organizationId])
+  @@unique([invoiceId, organizationId])
+  @@index([organizationId, revoked, expiresAt, createdAt])
+}
+
+model WhatsAppCreditUse {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  monthId               String
+  messageId             String   @unique
+  lotId                 String?
+  state                 String   @default("RESERVED")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  month                 WhatsAppMonth @relation(fields: [monthId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  message               WhatsAppMessage @relation(fields: [messageId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  lot                   WhatsAppCreditLot? @relation(fields: [lotId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@index([organizationId, state])
+  @@unique([messageId, organizationId])
+}
+
+model WhatsAppInvoice {
+  id                    String   @id
+  organizationId        String
+  createdById           String
+  idempotencyKey        String
+  pendingSlot           String?  @unique
+  quantity              Int
+  amountMinor           Int
+  offerVersion          String
+  currency              String   @default("KGS")
+  status                String   @default("CREATING")
+  merchantId            String
+  isTest                Boolean
+  providerPaymentId     String?
+  checkoutUrl           String?
+  expiresAt             DateTime
+  paidAt                DateTime?
+  nextCheckAt           DateTime @default(now())
+  processingToken       String?
+  processingUntil       DateTime?
+  termsVersion          String
+  termsUrl              String
+  termsAcceptedAt       DateTime @default(now())
+  lastIssue             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lot                   WhatsAppCreditLot?
+  events                WhatsAppPaymentEvent[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([id, organizationId])
+  @@unique([merchantId, isTest, providerPaymentId])
+  @@index([status, nextCheckAt])
+  @@index([organizationId, createdAt])
+}
+
+model WhatsAppPaymentEvent {
+  id                    String   @id @default(cuid())
+  invoiceId             String
+  eventKey              String   @unique
+  source                String
+  state                 String
+  digest                String
+  createdAt             DateTime @default(now())
+  invoice               WhatsAppInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, createdAt])
+}
+
+model WhatsAppWorkerState {
+  id                    String   @id
+  heartbeatAt           DateTime @default(now())
+  state                 String
+  dailyPeriod           String
+  spentMicros           BigInt   @default(0)
+  reservedMicros        BigInt   @default(0)
+  updatedAt             DateTime @updatedAt
 }
 
 model ProductCatalog {

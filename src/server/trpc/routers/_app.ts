@@ -51,8 +51,10 @@ import { emailMarketingRouter } from "@/server/trpc/routers/emailMarketing";
 import { loyaltyRouter } from "@/server/trpc/routers/loyalty";
 
 import { priceBooksRouter } from "./priceBooks";
+import { whatsappAiRouter } from "./whatsappAi";
 
 export const appRouter = router({
+  whatsappAi: whatsappAiRouter,
   priceBooks: priceBooksRouter,
   baam: baamRouter,
   inventory: inventoryRouter,

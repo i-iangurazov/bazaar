@@ -1,0 +1,174 @@
+WHATSAPP AI — OPERATOR RUNBOOK (2026-11-07)
+
+Status and scope
+---------------
+The application implementation is gated OFF by default. A passing mock protocol
+suite is not a real Gupshup/Meta/FreedomPay pilot. Do not enable customer sending
+or paid packs until the external prerequisites and the pilot below are complete.
+No customer stock, financial documents, existing subscription contracts or
+lifetime grants are rewritten by this module.
+
+Commercial behavior
+-------------------
+BUSINESS / ENTERPRISE: 1,000 delivered outbound service text messages per
+organization per calendar month, Asia/Bishkek. Stores, numbers and employees
+share this balance. Existing explicit lifetime grants remain effective.
+Unpaid self-service trials, expired subscriptions and STARTER cannot send.
+Read history, stop, human takeover, archive and local erasure remain available.
+
+Extra pack: 1,000 messages / 3,490 KGS. One-time FreedomPay payment; no recurring
+card debit. Up to 10 packs per checkout. Included units are reserved first, then
+paid lots by earliest expiry. Paid lots expire 12 months after verified payment,
+not at monthly renewal. A delivery belongs to the send reservation's month.
+A technical retry or repeated receipt does not debit another unit. Manual API
+replies from Bazaar also count; messages typed directly in WhatsApp Business
+are recorded as staff echoes and do not consume Bazaar reply credit.
+Never change a sold offer entry in src/lib/whatsapp-ai.ts. Add a new version;
+old pending invoices must retain their original amount and units.
+
+Supported launch flow: KG recipients (+996), 24-hour service window, text and
+normalized customer images. Other countries, voice notes, documents, video,
+complaints, unsupported questions and missing authoritative information go to
+an employee. No marketing templates, automatic transcription, calls or stock /
+order / payment / refund writes by the language model. Product search uses the
+selected store, current retail prices, discounts and public assortment only.
+A public catalog link can lead to the existing checkout; no reservation or
+payment success is invented inside the chat.
+
+Before enabling
+---------------
+1. Get Gupshup ISV / partner approval for a Kyrgyz individual entrepreneur.
+   Confirm in writing: Bazaar funds the provider/Meta bill; no customer Meta
+   card; +996 service pricing; incoming AND outgoing BSP fees; fixed/minimum
+   charges; top-up from Kyrgyzstan; overdraft policy; server-side inbound spend
+   cap; support for embedded signup and the selected number's Coexistence.
+   AI off does NOT stop the BSP's billable incoming traffic. An actual provider
+   spend cap is a launch requirement, not a local Boolean substitute for it.
+2. Confirm privacy / retention / cross-border processing and provider no-training
+   terms for actual merchant/customer data. store:false is not a data-processing
+   agreement. Obtain the merchant's appropriate onboarding permissions.
+3. Use the currently documented Universal Token for partner operations, not a
+   legacy 24-hour portal login JWT. Rotate it before expiry (maximum validity is
+   60 days). The adapter uses Bearer for UT and the documented app token flow
+   for app-scoped calls. Confirm GET app-token compatibility for this partner
+   during the pilot. Never send any provider token to a browser or customer.
+   An expired UT blocks new onboarding. Existing encrypted app-token transport
+   remains usable; a DeepSeek outage pauses AI without blocking employee replies.
+4. Run a persistent Node 22 worker near the primary database. Vercel request
+   handlers only persist webhooks; they do not keep a background loop alive.
+   Dockerfile.whatsapp-worker packages a non-root worker without .env files.
+   Supply the SAME database, encryption key and provider configuration as the
+   web app. Command: pnpm whatsapp:worker. Allow at least 90 seconds graceful
+   shutdown. Database leases and opaque send IDs recover interrupted work.
+   Worker heartbeat READY permits AI and manual replies; MANUAL permits only
+   employee replies. Three independent conversations run concurrently, while
+   every conversation's replies remain serialized. Turning AI off cancels queued
+   AI answers, never an employee's prepared reply.
+5. Obtain the FreedomPay test merchant. Approve/publicize pack terms, validity,
+   refund handling and seller details before live collection. Existing legal
+   publication checks also apply. Initial payment integration has no recurring
+   automatic debit. Never enable a test merchant in Vercel Production.
+
+Configuration (server secrets only)
+----------------------------------
+.env.example lists all names. Set WHATSAPP_ENCRYPTION_KEY to independent random
+32 bytes as 64 hex digits. Do not reuse NEXTAUTH_SECRET. Keep a secure copy for
+recovery; losing it requires reconnection. During rotation, up to two previous
+keys may be supplied in WHATSAPP_PREVIOUS_ENCRYPTION_KEYS. Retire old keys only
+after all connection secrets and unexpired encrypted media have been rotated.
+
+GUPSHUP_UNIVERSAL_TOKEN and GUPSHUP_UNIVERSAL_TOKEN_EXPIRES_AT belong to Bazaar,
+not individual merchants. App credentials and webhook authentication secrets
+are encrypted with tenant/connection-bound AES-GCM. DeepSeek uses the existing
+DEEPSEEK_API_KEY; OpenAI is not called by this module.
+
+Each WHATSAPP_*_APPROVED / *_CONFIRMED flag represents completed real evidence.
+Do not set them just to remove a warning. WHATSAPP_PILOT_APPROVED separates
+manual onboarding/transport validation from AI automation. Pack collection has
+an additional WHATSAPP_PACK_PAYMENTS_APPROVED gate. HARDENING_EXTERNAL_PROVIDER_MODE
+=disabled blocks provider calls in isolated verification environments.
+WHATSAPP_DAILY_BUDGET_USD_MICROS bounds estimated global AI expense; it does not
+replace the contractual BSP/Meta cap or represent audited accounting.
+
+Merchant UI
+-----------
+Operations -> Integrations -> WhatsApp AI.
+Connection: choose store, open official provider onboarding, complete Meta's
+business/number verification, then press Verify connection in Bazaar. No client
+API keys are entered. A consumed/expired onboarding nonce cannot be reused.
+Assistant: select one of six styles, language, address form and length.
+Knowledge: publish reviewed address/hours/delivery/payment/return rules and FAQ.
+Do not manually copy product prices/stock into free text. Preview uses genuine
+DeepSeek once its data-processing gate is approved, sends no WhatsApp message,
+uses no customer reply unit, and is limited to 20 tests/org/day.
+Conversations: independent Bazaar unread state, explicit employee takeover,
+resume AI, manual reply, archive/restore and confirmed local erasure.
+Replies and billing: monthly balance, reserved deliveries, paid credit, pack
+purchase, resume pending checkout and verified payment status.
+
+Real-number pilot (required; not substituted by automated tests)
+--------------------------------------------------------------
+- One consenting synthetic/pilot merchant number; verify partner-owned billing.
+- Actual +996 inbound text, price/stock/variant search and published FAQ in
+  Russian, Kyrgyz and English; photograph matching; unknown product and employee
+  handoff. Use real examples beyond a fixed two-command demonstration.
+- Standard onboarding and Coexistence separately, if supported by the number.
+  Check staff mobile echoes stop AI; merely reading does not send read/typing.
+- Actual delivered, read, failed and delayed receipts; preserve opaque callback
+  data. Simulate a connection timeout and worker restart; no automatic resend.
+- Quota exhaustion, staff reply accounting, monthly boundary, purchased lots,
+  provider wallet depletion and the provider-enforced incoming spend cap.
+- A real sandbox FreedomPay payment, rejected payment, duplicate callback,
+  delayed server callback and refund. Redirect alone must grant nothing.
+- Verify the number's BSUID-country payload before enabling phone-less customers.
+- Verify actual media download URL/auth behavior and the provider's download rate
+  limits; do not claim the fixture tests establish those merchant capabilities.
+
+Recovery / support
+------------------
+An UNKNOWN send stays reserved because it may have reached the customer. Do not
+blindly retry it or release its unit. Valid delivery receipts reconcile it even
+if the HTTP result was lost; unmatched receipts require provider investigation.
+
+An ambiguous provider app creation is PROVISIONING_REVIEW. Find the existing
+app by the deterministic name in the partner portal. Operator command:
+  node --import tsx scripts/whatsapp-recover-connection.ts CONNECTION_ID APP_ID
+It checks ownership/name at the provider before binding. It never creates a
+second external app after an uncertain first result.
+
+An uncertain invoice keeps the organization's pending slot. Use verified status
+reconciliation first; never clear it or re-initiate collection based on a user's
+redirect screenshot. Refund/revoke events quarantine the remaining credit lot
+for review. Financial refunds and disputes require provider/support processing;
+there is no autonomous refund decision by AI.
+
+Images: encrypted normalized thumbnails, maximum 256 KiB, seven-day retention.
+Text/customer identity: local 90-day retention. Explicit erasure removes local
+name, phone, BSUID, external identity, text and attachments; financial delivery
+counters remain. Provider/Meta copies require their separate deletion process.
+Keep customer content and tokens out of logs, support screenshots and fixtures.
+
+Emergency stop / rollback
+------------------------
+First disable AI and pack sales in web and worker environments, stop/drain the
+worker and deactivate the affected provider connection if incoming fees must
+stop. Changing AI mode alone cannot recall a submitted message.
+Prefer promoting the preceding verified Vercel deployment while retaining the
+additive database tables. Do NOT drop WhatsApp tables, credit or invoice records.
+A source-code revert must retain this migration and its approved checksum in the
+migration history planner; a blind revert that removes an applied migration
+will correctly fail the deployment history guard. Reconcile outstanding sends
+and payments before reactivation. No automated cleanup deletes customer stock,
+subscription periods, invoice evidence or financial counters.
+
+Primary provider references (checked 2026-11-07)
+-----------------------------------------------
+https://partner-docs.gupshup.io/docs/onboarding-apis
+https://partner-docs.gupshup.io/docs/partner-authentication-guide-universal-tokens-ut-overview
+https://partner-docs.gupshup.io/reference/setsubscription-api-v3
+https://partner-docs.gupshup.io/reference/get_partner-app-appid-subscription
+https://partner-docs.gupshup.io/reference/put_partner-app-appid-subscription-subscriptionid
+https://partner-docs.gupshup.io/reference/post_partner-app-appid-v3-text-message
+https://partner-docs.gupshup.io/docs/co-existence-closed-beta-phase
+https://partner-docs.gupshup.io/reference/downloadmedia
+https://api-docs.deepseek.com/api/create-response/

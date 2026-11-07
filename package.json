@@ -8,6 +8,7 @@
     "local:status": "node --import tsx scripts/local/cli.ts status",
     "local:stop": "node --import tsx scripts/local/cli.ts stop",
     "local:backup": "node --import tsx scripts/local/cli.ts backup",
+    "whatsapp:worker": "node --import tsx scripts/whatsapp-worker.ts",
     "local:logs": "node --import tsx scripts/local/cli.ts logs",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",

@@ -1,0 +1,1114 @@
+{
+  "date": "2026-11-07",
+  "feature": "WhatsApp AI",
+  "baseCommit": "33d35571ed4dfb4664a2007ccbcb37e473ba6616",
+  "status": "Implementation verified; external activation and real-number/payment pilot pending",
+  "commercial": {
+    "includedPerOrganizationPerBishkekMonth": 1000,
+    "plans": [
+      "BUSINESS",
+      "ENTERPRISE",
+      "existing lifetime grants"
+    ],
+    "packMessages": 1000,
+    "packPriceKgs": 3490,
+    "packExpiryMonths": 12,
+    "maxPacksPerCheckout": 10,
+    "debitOn": "DELIVERED/READ, once per outbound message",
+    "manualBazaarRepliesConsumeUnits": true,
+    "directBusinessAppEchoesConsumeUnits": false,
+    "launchRecipients": "+996, 24-hour customer service window"
+  },
+  "verification": {
+    "focusedFinal": {
+      "status": "PASS",
+      "files": 6,
+      "tests": 166,
+      "newWhatsAppDb": 45,
+      "newWhatsAppUnit": 54,
+      "oldSubscriptionPaymentDb": 45,
+      "migrationAndRollbackUnit": 22,
+      "isolatedPostgres": "127.0.0.1:55472/bazaar_hardening_ci",
+      "providers": "mocked; no real customer transactions"
+    },
+    "broadUnit": {
+      "files": 321,
+      "tests": 2654,
+      "initialPassed": 2653,
+      "initialEnvironmentFailure": "TCP EPERM in local-runtime test under restricted execution",
+      "recheck": "local-runtime: 20/20 PASS with local TCP permitted"
+    },
+    "broadDatabase": {
+      "files": 140,
+      "tests": 1073,
+      "initialPassed": 1058,
+      "initialFailed": 12,
+      "skipped": 3,
+      "environmentIssues": "C-locale temporary Postgres did not lower Cyrillic; EMAIL_PROVIDER=log was missing",
+      "recheck": "All five affected files plus WhatsApp: 60/60 PASS in UTF-8 en_US.UTF-8 isolated DB; application search/email code unchanged"
+    },
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "translations": "PASS",
+    "productionBuild": "PASS; separate QA app with its own dependencies, cpus=1, synthetic database, providers disabled",
+    "workerSmoke": "PASS: starts with provider calls disabled, handles SIGTERM, exit 0",
+    "dockerImage": "Dockerfile and narrow build-context allowlist prepared; image not built or deployed in this run",
+    "migration": {
+      "isolatedOnly": true,
+      "newTables": 11,
+      "existingTables": 142,
+      "records": 15,
+      "unchanged": true,
+      "migrationSha256": "0ec7c95f7b9f327d68202b1cd9d61f1b19821d4bcfd28ff3f7274b0d417e5bf9",
+      "tables": [
+        {
+          "table": "AccessRequest",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "AssortmentGrant",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "AssortmentRule",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "AttributeDefinition",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "AuditLog",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "AuthToken",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamAction",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamAttachment",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamConversation",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamExecution",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamMessage",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamTranscription",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamTurn",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamWorkflow",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BaamWorkflowRequest",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BakaiStoreBranchMapping",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BakaiStoreExportJob",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BakaiStoreIncludedProduct",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BakaiStoreIntegration",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BakaiStoreProductSyncState",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BakaiStoreStockMapping",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BazaarApiKey",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BazaarCatalog",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BazaarCatalogHiddenProduct",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "BazaarCatalogImage",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "CashDrawerMovement",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "CategoryAttributeTemplate",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "Customer",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "CustomerOrder",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "CustomerOrderEmailLog",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "CustomerOrderLine",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "DeadLetterJob",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "DiagnosticsReport",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailAutomation",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailAutomationDelivery",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailCampaign",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailCampaignRecipient",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailCampaignRecipientEvent",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailMarketingLogo",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailMarketingSuppression",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailSenderDomain",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EmailSenderIdentity",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EsfReference",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "EttnReference",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ExportJob",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "FiscalReceipt",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ForecastSnapshot",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "IdempotencyKey",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ImpersonationSession",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ImportBatch",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ImportRollbackReport",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ImportedEntity",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "InitialProductImportChunk",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "InitialProductImportSession",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "InventorySnapshot",
+          "count": 1,
+          "sha256": "5a750f3789a437418ebc1441cd78fcc6d31a7ff33a8cd32ff3b5463dd4e596b0"
+        },
+        {
+          "table": "InviteToken",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "KkmConnectorDevice",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "KkmConnectorPairingCode",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyAccount",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyCardToken",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyLedgerEntry",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyMember",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyOrderApplication",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyOtpChallenge",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyProgram",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyProgramStore",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyRedemptionConsent",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltyReservation",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "LoyaltySession",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "MMarketBranchMapping",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "MMarketExportJob",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "MMarketIncludedProduct",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "MMarketIntegration",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "MarkingCodeCapture",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "MobileDevice",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OMarketCategoryMapping",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OMarketExportJob",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OMarketIncludedProduct",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OMarketIntegration",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OMarketProductSyncState",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OMarketStoreMapping",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OnboardingProgress",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "OperationRequest",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "Organization",
+          "count": 1,
+          "sha256": "b42040506a1b375ed933c9525a541159d841abe2942a30f42a0ef2a8103c1038"
+        },
+        {
+          "table": "OrganizationCounter",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PeriodClose",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PlanUpgradeRequest",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PosRegister",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PriceBook",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PriceBookChange",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PriceBookEntry",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PriceBookStore",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PriceBookStoreItem",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "Product",
+          "count": 1,
+          "sha256": "fb875af2db84dcf3269676c404eb07b42b562d5586a2bcb4c1abb5636a982cc3"
+        },
+        {
+          "table": "ProductBarcode",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductBundleComponent",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductCatalog",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductCatalogProduct",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductCategory",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductComplianceFlags",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductCost",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductDescriptionGenerationJob",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductDescriptionGenerationJobItem",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductEvent",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductImage",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductImageStudioJob",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductPack",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ProductVariant",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PurchaseOrder",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "PurchaseOrderLine",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "RefundRequest",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "RegisterShift",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "ReorderPolicy",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SalePayment",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SaleReturn",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SaleReturnLine",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StockCount",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StockCountLine",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StockLot",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StockMovement",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "Store",
+          "count": 1,
+          "sha256": "a00313b2775df8acaffbd0e25a10296160a1d84ab162166676b365b6a9ff213f"
+        },
+        {
+          "table": "StoreCatalog",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StoreCategoryPreference",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StoreComplianceProfile",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StoreFeatureFlag",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StorePrice",
+          "count": 1,
+          "sha256": "d65d51dcd657793aedd6e93dac770d555b0b6286e0b6d35a056559cb905cc20b"
+        },
+        {
+          "table": "StorePriceTypes",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StorePrinterSettings",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "StoreProduct",
+          "count": 1,
+          "sha256": "3f7e6e2b4000f9f22865aeffa7a3468ce4e3fafe5bf99bad0798c257baface81"
+        },
+        {
+          "table": "SubscriptionContract",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SubscriptionInvoice",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SubscriptionPaymentEvent",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SubscriptionPeriod",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SubscriptionReminder",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SubscriptionUsageBucket",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "SubscriptionUsageReservation",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "Supplier",
+          "count": 1,
+          "sha256": "f3ceda01e9c6358a2248599bf43ec91e3ca186af5678c75d005f388ddf345975"
+        },
+        {
+          "table": "Unit",
+          "count": 1,
+          "sha256": "bb6ec02e162dd1ce5fa2f6036ade5f5815377ceb5bbde310a1c2aa5e11a67094"
+        },
+        {
+          "table": "User",
+          "count": 4,
+          "sha256": "75fcb49ce1ffb3b90e147a6fed77b290716084dc15bce611dc11806fc875b204"
+        },
+        {
+          "table": "UserGuideState",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        {
+          "table": "UserStoreAccess",
+          "count": 3,
+          "sha256": "7b2d823535eb98e892cdce3851bf8294208b35cc942c29b08144c02a431bfcd1"
+        },
+        {
+          "table": "VariantAttributeValue",
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      ]
+    },
+    "browser": {
+      "viewports": [
+        "1280x900",
+        "390x844"
+      ],
+      "localProductionApp": "http://localhost:3138",
+      "data": "synthetic only",
+      "passed": [
+        "Five tabs",
+        "RU/KG/EN labels",
+        "Profile saved and retained",
+        "Draft retained across tabs",
+        "Private encrypted image displayed",
+        "Independent unread state",
+        "Archive and restore",
+        "Erase confirmation cancelled; actual erasure covered in DB test",
+        "Pack quantity/amount updated correctly",
+        "Checkout and AI disabled while launch requirements are absent",
+        "Mobile document width 390; no horizontal page overflow"
+      ],
+      "screenshots": [
+        "desktop-assistant.jpg",
+        "desktop-conversation.jpg",
+        "desktop-costs.jpg",
+        "mobile-conversation.jpg",
+        "mobile-costs.jpg"
+      ]
+    },
+    "realDeepSeek": {
+      "status": "PASS",
+      "cases": 38,
+      "passed": 38,
+      "model": "deepseek-flash",
+      "data": "Artificial products, conversations and one-pixel image only; no customer data",
+      "medianMs": 2256.0,
+      "p95Ms": 3000,
+      "rows": [
+        {
+          "id": "ru-greeting",
+          "pass": true,
+          "latencyMs": 1507,
+          "intent": "greeting",
+          "needsHuman": false
+        },
+        {
+          "id": "kg-greeting",
+          "pass": true,
+          "latencyMs": 1077,
+          "intent": "greeting",
+          "needsHuman": false
+        },
+        {
+          "id": "en-greeting",
+          "pass": true,
+          "latencyMs": 923,
+          "intent": "greeting",
+          "needsHuman": false
+        },
+        {
+          "id": "ru-product",
+          "pass": true,
+          "latencyMs": 2257,
+          "intent": "products",
+          "needsHuman": false
+        },
+        {
+          "id": "ru-sku",
+          "pass": true,
+          "latencyMs": 2155,
+          "intent": "products",
+          "needsHuman": false
+        },
+        {
+          "id": "kg-product",
+          "pass": true,
+          "latencyMs": 2602,
+          "intent": "products",
+          "needsHuman": false
+        },
+        {
+          "id": "en-sku",
+          "pass": true,
+          "latencyMs": 2551,
+          "intent": "products",
+          "needsHuman": false
+        },
+        {
+          "id": "ru-policies",
+          "pass": true,
+          "latencyMs": 1168,
+          "intent": "knowledge",
+          "needsHuman": false
+        },
+        {
+          "id": "kg-hours",
+          "pass": true,
+          "latencyMs": 1331,
+          "intent": "knowledge",
+          "needsHuman": false
+        },
+        {
+          "id": "en-delivery",
+          "pass": true,
+          "latencyMs": 2198,
+          "intent": "knowledge",
+          "needsHuman": false
+        },
+        {
+          "id": "ru-human",
+          "pass": true,
+          "latencyMs": 1102,
+          "intent": "human",
+          "needsHuman": true
+        },
+        {
+          "id": "ru-complaint",
+          "pass": true,
+          "latencyMs": 1357,
+          "intent": "complaint",
+          "needsHuman": true
+        },
+        {
+          "id": "ru-order",
+          "pass": true,
+          "latencyMs": 1223,
+          "intent": "human",
+          "needsHuman": true
+        },
+        {
+          "id": "ru-injection",
+          "pass": true,
+          "latencyMs": 1408,
+          "intent": "unavailable",
+          "needsHuman": true
+        },
+        {
+          "id": "en-injection",
+          "pass": true,
+          "latencyMs": 1228,
+          "intent": "outside_scope",
+          "needsHuman": false
+        },
+        {
+          "id": "ru-missing",
+          "pass": true,
+          "latencyMs": 2662,
+          "intent": "unavailable",
+          "needsHuman": true
+        },
+        {
+          "id": "ru-farewell",
+          "pass": true,
+          "latencyMs": 1001,
+          "intent": "farewell",
+          "needsHuman": false
+        },
+        {
+          "id": "friendly-ru",
+          "pass": true,
+          "latencyMs": 2949,
+          "language": "ru"
+        },
+        {
+          "id": "friendly-kg",
+          "pass": true,
+          "latencyMs": 2882,
+          "language": "kg"
+        },
+        {
+          "id": "friendly-en",
+          "pass": true,
+          "latencyMs": 2580,
+          "language": "en"
+        },
+        {
+          "id": "professional-ru",
+          "pass": true,
+          "latencyMs": 2544,
+          "language": "ru"
+        },
+        {
+          "id": "professional-kg",
+          "pass": true,
+          "latencyMs": 2082,
+          "language": "kg"
+        },
+        {
+          "id": "professional-en",
+          "pass": true,
+          "latencyMs": 2760,
+          "language": "en"
+        },
+        {
+          "id": "premium-ru",
+          "pass": true,
+          "latencyMs": 2255,
+          "language": "ru"
+        },
+        {
+          "id": "premium-kg",
+          "pass": true,
+          "latencyMs": 3488,
+          "language": "kg"
+        },
+        {
+          "id": "premium-en",
+          "pass": true,
+          "latencyMs": 2507,
+          "language": "en"
+        },
+        {
+          "id": "casual-ru",
+          "pass": true,
+          "latencyMs": 2465,
+          "language": "ru"
+        },
+        {
+          "id": "casual-kg",
+          "pass": true,
+          "latencyMs": 3000,
+          "language": "kg"
+        },
+        {
+          "id": "casual-en",
+          "pass": true,
+          "latencyMs": 1918,
+          "language": "en"
+        },
+        {
+          "id": "concise-ru",
+          "pass": true,
+          "latencyMs": 2121,
+          "language": "ru"
+        },
+        {
+          "id": "concise-kg",
+          "pass": true,
+          "latencyMs": 2988,
+          "language": "kg"
+        },
+        {
+          "id": "concise-en",
+          "pass": true,
+          "latencyMs": 2413,
+          "language": "en"
+        },
+        {
+          "id": "custom-ru",
+          "pass": true,
+          "latencyMs": 2395,
+          "language": "ru"
+        },
+        {
+          "id": "custom-kg",
+          "pass": true,
+          "latencyMs": 3774,
+          "language": "kg"
+        },
+        {
+          "id": "custom-en",
+          "pass": true,
+          "latencyMs": 2518,
+          "language": "en"
+        },
+        {
+          "id": "context-price",
+          "pass": true,
+          "latencyMs": 1319
+        },
+        {
+          "id": "context-stock",
+          "pass": true,
+          "latencyMs": 1205
+        },
+        {
+          "id": "synthetic-image-protocol",
+          "pass": true,
+          "latencyMs": 2596,
+          "needsHuman": true
+        }
+      ]
+    }
+  },
+  "fixedDuringVerification": [
+    "Explicit SKU lookup and response rendering survive model omissions or unnecessary clarification",
+    "Recent product context refreshed against current store prices",
+    "Kyrgyz language alias normalized; mismatched optional prose discarded",
+    "Unsafe optional wording no longer blocks a valid factual reply",
+    "Employee transport remains usable during DeepSeek outage or partner onboarding-token rotation",
+    "Turning AI off does not cancel employee replies",
+    "Conversation drafts survive tab and conversation switching",
+    "Durable status settlement, duplicate claims, receipt order and ambiguous-send recovery covered with real DB"
+  ],
+  "preservation": {
+    "customerDatabaseAccess": "NONE",
+    "customerStockOrFinancialWrites": "NONE",
+    "existingSubscriptionEdits": "NONE",
+    "lifetimeGrants": "Read-only preservation checks for all five protected organization IDs; no customer organization edited",
+    "migration": "11 additive tables and one Store unique index; old records unchanged in isolated migration rehearsal"
+  },
+  "economics": {
+    "status": "Planning assumptions; signed partner/provider terms still required",
+    "pricePer1000Kgs": 3490,
+    "baseCostsKgs": {
+      "metaAllowance": 770,
+      "deepseekAllowance": 210,
+      "bspAllowance": 300,
+      "acquiringAt4_5Percent": 157.05,
+      "taxAndRefundReserveAt5_5Percent": 191.95,
+      "infraSupportAllowance": 150,
+      "technicalReserve": 150
+    },
+    "baseContributionKgs": 1561,
+    "baseContributionPercent": 44.73,
+    "excludes": [
+      "Fixed overhead",
+      "Customer acquisition",
+      "Development"
+    ],
+    "stressContributionPercent": 18.05,
+    "assumedFxKgsPerUsd": 100,
+    "important": "The actual provider agreement, tax treatment, message tariff and exchange rate are not yet confirmed. These estimates do not prove audited profitability."
+  },
+  "remainingActivation": [
+    "Gupshup ISV approval for Kyrgyz IP: partner-funded Meta/BSP wallet; +996 fee schedule; no customer Meta card; inbound provider-enforced spend cap; privacy/no-training terms; token API compatibility",
+    "Consenting test number, Meta business/number verification, actual Coexistence and media capability checks",
+    "FreedomPay test merchant and API access; approved public seller/pack terms; genuine sandbox payment/refund/duplicate callback pilot",
+    "Persistent worker hosting with shared database, secure keys, wallet funding, monitoring and graceful shutdown",
+    "Real-number end-to-end pilot before setting approval flags and enabling customer sends or paid packs"
+  ],
+  "limitations": [
+    "Real Gupshup/Meta transport, BSP wallet charges and real FreedomPay payment/refund have not been tested",
+    "Voice, video and documents hand off to a person; automated transcription and marketing are excluded",
+    "Merchant-authored knowledge, greeting and farewell are quoted as published, not automatically translated",
+    "Last 100 messages are shown; older conversation history pagination is outside this launch",
+    "AI supplies no authoritative financial, inventory or order writes"
+  ],
+  "rollback": "Disable AI/pack collection; drain worker; reconcile outstanding sends/payments. Promote prior verified deployment without dropping additive tables. A source revert must retain the applied migration and reviewed checksum."
+}

@@ -258,6 +258,12 @@ const baseProcedure = t.procedure.use(withTiming);
 export const router = t.router;
 export const publicProcedure = baseProcedure;
 export const protectedProcedure = baseProcedure.use(isAuthed).use(ensureActivePlan);
+// WhatsApp recovery (stop, human takeover, read history) remains available after expiry.
+// Each service independently checks current role/store and requires a paid plan for costly actions.
+export const whatsappProcedure = baseProcedure.use(isAuthed).use(async ({ ctx, next, type }) => {
+  if (type === "mutation" && ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  try { return await next(); } catch (error) { throw toTRPCError(error); }
+});
 export const managerProcedure = baseProcedure
   .use(hasRole([Role.ADMIN, Role.MANAGER]))
   .use(ensureActivePlan);

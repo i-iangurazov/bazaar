@@ -8,6 +8,7 @@ import { resolveMigrationDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20261107190000_whatsapp_ai": "0ec7c95f7b9f327d68202b1cd9d61f1b19821d4bcfd28ff3f7274b0d417e5bf9",
   "20261107100000_subscription_contracts": "b792622c58aa01afa2bb47b86083873ff40ace5dbb2b131f4c1c81774e69ac33",
   "20261107110000_subscription_usage": "ec1cfb3e4722d7abc30d32162fba84a1bb9036647eee526707d1bf3f2a87f3fc",
   "20261107120000_subscription_marketplace_channel": "5d89deff84d1d22c4cddb75a800ce4d620ef870fcc8f5b8e9e5ee7e1af9d3fb8",

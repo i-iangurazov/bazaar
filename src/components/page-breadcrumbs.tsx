@@ -102,6 +102,8 @@ const segmentLabel = (
       return tBreadcrumbs("bakaiStore");
     case "product-image-studio":
       return tBreadcrumbs("productImageStudio");
+    case "whatsapp-ai":
+      return tBreadcrumbs("whatsappAi");
     case "suppliers":
       return tNav("suppliers");
     case "stores":

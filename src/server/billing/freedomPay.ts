@@ -203,7 +203,6 @@ export const initializeFreedomPay = async (input: {
   locale: string;
   purchaseSnapshot?: unknown;
 }) => {
-  const config = getPaymentCredentials(input.merchantId);
   const purchase = readPurchaseSnapshot(input.purchaseSnapshot);
   const months = purchase?.months ?? 1;
   const descriptions = {
@@ -221,7 +220,26 @@ export const initializeFreedomPay = async (input: {
         : `${months} айга жеткилик`,
   };
   const description = `Bazaar ${input.plan}: ${descriptions[input.locale === "en" || input.locale === "kg" ? input.locale : "ru"]}`;
-  const returnUrl = `${config.publicOrigin}/billing?invoice=${encodeURIComponent(input.id)}`;
+  return initializeFreedomPayCheckout(input, description, "/billing");
+};
+
+export const initializeFreedomPayWhatsAppPack = async (input: {
+  id: string; merchantId: string; amountMinor: number; quantity: number; isTest: boolean; locale: string;
+}) => {
+  if (!Number.isSafeInteger(input.quantity) || input.quantity < 1 || input.quantity > 10)
+    throw new AppError("billingInvalidAmount");
+  const count = input.quantity * 1000;
+  const description = input.locale === "en" ? `Bazaar WhatsApp: ${count} service messages`
+    : input.locale === "kg" ? `Bazaar WhatsApp: ${count} тейлөө билдирүүсү`
+    : `Bazaar WhatsApp: ${count} сервисных сообщений`;
+  return initializeFreedomPayCheckout(input, description, "/operations/integrations/whatsapp-ai");
+};
+
+const initializeFreedomPayCheckout = async (input: {
+  id: string; merchantId: string; amountMinor: number; isTest: boolean; locale: string;
+}, description: string, returnPath: "/billing" | "/operations/integrations/whatsapp-ai") => {
+  const config = getPaymentCredentials(input.merchantId);
+  const returnUrl = `${config.publicOrigin}${returnPath}?invoice=${encodeURIComponent(input.id)}`;
   const fields = await call(
     "init_payment.php",
     {

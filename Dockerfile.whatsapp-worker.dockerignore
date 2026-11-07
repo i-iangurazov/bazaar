@@ -1,0 +1,11 @@
+**
+!package.json
+!pnpm-lock.yaml
+!tsconfig.json
+!prisma/
+!prisma/**
+!src/
+!src/**
+!scripts/
+!scripts/whatsapp-worker.ts
+!scripts/whatsapp-worker-health.ts

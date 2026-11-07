@@ -11,6 +11,7 @@ import {
 } from "./freedomPay";
 import { applyVerifiedPayment, verifyInvoiceCanBePaid } from "./subscriptionPayments";
 import { prisma } from "@/server/db/prisma";
+import { applyWhatsAppPayment, verifyWhatsAppInvoiceCanBePaid } from "@/server/whatsapp/payments";
 
 export const handleFreedomPayNotification = async (request: Request, kind: "check" | "result") => {
   const config = getSubscriptionPaymentConfig();
@@ -27,6 +28,14 @@ export const handleFreedomPayNotification = async (request: Request, kind: "chec
     const invoiceId = scalar(fields, "pg_order_id");
     if (!invoiceId || !/^[a-zA-Z0-9_-]{1,50}$/.test(invoiceId))
       throw new AppError("billingPaymentMismatch");
+    if (invoiceId.startsWith("wa_")) {
+      const invoice = await prisma.whatsAppInvoice.findUnique({ where: { id: invoiceId }, select: { merchantId: true } });
+      if (!invoice) throw new AppError("recordNotFound", "NOT_FOUND", 404);
+      getPaymentCredentials(invoice.merchantId);
+      if (kind === "check") await verifyWhatsAppInvoiceCanBePaid(invoiceId, fields);
+      else await applyWhatsAppPayment({ invoiceId, fields, source: "CALLBACK" });
+      return respond(true, 200);
+    }
     const invoice = await prisma.subscriptionInvoice.findUnique({
       where: { id: invoiceId },
       select: { merchantId: true },
