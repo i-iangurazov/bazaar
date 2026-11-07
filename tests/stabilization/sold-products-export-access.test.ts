@@ -73,7 +73,17 @@ describe("all-filtered export current persisted permissions", () => {
   });
 
   it("requires the exports feature independently from analytics", async () => {
-    vi.spyOn(plans,"getPlanFeatures").mockReturnValue(["analytics"]);
+    const getOrganizationPlan = plans.getOrganizationPlan;
+    vi.spyOn(plans,"getOrganizationPlan").mockImplementation(async (...args) => {
+      const organization = await getOrganizationPlan(...args);
+      return {
+        ...organization,
+        entitlements: {
+          ...organization.entitlements,
+          features: { ...organization.entitlements.features, exports: false },
+        },
+      };
+    });
     await expect(caller("ADMIN").soldProductsExport(request)).rejects.toThrow("featureLockedExports");
     expect(mocks.export).not.toHaveBeenCalled();
   });

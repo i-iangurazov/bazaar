@@ -240,7 +240,8 @@ try {
       assert.equal(structured["@type"], "SoftwareApplication");
       assert.deepEqual(
         structured.offers.map((offer) => offer.price),
-        ["1750", "4375", "8750"],
+        // Approved public catalog 2026-11; existing contracts retain their own prices.
+        ["2000", "3500", "5500"],
       );
       const prices = await page.locator("#pricing article").allTextContents();
       const priceFormatter = new Intl.NumberFormat(locale === "kg" ? "ky-KG" : locale, {

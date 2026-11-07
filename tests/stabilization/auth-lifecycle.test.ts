@@ -95,6 +95,8 @@ describe("persisted authentication lifecycle and security", () => {
     )) {
       await prisma.store.deleteMany({ where: { organizationId } });
       await prisma.unit.deleteMany({ where: { organizationId } });
+      // Signup persists a trial contract; clean only this fixture's extra tenant.
+      await prisma.subscriptionContract.deleteMany({ where: { organizationId } });
       await prisma.organization.delete({ where: { id: organizationId } });
     }
     await cleanupCommerceFixtures(prisma, fixture);
