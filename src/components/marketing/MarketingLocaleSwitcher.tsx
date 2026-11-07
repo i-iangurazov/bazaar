@@ -4,6 +4,7 @@ import { useId, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { defaultLocale, locales, normalizeLocale } from "@/lib/locales";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import styles from "./marketing.module.css";
 
 export function MarketingLocaleSwitcher() {
@@ -36,22 +37,26 @@ export function MarketingLocaleSwitcher() {
   };
   return (
     <div className={styles.localeControl}>
-      <label className={styles.localeLabel}>
-        <span>{t("language")}</span>
-        <select
+      <div className={styles.localeLabel}>
+        <span id={`${errorId}-label`}>{t("language")}</span>
+        <Select
           value={locale}
           disabled={pending || refreshing}
-          aria-busy={pending || refreshing}
-          aria-describedby={failed ? errorId : undefined}
-          onChange={(event) => void change(event.target.value)}
+          onValueChange={(value) => void change(value)}
         >
+          <SelectTrigger className="w-24" aria-labelledby={`${errorId}-label`}
+            aria-busy={pending || refreshing} aria-describedby={failed ? errorId : undefined}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
           {locales.map((item) => (
-            <option key={item} value={item}>
+            <SelectItem key={item} value={item}>
               {item.toUpperCase()}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-      </label>
+          </SelectContent>
+        </Select>
+      </div>
       {failed ? (
         <p role="alert" id={errorId} className={styles.localeError}>
           {tErrors("genericMessage")}

@@ -612,6 +612,7 @@
   --blue: #87b2ff;
   --line: #ffffff17;
   background: #101f3b;
+  color: var(--ink);
 }
 .storyDark .eyebrow > span {
   border-color: #87b2ff30;
@@ -1034,6 +1035,13 @@
   color: var(--ink);
   font-size: 12px;
 }
+.planExpansion {
+  color: var(--blue);
+  line-height: 1.6;
+}
+.pricingAddons {
+  margin-top: 40px;
+}
 .planCard ul {
   display: grid;
   margin: 24px 0 32px;
@@ -1312,19 +1320,6 @@
   gap: 8px;
   color: var(--ink-soft);
   font-size: 10px;
-}
-.localeLabel select {
-  min-height: 30px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--paper-strong);
-  color: var(--ink);
-  padding: 3px 8px;
-  font: inherit;
-}
-.localeLabel select:disabled {
-  opacity: 0.6;
-  cursor: wait;
 }
 .localeError {
   max-width: 240px;

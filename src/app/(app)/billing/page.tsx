@@ -29,7 +29,7 @@ import { translateError } from "@/lib/translateError";
 import { SubscriptionPayments } from "@/components/billing/subscription-payments";
 import { SubscriptionUsage } from "@/components/billing/subscription-usage";
 import { SubscriptionAccessNotice } from "@/components/billing/subscription-access-banner";
-import { CURRENT_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
+import { ADDITIONAL_STORE_CAPS, CURRENT_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
 
 type PlanTier = PlanCode;
 const planOrder = PLAN_CODES;
@@ -277,6 +277,13 @@ const BillingPage = () => {
                             limit: planItem.limits.maxStores,
                           })}
                         </p>
+                        {billingQuery.data?.billingCatalogVersion === CURRENT_CATALOG_VERSION ? (
+                          <p className="text-xs text-primary" data-store-expansion>
+                            {ADDITIONAL_STORE_CAPS[tier] > 0
+                              ? t("publicPricing.expandStores", { count: planItem.limits.maxStores + ADDITIONAL_STORE_CAPS[tier] })
+                              : t("publicPricing.singleStore")}
+                          </p>
+                        ) : null}
                         <p>
                           {t("capacityUsers", {
                             limit: planItem.limits.maxUsers,
@@ -366,6 +373,10 @@ const BillingPage = () => {
                       );
                     })}
                   </TableRow>
+                  {billingQuery.data.billingCatalogVersion === CURRENT_CATALOG_VERSION ? <TableRow>
+                    <TableCell>{t("publicPricing.maxStores")}</TableCell>
+                    {planOrder.map(plan => <TableCell key={plan}>{1 + ADDITIONAL_STORE_CAPS[plan]}</TableCell>)}
+                  </TableRow> : null}
                   <TableRow>
                     <TableCell>{t("comparison.rows.products")}</TableCell>
                     {planOrder.map((plan) => {

@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-07",
+  "baseline": "09e566b61b0945e460bdc5d44d6e00cf02c00bc9",
+  "scope": [
+    "Readable analytics heading in both landing themes",
+    "Shared application Select for public language switching, including failure recovery",
+    "Included versus expandable store capacity on pricing cards and comparison",
+    "Shared add-on cards on the landing and billing, visible when collection is disabled",
+    "Clear path from the public landing to authenticated billing",
+    "Store terminology in billing, legal drafts and relevant help copy"
+  ],
+  "businessRulesChanged": false,
+  "databaseMigrationsAdded": false,
+  "paymentCollectionEnabled": false,
+  "legalPublicationEnabled": false,
+  "legacyAndLifetimeTermsChanged": false,
+  "localVerification": {
+    "unitAndIsolatedDatabase": {
+      "files": 14,
+      "passed": 165,
+      "failed": 0,
+      "command": "node scripts/qa/subscriptions-runtime.mjs test <marketing, subscription UI, legal, help, privacy, subscription-core-flows and subscription-contracts suites>"
+    },
+    "typecheck": "pnpm typecheck: PASS",
+    "lint": "pnpm lint: PASS without warnings",
+    "translations": "pnpm i18n:check: PASS",
+    "productionBuild": "node scripts/qa/subscriptions-runtime.mjs build: PASS; isolated configuration and low resource budget",
+    "landingBrowser": {
+      "command": "QA_BASE_URL=http://localhost:3137 QA_BROWSER_CHANNEL=chrome node scripts/marketing/browser.mjs",
+      "status": "PASS",
+      "locales": ["ru", "kg", "en"],
+      "widths": [360, 390, 768, 1440],
+      "themes": ["light", "dark"],
+      "checks": ["no horizontal overflow", "analytics heading contrast at least 4.5:1", "store expansion and two add-ons", "shared language control and actual language switching", "mobile navigation and keyboard controls"],
+      "additionalEntryCheck": "Anonymous add-on CTA opens /login with next=/billing; no login submitted"
+    },
+    "billingBrowser": {
+      "command": "QA_SUBSCRIPTIONS_ARTIFACT_DIR=<private output> node --import tsx scripts/qa/subscriptions-browser.tsx",
+      "status": "PASS",
+      "commercialStates": 6,
+      "legacyAndLifetimeStates": 12,
+      "publicPricingStates": 6,
+      "realServerQuotes": 54,
+      "providerCalls": 0,
+      "note": "Readiness alone is a labelled browser fixture. Quotes, disabled checkout and legacy/lifetime read models use the real isolated application and database. Five protected identifiers are synthetic local fixtures, never production customer rows."
+    },
+    "legalDrafts": {
+      "command": "node --import tsx scripts/qa/legal-drafts-browser.tsx export",
+      "status": "PASS",
+      "offlineStates": 96,
+      "publishedLayoutFixtures": "Synthetic, private and offline only; not approved public seller details"
+    }
+  },
+  "remainingExternalPrerequisites": [
+    "FreedomPay-approved public correspondence address without publishing the home address",
+    "Verified support mailbox and owner-approved final legal terms",
+    "Provider acceptance of documents and domain ownership evidence",
+    "Contract and Kyrgyzstan test merchant, real payment/callback/refund checks before live collection"
+  ],
+  "releaseVerification": "Exact-commit CI and anonymous production checks must be confirmed after push; local checks are not a replacement for them."
+}

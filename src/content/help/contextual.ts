@@ -202,7 +202,7 @@ const contextualHelpSummaries: Record<string, ContextualHelpSummary> = {
     steps: [
       t("Откройте список магазинов", "Дүкөндөрдүн тизмесин ачыңыз", "Open the store list"),
       t(
-        "Выберите или создайте точку",
+        "Выберите или создайте магазин",
         "Чекитти тандаңыз же түзүңүз",
         "Choose or create a location",
       ),

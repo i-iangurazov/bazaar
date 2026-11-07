@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const base = process.env.QA_BASE_URL ?? "http://localhost:3120";
-assert(["http://localhost:3120", "http://localhost:3124", "https://www.bazaar.kg"].includes(base));
+assert(["http://localhost:3120", "http://localhost:3124", "http://localhost:3137", "https://www.bazaar.kg"].includes(base));
 const production = base.startsWith("https:");
 const sha = process.env.QA_EXPECTED_SHA;
 if (production) assert(sha && /^[a-f0-9]{40}$/.test(sha), "Production requires QA_EXPECTED_SHA");
@@ -59,6 +59,26 @@ async function noOverflow(page, label) {
     dimensions.scroll <= dimensions.width + 1,
     `${label}: horizontal overflow ${JSON.stringify(dimensions)}`,
   );
+}
+async function verifyPricingPresentation(page, label) {
+  assert.equal(await page.locator('#pricing [data-store-expansion]').count(), 3);
+  assert((await page.locator('#pricing [data-plan="BUSINESS"] [data-store-expansion]').innerText()).includes('5'));
+  assert((await page.locator('#pricing [data-plan="ENTERPRISE"] [data-store-expansion]').innerText()).includes('15'));
+  assert.equal(await page.locator('#pricing [data-subscription-addons] [data-addon]').count(), 2);
+  assert.equal(await page.locator('#pricing a[href="/billing#subscription-addons"]').count(), 1);
+  assert.equal(await page.locator('footer select').count(), 0, 'Use the shared Select, not a native browser select');
+  assert.equal(await page.locator('footer [role="combobox"][data-bazaar-field="select"]').count(), 1);
+  const contrast = await page.locator('#analytics h2').evaluate(heading => {
+    const luminance = color => {
+      const rgb = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255);
+      const linear = rgb.map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    };
+    const text = luminance(getComputedStyle(heading).color);
+    const background = luminance(getComputedStyle(heading.closest('section')).backgroundColor);
+    return (Math.max(text, background) + 0.05) / (Math.min(text, background) + 0.05);
+  });
+  assert(contrast >= 4.5, `${label}: unreadable analytics heading, contrast ${contrast}`);
 }
 async function contextFor(locale, width, theme = "dark") {
   const context = await browser.newContext({
@@ -187,6 +207,7 @@ try {
         "https://www.bazaar.kg/",
       );
       await noOverflow(page, label);
+      await verifyPricingPresentation(page, label);
       // Visit each visible capture and await its actual load/decode. A fast timed scroll can
       // skip native lazy-image activation on a busy CI runner, even after networkidle.
       for (const picture of await page.locator("main img").all()) {
@@ -319,6 +340,12 @@ try {
       await page.keyboard.press("Enter");
       assert.equal(await comparison.getAttribute("open"), null);
       if (width === 1440 || width === 390) {
+        const nextLocale = locale === "en" ? "kg" : "en";
+        for (const language of [nextLocale, locale]) {
+          await page.locator('footer [role="combobox"]').click();
+          await page.getByRole('option', { name: language.toUpperCase(), exact: true }).click();
+          await page.waitForFunction(expected => document.documentElement.lang === expected, htmlLocales[language]);
+        }
         if (width === 390) {
           await page.getByRole("button", { name: copy.nav.open, exact: true }).click();
           await page.locator('#marketing-mobile-navigation a[href="/signup"]').click();
@@ -366,6 +393,15 @@ try {
     const page = await context.newPage();
     page.on("pageerror", (error) => report.errors.push(`theme-${theme}: ${error.message}`));
     await page.goto(base, { waitUntil: "networkidle" });
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await verifyPricingPresentation(page, `${theme}-${width}`);
+      await page.locator('#analytics').screenshot({ path: `${output}/analytics-${theme}-${width}.png` });
+      await page.locator('#pricing').screenshot({ path: `${output}/pricing-${theme}-${width}.png`,
+        style: 'header { visibility: hidden !important; }' });
+      await page.locator('footer').screenshot({ path: `${output}/footer-${theme}-${width}.png` });
+    }
+    await page.setViewportSize({ width: 390, height: 900 });
     assert.equal(
       await page.locator("html").evaluate((el) => el.classList.contains("dark")),
       theme === "dark",

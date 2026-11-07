@@ -77,7 +77,9 @@ if (mode === "up") {
     NEXTAUTH_URL: "http://localhost:3137", DATABASE_URL: dbUrl, DIRECT_URL: dbUrl,
     ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION: "1", ALLOW_LOG_EMAIL_IN_PRODUCTION: "1",
     HARDENING_PREVIEW_GUARD: mode === "dev" ? "0" : "1", HARDENING_PREVIEW_EXPECTED_DATABASE_NAME: "bazaar_hardening_agent4_platform",
-    HARDENING_PREVIEW_EXPECTED_DATABASE_HOST: "127.0.0.1", BAZAAR_LEGAL_PREVIEW: "1",
+    // Subscription QA verifies closed legal publication even in development.
+    // Use legal-drafts-runtime explicitly when reviewing unpublished documents.
+    HARDENING_PREVIEW_EXPECTED_DATABASE_HOST: "127.0.0.1", BAZAAR_LEGAL_PREVIEW: "0",
     CRON_SECRET: "isolated-subscriptions-cron-secret", JOBS_SECRET: "isolated-subscriptions-jobs-secret",
     NODE_OPTIONS: `--max-old-space-size=3072 --require ${resolve("scripts/qa/low-resource.cjs")}`,
     RAYON_NUM_THREADS: "2", UV_THREADPOOL_SIZE: "2", RUN_DB_TESTS: "0", ALLOW_TEST_DB_RESET: "0",

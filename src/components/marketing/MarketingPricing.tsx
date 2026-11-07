@@ -4,6 +4,7 @@ import { PLAN_FEATURE_CODES } from "@/lib/billing/plans";
 import { ADDITIONAL_STORE_CAPS, subscriptionPrice } from "@/lib/billing/subscriptionPricing";
 import { formatNumber } from "@/lib/i18nFormat";
 import type { PlanDefinition } from "@/server/billing/planCatalog";
+import { SubscriptionAddons } from "@/components/billing/subscription-addons";
 import styles from "./marketing.module.css";
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
@@ -61,7 +62,12 @@ export function MarketingPricing({
                 <span>{t("publicPricing.monthlySuffix")}</span>
               </div>
               <div className={styles.planCapacity}>
-                <span>{t("capacityStores", { limit: number(plan.limits.maxStores) })}</span>
+                <span>{t("publicPricing.includedStores", { count: number(plan.limits.maxStores) })}</span>
+                <span className={styles.planExpansion} data-store-expansion>
+                  {ADDITIONAL_STORE_CAPS[plan.code] > 0
+                    ? t("publicPricing.expandStores", { count: number(plan.limits.maxStores + ADDITIONAL_STORE_CAPS[plan.code]) })
+                    : t("publicPricing.singleStore")}
+                </span>
                 <span>{t("capacityProducts", { limit: number(plan.limits.maxProducts) })}</span>
                 <span>{t("capacityUsers", { limit: number(plan.limits.maxActiveUsers) })}</span>
               </div>
@@ -149,12 +155,8 @@ export function MarketingPricing({
           </table>
         </div>
       </details>
-      <div className={styles.sectionHeading}>
-        <h3>{t("publicPricing.extras")}</h3>
-        <p>{t("publicPricing.storeExtra")}</p>
-        <p>{t("publicPricing.reserveExtra")}</p>
-        <p>{t("publicPricing.quotaNote")}</p>
-      </div>
+      <SubscriptionAddons t={t} locale={locale} className={styles.pricingAddons}
+        manageHref="/billing#subscription-addons" />
     </section>
   );
 }

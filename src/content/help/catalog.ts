@@ -488,7 +488,7 @@ export const helpGuides: HelpGuide[] = [
       step(
         t("Выберите магазин", "Дүкөндү тандаңыз", "Choose the store"),
         t(
-          "Остаток увеличится только в выбранной точке.",
+          "Остаток увеличится только в выбранном магазине.",
           "Калдык тандалган жерде гана көбөйөт.",
           "Stock increases only at the selected location.",
         ),
@@ -655,7 +655,7 @@ export const helpGuides: HelpGuide[] = [
       step(
         t("Выберите магазин", "Дүкөндү тандаңыз", "Choose the store"),
         t(
-          "Списание уменьшит остаток только в этой точке.",
+          "Списание уменьшит остаток только в этом магазине.",
           "Эсептен чыгаруу ушул жерде гана калдыкты азайтат.",
           "The write-off affects only this location.",
         ),
@@ -935,7 +935,7 @@ export const helpGuides: HelpGuide[] = [
       {
         question: t("Товар не находится?", "Товар табылбай жатабы?", "Product not found?"),
         answer: t(
-          "Проверьте магазин, остаток и назначение товара этой точке.",
+          "Проверьте магазин, остаток и доступность товара в этом магазине.",
           "Дүкөндү, калдыкты жана товар ушул жерге дайындалганын текшериңиз.",
           "Check store selection, stock, and product assignment.",
         ),
@@ -1440,7 +1440,7 @@ export const helpGuides: HelpGuide[] = [
       step(
         t("Назначьте магазины", "Дүкөндөрдү дайындаңыз", "Assign stores"),
         t(
-          "Оставьте только те точки, где сотрудник действительно работает.",
+          "Оставьте только те магазины, где сотрудник действительно работает.",
           "Кызматкер чындап иштеген жерлерди гана калтырыңыз.",
           "Keep only the locations where the employee actually works.",
         ),
@@ -1634,7 +1634,7 @@ export const helpGuides: HelpGuide[] = [
       "How to create or choose a store",
     ),
     summary: t(
-      "Создайте рабочую точку и убедитесь, что товары и касса относятся к нужному магазину.",
+      "Создайте магазин и убедитесь, что товары и касса относятся к нужному магазину.",
       "Иш ордун түзүп, товарлар менен касса туура дүкөнгө тиешелүү экенин текшериңиз.",
       "Create a location and make sure products and POS use the right store.",
     ),
@@ -1667,7 +1667,7 @@ export const helpGuides: HelpGuide[] = [
           "Choose or create a store",
         ),
         t(
-          "Для новой точки укажите понятное название и адрес.",
+          "Для нового магазина укажите понятное название и адрес.",
           "Жаңы чекит үчүн түшүнүктүү аталыш жана дарек жазыңыз.",
           "For a new location, enter a clear name and address.",
         ),
@@ -1690,7 +1690,7 @@ export const helpGuides: HelpGuide[] = [
           "Check staff access",
         ),
         t(
-          "Назначьте нужную точку сотрудникам, которые будут с ней работать.",
+          "Назначьте нужный магазин сотрудникам, которые будут с ним работать.",
           "Бул чекитте иштей турган кызматкерлерге дүкөндү дайындаңыз.",
           "Assign the location to the employees who will use it.",
         ),
@@ -1702,14 +1702,14 @@ export const helpGuides: HelpGuide[] = [
           "Select the store while working",
         ),
         t(
-          "Перед товаром, остатком или продажей всегда проверяйте активную точку.",
+          "Перед товаром, остатком или продажей всегда проверяйте активный магазин.",
           "Товар, калдык же сатуудан мурун активдүү чекитти текшериңиз.",
           "Before products, stock, or sales, always verify the active location.",
         ),
       ),
     ],
     success: t(
-      "Рабочая точка готова для товаров, остатков и кассы.",
+      "Магазин готов для товаров, остатков и кассы.",
       "Иш орду товарлар, калдыктар жана касса үчүн даяр.",
       "The location is ready for products, stock, and POS.",
     ),
@@ -1919,7 +1919,7 @@ export const helpJourney: HelpJourneyItem[] = [
       "Create or choose a store",
     ),
     description: t(
-      "Рабочая точка для товаров и кассы",
+      "Магазин для товаров и кассы",
       "Товар жана касса үчүн иш орду",
       "The location for products and POS",
     ),

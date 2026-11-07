@@ -265,6 +265,7 @@ describe("marketing language recovery", () => {
   it.each(["http", "network"])(
     "shows and recovers from a %s failure without a false refresh",
     async (mode) => {
+      Element.prototype.scrollIntoView = vi.fn();
       let failed = true;
       state.fetch.mockImplementation(async () => {
         if (failed && mode === "network") throw new TypeError("network");
@@ -276,12 +277,14 @@ describe("marketing language recovery", () => {
         </NextIntlClientProvider>,
       );
       const select = screen.getByRole("combobox", { name: ru.common.language });
-      await act(async () => fireEvent.change(select, { target: { value: "kg" } }));
+      fireEvent.keyDown(select, { key: "Enter" });
+      await act(async () => fireEvent.click(await screen.findByRole("option", { name: "KG" })));
       expect(screen.getByRole("alert").textContent).toBe(ru.errors.genericMessage);
       expect(state.refresh).not.toHaveBeenCalled();
       expect(select.getAttribute("aria-describedby")).toBe(screen.getByRole("alert").id);
       failed = false;
-      await act(async () => fireEvent.change(select, { target: { value: "kg" } }));
+      fireEvent.keyDown(select, { key: "Enter" });
+      await act(async () => fireEvent.click(await screen.findByRole("option", { name: "KG" })));
       expect(state.refresh).toHaveBeenCalledOnce();
       expect(screen.queryByRole("alert")).toBeNull();
     },

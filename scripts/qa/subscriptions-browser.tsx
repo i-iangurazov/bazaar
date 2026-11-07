@@ -21,7 +21,7 @@ import en from "../../messages/en.json";
 const base = "http://localhost:3137";
 const databaseUrl = "postgresql://bazaar_test@127.0.0.1:55971/bazaar_hardening_agent4_platform";
 const fixtureRoot = resolve(".local/subscriptions-20261107");
-const directory = resolve(".local/subscriptions-final-20261107/browser-current");
+const directory = resolve(process.env.QA_SUBSCRIPTIONS_ARTIFACT_DIR ?? ".local/subscriptions-final-20261107/browser-current");
 assert.notEqual(process.env.VERCEL_ENV, "production");
 assert(
   (await readFile(resolve(fixtureRoot, "TEST-INFRASTRUCTURE-ONLY"), "utf8")).startsWith(
@@ -295,6 +295,7 @@ try {
         await page.goto(base + "/billing", { waitUntil: "domcontentloaded" });
         const panel = page.locator("[data-subscription-payments]");
         await panel.getByText(t.manualAccess, { exact: true }).waitFor();
+        assert.equal(await panel.locator('[data-subscription-addons] [data-addon]').count(), 2);
         assert.equal(await panel.locator("[data-checkout-form]").count(), 0);
         await db.organization.update({
           where: { id: fixture.org.id },
@@ -303,6 +304,7 @@ try {
         const commercialBefore = await commercialFields(fixture.org.id);
         await page.reload({ waitUntil: "domcontentloaded" });
         await panel.getByText(t.unavailable, { exact: true }).waitFor();
+        await panel.locator('[data-subscription-addons]').screenshot({ path: resolve(directory, `addons-unavailable-${locale}-${width}.png`) });
         assert.equal(await panel.locator("[data-checkout-form]").count(), 0);
         readinessFixture = true;
         await page.reload({ waitUntil: "domcontentloaded" });

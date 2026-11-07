@@ -13,6 +13,7 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ADDITIONAL_STORE_CAPS, CURRENT_CATALOG_VERSION, EMPTY_SUBSCRIPTION_EXTRAS, type SubscriptionExtras, type SubscriptionMonths } from "@/lib/billing/subscriptionPricing";
 import { QueryErrorState } from "@/components/query-error-state";
+import { SubscriptionAddons } from "@/components/billing/subscription-addons";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import {
 
 export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
   const t = useTranslations("billing.payments");
+  const billing = useTranslations("billing");
   const plans = useTranslations("billing.plans");
   const errors = useTranslations("errors");
   const common = useTranslations("common");
@@ -154,6 +156,18 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
             ) : !settings.data.available ? (
               <p className="text-sm text-muted-foreground">{t("unavailable")}</p>
             ) : null}
+            {settings.data.catalogVersion !== CURRENT_CATALOG_VERSION ? (
+              <p className="rounded-md bg-secondary p-3 text-sm text-muted-foreground">
+                {t("legacyExtras")}
+              </p>
+            ) : null}
+            <SubscriptionAddons t={billing} locale={locale} />
+            {!settings.data.canPurchase && !settings.data.lifetimeAccess && !pending ? (
+              <Button asChild variant="secondary">
+                <a href="https://wa.me/996709911300" target="_blank" rel="noreferrer">{t("support")}</a>
+              </Button>
+            ) : null}
+            {settings.data.canPurchase ? <p className="text-sm text-muted-foreground">{t("configureExtrasHint")}</p> : null}
             {pending ? (
               <div className="space-y-3 rounded-md border border-input p-4" data-pending-invoice>
                 <div className="flex flex-wrap items-center justify-between gap-2">

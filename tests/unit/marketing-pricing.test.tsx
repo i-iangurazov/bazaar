@@ -32,6 +32,11 @@ describe("public tariff rendering", () => {
         t(`plans.${plan.plan.toLowerCase() as "starter" | "business" | "enterprise"}.name`),
       );
       expect(card.querySelector('a[href="/signup"]')).not.toBeNull();
+      expect(card.querySelector("[data-store-expansion]")?.textContent).toBe(
+        plan.plan === "STARTER"
+          ? t("publicPricing.singleStore")
+          : t("publicPricing.expandStores", { count: plan.plan === "BUSINESS" ? "5" : "15" }),
+      );
       expect(plan.limits.maxStores).toBe(
         getPlanCatalogEntries().find((p) => p.code === plan.plan)?.limits.maxStores,
       );
@@ -51,6 +56,8 @@ describe("public tariff rendering", () => {
     );
     expect(root.textContent).not.toContain("Plan price primary");
     expect(root.textContent).not.toContain("undefined");
+    expect(root.querySelectorAll("[data-subscription-addons] [data-addon]")).toHaveLength(2);
+    expect(root.querySelector('a[href="/billing#subscription-addons"]')).not.toBeNull();
   });
 
   it("preserves an agreed legacy fractional KGS override without changing the public catalog", () => {
