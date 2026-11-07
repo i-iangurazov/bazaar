@@ -46,13 +46,23 @@ async function waitFor(check, label, timeout = 45_000) {
   throw new Error(`Timed out: ${label}`);
 }
 async function removeOwnedContainer(name) {
-  try {
-    const item = await inspect(name);
-    assert.equal(item.Config.Labels?.["bazaar.test.kind"], "whatsapp-worker-container");
-    await docker(["rm", "--force", "--volumes", name]);
-  } catch (error) {
-    if (!String(error).includes("No such")) throw error;
-  }
+  // Query existence explicitly: Docker versions use different error text when
+  // an automatically removed container no longer exists.
+  const id = await docker([
+    "container",
+    "ls",
+    "--all",
+    "--filter",
+    `name=^/${name}$`,
+    "--format",
+    "{{.ID}}",
+  ]);
+  if (!id) return;
+  assert.ok(!id.includes("\n"), "Cleanup must identify exactly one owned container");
+  const item = await inspect(id);
+  assert.equal(item.Name, `/${name}`);
+  assert.equal(item.Config.Labels?.["bazaar.test.kind"], "whatsapp-worker-container");
+  await docker(["rm", "--force", "--volumes", id]);
 }
 try {
   await docker(["info", "--format", "{{.ServerVersion}}"], 15_000);
@@ -128,7 +138,6 @@ try {
   await docker(
     [
       "run",
-      "--rm",
       "--name",
       migration,
       "--label",
@@ -246,16 +255,40 @@ try {
     for (const name of [worker, migration, postgres]) {
       try {
         await removeOwnedContainer(name);
-      } catch {
-        failures.push(name);
+      } catch (error) {
+        failures.push({
+          name,
+          error:
+            error instanceof Error
+              ? error.message.replaceAll(password, "[synthetic-password]")
+              : "unknown",
+        });
       }
     }
     try {
-      const item = JSON.parse(await docker(["network", "inspect", network]))[0];
-      assert.equal(item.Labels?.["bazaar.test.kind"], "whatsapp-worker-container");
-      await docker(["network", "rm", network]);
+      const id = await docker([
+        "network",
+        "ls",
+        "--filter",
+        `name=^${network}$`,
+        "--format",
+        "{{.ID}}",
+      ]);
+      if (id) {
+        assert.ok(!id.includes("\n"), "Cleanup must identify exactly one owned network");
+        const item = JSON.parse(await docker(["network", "inspect", id]))[0];
+        assert.equal(item.Name, network);
+        assert.equal(item.Labels?.["bazaar.test.kind"], "whatsapp-worker-container");
+        await docker(["network", "rm", id]);
+      }
     } catch (error) {
-      if (!String(error).includes("No such")) failures.push(network);
+      failures.push({
+        name: network,
+        error:
+          error instanceof Error
+            ? error.message.replaceAll(password, "[synthetic-password]")
+            : "unknown",
+      });
     }
   }
   evidence.cleanupPassed = failures.length === 0;
