@@ -1,0 +1,52 @@
+# Apply only to the owner-approved Render workspace after confirming charges.
+# Committing this file does not create a service or incur charges.
+# The database's verified Vercel region is iad1; place this worker in Virginia.
+# All approval flags remain off until the real provider/payment pilot succeeds.
+services:
+  - type: worker
+    name: bazaar-whatsapp-worker
+    runtime: docker
+    repo: https://github.com/i-iangurazov/bazaar
+    branch: main
+    region: virginia
+    plan: 0.5c-512mb
+    numInstances: 1
+    dockerfilePath: ./Dockerfile.whatsapp-worker
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 90
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Same production database as Vercel, using its pooled endpoint. Preserve
+      # the existing URL options and bound this process's connection_limit.
+      - key: DATABASE_URL
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      # Must be identical to the web app's key. Do not generate independent keys.
+      - key: WHATSAPP_ENCRYPTION_KEY
+        sync: false
+      - key: WHATSAPP_PUBLIC_URL
+        value: https://bazaar.kg
+      - key: WHATSAPP_DAILY_BUDGET_USD_MICROS
+        value: "1000000"
+      # Literal flags below are managed by this file. Any later activation must
+      # update this file after evidence/approval and configure Vercel consistently.
+      - key: WHATSAPP_AI_ENABLED
+        value: "0"
+      - key: WHATSAPP_PARTNER_APPROVED
+        value: "0"
+      - key: WHATSAPP_PRIVACY_APPROVED
+        value: "0"
+      - key: WHATSAPP_PARTNER_BILLING_CONFIRMED
+        value: "0"
+      - key: WHATSAPP_INBOUND_SPEND_CAP_CONFIRMED
+        value: "0"
+      - key: WHATSAPP_PILOT_APPROVED
+        value: "0"
+      - key: WHATSAPP_PACK_PAYMENTS_APPROVED
+        value: "0"
+# Gupshup's Universal Token/expiry and FreedomPay merchant configuration are
+# supplied as shared server secrets after their contracts/test access exist.
+# They are intentionally absent from this inactive hosting proposal.

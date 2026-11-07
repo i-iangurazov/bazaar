@@ -5,11 +5,7 @@
   "status": "Implementation verified; external activation and real-number/payment pilot pending",
   "commercial": {
     "includedPerOrganizationPerBishkekMonth": 1000,
-    "plans": [
-      "BUSINESS",
-      "ENTERPRISE",
-      "existing lifetime grants"
-    ],
+    "plans": ["BUSINESS", "ENTERPRISE", "existing lifetime grants"],
     "packMessages": 1000,
     "packPriceKgs": 3490,
     "packExpiryMonths": 12,
@@ -52,7 +48,17 @@
     "translations": "PASS",
     "productionBuild": "PASS; separate QA app with its own dependencies, cpus=1, synthetic database, providers disabled",
     "workerSmoke": "PASS: starts with provider calls disabled, handles SIGTERM, exit 0",
-    "dockerImage": "Dockerfile and narrow build-context allowlist prepared; image not built or deployed in this run",
+    "dockerImage": {
+      "status": "PASS",
+      "verifiedAtUtc": "2026-11-07T18:44:09.497661+00:00",
+      "sourceCommit": "7488ea58160e89b57901174f3ec59c79a9f8e6c7",
+      "ci": "https://github.com/i-iangurazov/bazaar/actions/runs/42401828933/job/128491073381",
+      "scope": "Linux image build; fresh internal-network PostgreSQL migrations; non-root startup; heartbeat health; two SIGTERM/stop/start cycles; no baked-in runtime credentials; owned-resource cleanup",
+      "workerMemoryLimitMiB": 512,
+      "workerCpuLimit": 0.5,
+      "externalProviders": "disabled",
+      "limitations": "Packaging and lifecycle verification only. No live transport, production capacity or real payment claim."
+    },
     "migration": {
       "isolatedOnly": true,
       "newTables": 11,
@@ -774,10 +780,7 @@
       ]
     },
     "browser": {
-      "viewports": [
-        "1280x900",
-        "390x844"
-      ],
+      "viewports": ["1280x900", "390x844"],
       "localProductionApp": "http://localhost:3138",
       "data": "synthetic only",
       "passed": [
@@ -1121,11 +1124,7 @@
     },
     "baseContributionKgs": 1561,
     "baseContributionPercent": 44.73,
-    "excludes": [
-      "Fixed overhead",
-      "Customer acquisition",
-      "Development"
-    ],
+    "excludes": ["Fixed overhead", "Customer acquisition", "Development"],
     "stressContributionPercent": 18.05,
     "assumedFxKgsPerUsd": 100,
     "important": "The actual provider agreement, tax treatment, message tariff and exchange rate are not yet confirmed. These estimates do not prove audited profitability."
@@ -1150,5 +1149,28 @@
     "deployment": "dpl_2xfFt5AgdupkGFsBn5nWW4DDhieM",
     "migration": "20261107190000_whatsapp_ai",
     "evidence": "Vercel build log: reviewed additive migration applied successfully; no customer records rewritten"
+  },
+  "workerHostingProposal": {
+    "file": "render.whatsapp.yaml",
+    "platformValidation": {
+      "valid": true,
+      "services": ["bazaar-whatsapp-worker"],
+      "totalActions": 1
+    },
+    "region": "virginia",
+    "regionEvidence": "Existing production Neon resource metadata reports iad1; no database migration or relocation is proposed.",
+    "plan": "0.5c-512mb",
+    "computeUsdPerMonth": 7,
+    "newDatabasesOrRedis": 0,
+    "instances": 1,
+    "status": "Not deployed; paid service creation and secret transfer await owner approval.",
+    "costExclusions": [
+      "Outbound bandwidth above included workspace usage",
+      "Neon compute/storage",
+      "DeepSeek",
+      "WhatsApp/BSP fees",
+      "Applicable taxes"
+    ],
+    "pricingSource": "https://render.com/pricing"
   }
 }

@@ -76,6 +76,23 @@ Before enabling
    Before starting a permanent instance, confirm the intended hosting account,
    its resource price and database compute implications. The one-second queue
    polling loop can keep an otherwise sleeping database active overnight.
+   render.whatsapp.yaml is the validated one-worker Render configuration:
+   Virginia (the existing database reports iad1), 0.5 CPU/512 MB, one instance,
+   no new database/Redis, no public listener and 90-second shutdown grace.
+   Creation/secret transfer still requires the owner's hosting approval.
+   Publish the file before applying a Blueprint; select this custom file path.
+   Never add an automatic database migration to the worker: the web release
+   applies reviewed migrations before promotion. Use the same production pooled
+   URL, bounding connection_limit to 2 and retaining the existing URL options.
+   Supply the same DeepSeek/encryption secrets to web and worker. Provider
+   credentials are added as server secrets when approved contracts/access exist.
+   The literal activation flags are managed by the Blueprint and start at zero;
+   a future sync restores these values. Update the reviewed file and Vercel
+   settings consistently only after the pilot. The initial AI budget is $1/day,
+   separate from the host bill and contractual incoming-message spend cap.
+   checksPass needs a linked Git provider. A public repository URL alone does
+   not establish automatic deploys: verify GitHub linking before calling this
+   continuous delivery. A running inactive worker is not a completed live pilot.
 5. Obtain the FreedomPay test merchant. Approve/publicize pack terms, validity,
    refund handling and seller details before live collection. Existing legal
    publication checks also apply. Initial payment integration has no recurring
