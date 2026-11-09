@@ -195,6 +195,9 @@ describeDb("GoPay checkout, settlement and provider isolation with real PostgreS
         isTest: true,
       });
       expect(onlyPayment().amount).toBe((amount / 100).toFixed(2));
+      expect(JSON.parse(String(fixture.transport.mock.calls[0]?.[1]?.body)).description).toBe(
+        `Bazaar ${plan}: доступ на ${months} мес.`,
+      );
       expect(await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).toEqual(
         before,
       );

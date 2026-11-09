@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { initializeFreedomPay, signFreedomPay } from "@/server/billing/freedomPay";
 
+import { whatsAppPaymentDescription } from "@/server/billing/checkoutDescription";
+
 const secret = "synthetic-checkout-description-secret";
 const snapshot = (months: 1 | 6 | 12, kind: "RENEWAL" | "UPGRADE" = "RENEWAL") => ({
   version: 1,
@@ -89,4 +91,14 @@ describe("gateway description represents the immutable invoice term", () => {
       expect(transport).toHaveBeenCalledOnce();
     },
   );
+});
+
+describe("WhatsApp payment purpose in all supported languages", () => {
+  it.each([
+    ["ru", "Bazaar WhatsApp: 2000 сервисных сообщений"],
+    ["kg", "Bazaar WhatsApp: 2000 тейлөө билдирүүсү"],
+    ["en", "Bazaar WhatsApp: 2000 service messages"],
+  ])("describes %s packs without an automatic charge promise", (locale, description) => {
+    expect(whatsAppPaymentDescription({ quantity: 2, locale })).toBe(description);
+  });
 });

@@ -7,6 +7,7 @@ import { writeAuditLog } from "@/server/services/audit";
 import { contractPlan } from "./contractTerms";
 import { getGoPayCredentials, getSubscriptionPaymentConfig, paymentOrderId } from "./paymentConfig";
 import { initializeGoPay, getGoPayStatus } from "./gopay";
+import { subscriptionPaymentDescription } from "./checkoutDescription";
 import {
   assertPaymentReceipt,
   freedomPayReceipt,
@@ -286,7 +287,10 @@ export const createSubscriptionCheckout = async (input: {
               {
                 orderId: invoice.value.providerOrderId!,
                 amountMinor: invoice.value.amountMinor,
-                description: `Bazaar ${invoice.value.plan} (${input.months ?? 1} months)`,
+                description: subscriptionPaymentDescription({
+                  ...invoice.value,
+                  locale: input.locale,
+                }),
                 isTest: invoice.value.isTest,
                 ...(config.publicOrigin.startsWith("https:")
                   ? { returnUrl: `${config.publicOrigin}/billing` }

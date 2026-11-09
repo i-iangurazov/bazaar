@@ -8,6 +8,7 @@ import {
   paymentOrderId,
 } from "@/server/billing/paymentConfig";
 import { initializeGoPay, getGoPayStatus } from "@/server/billing/gopay";
+import { whatsAppPaymentDescription } from "@/server/billing/checkoutDescription";
 import {
   assertPaymentReceipt,
   freedomPayReceipt,
@@ -180,7 +181,10 @@ export async function createWhatsAppCheckout(
               {
                 orderId: result.invoice.providerOrderId!,
                 amountMinor: result.invoice.amountMinor,
-                description: `Bazaar WhatsApp AI: ${result.invoice.quantity} x 1000`,
+                description: whatsAppPaymentDescription({
+                  ...result.invoice,
+                  locale: input.locale,
+                }),
                 isTest: result.invoice.isTest,
                 ...(config.publicOrigin.startsWith("https:")
                   ? {
