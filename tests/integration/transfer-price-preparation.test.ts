@@ -6,6 +6,7 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import * as audit from "@/server/services/audit";
 import { transferStock } from "@/server/services/inventory";
 import type { TransferAssortmentPreparation } from "@/lib/transferAssortmentPreparation";
+import { transferAssortmentLines } from "@/lib/transferAssortmentPreparation";
 
 (shouldRunDbTests ? describe : describe.skip)(
   "atomic transfer assortment and missing prices",
@@ -97,6 +98,86 @@ import type { TransferAssortmentPreparation } from "@/lib/transferAssortmentPrep
         ]);
       return { ...f, destination, caller, change, review, request, prices, stable };
     }
+    it("connects from actual posted-document rows without reposting stock and keeps strict validation", async () => {
+      const f = await fixture();
+      const transfer = await transferStock({
+        organizationId: f.org.id,
+        actorId: f.adminUser.id,
+        requestId: "posted-row-regression",
+        fromStoreId: f.store.id,
+        toStoreId: f.destination.id,
+        lines: [{ productId: f.product.id, qty: 3 }],
+        destinationAssortment: "INVENTORY_ONLY",
+        idempotencyKey: randomUUID(),
+      });
+      const document = await f.caller.inventory.productMovementDocument({
+        documentKey: `TRANSFER:TRANSFER:${transfer.transferId}`,
+      });
+      expect(document!.lines[0]).toHaveProperty("qtyDelta");
+      const before = await f.stable();
+      await expect(f.review({ ...f.change, lines: document!.lines })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+      const change = { ...f.change, lines: transferAssortmentLines(document!.lines) };
+      const preview = await f.review(change);
+      expect(preview).toMatchObject({ added: 1, priceChanges: 1 });
+      const request = { change, token: preview.token, idempotencyKey: randomUUID() };
+      await f.caller.inventory.applyTransferAssortment(request);
+      await f.caller.inventory.applyTransferAssortment(request);
+      expect(await f.stable()).toEqual(before);
+      expect(Number((await f.prices())!.retailPriceKgs)).toBe(120);
+      expect(Number((await f.prices())!.wholesalePriceKgs)).toBe(90);
+      expect(
+        (await f.caller.products.list({ storeId: f.destination.id })).items.map((p) => p.id),
+      ).toEqual([f.product.id]);
+    });
+    it.each([40, 500])(
+      "connects %i selected products without opening unselected source products or altering stock",
+      async (count) => {
+        const f = await fixture();
+        const ids = [f.product.id, ...Array.from({ length: count - 1 }, () => randomUUID())];
+        const unselected = randomUUID();
+        await prisma.product.createMany({
+          data: [...ids.slice(1), unselected].map((id, i) => ({
+            id,
+            organizationId: f.org.id,
+            name: `Bulk transfer ${i}`,
+            sku: `BULK-${i}`,
+            unit: f.baseUnit.code,
+            baseUnitId: f.baseUnit.id,
+          })),
+        });
+        await prisma.storeProduct.createMany({
+          data: [...ids.slice(1), unselected].map((productId) => ({
+            organizationId: f.org.id,
+            storeId: f.store.id,
+            productId,
+            isDirect: true,
+          })),
+        });
+        const before = await f.stable();
+        const change = {
+          ...f.change,
+          selections: ids.map((productId) => ({ productId, sourceKey: `store:${f.store.id}` })),
+          lines: transferAssortmentLines(ids.map((productId) => ({ productId }))),
+        };
+        const preview = await f.review(change);
+        expect(preview.added).toBe(count);
+        const request = { change, token: preview.token, idempotencyKey: randomUUID() };
+        const applied = await f.caller.inventory.applyTransferAssortment(request);
+        expect(await f.caller.inventory.applyTransferAssortment(request)).toEqual(applied);
+        expect(await f.stable()).toEqual(before);
+        expect(
+          await prisma.storeProduct.count({ where: { storeId: f.destination.id, isActive: true } }),
+        ).toBe(count);
+        expect(
+          await prisma.storeProduct.count({
+            where: { storeId: f.destination.id, productId: unselected, isActive: true },
+          }),
+        ).toBe(0);
+      },
+      30_000,
+    );
     it("previews without writing and atomically fills both kinds without touching identities, cost or stock", async () => {
       const f = await fixture(),
         before = await f.stable();

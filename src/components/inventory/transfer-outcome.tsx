@@ -13,6 +13,7 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { formatNumber } from "@/lib/i18nFormat";
 import { useSse } from "@/lib/useSse";
+import { transferAssortmentLines } from "@/lib/transferAssortmentPreparation";
 
 export function TransferOutcome(props: {
   fromStoreId: string;
@@ -26,13 +27,7 @@ export function TransferOutcome(props: {
   const [connect, setConnect] = useState<string[] | null>(null);
   const manager = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const canConfigure = session?.user?.role === "ADMIN" || session?.user?.isOrgOwner;
-  const lines = useMemo(
-    () =>
-      [
-        ...new Map(props.lines.map((l) => [`${l.productId}:${l.variantId ?? "BASE"}`, l])).values(),
-      ].slice(0, 500),
-    [props.lines],
-  );
+  const lines = useMemo(() => transferAssortmentLines(props.lines).slice(0, 500), [props.lines]);
   const q = useTransferLineContext(
     { fromStoreId: props.fromStoreId, toStoreId: props.toStoreId, lines },
     Boolean(manager && lines.length),
@@ -129,6 +124,7 @@ export function TransferOutcome(props: {
         {connect ? (
           <TransferAssortmentDialog
             open
+            posted
             onOpenChange={(open) => {
               if (!open) setConnect(null);
             }}

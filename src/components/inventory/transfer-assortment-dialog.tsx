@@ -12,10 +12,13 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/trpc/routers/_app";
-import type { TransferAssortmentPreparation } from "@/lib/transferAssortmentPreparation";
+import {
+  transferAssortmentLines,
+  type TransferAssortmentPreparation,
+} from "@/lib/transferAssortmentPreparation";
 import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { trpc } from "@/lib/trpc";
-import { translateError } from "@/lib/translateError";
+import type { translateError } from "@/lib/translateError";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,11 +44,11 @@ export function TransferAssortmentDialog(props: {
   fromStoreId: string;
   lines: TransferAssortmentPreparation["lines"];
   productIds: string[];
+  posted?: boolean;
   onApplied: () => void;
 }) {
   const t = useTranslations("inventory.transferSafety"),
     common = useTranslations("common"),
-    errors = useTranslations("errors"),
     locale = useLocale();
   const utils = trpc.useUtils();
   const { data: session } = useSession();
@@ -71,7 +74,10 @@ export function TransferAssortmentDialog(props: {
     change: TransferAssortmentPreparation;
     key: string;
   }>();
-  const [error, setError] = useState<unknown>();
+  const [failure, setFailure] = useState<{
+    error: unknown;
+    retry: "load" | "preview" | "apply";
+  }>();
   const [uncertain, setUncertain] = useState(false),
     [done, setDone] = useState(false);
   const generation = useRef(0);
@@ -79,7 +85,7 @@ export function TransferAssortmentDialog(props: {
     props.fromStoreId,
     props.storeId,
     [...new Set(props.productIds)].sort(),
-    props.lines,
+    transferAssortmentLines(props.lines),
   ]);
   const busy =
     optionsMutation.isLoading ||
@@ -87,6 +93,26 @@ export function TransferAssortmentDialog(props: {
     saveMutation.isLoading ||
     reconcileMutation.isLoading;
   const { mutateAsync: loadOptions } = optionsMutation;
+  const eligible =
+    options?.products.filter((row) => !row.available && !row.hidden && row.sources.length > 0) ??
+    [];
+  const selected = eligible.filter((row) => row.sources.some((s) => s.key === selection[row.id]));
+  const selectedSources = [...new Set(selected.map((row) => selection[row.id]))].map((key) => ({
+    key,
+    name: selected.flatMap((row) => row.sources).find((source) => source.key === key)!.name,
+    count: selected.filter((row) => selection[row.id] === key).length,
+  }));
+  const multipleSources = selected.filter((row) => row.sources.length > 1).length;
+  function keepValidSelection(rows: Options, current: Record<string, string>) {
+    return Object.fromEntries(
+      rows.products
+        .filter((row) => !row.available && !row.hidden && row.sources.length > 0)
+        .flatMap((row) => {
+          const source = row.sources.find((s) => s.key === current[row.id]);
+          return source ? [[row.id, source.key]] : [];
+        }),
+    );
+  }
   useEffect(() => {
     if (!props.open) return;
     const id = ++generation.current;
@@ -94,7 +120,7 @@ export function TransferAssortmentDialog(props: {
     setOptions(undefined);
     setSelection({});
     setApproval(undefined);
-    setError(undefined);
+    setFailure(undefined);
     setDone(false);
     setUncertain(false);
     setPending(null);
@@ -112,7 +138,7 @@ export function TransferAssortmentDialog(props: {
         setUncertain(true);
       }
     } catch {
-      setError(new Error("productPreparationStorageUnavailable"));
+      setFailure({ error: new Error("productPreparationStorageUnavailable"), retry: "load" });
     }
     const [fromStoreId, toStoreId, productIds] = JSON.parse(signature) as [
       string,
@@ -133,7 +159,7 @@ export function TransferAssortmentDialog(props: {
         );
       })
       .catch((e) => {
-        if (active && id === generation.current) setError(e);
+        if (active && id === generation.current) setFailure({ error: e, retry: "load" });
       });
     return () => {
       active = false;
@@ -160,7 +186,7 @@ export function TransferAssortmentDialog(props: {
   }
   async function reload() {
     const id = generation.current;
-    setError(undefined);
+    setFailure(undefined);
     try {
       if (uncertain && pending) {
         const result = await reconcileMutation.mutateAsync({
@@ -180,39 +206,51 @@ export function TransferAssortmentDialog(props: {
         toStoreId: props.storeId,
         productIds: [...new Set(props.productIds)],
       });
-      if (id === generation.current) setOptions(rows);
+      if (id === generation.current) {
+        setOptions(rows);
+        setSelection((current) => keepValidSelection(rows, current));
+        setPrices((current) => (rows.pricingAllowed ? current : "NONE"));
+        setApproval(undefined);
+      }
     } catch (e) {
-      if (id === generation.current) setError(e);
+      if (id === generation.current) setFailure({ error: e, retry: "load" });
     }
   }
   async function preview() {
     const id = generation.current;
-    setError(undefined);
+    setFailure(undefined);
     try {
-      const selections = Object.entries(selection)
-        .filter(
-          ([id, value]) =>
-            value && options?.products.some((o) => o.id === id && !o.available && !o.hidden),
-        )
-        .map(([productId, sourceKey]) => ({ productId, sourceKey }));
+      const selections = selected.map((row) => ({
+        productId: row.id,
+        sourceKey: selection[row.id],
+      }));
       const change: TransferAssortmentPreparation = {
         fromStoreId: props.fromStoreId,
         toStoreId: props.storeId,
         selections,
-        lines: props.lines.filter((line) => selections.some((s) => s.productId === line.productId)),
+        lines: transferAssortmentLines(props.lines).filter((line) =>
+          selections.some((s) => s.productId === line.productId),
+        ),
         prices,
       };
       const result = await previewMutation.mutateAsync(change);
       if (id === generation.current)
         setApproval({ preview: result, change, key: crypto.randomUUID() });
     } catch (e) {
-      if (id === generation.current) setError(e);
+      if (id === generation.current) {
+        setApproval(undefined);
+        const code = (e as { data?: { code?: string } })?.data?.code;
+        setFailure({
+          error: e,
+          retry: code === "CONFLICT" || code === "FORBIDDEN" ? "load" : "preview",
+        });
+      }
     }
   }
   async function apply() {
     if (!approval) return;
     const id = generation.current;
-    setError(undefined);
+    setFailure(undefined);
     const request = {
       change: approval.change,
       token: approval.preview.token,
@@ -222,7 +260,7 @@ export function TransferAssortmentDialog(props: {
       if (!pendingKey) throw new Error("productPreparationStorageUnavailable");
       saveTransferPreparationPending(sessionStorage, pendingKey, request);
     } catch {
-      setError(new Error("productPreparationStorageUnavailable"));
+      setFailure({ error: new Error("productPreparationStorageUnavailable"), retry: "apply" });
       return;
     }
     setPending(request);
@@ -235,7 +273,7 @@ export function TransferAssortmentDialog(props: {
       if (id === generation.current) await completed();
     } catch (e) {
       if (id !== generation.current) return;
-      setError(e);
+      setFailure({ error: e, retry: "load" });
       const code = (e as { data?: { code?: string } })?.data?.code;
       if (
         !code ||
@@ -262,16 +300,22 @@ export function TransferAssortmentDialog(props: {
       className="sm:max-w-2xl"
     >
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">{t("preparationHint")}</p>
-        {error ? (
-          <div role="alert" className="space-y-2 text-sm text-danger">
-            {translateError(errors, error as Parameters<typeof translateError>[1])}
-            <QueryErrorState
-              onRetry={() => void (uncertain ? reload() : options ? preview() : reload())}
-            />
-          </div>
+        <p className="text-sm text-muted-foreground">
+          {t(props.posted ? "postedPreparationHint" : "preparationHint")}
+        </p>
+        {failure ? (
+          <QueryErrorState
+            error={failure.error as Parameters<typeof translateError>[1]}
+            onRetry={() =>
+              void (uncertain || failure.retry === "load"
+                ? reload()
+                : failure.retry === "apply"
+                  ? apply()
+                  : preview())
+            }
+          />
         ) : null}
-        {!options && !error ? (
+        {!options && !failure ? (
           <p role="status" className="flex items-center gap-2 text-sm">
             <Spinner className="h-4 w-4" />
             {common("loading")}
@@ -292,6 +336,7 @@ export function TransferAssortmentDialog(props: {
                     onCheckedChange={(checked) => {
                       setPrices(checked ? "MISSING" : "NONE");
                       setApproval(undefined);
+                      setFailure(undefined);
                     }}
                   />
                   <span>{t("copyMissingPrices", { source: options.sourceName })}</span>
@@ -300,6 +345,58 @@ export function TransferAssortmentDialog(props: {
               </div>
             ) : options ? (
               <p className="text-sm text-muted-foreground">{t("pricePlanHint")}</p>
+            ) : null}
+            {options ? (
+              <div className="space-y-2 rounded-md bg-muted/50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p role="status" aria-live="polite" className="text-sm font-medium">
+                    {t("selectionCount", { selected: selected.length, total: eligible.length })}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={
+                        busy || uncertain || !eligible.length || selected.length === eligible.length
+                      }
+                      onClick={() => {
+                        setApproval(undefined);
+                        setFailure(undefined);
+                        setSelection((current) =>
+                          Object.fromEntries(
+                            eligible.map((row) => [
+                              row.id,
+                              row.sources.find((source) => source.key === current[row.id])?.key ??
+                                row.sources[0].key,
+                            ]),
+                          ),
+                        );
+                      }}
+                    >
+                      {t("selectAll")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy || uncertain || !selected.length}
+                      onClick={() => {
+                        setApproval(undefined);
+                        setFailure(undefined);
+                        setSelection({});
+                      }}
+                    >
+                      {t("clearSelection")}
+                    </Button>
+                  </div>
+                </div>
+                {multipleSources > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t("multipleSourcesHint", { count: multipleSources })}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
             <div className="max-h-[35vh] space-y-3 overflow-y-auto">
               {options?.products.map((row) => (
@@ -312,6 +409,7 @@ export function TransferAssortmentDialog(props: {
                       }
                       onCheckedChange={(checked) => {
                         setApproval(undefined);
+                        setFailure(undefined);
                         setSelection((current) => ({
                           ...current,
                           [row.id]: checked ? (row.sources[0]?.key ?? "") : "",
@@ -335,6 +433,7 @@ export function TransferAssortmentDialog(props: {
                       disabled={busy || uncertain || !selection[row.id]}
                       onValueChange={(value) => {
                         setApproval(undefined);
+                        setFailure(undefined);
                         setSelection((current) => ({ ...current, [row.id]: value }));
                       }}
                     >
@@ -361,6 +460,16 @@ export function TransferAssortmentDialog(props: {
                     prices: approval.preview.priceChanges,
                   })}
                 </p>
+                <ul
+                  className="space-y-1 text-xs text-muted-foreground"
+                  aria-label={t("selectedSources")}
+                >
+                  {selectedSources.map((source) => (
+                    <li key={source.key}>
+                      {t("sourceCount", { source: source.name, count: source.count })}
+                    </li>
+                  ))}
+                </ul>
                 {approval.preview.rows.length ? (
                   <div
                     className="max-h-[30vh] space-y-3 overflow-y-auto"
@@ -426,10 +535,7 @@ export function TransferAssortmentDialog(props: {
               {t("connect")}
             </Button>
           ) : (
-            <Button
-              disabled={busy || !Object.values(selection).some(Boolean)}
-              onClick={() => void preview()}
-            >
+            <Button disabled={busy || !selected.length} onClick={() => void preview()}>
               {t("preview")}
             </Button>
           )}

@@ -49,3 +49,17 @@ export const transferAssortmentPreparationApplySchema = z
   .strict();
 
 export type TransferAssortmentPreparation = z.infer<typeof transferAssortmentPreparationSchema>;
+
+/** Document rows contain display/audit fields that must never enter the strict write contract. */
+export function transferAssortmentLines(
+  lines: ReadonlyArray<{ productId: string; variantId?: string | null }>,
+): TransferAssortmentPreparation["lines"] {
+  return [
+    ...new Map(
+      lines.map(({ productId, variantId }) => {
+        const line = { productId, variantId: variantId ?? null };
+        return [JSON.stringify([line.productId, line.variantId]), line] as const;
+      }),
+    ).values(),
+  ];
+}

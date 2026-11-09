@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-09",
+  "baseCommit": "40e9c64a354d09c5bdf41e68cec5873d2741e7cb",
+  "scope": [
+    "Project posted movement rows to productId/variantId and deduplicate before the strict transfer-assortment RPC; preserve strict server validation.",
+    "Select all eligible products from the current transfer, clear selection, show selected/eligible counts, preserve explicitly chosen origins and show origin totals in preview.",
+    "Show one actual error, refresh invalidated source choices on retry and preserve uncertain-write reconciliation.",
+    "Explain that a posted transfer already recorded stock; connecting assortment does not repost the transfer."
+  ],
+  "domainChanges": {
+    "schemaOrMigrations": false,
+    "stockPostingOrCosting": false,
+    "priceCalculationOrPermissions": false,
+    "operationalColumnLayouts": false,
+    "customerDataCorrection": false,
+    "newExternalProviders": false
+  },
+  "references": [
+    {
+      "url": "https://shopify.dev/docs/apps/build/app-home/migrate-from-polaris-react/unstable-bulk-actions",
+      "applied": "Selection state belongs to the displayed resources; select-all and per-row selection have visible counts and explicit scope. No cross-catalog selection."
+    },
+    {
+      "url": "https://docs.frappe.io/crm/custom-list-actions",
+      "applied": "Bulk actions operate on selected rows. Existing Bazaar components and transfer workflow are retained."
+    }
+  ],
+  "verification": {
+    "database": {
+      "passed": 41,
+      "failed": 0,
+      "skipped": 0,
+      "applicationRegressionCases": 38,
+      "additionalPrivateDiagnosticControls": 3,
+      "suites": [
+        "tests/integration/transfer-price-preparation.test.ts",
+        "tests/integration/transfer-assortment-safety.test.ts"
+      ],
+      "newRegressions": [
+        "Actual posted-document response -> narrow contract -> preview/apply/replay with unchanged stock/history",
+        "40 products applied and replayed, unselected products excluded",
+        "500 products applied and replayed, unselected products excluded"
+      ]
+    },
+    "component": {
+      "passed": 8,
+      "failed": 0,
+      "suite": "tests/unit/transfer-assortment-dialog.test.tsx",
+      "coverage": [
+        "Strict real-document row projection and variant deduplication",
+        "40-row select-all, blocked rows, partial and clear selection",
+        "Single translated error and safe retry",
+        "Stale options refresh",
+        "Lost-response reconciliation",
+        "Pending recovery after reload",
+        "Missing-price option and price preview"
+      ]
+    },
+    "browser": {
+      "runtime": "Actual local production bundle, CUA in-app browser, synthetic data only",
+      "locales": ["ru", "kg", "en"],
+      "viewports": ["1280x900 desktop (initial desktop capture 1280x720)", "390x844 mobile"],
+      "passed": [
+        "Select 40 in one click",
+        "Partial selection and clear",
+        "Manually chosen source survives select-all",
+        "Posted document preview succeeds",
+        "Concurrent synthetic price change invalidates preview",
+        "One meaningful error, preserved selection, re-preview and successful apply",
+        "40 recipient retail/wholesale prices match source",
+        "Stock and movement hashes match before/after connection",
+        "No browser console errors or mobile horizontal overflow"
+      ]
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "translations": "passed",
+    "productionBuild": "passed",
+    "gitDiffCheck": "passed",
+    "isolation": "Dedicated PostgreSQL 16 on 127.0.0.1:55529/bazaar_hardening_ci; data_directory verified before tests; dedicated Redis on 55530; all external provider calls disabled. No customer database used.",
+    "ciAndDeployment": "Recorded after push in the release receipt; local success alone does not establish CI or production readiness."
+  },
+  "privateEvidenceDirectory": ".local/qa/client-video-20261109-131819",
+  "knownLimits": [
+    "Select-all uses the same eligible-source default as individual selection. Existing explicit choices survive; multiple origins are flagged and shown for review.",
+    "Only administrator/organization-owner assortment rights already allowed by the server apply.",
+    "500-line contract limit, hidden-product restrictions, existing/zero/shared prices, transactions and idempotency are retained.",
+    "No automatic correction or merging of historical customer records."
+  ]
+}
