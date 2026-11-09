@@ -3,6 +3,7 @@ import { runJob, type JobPayload, type JobResult } from "@/server/jobs";
 export const scheduledJobGroups = {
   recovery: [
     "subscription-payment-reconcile",
+    "whatsapp-payment-reconcile",
     "export-job",
     "kkm-retry-receipts",
     "order-confirmation-email",

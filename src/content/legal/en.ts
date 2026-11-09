@@ -6,9 +6,9 @@ export const enLegal: LegalCopy = {
   contents: "On this page",
   draft: "Draft · local preview only",
   published: "Version dated 7 November 2026",
-  paymentSystemsTitle: "Bank cards",
+  paymentSystemsTitle: "Payment methods",
   paymentSystemsNotice:
-    "Availability of a particular card and payment method is confirmed on the FreedomPay checkout page.",
+    "Available payment methods and restrictions are shown on the provider page opened from your Bazaar invoice. Owning a card or bank app does not guarantee support for a particular method.",
   draftNotice:
     "Draft for review. Seller details were verified; the public address and support mailbox still need confirmation. This is unpublished and is not an effective offer. Viewing this page does not enable payments.",
   missing: "To be completed from the entrepreneur's documents",
@@ -74,7 +74,7 @@ export const enLegal: LegalCopy = {
           paragraphs: [
             "Prices are in Kyrgyz som (KGS). The final amount and selected plan are shown before payment confirmation. If the price changes before invoice creation, the updated amount must be confirmed again. The price of an already paid period cannot be increased retrospectively.",
             "Access is purchased in one payment for a selected term of 1, 6 or 12 calendar months, when that term is available in the published plan. The discount, its application to extra capacity and the full amount are determined by the selected offer and shown before payment. There are no automatic charges or mandatory card saving.",
-            "When online payment is available, FreedomPay processes the transaction. Available payment methods and restrictions are shown on its payment page. Card details and bank verification codes are entered on the provider's side. The payer's bank determines any bank fees and currency conversion.",
+            "When online payment is available, the provider identified at confirmation and in the invoice history processes the transaction. Available payment methods and restrictions are shown on its payment page. Card details and bank verification codes are entered on the provider's side. The payer's bank determines any bank fees and currency conversion.",
           ],
         },
         {
@@ -179,7 +179,7 @@ export const enLegal: LegalCopy = {
           title: "Who provides Bazaar",
           paragraphs: [
             "The individual entrepreneur identified below provides access to the software. Bazaar is the software brand; the named entrepreneur is the contracting party and payment recipient.",
-            "FreedomPay processes online payments under the acquiring arrangement. Its details do not replace the service provider's details. The stores of Bazaar users are also not the sellers of the Bazaar subscription.",
+            "A GoPay integration is prepared for new payments; real payments require merchant activation. Previously created FreedomPay invoices retain their original provider. The payment provider is identified on the invoice and does not replace the seller's details. The stores of Bazaar users are also not the sellers of the Bazaar subscription.",
           ],
         },
         {
@@ -195,7 +195,7 @@ export const enLegal: LegalCopy = {
     payment: {
       title: "Subscription payment",
       description:
-        "Paying for a month, six months or a year of Bazaar access through FreedomPay and checking the result.",
+        "Paying for a month, six months or a year of Bazaar access through the connected payment provider and checking the result.",
       sections: [
         {
           id: "before",
@@ -210,7 +210,7 @@ export const enLegal: LegalCopy = {
           title: "2. How to pay",
           paragraphs: [
             "Open the organisation's subscription section using an account authorised to manage the subscription. Select an available plan, check the amount and review the offer and refund rules. Accept the offer and continue to payment.",
-            "Bazaar creates an invoice and redirects you to FreedomPay's payment page. Choose an available method, enter required payment details on the provider's page and confirm using the bank's method. Support for a specific card, payment network and currency depends on the merchant setup and bank.",
+            "Bazaar creates an invoice and redirects you to the payment page of the provider identified on it. Choose an available method, enter required payment details on the provider's page and confirm using the bank's method. Support for a specific card, payment network and currency depends on the merchant setup and bank.",
             "Payment links expire; the account shows the deadline. If a link expires, first check the original invoice status. Contact support about an incomplete or disputed operation before creating another payment.",
           ],
         },
@@ -218,7 +218,7 @@ export const enLegal: LegalCopy = {
           id: "result",
           title: "3. Checking the result",
           paragraphs: [
-            "After payment, return to Bazaar and check the invoice status and access dates in the subscription section. Access is extended after server-side verification of successful payment from FreedomPay. A browser message, transfer screenshot or success-page redirect alone is not confirmation.",
+            "After payment, return to Bazaar and check the invoice status and access dates in the subscription section. Access is extended after server-side verification of successful payment with the provider identified on the invoice. A browser message, transfer screenshot or success-page redirect alone is not confirmation.",
             "If the bank charged you but the invoice still awaits confirmation, check its status in the account or contact support with the invoice number. Do not pay again until the first transaction's result is established. Bank-declined or cancelled payments do not add a paid period.",
           ],
         },
@@ -234,7 +234,7 @@ export const enLegal: LegalCopy = {
           id: "security",
           title: "5. Security and refunds",
           paragraphs: [
-            "Use bazaar.kg and the FreedomPay payment page opened from your account. Enter card details and bank codes at the payment provider. Do not disclose them to support staff or send them in messages.",
+            "Use bazaar.kg and the payment provider page opened from the invoice in your account. Enter card details and bank codes at the payment provider. Do not disclose them to support staff or send them in messages.",
             "For mistaken payment, access not provided or service cancellation, follow the refund rules and contact the service provider. A refund follows verification of the original transaction; receiving the request is not the same as the bank crediting the money.",
           ],
         },

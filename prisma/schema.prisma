@@ -683,6 +683,11 @@ enum SubscriptionInvoiceStatus {
   RESOLVED
 }
 
+enum BillingPaymentProvider {
+  FREEDOMPAY
+  GOPAY
+}
+
 model SubscriptionInvoice {
   id                String                     @id @default(cuid())
   organizationId    String
@@ -693,6 +698,8 @@ model SubscriptionInvoice {
   amountMinor       Int
   currency          String                     @default("KGS")
   status            SubscriptionInvoiceStatus  @default(CREATING)
+  provider              BillingPaymentProvider @default(FREEDOMPAY)
+  providerOrderId       String? @unique
   merchantId        String
   isTest            Boolean
   providerPaymentId String?
@@ -716,7 +723,7 @@ model SubscriptionInvoice {
 
   @@unique([organizationId, idempotencyKey])
   @@unique([id, organizationId])
-  @@unique([merchantId, isTest, providerPaymentId])
+  @@unique([provider, merchantId, isTest, providerPaymentId], map: "SubscriptionInvoice_provider_payment_key")
   @@index([status, nextCheckAt])
   @@index([organizationId, createdAt, id])
 }
@@ -1235,6 +1242,8 @@ model WhatsAppInvoice {
   offerVersion          String
   currency              String   @default("KGS")
   status                String   @default("CREATING")
+  provider              BillingPaymentProvider @default(FREEDOMPAY)
+  providerOrderId       String? @unique
   merchantId            String
   isTest                Boolean
   providerPaymentId     String?
@@ -1256,7 +1265,7 @@ model WhatsAppInvoice {
 
   @@unique([organizationId, idempotencyKey])
   @@unique([id, organizationId])
-  @@unique([merchantId, isTest, providerPaymentId])
+  @@unique([provider, merchantId, isTest, providerPaymentId], map: "WhatsAppInvoice_provider_payment_key")
   @@index([status, nextCheckAt])
   @@index([organizationId, createdAt])
 }

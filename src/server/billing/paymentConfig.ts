@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import type { BillingPaymentProvider } from "@prisma/client";
 import { legalPublicationState, LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 export type PaymentMode = "disabled" | "sandbox" | "live";
 
@@ -5,11 +7,19 @@ const localHost = (host: string) => ["localhost", "127.0.0.1", "[::1]"].includes
 
 export const getSubscriptionPaymentConfig = (
   env: Record<string, string | undefined> = process.env,
+  explicitProvider?: BillingPaymentProvider,
 ) => {
   const mode: PaymentMode = ["sandbox", "live"].includes(env.BILLING_PAYMENTS_MODE ?? "")
     ? (env.BILLING_PAYMENTS_MODE as PaymentMode)
     : "disabled";
-  const merchantId = env.FREEDOMPAY_MERCHANT_ID?.trim() ?? "";
+  const selection = env.BILLING_PAYMENT_PROVIDER?.trim().toLowerCase() || "freedompay";
+  const provider: BillingPaymentProvider =
+    explicitProvider ?? (selection === "gopay" ? "GOPAY" : "FREEDOMPAY");
+  const apiKey = env.GOPAY_API_KEY?.trim() ?? "";
+  const apiSecret = env.GOPAY_API_SECRET?.trim() ?? "";
+  const webhookSecret = env.GOPAY_WEBHOOK_SECRET?.trim() ?? "";
+  const merchantId =
+    provider === "GOPAY" ? goPayMerchantId(apiKey) : (env.FREEDOMPAY_MERCHANT_ID?.trim() ?? "");
   const secretKey = env.FREEDOMPAY_SECRET_KEY?.trim() ?? "";
   const sellerName = env.BILLING_SELLER_NAME?.trim() ?? "";
   const termsVersion = env.BILLING_TERMS_VERSION?.trim() ?? "";
@@ -43,8 +53,12 @@ export const getSubscriptionPaymentConfig = (
   const ready = Boolean(
     mode !== "disabled" &&
     env.HARDENING_EXTERNAL_PROVIDER_MODE !== "disabled" &&
-    /^\d{1,20}$/.test(merchantId) &&
-    secretKey.length >= 16 &&
+    (explicitProvider || ["gopay", "freedompay"].includes(selection)) &&
+    (provider === "GOPAY"
+      ? /^[\x21-\x7e]{16,512}$/.test(apiKey) &&
+        /^[\x21-\x7e]{16,4096}$/.test(apiSecret) &&
+        /^[\x21-\x7e]{16,4096}$/.test(webhookSecret)
+      : /^\d{1,20}$/.test(merchantId) && secretKey.length >= 16) &&
     publicOrigin &&
     termsUrl &&
     termsVersion &&
@@ -59,8 +73,42 @@ export const getSubscriptionPaymentConfig = (
         sellerName === legal.seller.legalName &&
         termsUrl === `${publicOrigin}/legal/offer`)),
   );
-  return { mode, ready, merchantId, secretKey, publicOrigin, termsUrl, termsVersion, sellerName };
+  return {
+    provider,
+    apiKey,
+    apiSecret,
+    webhookSecret,
+    mode,
+    ready,
+    merchantId,
+    secretKey,
+    publicOrigin,
+    termsUrl,
+    termsVersion,
+    sellerName,
+  };
 };
 
 export const selfServeSignupEnabled = () =>
   process.env.BILLING_SELF_SERVE_SIGNUP === "1" && getSubscriptionPaymentConfig().ready;
+
+// Persist only a credential identity, never the API key itself.
+export const goPayMerchantId = (apiKey: string) =>
+  apiKey ? `gopay:${createHash("sha256").update(apiKey).digest("hex").slice(0, 32)}` : "";
+
+export const getGoPayCredentials = (merchantId: string) => {
+  for (const prefix of ["GOPAY_", "GOPAY_PREVIOUS_"]) {
+    const apiKey = process.env[`${prefix}API_KEY`]?.trim() ?? "";
+    const apiSecret = process.env[`${prefix}API_SECRET`]?.trim() ?? "";
+    if (
+      /^[\x21-\x7e]{16,512}$/.test(apiKey) &&
+      /^[\x21-\x7e]{16,4096}$/.test(apiSecret) &&
+      goPayMerchantId(apiKey) === merchantId
+    )
+      return { apiKey, apiSecret };
+  }
+  throw new Error("GoPay credentials unavailable for invoice");
+};
+
+export const paymentOrderId = (kind: "subscription" | "whatsapp", invoiceId: string) =>
+  createHash("sha256").update(`bazaar:${kind}:${invoiceId}`).digest("hex").slice(0, 32);

@@ -46,6 +46,7 @@ describe("privacy matches subscription, AI and real seller processing", () => {
         expect(root.textContent).toContain(copy[`${section}Title` as keyof typeof copy]);
         expect(root.textContent).toContain(copy[`${section}Body` as keyof typeof copy]);
       }
+      expect(root.textContent).toContain("GoPay");
       expect(root.textContent).toContain("FreedomPay");
       expect(root.textContent).toContain("DeepSeek");
       expect(root.textContent).toContain("OpenAI");

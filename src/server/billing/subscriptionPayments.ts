@@ -1,11 +1,18 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { Prisma, SubscriptionInvoice } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { contractPlan } from "./contractTerms";
-import { getSubscriptionPaymentConfig } from "./paymentConfig";
+import { getGoPayCredentials, getSubscriptionPaymentConfig, paymentOrderId } from "./paymentConfig";
+import { initializeGoPay, getGoPayStatus } from "./gopay";
+import {
+  assertPaymentReceipt,
+  freedomPayReceipt,
+  goPayReceipt,
+  type VerifiedPaymentReceipt,
+} from "./paymentReceipt";
 import { extendSubscriptionMonths, kgsToMinor } from "./paymentMath";
 import { getFreedomPayStatus, initializeFreedomPay, scalar, type SignedFields } from "./freedomPay";
 import type { PlanCode } from "@/lib/billing/plans";
@@ -22,7 +29,6 @@ import { LIFETIME_ORGANIZATION_IDS } from "./lifetimeOrganizations";
 import { assertSubscriptionSelectionReady } from "./subscriptionPreparation";
 
 const nowPlus = (milliseconds: number) => new Date(Date.now() + milliseconds);
-const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const lockOrganization = async (tx: Prisma.TransactionClient, organizationId: string) => {
   await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
   return tx.organization.findUniqueOrThrow({
@@ -35,6 +41,7 @@ export const presentInvoice = (
   invoice: SubscriptionInvoice & { period?: { startsAt: Date; endsAt: Date } | null },
 ) => ({
   id: invoice.id,
+  provider: invoice.provider,
   plan: invoice.plan,
   purchase: readPurchaseSnapshot(invoice.purchaseSnapshot),
   amountMinor: invoice.amountMinor,
@@ -65,6 +72,7 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
     prisma.subscriptionPeriod.findFirst({ where: { organizationId }, orderBy: { endsAt: "desc" } }),
   ]);
   return {
+    provider: config.provider,
     available: config.ready,
     mode: config.mode,
     sellerName: config.sellerName,
@@ -131,12 +139,15 @@ export const createSubscriptionCheckout = async (input: {
   quoteToken?: string;
   idempotencyKey: string;
   termsVersion: string;
+  expectedProvider?: "GOPAY" | "FREEDOMPAY";
   expectedAmountMinor: number;
   locale: string;
   requestId: string;
 }) => {
   const config = getSubscriptionPaymentConfig();
   if (!config.ready) throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
+  if (input.expectedProvider && input.expectedProvider !== config.provider)
+    throw new AppError("billingQuoteChanged", "CONFLICT", 409);
   const invoice = await prisma.$transaction(async (tx) => {
     const org = await lockOrganization(tx, input.organizationId);
     if (org.subscriptionContract?.lifetimeAccess || LIFETIME_ORGANIZATION_IDS.has(org.id))
@@ -222,8 +233,13 @@ export const createSubscriptionCheckout = async (input: {
     const amountMinor = snapshot.amountMinor;
     if (input.expectedAmountMinor !== amountMinor)
       throw new AppError("billingPriceChanged", "CONFLICT", 409);
+    const invoiceId = randomUUID().replaceAll("-", "");
     const created = await tx.subscriptionInvoice.create({
       data: {
+        id: invoiceId,
+        provider: config.provider,
+        providerOrderId:
+          config.provider === "GOPAY" ? paymentOrderId("subscription", invoiceId) : null,
         organizationId: org.id,
         createdById: input.actorId,
         idempotencyKey: input.idempotencyKey,
@@ -262,7 +278,25 @@ export const createSubscriptionCheckout = async (input: {
   // Persist before calling the provider. An uncertain result must be reconciled
   // by our unique order id, never by blindly creating a second payment.
   try {
-    const result = await initializeFreedomPay({ ...invoice.value, locale: input.locale });
+    const result =
+      invoice.value.provider === "GOPAY"
+        ? {
+            accepted: true as const,
+            ...(await initializeGoPay(
+              {
+                orderId: invoice.value.providerOrderId!,
+                amountMinor: invoice.value.amountMinor,
+                description: `Bazaar ${invoice.value.plan} (${input.months ?? 1} months)`,
+                isTest: invoice.value.isTest,
+                ...(config.publicOrigin.startsWith("https:")
+                  ? { returnUrl: `${config.publicOrigin}/billing` }
+                  : {}),
+                lifetimeSeconds: 900,
+              },
+              getGoPayCredentials(invoice.value.merchantId),
+            )),
+          }
+        : await initializeFreedomPay({ ...invoice.value, locale: input.locale });
     await prisma.subscriptionInvoice.updateMany({
       where: { id: invoice.value.id, status: "CREATING" },
       data: result.accepted
@@ -304,15 +338,23 @@ const sameAmount = (fields: SignedFields, amount: number) => {
     return false;
   }
 };
-const hasRefund = (fields: SignedFields) =>
-  ["pg_refund_amount", "pg_revoke_amount"].some((key) => {
-    const value = scalar(fields, key);
-    return value !== undefined && (!/^-?\d+(?:\.\d{1,2})?$/.test(value) || Number(value) !== 0);
-  });
-
 export const applyVerifiedPayment = async (input: {
   invoiceId: string;
   fields: SignedFields;
+  source: "CALLBACK" | "RECONCILIATION";
+}) => {
+  const invoice = await prisma.subscriptionInvoice.findUnique({ where: { id: input.invoiceId } });
+  if (!invoice) throw new AppError("recordNotFound", "NOT_FOUND", 404);
+  return applySubscriptionReceipt({
+    invoiceId: invoice.id,
+    source: input.source,
+    receipt: freedomPayReceipt(invoice, input.fields, input.source),
+  });
+};
+
+export const applySubscriptionReceipt = async (input: {
+  invoiceId: string;
+  receipt: VerifiedPaymentReceipt;
   source: "CALLBACK" | "RECONCILIATION";
 }) => {
   const seed = await prisma.subscriptionInvoice.findUnique({ where: { id: input.invoiceId } });
@@ -320,48 +362,11 @@ export const applyVerifiedPayment = async (input: {
   return prisma.$transaction(async (tx) => {
     const org = await lockOrganization(tx, seed.organizationId);
     const invoice = await tx.subscriptionInvoice.findUniqueOrThrow({ where: { id: seed.id } });
-    const f = input.fields;
-    const paymentId = scalar(f, "pg_payment_id");
-    const orderId = scalar(f, "pg_order_id");
-    const testingMode = scalar(f, "pg_testing_mode");
-    if (
-      !paymentId ||
-      !/^[1-9]\d{0,29}$/.test(paymentId) ||
-      (invoice.providerPaymentId && paymentId !== invoice.providerPaymentId) ||
-      (orderId !== undefined && orderId !== invoice.id) ||
-      (input.source === "CALLBACK" && orderId !== invoice.id) ||
-      (scalar(f, "pg_merchant_id") !== undefined &&
-        scalar(f, "pg_merchant_id") !== invoice.merchantId) ||
-      scalar(f, "pg_currency") !== "KGS" ||
-      !sameAmount(f, invoice.amountMinor) ||
-      (input.source === "CALLBACK" && testingMode === undefined) ||
-      (testingMode !== undefined && testingMode !== (invoice.isTest ? "1" : "0")) ||
-      (invoice.isTest && process.env.VERCEL_ENV === "production")
-    )
-      throw new AppError("billingPaymentMismatch", "CONFLICT", 409);
-    const result = scalar(f, "pg_result");
-    const status = scalar(f, "pg_payment_status");
-    const success =
-      input.source === "CALLBACK" ? result === "1" : ["ok", "success"].includes(status ?? "");
-    const failed =
-      input.source === "CALLBACK"
-        ? result === "0"
-        : ["failed", "error", "revoked", "incomplete", "expired"].includes(status ?? "");
-    const captured = scalar(f, "pg_captured");
-    const settled =
-      success &&
-      captured !== "0" &&
-      (scalar(f, "pg_payment_method") !== "bankcard" || captured === "1");
-    const refunded = hasRefund(f) || ["revoked", "refunded"].includes(status ?? "");
-    const state = refunded ? "REFUND_REVIEW" : settled ? "PAID" : failed ? "FAILED" : "PENDING";
-    const key = digest({
-      invoice: invoice.id,
-      paymentId,
-      state,
-      captured,
-      refund: scalar(f, "pg_refund_amount"),
-      revoke: scalar(f, "pg_revoke_amount"),
-    });
+    assertPaymentReceipt(invoice, input.receipt);
+    const { paymentId, state, eventKey: key } = input.receipt;
+    const refunded = state === "REFUND_REVIEW",
+      settled = state === "PAID",
+      failed = state === "FAILED" || state === "EXPIRED";
     const exists = await tx.subscriptionPaymentEvent.findUnique({
       where: { deduplicationKey: key },
       select: { id: true },
@@ -373,10 +378,15 @@ export const applyVerifiedPayment = async (input: {
           deduplicationKey: key,
           source: input.source,
           state,
-          payloadDigest: digest(f),
+          payloadDigest: input.receipt.payloadDigest,
         },
       });
-    const update = { providerPaymentId: paymentId, nextCheckAt: nowPlus(30_000), lastIssue: null };
+    const update = {
+      providerPaymentId: paymentId,
+      nextCheckAt: nowPlus(30_000),
+      lastIssue: null,
+      ...(input.receipt.checkoutUrl ? { checkoutUrl: input.receipt.checkoutUrl } : {}),
+    };
     if (
       invoice.status === "RESOLVED" ||
       (invoice.status === "REVIEW" && invoice.lastIssue === "REFUND_REVIEW" && !refunded)
@@ -538,7 +548,7 @@ export const applyVerifiedPayment = async (input: {
         ...update,
         ...(failed
           ? {
-              status: status === "incomplete" || status === "expired" ? "EXPIRED" : "FAILED",
+              status: state === "EXPIRED" ? "EXPIRED" : "FAILED",
               pendingSlot: null,
               lastIssue: null,
             }
@@ -566,29 +576,60 @@ export const checkSubscriptionInvoice = async (organizationId: string, invoiceId
   let checkFailed = false;
   if (claimed.count) {
     try {
-      const fields = await getFreedomPayStatus(invoice);
-      if (scalar(fields, "pg_status") !== "ok") throw new Error("Unconfirmed provider status");
-      {
-        // The documented get_status3 not-found result uses payment_id=0. Give
-        // initialization at least one minute before treating it as absent.
-        if (
-          scalar(fields, "pg_payment_id") === "0" &&
-          !invoice.providerPaymentId &&
-          invoice.createdAt < new Date(Date.now() - 60_000)
-        ) {
-          await prisma.subscriptionInvoice.updateMany({
-            where: { id: invoice.id, status: "CREATING", processingToken },
-            data: { status: "FAILED", pendingSlot: null, lastIssue: "PAYMENT_NOT_CREATED" },
-          });
-        } else
-          await applyVerifiedPayment({ invoiceId: invoice.id, fields, source: "RECONCILIATION" });
+      if (invoice.provider === "GOPAY") {
+        if (!invoice.providerOrderId) throw new Error("Missing payment order identity");
+        const payment = await getGoPayStatus(
+          {
+            orderId: invoice.providerOrderId,
+            providerPaymentId: invoice.providerPaymentId ?? undefined,
+            isTest: invoice.isTest,
+          },
+          getGoPayCredentials(invoice.merchantId),
+        );
+        await applySubscriptionReceipt({
+          invoiceId: invoice.id,
+          source: "RECONCILIATION",
+          receipt: goPayReceipt(invoice, payment),
+        });
+      } else {
+        const fields = await getFreedomPayStatus(invoice);
+        if (scalar(fields, "pg_status") !== "ok") throw new Error("Unconfirmed provider status");
+        {
+          // The documented get_status3 not-found result uses payment_id=0. Give
+          // initialization at least one minute before treating it as absent.
+          if (
+            scalar(fields, "pg_payment_id") === "0" &&
+            !invoice.providerPaymentId &&
+            invoice.createdAt < new Date(Date.now() - 60_000)
+          ) {
+            await prisma.subscriptionInvoice.updateMany({
+              where: { id: invoice.id, status: "CREATING", processingToken },
+              data: { status: "FAILED", pendingSlot: null, lastIssue: "PAYMENT_NOT_CREATED" },
+            });
+          } else
+            await applyVerifiedPayment({ invoiceId: invoice.id, fields, source: "RECONCILIATION" });
+        }
       }
-    } catch {
-      checkFailed = true;
-      await prisma.subscriptionInvoice.updateMany({
-        where: { id: invoice.id, processingToken, status: { in: ["CREATING", "PENDING"] } },
-        data: { lastIssue: "RECONCILIATION_REQUIRED" },
-      });
+    } catch (error) {
+      if (
+        invoice.provider === "GOPAY" &&
+        !invoice.providerPaymentId &&
+        invoice.status === "CREATING" &&
+        invoice.createdAt < new Date(Date.now() - 60_000) &&
+        error instanceof AppError &&
+        error.details?.providerCode === "4041"
+      ) {
+        await prisma.subscriptionInvoice.updateMany({
+          where: { id: invoice.id, status: "CREATING", processingToken },
+          data: { status: "FAILED", pendingSlot: null, lastIssue: "PAYMENT_NOT_CREATED" },
+        });
+      } else {
+        checkFailed = true;
+        await prisma.subscriptionInvoice.updateMany({
+          where: { id: invoice.id, processingToken, status: { in: ["CREATING", "PENDING"] } },
+          data: { lastIssue: "RECONCILIATION_REQUIRED" },
+        });
+      }
     } finally {
       const latest = await prisma.subscriptionInvoice.findUniqueOrThrow({
         where: { id: invoice.id },
@@ -626,6 +667,7 @@ export const verifyInvoiceCanBePaid = async (invoiceId: string, fields: SignedFi
     const invoice = await tx.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
     const now = new Date();
     if (
+      invoice.provider !== "FREEDOMPAY" ||
       invoice.expiresAt <= now ||
       !["CREATING", "PENDING"].includes(invoice.status) ||
       org.subscriptionBillingMode !== "SELF_SERVE" ||

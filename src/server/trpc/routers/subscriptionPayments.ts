@@ -4,7 +4,10 @@ import { TRPCError } from "@trpc/server";
 import { PLAN_CODES } from "@/lib/billing/plans";
 import { adminProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
-import { getSubscriptionQuote, subscriptionQuoteInputSchema } from "@/server/billing/subscriptionQuotes";
+import {
+  getSubscriptionQuote,
+  subscriptionQuoteInputSchema,
+} from "@/server/billing/subscriptionQuotes";
 import {
   checkSubscriptionInvoice,
   createSubscriptionCheckout,
@@ -22,8 +25,11 @@ export const subscriptionPaymentsRouter = router({
     .use(rateLimit({ max: 60, windowMs: 60_000, prefix: "billing-quote" }))
     .input(subscriptionQuoteInputSchema)
     .query(async ({ ctx, input }) => {
-      try { return await getSubscriptionQuote(ctx.user.organizationId, input); }
-      catch (error) { throw toTRPCError(error); }
+      try {
+        return await getSubscriptionQuote(ctx.user.organizationId, input);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
   get: paymentProcedure.query(async ({ ctx }) => {
     try {
@@ -52,6 +58,7 @@ export const subscriptionPaymentsRouter = router({
         quoteToken: z.string().max(12000).optional(),
         idempotencyKey: z.string().uuid(),
         termsVersion: z.string().min(1).max(100),
+        expectedProvider: z.enum(["GOPAY", "FREEDOMPAY"]).optional(),
         expectedAmountMinor: z.number().int().positive().max(2147483647),
         acceptedTerms: z.literal(true),
         locale: z.enum(["ru", "kg", "en"]),

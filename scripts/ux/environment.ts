@@ -16,6 +16,12 @@ export function uxEnvironment() {
     REDIS_URL: espressoSuite ? "redis://127.0.0.1:56390/4" : "redis://127.0.0.1:56390/2",
     REDIS_KEY_PREFIX: espressoSuite ? "espresso-ui-test" : "ux-isolated-test",
     BILLING_PAYMENTS_MODE: "disabled",
+    BILLING_PAYMENT_PROVIDER: "freedompay",
+    GOPAY_API_KEY: "",
+    GOPAY_API_SECRET: "",
+    GOPAY_WEBHOOK_SECRET: "",
+    GOPAY_PREVIOUS_API_KEY: "",
+    GOPAY_PREVIOUS_API_SECRET: "",
     FREEDOMPAY_MERCHANT_ID: "",
     FREEDOMPAY_SECRET_KEY: "",
   };

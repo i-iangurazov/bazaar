@@ -22,7 +22,7 @@ const env = { ...process.env, NODE_ENV: "test", VERCEL_ENV: "development", VERCE
 const dotenvKeys = [".env", ".env.local", ".env.production", ".env.production.local"]
   .flatMap(file => existsSync(file) ? [...readFileSync(file, "utf8").matchAll(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)].map(match => match[1]) : []);
 for (const key of new Set([...Object.keys(env), ...dotenvKeys])) {
-  if (/^(?:RESEND_|OPENAI_|DEEPSEEK_|AI_PROVIDER|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_|FREEDOMPAY_)/.test(key)) env[key] = "";
+  if (/^(?:RESEND_|OPENAI_|DEEPSEEK_|AI_PROVIDER|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_|FREEDOMPAY_|GOPAY_)/.test(key)) env[key] = "";
 }
 const run = (cmd, args, capture = false) => {
   const result = spawnSync(cmd, args, { env, encoding: "utf8", stdio: capture ? "pipe" : "inherit" });

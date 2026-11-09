@@ -436,6 +436,7 @@ export function Costs({
   reload: () => Promise<unknown>;
 }) {
   const t = useTranslations("whatsappAi"),
+    paymentText = useTranslations("billing.payments"),
     locale = useLocale(),
     feedback = useFeedback();
   const payments = trpc.whatsappAi.payments.useQuery(undefined, {
@@ -445,6 +446,9 @@ export function Costs({
   const [quantity, setQuantity] = useState("1"),
     [agreed, setAgreed] = useState(false);
   const key = useRef<string | null>(null);
+  useEffect(() => {
+    setAgreed(false);
+  }, [payments.data?.provider, payments.data?.mode, payments.data?.termsVersion, data.pack.priceMinor]);
   const checkout = trpc.whatsappAi.checkout.useMutation({ onError: feedback.error });
   const check = trpc.whatsappAi.checkPayment.useMutation({
     onError: feedback.error,
@@ -510,6 +514,11 @@ export function Costs({
               {!payments.data?.ready && (
                 <p className="rounded-md bg-secondary p-3 text-sm">{t("paymentsUnavailable")}</p>
               )}
+              {payments.data?.ready && payments.data.mode === "sandbox" ? (
+                <p role="status" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                  {paymentText("sandbox", { provider: payments.data.provider === "GOPAY" ? "GoPay" : "FreedomPay" })}
+                </p>
+              ) : null}
               <div className="max-w-xs">
                 <Choice
                   label={t("packs")}
@@ -566,6 +575,7 @@ export function Costs({
                         termsAccepted: true,
                         termsVersion: payments.data!.termsVersion,
                         expectedAmountMinor: Number(quantity) * data.pack.priceMinor,
+                        expectedProvider: payments.data!.provider,
                         idempotencyKey: key.current,
                         locale: locale as "ru" | "kg" | "en",
                       },
@@ -579,7 +589,7 @@ export function Costs({
               >
                 {t("pay", { price: money(Number(quantity) * data.pack.priceMinor) })}
               </Button>
-              <p className="text-xs text-muted-foreground">{t("paymentHelp")}</p>
+              {payments.data ? <p className="text-xs text-muted-foreground">{t("paymentHelp", { provider: payments.data.provider === "GOPAY" ? "GoPay" : "FreedomPay" })}</p> : null}
               <div className="divide-y">
                 {payments.data?.invoices.map((invoice) => (
                   <div
@@ -591,9 +601,13 @@ export function Costs({
                         {invoice.quantity * data.pack.messages} · {money(invoice.amountMinor)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {t(`invoiceStates.${invoice.status}`)} ·{" "}
+                        {invoice.isTest && invoice.status === "PAID" ? paymentText("testPaid") : t(`invoiceStates.${invoice.status}`)} ·{" "}
                         {formatDateTime(invoice.createdAt, locale)}
                       </p>
+                      <p className="text-xs text-muted-foreground">
+                        {paymentText("providerDescription", { provider: invoice.provider === "GOPAY" ? "GoPay" : "FreedomPay" })}
+                      </p>
+                      {invoice.isTest ? <Badge variant="warning">{paymentText("testInvoice")}</Badge> : null}
                     </div>
                     <div className="flex gap-2">
                       {invoice.checkoutUrl && (

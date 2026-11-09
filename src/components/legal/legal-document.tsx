@@ -140,36 +140,13 @@ export function LegalDocument({
             {documentId === "payment" ? (
               <section className="space-y-4" aria-label={copy.paymentSystemsTitle}>
                 <h2 className="text-xl font-semibold tracking-tight">{copy.paymentSystemsTitle}</h2>
-                <div className="flex flex-wrap items-center gap-5 rounded-lg border border-border bg-white p-5">
-                  {/* Local vector payment marks retain their original SVGs; raster optimization is unnecessary. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/brand/payments/visa.svg"
-                    alt="Visa"
-                    width={90}
-                    height={40}
-                    className="h-8 w-20 object-contain"
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/brand/payments/mastercard.svg"
-                    alt="Mastercard"
-                    width={70}
-                    height={44}
-                    className="h-10 w-16 object-contain"
-                  />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/brand/payments/elcart.svg"
-                    alt="Элкарт"
-                    width={96}
-                    height={44}
-                    className="h-10 w-24 object-contain"
-                  />
-                </div>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {copy.paymentSystemsNotice}
-                </p>
+                <Card>
+                  <CardContent className="p-5">
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {copy.paymentSystemsNotice}
+                    </p>
+                  </CardContent>
+                </Card>
               </section>
             ) : null}
             <section id="seller-details" className="scroll-mt-6 space-y-4">

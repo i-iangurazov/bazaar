@@ -229,6 +229,13 @@ const jobs: Record<string, JobDefinition> = {
       return reconcileSubscriptionPayments();
     },
   },
+  "whatsapp-payment-reconcile": {
+    handler: async () => {
+      const { reconcileWhatsAppPayments } = await import("@/server/whatsapp/payments");
+      return reconcileWhatsAppPayments();
+    },
+    maxAttempts: 1,
+  },
   "cleanup-idempotency-keys": {
     handler: cleanupIdempotencyKeys,
     maxAttempts: 3,

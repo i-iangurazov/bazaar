@@ -1,5 +1,6 @@
 // Actual local UI with genuine quotes and a real DISABLED checkout backend.
-// Readiness is the only labelled browser response fixture; no provider is tested.
+// GoPay readiness is a labelled browser response fixture; no provider is tested.
+// Historical and test invoice rows below are synthetic local render fixtures.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -14,6 +15,7 @@ import {
   type Response as BrowserResponse,
 } from "playwright";
 import { subscriptionReleaseMigrations } from "../deployment/prepare-subscription-rollback";
+import { WHATSAPP_OFFER_VERSION, WHATSAPP_PACK_PRICE_MINOR } from "../../src/lib/whatsapp-ai";
 import ru from "../../messages/ru.json";
 import kg from "../../messages/kg.json";
 import en from "../../messages/en.json";
@@ -21,7 +23,8 @@ import en from "../../messages/en.json";
 const base = "http://localhost:3137";
 const databaseUrl = "postgresql://bazaar_test@127.0.0.1:55971/bazaar_hardening_agent4_platform";
 const fixtureRoot = resolve(".local/subscriptions-20261107");
-const directory = resolve(process.env.QA_SUBSCRIPTIONS_ARTIFACT_DIR ?? ".local/subscriptions-final-20261107/browser-current");
+const directory = resolve(process.env.QA_SUBSCRIPTIONS_ARTIFACT_DIR ?? ".local/gopay-20261109/browser");
+const reviewOnly = process.env.QA_SUBSCRIPTIONS_REVIEW_ONLY === "1";
 assert.notEqual(process.env.VERCEL_ENV, "production");
 assert(
   (await readFile(resolve(fixtureRoot, "TEST-INFRASTRUCTURE-ONLY"), "utf8")).startsWith(
@@ -41,7 +44,7 @@ type Quote = {
   extras: { stores: number; productPacks: number; userPacks: number };
   quoteToken: string;
 };
-type Checkout = Quote & { idempotencyKey: string; expectedAmountMinor: number };
+type Checkout = Quote & { idempotencyKey: string; expectedAmountMinor: number; expectedProvider: "GOPAY" | "FREEDOMPAY" };
 type BillingSummary = {
   billingCatalogVersion: string;
   planTier: Plan;
@@ -232,6 +235,53 @@ try {
     channel: process.env.QA_BROWSER_CHANNEL ?? "chrome",
   });
 
+  if (reviewOnly) {
+    const fixture = await seed();
+    await db.organization.update({ where: { id: fixture.org.id }, data: { subscriptionBillingMode: "SELF_SERVE" } });
+    const before = await commercialFields(fixture.org.id);
+    const context = await browser.newContext({ viewport: { width: 390, height: 1000 }, reducedMotion: "reduce", serviceWorkers: "block" });
+    await authenticate(context, fixture, "ru");
+    await context.route("**/*", (route) => {
+      const url = new URL(route.request().url());
+      return url.origin === base || ["data:", "blob:"].includes(url.protocol) ? route.continue() : route.abort();
+    });
+    try {
+      const url = new URL(base + "/api/trpc/billing.payments.quote");
+      url.searchParams.set("batch", "1");
+      url.searchParams.set("input", JSON.stringify({ "0": { json: {
+        plan: "STARTER", months: 1, extras: { stores: 0, productPacks: 0, userPacks: 0 }, action: "RENEW",
+      } } }));
+      const response = await context.request.get(url.href, { maxRedirects: 0 });
+      const wire = await response.json(), quote = (Array.isArray(wire) ? wire[0] : wire)?.result?.data?.json;
+      assert(response.ok() && quote?.organizationId === fixture.org.id && quote.amountMinor === 200000, "A real local server quote is required for the REVIEW fixture");
+      await db.subscriptionInvoice.create({ data: {
+        organizationId: fixture.org.id, createdById: fixture.user.id, idempotencyKey: randomUUID(),
+        plan: "STARTER", amountMinor: quote.amountMinor, purchaseSnapshot: quote,
+        provider: "GOPAY", providerOrderId: randomUUID().replaceAll("-", ""), isTest: true,
+        status: "REVIEW", merchantId: "synthetic-review-only", sellerName: "Synthetic browser seller",
+        termsVersion: "synthetic-display-only", termsUrl: base + "/legal/offer", checkoutUrl: null,
+        expiresAt: new Date(Date.now() + 86400_000), nextCheckAt: new Date(Date.now() + 3600_000),
+      } });
+      const page = await context.newPage(), errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.goto(base + "/billing", { waitUntil: "domcontentloaded" });
+      const pending = page.locator("[data-pending-invoice]"), t = ru.billing.payments;
+      await pending.getByText(interpolate(t.providerDescription, { provider: "GoPay" }), { exact: true }).waitFor();
+      await pending.getByText(t.testInvoice, { exact: true }).waitFor();
+      await pending.getByText(t.reviewHint, { exact: true }).waitFor();
+      assert.equal(await pending.getByText(/Ссылка для оплаты действует до/).count(), 0, "REVIEW without a checkout URL must not claim link expiry");
+      assert.equal(await pending.getByRole("link", { name: t.continue, exact: true }).count(), 0);
+      assert.equal(await pending.getByRole("link", { name: t.support, exact: true }).count(), 1);
+      assert.equal(await db.subscriptionPeriod.count({ where: { organizationId: fixture.org.id } }), 0);
+      assert.equal(await commercialFields(fixture.org.id), before);
+      await overflow(page);
+      assert.deepEqual(errors, []);
+      await pending.screenshot({ path: resolve(directory, "gopay-test-review-ru-390.png") });
+      checks.push({ scenario: "final-review-only", locale: "ru", width: 390, absentCheckoutUrl: true,
+        noFalseExpiry: true, supportAndCheckVisible: true, createdSubscriptionPeriods: 0,
+        accessUnchanged: true, externalRequests: false, errors });
+    } finally { await context.close(); }
+  } else {
   for (const locale of ["ru", "kg", "en"] as const)
     for (const width of [390, 1440]) {
       const t = messages[locale].billing.payments;
@@ -278,8 +328,9 @@ try {
             if (readinessFixture)
               Object.assign(data, {
                 available: true,
-                canPurchase: true,
+                canPurchase: !data.pendingInvoice,
                 mode: "sandbox",
+                provider: "GOPAY",
                 sellerName: "Synthetic local seller",
                 termsUrl: base + "/legal/offer",
                 termsVersion: "qa-commercial-browser",
@@ -310,6 +361,8 @@ try {
         await page.reload({ waitUntil: "domcontentloaded" });
         const form = panel.locator("[data-checkout-form]");
         await form.waitFor();
+        await panel.getByText(interpolate(t.sandbox, { provider: "GoPay" }), { exact: true }).waitFor();
+        await form.getByText(interpolate(t.description, { provider: "GoPay" }), { exact: true }).waitFor();
         const expected: Record<Plan, number[]> = {
           STARTER: [200000, 1140000, 2040000],
           BUSINESS: [350000, 1995000, 3570000],
@@ -386,6 +439,8 @@ try {
         await pay.click();
         const dialog = page.getByRole("dialog");
         await dialog.waitFor();
+        await dialog.getByText(interpolate(t.sandbox, { provider: "GoPay" }), { exact: true }).waitFor();
+        await dialog.getByText(t.testPaymentPolicy, { exact: true }).waitFor();
         await dialog
           .getByText(interpolate(t.extrasSummary, { stores: 1, products: 1000, users: 2 }), {
             exact: true,
@@ -408,6 +463,8 @@ try {
         assert.equal(requests[0].idempotencyKey, requests[1].idempotencyKey);
         assert.equal(requests[0].quoteToken, requests[1].quoteToken);
         assert.equal(requests[0].expectedAmountMinor, expectedMinor);
+        assert.equal(requests[0].expectedProvider, "GOPAY");
+        assert.equal(requests[1].expectedProvider, "GOPAY");
         assert.deepEqual(requests[0].extras, { stores: 1, productPacks: 1, userPacks: 0 });
         assert.equal(
           await db.subscriptionInvoice.count({ where: { organizationId: fixture.org.id } }),
@@ -428,15 +485,166 @@ try {
           realQuotes: 9,
           disabledBackend: true,
           readinessFixture: true,
+          selectedProvider: "GOPAY",
+          explicitTestDisclosure: true,
+          expectedProviderConsent: true,
           twoExtras: true,
           starterCannotBuyStores: true,
           confirmationAndRetry: true,
           invoiceCount: 0,
           errors,
         });
+
+        // These are isolated display fixtures, not provider-confirmed payments
+        // and they intentionally create no paid subscription periods.
+        await dialog.getByRole("button", { name: messages[locale].common.cancel, exact: true }).click();
+        const displayPurchase = quotes.find((entry) => entry.plan === "STARTER" && entry.months === 1);
+        assert(displayPurchase, "A real server quote is required for the display purchase snapshot");
+        const createDisplayInvoice = (input: {
+          provider: "GOPAY" | "FREEDOMPAY";
+          isTest: boolean;
+          status: "PAID" | "FAILED" | "PENDING" | "REVIEW";
+          pendingSlot?: string;
+          lastIssue?: string;
+        }) => db.subscriptionInvoice.create({
+          data: {
+            ...input,
+            providerOrderId: input.provider === "GOPAY" ? randomUUID().replaceAll("-", "") : null,
+            organizationId: fixture.org.id,
+            createdById: fixture.user.id,
+            idempotencyKey: randomUUID(),
+            plan: "STARTER",
+            amountMinor: 200000,
+            purchaseSnapshot: JSON.parse(JSON.stringify(displayPurchase)),
+            merchantId: "synthetic-browser-only",
+            sellerName: "Synthetic browser seller",
+            termsVersion: "synthetic-display-only",
+            termsUrl: base + "/legal/offer",
+            checkoutUrl: input.status === "PENDING" ? "https://example.invalid/synthetic-checkout" : null,
+            expiresAt: new Date(Date.now() + 86400_000),
+            paidAt: input.status === "PAID" ? new Date() : null,
+            // All credentials/providers stay disabled; checking renders a stored
+            // delayed result without initiating an external request.
+            nextCheckAt: new Date(Date.now() + 3600_000),
+          },
+        });
+        const legacyPaid = await createDisplayInvoice({ provider: "FREEDOMPAY", isTest: false, status: "PAID" });
+        const testPaid = await createDisplayInvoice({ provider: "GOPAY", isTest: true, status: "PAID" });
+        const testFailed = await createDisplayInvoice({ provider: "GOPAY", isTest: true, status: "FAILED" });
+        const legacyPending = await createDisplayInvoice({
+          provider: "FREEDOMPAY", isTest: false, status: "PENDING", pendingSlot: fixture.org.id,
+          lastIssue: "RECONCILIATION_REQUIRED",
+        });
+        await page.reload({ waitUntil: "domcontentloaded" });
+        const pendingPanel = panel.locator("[data-pending-invoice]");
+        await pendingPanel.getByText(interpolate(t.providerDescription, { provider: "FreedomPay" }), { exact: true }).waitFor();
+        assert.equal(await form.count(), 0);
+        assert.equal(await pendingPanel.getByRole("link", { name: t.continue, exact: true }).getAttribute("href"), "https://example.invalid/synthetic-checkout");
+        await pendingPanel.getByRole("button", { name: t.check, exact: true }).click();
+        await panel.getByText(t.checkDelayed, { exact: true }).waitFor();
+        for (const [invoice, provider, status] of [
+          [legacyPaid, "FreedomPay", t.statuses.PAID],
+          [testPaid, "GoPay", t.testPaid],
+          [testFailed, "GoPay", t.statuses.FAILED],
+        ] as const) {
+          const row = panel.locator(`[data-subscription-invoice="${invoice.id}"]`);
+          await row.locator("summary").click();
+          await row.getByText(provider, { exact: true }).waitFor();
+          await row.locator("summary").getByText(status, { exact: true }).waitFor();
+          assert.equal(await row.getByText(t.testInvoice, { exact: true }).count(), Number(invoice.isTest));
+        }
+        await overflow(page);
+        await panel.screenshot({ path: resolve(directory, `history-and-pending-${locale}-${width}.png`) });
+        assert.equal((await db.subscriptionInvoice.findUniqueOrThrow({ where: { id: legacyPending.id } })).status, "PENDING");
+        const review = await createDisplayInvoice({ provider: "GOPAY", isTest: true, status: "REVIEW" });
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await pendingPanel.getByText(interpolate(t.providerDescription, { provider: "GoPay" }), { exact: true }).waitFor();
+        await pendingPanel.getByText(t.testInvoice, { exact: true }).waitFor();
+        await pendingPanel.getByText(t.reviewHint, { exact: true }).waitFor();
+        assert.equal(await pendingPanel.getByRole("link", { name: t.continue, exact: true }).count(), 0);
+        assert.equal(await pendingPanel.getByRole("link", { name: t.support, exact: true }).count(), 1);
+        assert.equal((await db.subscriptionInvoice.findUniqueOrThrow({ where: { id: review.id } })).status, "REVIEW");
+        assert.equal(await db.subscriptionPeriod.count({ where: { organizationId: fixture.org.id } }), 0);
+        assert.equal(await commercialFields(fixture.org.id), commercialBefore, "Invoice rendering changed agreed access");
+        await overflow(page);
+        await pendingPanel.screenshot({ path: resolve(directory, `gopay-test-review-${locale}-${width}.png`) });
+        assert.deepEqual(errors, []);
+        checks.push({ scenario: "synthetic-invoice-rendering", locale, width,
+          historicalFreedomPay: true, historicalPendingContinuation: true, testPaidNotLive: true,
+          failedTestVisible: true, delayedStatusRecovery: true, reviewSupport: true,
+          createdSubscriptionPeriods: 0, accessUnchanged: true, externalRequests: false, errors });
       } finally {
         await context.close();
       }
+    }
+
+  // WhatsApp pack purchases share the same provider labels and Test boundary.
+  for (const locale of ["ru", "kg", "en"] as const)
+    for (const width of [390, 1440]) {
+      const fixture = await seed("BUSINESS"), t = messages[locale].whatsappAi,
+        billingText = messages[locale].billing.payments;
+      const before = await commercialFields(fixture.org.id);
+      await db.whatsAppInvoice.createMany({ data: [
+        { provider: "GOPAY" as const, isTest: true, status: "PAID" },
+        { provider: "FREEDOMPAY" as const, isTest: false, status: "PENDING" },
+      ].map((row) => ({
+        ...row, id: `wa_${randomUUID().replaceAll("-", "")}`, organizationId: fixture.org.id,
+        providerOrderId: row.provider === "GOPAY" ? randomUUID().replaceAll("-", "") : null,
+        createdById: fixture.user.id, idempotencyKey: randomUUID(), quantity: 1,
+        amountMinor: WHATSAPP_PACK_PRICE_MINOR, offerVersion: WHATSAPP_OFFER_VERSION,
+        merchantId: "synthetic-browser-only", termsVersion: "synthetic-display-only",
+        termsUrl: base + "/legal/offer", expiresAt: new Date(Date.now() + 86400_000),
+        checkoutUrl: row.status === "PENDING" ? "https://example.invalid/synthetic-wa-checkout" : null,
+        paidAt: row.status === "PAID" ? new Date() : null,
+        nextCheckAt: new Date(Date.now() + 3600_000),
+      })) });
+      const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: "reduce", serviceWorkers: "block" });
+      await authenticate(context, fixture, locale);
+      let readinessFixture = false;
+      await context.route("**/*", (route) => {
+        const url = new URL(route.request().url());
+        return url.origin === base || ["data:", "blob:"].includes(url.protocol) ? route.continue() : route.abort();
+      });
+      await context.route("**/api/trpc/**", async (route) => {
+        const response = await route.fetch({ maxRedirects: 0 }), body = await response.json();
+        const procedures = new URL(route.request().url()).pathname.split("/").at(-1)!.split(",");
+        const rows = Array.isArray(body) ? body : [body];
+        for (const [index, procedure] of procedures.entries()) {
+          const data = rows[index]?.result?.data?.json;
+          if (procedure === "whatsappAi.payments" && data) {
+            assert.equal(data.ready, false, "Real pack checkout must remain disabled");
+            if (readinessFixture) Object.assign(data, { ready: true, mode: "sandbox", provider: "GOPAY" });
+          }
+        }
+        await route.fulfill({ response, json: Array.isArray(body) ? rows : rows[0] });
+      });
+      const page = await context.newPage(), errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      try {
+        await page.goto(base + "/operations/integrations/whatsapp-ai", { waitUntil: "domcontentloaded" });
+        await page.getByRole("tab", { name: t.tabs.costs, exact: true }).click();
+        const panel = page.locator("#wa-panel-costs");
+        await panel.getByText(t.paymentsUnavailable, { exact: true }).waitFor();
+        assert.equal(await panel.getByRole("button", { name: interpolate(t.pay, { price: await uiMoney(page, WHATSAPP_PACK_PRICE_MINOR / 100, locale) }), exact: true }).isDisabled(), true);
+        await panel.screenshot({ path: resolve(directory, `whatsapp-disabled-${locale}-${width}.png`) });
+        readinessFixture = true;
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.getByRole("tab", { name: t.tabs.costs, exact: true }).click();
+        await panel.getByText(interpolate(billingText.sandbox, { provider: "GoPay" }), { exact: true }).waitFor();
+        await panel.getByText(interpolate(t.paymentHelp, { provider: "GoPay" }), { exact: true }).waitFor();
+        await panel.getByText(interpolate(billingText.providerDescription, { provider: "FreedomPay" }), { exact: true }).waitFor();
+        await panel.getByText(billingText.testInvoice, { exact: true }).waitFor();
+        await panel.getByText(billingText.testPaid, { exact: false }).waitFor();
+        assert.equal(await panel.getByRole("link", { name: t.continuePayment, exact: true }).getAttribute("href"), "https://example.invalid/synthetic-wa-checkout");
+        assert.equal(await db.whatsAppCreditLot.count({ where: { organizationId: fixture.org.id } }), 0, "Display fixtures must never grant message credits");
+        assert.equal(await commercialFields(fixture.org.id), before);
+        await overflow(page);
+        assert.deepEqual(errors, []);
+        await panel.screenshot({ path: resolve(directory, `whatsapp-gopay-test-${locale}-${width}.png`) });
+        checks.push({ scenario: "whatsapp-pack-rendering", locale, width, disabledBackend: true,
+          explicitGoPayTest: true, historicalFreedomPay: true, readinessFixture: true,
+          createdCredits: 0, accessUnchanged: true, externalRequests: false, errors });
+      } finally { await context.close(); }
     }
 
   // Old contracts and all five protected identifiers use actual read models.
@@ -575,12 +783,13 @@ try {
         await context.close();
       }
     }
+  }
 } catch (error) {
   failures.push(error instanceof Error ? error.message : String(error));
   throw error;
 } finally {
   await writeFile(
-    resolve(directory, "checks.json"),
+    resolve(directory, reviewOnly ? "review-only-checks.json" : "checks.json"),
     JSON.stringify(
       {
         status: failures.length ? "failed" : "passed",
@@ -588,7 +797,7 @@ try {
         database: "explicit local disposable55971",
         providerTests: false,
         disclosure:
-          "Readiness is a browser read-model fixture only. Quotes and disabled checkout are real server calls. Protected IDs refer only to synthetic local rows, not customer production data.",
+          "GoPay readiness is a browser read-model fixture only. Invoice rows are explicitly synthetic local display fixtures and create no subscription periods. Quotes, history and disabled checkout are real local server calls. Providers stay disabled. Protected IDs refer only to synthetic local rows, not customer production data.",
         checks,
         failures,
       },

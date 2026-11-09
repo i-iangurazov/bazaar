@@ -96,6 +96,7 @@ export const whatsappPackSelectionSchema = z.object({
   offerVersion: z.literal(WHATSAPP_OFFER_VERSION),
   termsAccepted: z.literal(true),
   termsVersion: z.string().min(1).max(100),
+  expectedProvider: z.enum(["GOPAY", "FREEDOMPAY"]).optional(),
   expectedAmountMinor: z.number().int().positive().max(2147483647),
   idempotencyKey: z.string().regex(/^[a-zA-Z0-9_-]{16,80}$/),
   locale: z.enum(["ru", "kg", "en"]).default("ru"),

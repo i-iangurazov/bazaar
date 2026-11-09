@@ -14,6 +14,7 @@ describe("scheduled job recovery", () => {
     expect(scheduledJobGroups.recovery).toEqual(
       expect.arrayContaining([
         "subscription-payment-reconcile",
+        "whatsapp-payment-reconcile",
         "export-job",
         "kkm-retry-receipts",
         "order-confirmation-email",

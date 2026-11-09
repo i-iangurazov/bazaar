@@ -76,7 +76,10 @@ if (mode === "export") {
                   !(await page.locator("main").innerText()).includes(legalCopy[locale].missing),
                 );
               }
-              if (id === "payment") assert.equal(await page.locator("img").count(), 3);
+              if (id === "payment") {
+                assert.equal(await page.locator('img[alt="Visa"], img[alt="Mastercard"], img[alt="Элкарт"]').count(), 0);
+                await page.getByText(legalCopy[locale].paymentSystemsNotice, { exact: true }).waitFor();
+              }
               if (
                 locale === "ru" &&
                 !dark &&

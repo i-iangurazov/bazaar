@@ -142,12 +142,14 @@ describe("deliberate legal publication and residential-address privacy", () => {
         expect(
           root.querySelector('[data-seller-field="correspondenceAddress"]')?.textContent,
         ).toContain(approved.BILLING_PUBLIC_CONTACT_ADDRESS);
-        if (documentId === "payment")
-          expect([...root.querySelectorAll("img")].map((img) => img.alt)).toEqual([
-            "Visa",
-            "Mastercard",
-            "Элкарт",
-          ]);
+        if (documentId === "payment") {
+          expect(root.textContent).toContain(copy.paymentSystemsNotice);
+          expect(root.querySelector('img[alt="Visa"], img[alt="Mastercard"], img[alt="Элкарт"]')).toBeNull();
+        }
+        if (documentId === "requisites") {
+          expect(root.textContent).toContain("GoPay");
+          expect(root.textContent).toContain("FreedomPay");
+        }
       }
     },
   );

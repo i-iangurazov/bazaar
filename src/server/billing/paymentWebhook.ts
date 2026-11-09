@@ -14,7 +14,7 @@ import { prisma } from "@/server/db/prisma";
 import { applyWhatsAppPayment, verifyWhatsAppInvoiceCanBePaid } from "@/server/whatsapp/payments";
 
 export const handleFreedomPayNotification = async (request: Request, kind: "check" | "result") => {
-  const config = getSubscriptionPaymentConfig();
+  const config = getSubscriptionPaymentConfig(process.env, "FREEDOMPAY");
   const script = kind === "check" ? CHECK_SCRIPT : RESULT_SCRIPT;
   const respond = (accepted: boolean, status: number) =>
     new Response(paymentAcknowledgement(script, config.secretKey, accepted), {
@@ -29,8 +29,12 @@ export const handleFreedomPayNotification = async (request: Request, kind: "chec
     if (!invoiceId || !/^[a-zA-Z0-9_-]{1,50}$/.test(invoiceId))
       throw new AppError("billingPaymentMismatch");
     if (invoiceId.startsWith("wa_")) {
-      const invoice = await prisma.whatsAppInvoice.findUnique({ where: { id: invoiceId }, select: { merchantId: true } });
-      if (!invoice) throw new AppError("recordNotFound", "NOT_FOUND", 404);
+      const invoice = await prisma.whatsAppInvoice.findUnique({
+        where: { id: invoiceId },
+        select: { merchantId: true, provider: true },
+      });
+      if (!invoice || invoice.provider !== "FREEDOMPAY")
+        throw new AppError("recordNotFound", "NOT_FOUND", 404);
       getPaymentCredentials(invoice.merchantId);
       if (kind === "check") await verifyWhatsAppInvoiceCanBePaid(invoiceId, fields);
       else await applyWhatsAppPayment({ invoiceId, fields, source: "CALLBACK" });
@@ -38,9 +42,10 @@ export const handleFreedomPayNotification = async (request: Request, kind: "chec
     }
     const invoice = await prisma.subscriptionInvoice.findUnique({
       where: { id: invoiceId },
-      select: { merchantId: true },
+      select: { merchantId: true, provider: true },
     });
-    if (!invoice) throw new AppError("recordNotFound", "NOT_FOUND", 404);
+    if (!invoice || invoice.provider !== "FREEDOMPAY")
+      throw new AppError("recordNotFound", "NOT_FOUND", 404);
     getPaymentCredentials(invoice.merchantId);
     if (kind === "check") await verifyInvoiceCanBePaid(invoiceId, fields);
     else await applyVerifiedPayment({ invoiceId, fields, source: "CALLBACK" });

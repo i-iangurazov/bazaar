@@ -52,6 +52,8 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
     termsVersion: string;
     termsUrl: string;
     sellerName: string;
+    provider: "GOPAY" | "FREEDOMPAY";
+    isTest: boolean;
   } | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [notice, setNotice] = useState("");
@@ -86,7 +88,9 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
           invoice.syncDelayed
             ? "checkDelayed"
             : invoice.status === "PAID"
-              ? "confirmed"
+              ? invoice.isTest
+                ? "testConfirmed"
+                : "confirmed"
               : invoice.status === "REVIEW"
                 ? "reviewHint"
                 : "checked",
@@ -125,6 +129,9 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
   const amount = quote.data?.amountMinor ?? 0;
   const money = (minor: number) => formatCurrencyKGS(minor / 100, locale);
   const name = (code: string) => plans(`${toPlanCode(code).toLowerCase()}.name`);
+  const providerName = (provider: string | undefined) => provider === "GOPAY" ? "GoPay" : "FreedomPay";
+  const invoiceStatus = (status: string, isTest: boolean) =>
+    t(isTest && status === "PAID" ? "testPaid" : `statuses.${status}`);
   const records = history.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
@@ -146,7 +153,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 role="status"
                 className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
               >
-                {t("sandbox")}
+                {t("sandbox", { provider: providerName(settings.data.provider) })}
               </p>
             ) : null}
             {settings.data.lifetimeAccess || settings.data.billingMode === "MANUAL" ? (
@@ -174,16 +181,24 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                   <strong>
                     {name(pending.plan)} · {money(pending.amountMinor)}
                   </strong>
-                  <Badge variant={pending.status === "REVIEW" ? "warning" : "muted"}>
-                    {t(`statuses.${pending.status}`)}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {pending.isTest ? <Badge variant="warning">{t("testInvoice")}</Badge> : null}
+                    <Badge variant={pending.status === "REVIEW" ? "warning" : "muted"}>
+                      {invoiceStatus(pending.status, pending.isTest)}
+                    </Badge>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {t(pending.status === "REVIEW" ? "reviewHint" : "pendingHint")}
-                </p>
                 <p className="text-xs text-muted-foreground">
-                  {t("expiresAt", { date: formatDateTime(pending.expiresAt, locale) })}
+                  {t("providerDescription", { provider: providerName(pending.provider) })}
                 </p>
+                <p className="text-sm text-muted-foreground">
+                  {t(pending.status === "REVIEW" ? "reviewHint"
+                    : pending.status === "CREATING" ? "creatingHint"
+                      : pending.checkoutUrl ? "pendingHint" : "linkUnavailable")}
+                </p>
+                {pending.checkoutUrl ? <p className="text-xs text-muted-foreground">
+                  {t("expiresAt", { date: formatDateTime(pending.expiresAt, locale) })}
+                </p> : null}
                 <div className="flex flex-wrap gap-2">
                   {pending.checkoutUrl ? (
                     <Button asChild>
@@ -208,7 +223,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
               </div>
             ) : settings.data.canPurchase ? (
               <div className="space-y-3" data-checkout-form>
-                <p className="text-sm text-muted-foreground">{t("description")}</p>
+                <p className="text-sm text-muted-foreground">{t("description", { provider: providerName(settings.data.provider) })}</p>
                 {settings.data.canChange ? (
                   <div className="max-w-sm space-y-2">
                     <label htmlFor="subscription-action" className="block text-sm font-medium">{t("purchaseAction")}</label>
@@ -272,6 +287,8 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                         termsVersion: settings.data.termsVersion,
                         termsUrl: settings.data.termsUrl,
                         sellerName: settings.data.sellerName,
+                        provider: settings.data.provider,
+                        isTest: settings.data.mode === "sandbox",
                       });
                       setNotice("");
                       setAccepted(false);
@@ -345,17 +362,20 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                           <span className="min-w-0">
                             {name(invoice.plan)} · {money(invoice.amountMinor)}
                           </span>
-                          <Badge
-                            variant={
-                              invoice.status === "PAID"
-                                ? "success"
-                                : invoice.status === "REVIEW"
-                                  ? "warning"
-                                  : "muted"
-                            }
-                          >
-                            {t(`statuses.${invoice.status}`)}
-                          </Badge>
+                          <span className="flex flex-wrap items-center gap-2">
+                            {invoice.isTest ? <Badge variant="warning">{t("testInvoice")}</Badge> : null}
+                            <Badge
+                              variant={
+                                invoice.status === "PAID"
+                                  ? "success"
+                                  : invoice.status === "REVIEW"
+                                    ? "warning"
+                                    : "muted"
+                              }
+                            >
+                              {invoiceStatus(invoice.status, invoice.isTest)}
+                            </Badge>
+                          </span>
                         </summary>
                         <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                           <div>
@@ -365,6 +385,10 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                           <div>
                             <dt>{t("created")}</dt>
                             <dd>{formatDateTime(invoice.createdAt, locale)}</dd>
+                          </div>
+                          <div>
+                            <dt>{t("provider")}</dt>
+                            <dd>{providerName(invoice.provider)}</dd>
                           </div>
                           {invoice.paidAt ? (
                             <div>
@@ -438,6 +462,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                   if (!accepted || !consent || checkout.isLoading) return;
                   checkout.mutate({
                     expectedAmountMinor: consent.amount,
+                    expectedProvider: consent.provider,
                     plan: consent.plan,
                     months: consent.months,
                     extras: consent.extras,
@@ -450,6 +475,11 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                   });
                 }}
               >
+                {consent?.isTest ? (
+                  <p role="status" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                    {t("sandbox", { provider: providerName(consent.provider) })}
+                  </p>
+                ) : null}
                 <p className="text-sm">
                   {t("confirmDescription", {
                     plan: name(consent?.plan ?? plan),
@@ -460,7 +490,8 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 <p className="text-sm">{t("extrasSummary", { stores: consent?.extras.stores ?? 0, products: (consent?.extras.productPacks ?? 0) * 1000, users: settings.data?.catalogVersion === CURRENT_CATALOG_VERSION ? (consent?.extras.productPacks ?? 0) * 2 : (consent?.extras.userPacks ?? 0) * 5 })}</p>
                 {consent ? <p className="text-sm">{t(consent.action === "CHANGE" ? "upgradeDates" : "renewDates", { start: formatDateTime(consent.startsAt, locale), end: formatDateTime(consent.endsAt, locale) })}</p> : null}
                 {consent?.creditMinor ? <p className="text-sm">{t("credit", { amount: money(consent.creditMinor) })}</p> : null}
-                <p className="text-sm text-muted-foreground">{t("renewalPolicy")}</p>
+                <p className="text-xs text-muted-foreground">{t("providerDescription", { provider: providerName(consent?.provider ?? settings.data?.provider) })}</p>
+                <p className="text-sm text-muted-foreground">{t(consent?.isTest ? "testPaymentPolicy" : "renewalPolicy")}</p>
                 <p className="text-xs text-muted-foreground">{consent?.sellerName}</p>
                 <div className="flex items-start gap-3">
                   <Checkbox

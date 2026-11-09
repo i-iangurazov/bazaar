@@ -170,7 +170,7 @@ export const allowedCheckoutUrl = (value: string) => {
 };
 
 export const getPaymentCredentials = (merchantId: string) => {
-  const config = getSubscriptionPaymentConfig();
+  const config = getSubscriptionPaymentConfig(process.env, "FREEDOMPAY");
   if (!config.secretKey || config.merchantId !== merchantId)
     throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
   return config;

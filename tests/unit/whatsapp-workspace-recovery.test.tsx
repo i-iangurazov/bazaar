@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -14,6 +14,17 @@ const state = vi.hoisted(() => ({
   retries: [] as string[],
   mutation: vi.fn(),
   queries: [] as Array<{ path: string; enabled: boolean }>,
+  payments: {
+    ready: false,
+    mode: "disabled",
+    provider: "GOPAY",
+    termsVersion: "qa-v1",
+    termsUrl: "https://example.invalid/terms/v1",
+    invoices: [] as Array<{
+      id: string; provider: string; isTest: boolean; status: string; quantity: number;
+      amountMinor: number; createdAt: Date; checkoutUrl: string | null; lastIssue: string | null;
+    }>,
+  },
 }));
 
 vi.mock("next-auth/react", () => ({
@@ -26,7 +37,8 @@ vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams()
 vi.mock("next-intl", () => ({
   useLocale: () => "ru",
   useTranslations: (namespace: string) =>
-    Object.assign((key: string) => `${namespace}.${key}`, { has: () => true }),
+    Object.assign((key: string, params?: Record<string, unknown>) =>
+      `${namespace}.${key}${params ? ` ${JSON.stringify(params)}` : ""}`, { has: () => true }),
 }));
 vi.mock("@/components/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
@@ -57,6 +69,8 @@ vi.mock("@/lib/trpc", () => {
       "seen",
       "erase",
       "send",
+      "checkout",
+      "checkPayment",
     ].map((key) => [
       key,
       {
@@ -85,6 +99,7 @@ vi.mock("@/lib/trpc", () => {
     trpc: {
       whatsappAi: {
         ...procedures,
+        payments: { useQuery: () => result("payments", state.payments) },
         stores: {
           useQuery: (_input: unknown, options?: { enabled?: boolean }) => {
             queryOptions("stores", options);
@@ -127,6 +142,7 @@ import WhatsAppAiPage from "@/app/(app)/operations/integrations/whatsapp-ai/page
 import type { Workspace } from "@/app/(app)/operations/integrations/whatsapp-ai/workspace-ui";
 import { whatsappKnowledgeSchema, whatsappProfileSchema } from "@/lib/whatsapp-ai";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Costs } from "@/app/(app)/operations/integrations/whatsapp-ai/workspace-panels";
 
 const TestWorkspace = () => (
   <TooltipProvider>
@@ -189,6 +205,9 @@ beforeEach(() => {
   state.workspaceError = null;
   state.retries = [];
   state.queries = [];
+  Object.assign(state.payments, {
+    ready: false, mode: "disabled", provider: "GOPAY", termsVersion: "qa-v1", invoices: [],
+  });
 });
 
 const openTab = (tab: string) =>
@@ -199,6 +218,57 @@ const openConversation = () => {
 };
 
 describe("WhatsApp workspace recovery", () => {
+  it("shows GoPay test status and historical FreedomPay pack invoices independently", () => {
+    Object.assign(state.payments, {
+      ready: true, mode: "sandbox", invoices: [
+        { id: "go-test", provider: "GOPAY", isTest: true, status: "PAID", quantity: 1,
+          amountMinor: 349000, createdAt: new Date("2026-11-09T00:00:00Z"), checkoutUrl: null, lastIssue: null },
+        { id: "fp-existing", provider: "FREEDOMPAY", isTest: false, status: "PENDING", quantity: 1,
+          amountMinor: 349000, createdAt: new Date("2026-11-08T00:00:00Z"),
+          checkoutUrl: "https://example.invalid/existing", lastIssue: null },
+      ],
+    });
+    render(<TooltipProvider><Costs storeId="assigned-store" data={workspace()} reload={vi.fn()} /></TooltipProvider>);
+    expect(screen.getByText('billing.payments.sandbox {"provider":"GoPay"}')).toBeTruthy();
+    expect(screen.getByText('whatsappAi.paymentHelp {"provider":"GoPay"}')).toBeTruthy();
+    expect(screen.getByText(/^billing.payments.testPaid/)).toBeTruthy();
+    expect(screen.getByText("billing.payments.testInvoice")).toBeTruthy();
+    expect(screen.queryByText(/^whatsappAi.invoiceStates.PAID/)).toBeNull();
+    expect(screen.getByText('billing.payments.providerDescription {"provider":"FreedomPay"}')).toBeTruthy();
+    const link = screen.getByRole("link", { name: "whatsappAi.continuePayment" });
+    expect(link.getAttribute("href")).toBe("https://example.invalid/existing");
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+  it("keeps pack collection disabled until the payment merchant is ready", () => {
+    const connected = workspace();
+    connected.connection = { state: "CONNECTED" } as Workspace["connection"];
+    connected.readiness.manualWorkerReady = true;
+    render(<TooltipProvider><Costs storeId="assigned-store" data={connected} reload={vi.fn()} /></TooltipProvider>);
+    expect(screen.getByText("whatsappAi.paymentsUnavailable")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect((screen.getByRole("button", { name: /^whatsappAi.pay / }) as HTMLButtonElement).disabled).toBe(true);
+    expect(state.mutation).not.toHaveBeenCalled();
+  });
+  it("sends the selected provider with pack consent and resets consent when the provider changes", async () => {
+    Object.assign(state.payments, { ready: true, mode: "sandbox" });
+    state.mutation.mockResolvedValue({ status: "PENDING" });
+    const connected = workspace();
+    connected.connection = { state: "CONNECTED" } as Workspace["connection"];
+    connected.readiness.manualWorkerReady = true;
+    const view = render(<TooltipProvider><Costs storeId="assigned-store" data={connected} reload={vi.fn()} /></TooltipProvider>);
+    const pay = screen.getByRole("button", { name: /^whatsappAi.pay / }) as HTMLButtonElement;
+    expect(pay.disabled).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(pay.disabled).toBe(false);
+    fireEvent.click(pay);
+    await waitFor(() => expect(state.mutation).toHaveBeenCalledWith(expect.objectContaining({
+      selection: expect.objectContaining({ expectedProvider: "GOPAY", termsVersion: "qa-v1", termsAccepted: true }),
+    })));
+    state.payments.provider = "FREEDOMPAY";
+    view.rerender(<TooltipProvider><Costs storeId="assigned-store" data={connected} reload={vi.fn()} /></TooltipProvider>);
+    expect((screen.getByRole("checkbox") as HTMLButtonElement).getAttribute("aria-checked")).toBe("false");
+    expect(pay.disabled).toBe(true);
+  });
   it.each([
     { message: "serviceUnavailable", data: { code: "INTERNAL_SERVER_ERROR" } },
     { message: "Failed to fetch" },
