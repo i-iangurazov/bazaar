@@ -1,6 +1,15 @@
 import { sellerDraft } from "@/content/legal/seller";
 import type { SellerDetails } from "@/content/legal/types";
 
+// A separate explicit public value permits publishing the platform owner's name
+// without releasing the private seller record or enabling the legal documents.
+export function loadPublicSellerLegalName(
+  env: Record<string, string | undefined> = process.env,
+): string | null {
+  const name = env.BAZAAR_PUBLIC_LEGAL_NAME?.trim() ?? "";
+  return name.length >= 2 && name.length <= 240 && !/[<>\r\n]/.test(name) ? name : null;
+}
+
 // Server/Edge environment allowlist. These names must never have NEXT_PUBLIC_
 // equivalents or be passed to a client component before deliberate publication.
 export const SELLER_ENV_FIELDS = {

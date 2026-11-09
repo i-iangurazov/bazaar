@@ -173,6 +173,7 @@
     "contact": "Ask a question"
   },
   "footer": {
+    "owner": "Platform owner",
     "description": "A system for the modern store.",
     "product": "Product",
     "solutions": "Solutions",

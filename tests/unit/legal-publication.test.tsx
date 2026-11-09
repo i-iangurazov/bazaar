@@ -5,7 +5,7 @@ import { legalPublicationState, LEGAL_TERMS_VERSION } from "@/lib/legalPublicati
 import { getSubscriptionPaymentConfig } from "@/server/billing/paymentConfig";
 import { sellerDraft } from "@/content/legal/seller";
 import { syntheticSellerEnvironment, syntheticSeller } from "../helpers/legalSeller";
-import { loadSellerDetails } from "@/server/legal/seller";
+import { loadPublicSellerLegalName, loadSellerDetails } from "@/server/legal/seller";
 import { legalCopy } from "@/content/legal";
 import { legalDocumentIds, sellerFields } from "@/content/legal/types";
 import { LegalDocument } from "@/components/legal/legal-document";
@@ -32,6 +32,22 @@ const live = {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("deliberate legal publication and residential-address privacy", () => {
+  it("publishes only the separately approved public name without releasing private seller details", () => {
+    expect(loadPublicSellerLegalName(syntheticSellerEnvironment)).toBeNull();
+    const env = {
+      ...syntheticSellerEnvironment,
+      BAZAAR_PUBLIC_LEGAL_NAME: "  ИП Тестовый Поставщик  ",
+      BILLING_SELLER_REGISTERED_ADDRESS: "private-home-address",
+    };
+    expect(loadPublicSellerLegalName(env)).toBe("ИП Тестовый Поставщик");
+    expect(legalPublicationState(env).published).toBe(false);
+    expect(legalPublicationState(env).seller.registeredAddress).toBeNull();
+    expect(legalPublicationState(env).seller.correspondenceAddress).toBeNull();
+  });
+  it.each(["", " ", "x", "<address>private</address>", "Name\naddress", "x".repeat(241)])(
+    "omits invalid public owner names: %s",
+    (name) => expect(loadPublicSellerLegalName({ BAZAAR_PUBLIC_LEGAL_NAME: name })).toBeNull(),
+  );
   it("does not publish completed seller data without each release prerequisite", () => {
     expect(legalPublicationState({}).published).toBe(false);
     for (const key of [

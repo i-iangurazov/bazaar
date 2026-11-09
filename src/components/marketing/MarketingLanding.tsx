@@ -7,6 +7,7 @@ import { formatCurrency } from "@/lib/i18nFormat";
 import { MarketingLocaleSwitcher } from "./MarketingLocaleSwitcher";
 import { getPlanCatalogEntries } from "@/server/billing/planCatalog";
 import { legalPublicationState } from "@/lib/legalPublication";
+import { loadPublicSellerLegalName } from "@/server/legal/seller";
 import { legalCopy } from "@/content/legal";
 import { legalDocumentIds } from "@/content/legal/types";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
@@ -146,6 +147,7 @@ export const MarketingLanding = async () => {
   const [t, locale] = await Promise.all([getTranslations("billing"), getLocale()]);
   const plans = getPlanCatalogEntries();
   const publishedLegal = legalPublicationState().published;
+  const publicLegalName = loadPublicSellerLegalName();
   const documents = legalCopy[normalizeLocale(locale) ?? defaultLocale].documents;
   const copy = getMarketingCopy(locale);
   const previewData = getMarketingPreviewData(locale);
@@ -418,6 +420,11 @@ export const MarketingLanding = async () => {
             <span>BAZAAR</span>
           </Link>
           <p>{copy.footer.description}</p>
+          {publicLegalName ? (
+            <p data-public-seller-identity>
+              {copy.footer.owner}: {publicLegalName}
+            </p>
+          ) : null}
         </div>
         <div className={styles.footerLinks}>
           <div>
