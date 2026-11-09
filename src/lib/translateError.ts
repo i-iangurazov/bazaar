@@ -1,5 +1,6 @@
 import type { TRPCClientErrorLike } from "@trpc/client";
 import type { AppRouter } from "@/server/trpc/routers/_app";
+import { featureFromErrorDetails, featureLockError } from "@/lib/billing/featureLocks";
 
 export const translateError = (
   tErrors: { (key: string): string; has?: (key: string) => boolean },
@@ -12,6 +13,11 @@ export const translateError = (
   const messageKey = error.message;
   const normalizedKey = messageKey.startsWith("errors.") ? messageKey.replace("errors.", "") : messageKey;
   if (normalizedKey && tErrors.has?.(normalizedKey)) {
+    const failure = featureLockError(normalizedKey);
+    const feature = failure && !failure.feature ? featureFromErrorDetails(error.data?.details) : null;
+    if (feature && tErrors.has?.(`featureNames.${feature}`)) {
+      return `${tErrors(`featureNames.${feature}`)}: ${tErrors(normalizedKey)}`;
+    }
     return tErrors(normalizedKey);
   }
 

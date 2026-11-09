@@ -179,7 +179,7 @@ describe("merchant activation gates", () => {
         .ready,
     ).toBe(false);
   });
-  it("requires both merchant readiness and the rollout flag for future signups", () => {
+  it("requires the rollout flag for future trials", () => {
     for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
     vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "");
     vi.stubEnv("BILLING_SELF_SERVE_SIGNUP", "0");

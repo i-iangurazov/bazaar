@@ -211,7 +211,7 @@ describe("GoPay merchant configuration and historical credential isolation", () 
     expect(paymentOrderId("whatsapp", sourceId + "b")).not.toBe(whatsapp);
   });
 
-  it("requires explicit signup rollout as well as provider readiness", () => {
+  it("requires explicit trial rollout independently of provider readiness", () => {
     for (const [key, value] of Object.entries(sandbox)) vi.stubEnv(key, value);
     vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "sandbox");
     vi.stubEnv("BILLING_SELF_SERVE_SIGNUP", "0");
@@ -219,6 +219,7 @@ describe("GoPay merchant configuration and historical credential isolation", () 
     vi.stubEnv("BILLING_SELF_SERVE_SIGNUP", "1");
     expect(selfServeSignupEnabled()).toBe(true);
     vi.stubEnv("GOPAY_WEBHOOK_SECRET", "");
-    expect(selfServeSignupEnabled()).toBe(false);
+    expect(selfServeSignupEnabled()).toBe(true);
+    expect(getSubscriptionPaymentConfig().ready).toBe(false);
   });
 });

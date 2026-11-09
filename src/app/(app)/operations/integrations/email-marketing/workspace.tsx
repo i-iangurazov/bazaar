@@ -36,6 +36,7 @@ import {
 } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
+import { SubscriptionFeatureAvailability } from "@/components/billing/subscription-feature-lock";
 
 import {
   AddIcon,
@@ -2509,6 +2510,10 @@ export const EmailMarketingWorkspace = () => {
         </Card>
       </section>
 
+      {billing.data ? <SubscriptionFeatureAvailability features={["marketingAutomation", "ownSender"]}
+        flags={billing.data.featureFlags} featurePlans={billing.data.featurePlans}
+        currentPlan={billing.data.plan} canManage={session?.user?.role === "ADMIN"}
+        isTrial={Boolean(billing.data.trialOffer)} /> : null}
       <Tabs>
         <TabsList className="flex max-w-full overflow-x-auto">
           {[

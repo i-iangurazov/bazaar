@@ -59,7 +59,8 @@ export const usageWindow = (input: {
 const windowFor = (org: Organization, resource: UsageResource, now: Date) => usageWindow({
   resource, now, origin: new Date(org.activePurchase?.cycleStartsAt ?? org.createdAt),
   anchorDay: org.activePurchase?.anchorDay,
-  paidEnd: org.activePurchase ? new Date(org.activePurchase.cycleEndsAt) : null,
+  paidEnd: org.activePurchase ? new Date(org.activePurchase.cycleEndsAt)
+    : org.trialOffer ? org.trialEndsAt : null,
   trialOrigin: org.createdAt,
 });
 const keyDigest = (key: string) => createHash("sha256").update(key).digest("hex");

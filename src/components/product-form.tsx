@@ -32,6 +32,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/price-input";
+import { optionalPriceInputSchema } from "@/lib/priceInput";
 import { ProductNameInput } from "@/components/products/product-name-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -783,9 +785,9 @@ export const ProductForm = ({
   const unitOptions = useMemo(() => units ?? [], [units]);
   const resolveUnitLabel = (unit: UnitOption) => (locale === "kg" ? unit.labelKg : unit.labelRu);
   const schema = useMemo(() => {
-    const optionalPrice = z.preprocess(
-      (value) => (value === "" || value === null || value === undefined ? undefined : value),
-      z.coerce.number().min(0, t("priceNonNegative")).optional(),
+    const optionalPrice = optionalPriceInputSchema(
+      tErrors("priceAutosaveInvalid"),
+      t("priceNonNegative"),
     );
     const optionalStockQty = z.preprocess(
       (value) => (value === "" || value === null || value === undefined ? undefined : value),
@@ -1386,7 +1388,7 @@ export const ProductForm = ({
                   {moneyCurrencyCode}
                 </FormLabel>
                 <FormControl>
-                  <Input
+                  <PriceInput
                     {...field}
                     onChange={(event) => {
                       field.onChange(event);
@@ -1397,8 +1399,6 @@ export const ProductForm = ({
                       priceAutosave?.controlRef.current?.blur(field.name);
                     }}
                     value={field.value ?? ""}
-                    type="number"
-                    inputMode="decimal"
                     min={0}
                     step="0.01"
                     aria-required={variantIndex === undefined && name === "retailPriceKgs"}
@@ -5209,11 +5209,9 @@ export const ProductForm = ({
                       <FormItem>
                         <FormLabel>{t("salePrice")}</FormLabel>
                         <FormControl>
-                          <Input
+                          <PriceInput
                             {...field}
                             value={field.value ?? ""}
-                            type="number"
-                            inputMode="decimal"
                             step="0.01"
                             disabled={readOnly}
                           />
@@ -5234,11 +5232,9 @@ export const ProductForm = ({
                       <FormItem>
                         <FormLabel>{t(priceStoreName ? "basePrice" : "salePrice")}</FormLabel>
                         <FormControl>
-                          <Input
+                          <PriceInput
                             {...field}
                             value={field.value ?? ""}
-                            type="number"
-                            inputMode="decimal"
                             step="0.01"
                             placeholder={t("pricePlaceholder")}
                             disabled={readOnly}
@@ -5269,11 +5265,9 @@ export const ProductForm = ({
                     <FormItem>
                       <FormLabel>{t("quickAvgCost")}</FormLabel>
                       <FormControl>
-                        <Input
+                        <PriceInput
                           {...field}
                           value={field.value ?? ""}
-                          type="number"
-                          inputMode="decimal"
                           step="0.01"
                           placeholder={t("pricePlaceholder")}
                           disabled={readOnly}
@@ -5955,11 +5949,9 @@ export const ProductForm = ({
                                           {t("salePrice")}
                                         </FormLabel>
                                         <FormControl>
-                                          <Input
+                                          <PriceInput
                                             {...field}
                                             value={field.value ?? ""}
-                                            type="number"
-                                            inputMode="decimal"
                                             min={0}
                                             step="0.01"
                                             className="h-9"
@@ -6621,11 +6613,9 @@ export const ProductForm = ({
                           <FormItem>
                             <FormLabel>{t("salePrice")}</FormLabel>
                             <FormControl>
-                              <Input
+                              <PriceInput
                                 {...field}
                                 value={field.value ?? ""}
-                                type="number"
-                                inputMode="decimal"
                                 step="0.01"
                                 placeholder={t("pricePlaceholder")}
                                 disabled={readOnly}
@@ -6707,11 +6697,9 @@ export const ProductForm = ({
                             <FormItem>
                               <FormLabel>{t("quickAvgCost")}</FormLabel>
                               <FormControl>
-                                <Input
+                                <PriceInput
                                   {...field}
                                   value={field.value ?? ""}
-                                  type="number"
-                                  inputMode="decimal"
                                   step="0.01"
                                   placeholder={t("pricePlaceholder")}
                                   disabled={readOnly}
@@ -6818,11 +6806,9 @@ export const ProductForm = ({
                           <FormItem>
                             <FormLabel>{t("avgCost")}</FormLabel>
                             <FormControl>
-                              <Input
+                              <PriceInput
                                 {...field}
                                 value={field.value ?? ""}
-                                type="number"
-                                inputMode="decimal"
                                 step="0.01"
                                 placeholder={t("pricePlaceholder")}
                                 disabled={readOnly}
@@ -7338,11 +7324,9 @@ export const ProductForm = ({
                                     <FormItem>
                                       <FormLabel>{t("salePrice")}</FormLabel>
                                       <FormControl>
-                                        <Input
+                                        <PriceInput
                                           {...itemField}
                                           value={itemField.value ?? ""}
-                                          type="number"
-                                          inputMode="decimal"
                                           min={0}
                                           step="0.01"
                                           placeholder={t("pricePlaceholder")}

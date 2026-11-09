@@ -14,7 +14,7 @@ const env = { ...process.env, NODE_ENV: "test", VERCEL_ENV: "development", VERCE
   NEXTAUTH_SECRET: "isolated-subscriptions-20261107-test-secret", NEXTAUTH_URL: "http://127.0.0.1:3137",
   IMAGE_STORAGE_PROVIDER: "local", EXPORT_STORAGE_PROVIDER: "local", EMAIL_PROVIDER: "log",
   EMAIL_FROM: "Bazaar Test <test@example.invalid>", HARDENING_EXTERNAL_PROVIDER_MODE: "disabled",
-  BILLING_PAYMENTS_MODE: "disabled", BILLING_SELF_SERVE_SIGNUP: "0", SIGNUP_MODE: "open",
+  BILLING_PAYMENTS_MODE: "disabled", BILLING_SELF_SERVE_SIGNUP: process.env.QA_SELF_SERVE_SIGNUP === "1" ? "1" : "0", SIGNUP_MODE: "open",
 };
 // Explicit empty values also cover keys only present in dotenv files: Next can
 // reload its environment when starting a production server. Never inherit an

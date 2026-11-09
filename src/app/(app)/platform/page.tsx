@@ -1,4 +1,5 @@
 "use client";
+import { TRIAL_DAYS } from "@/lib/billing/trial";
 
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -457,7 +458,7 @@ const PlatformPage = () => {
                               plan: normalizePlanForEditor(org.plan),
                               subscriptionStatus: org.subscriptionStatus,
                               subscriptionBillingMode: org.subscriptionBillingMode,
-                              trialDays: 14,
+                              trialDays: TRIAL_DAYS,
                               currentPeriodDays: 30,
                             })
                           }

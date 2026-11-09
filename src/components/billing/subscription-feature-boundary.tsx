@@ -1,15 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 import { requiredPageFeature } from "@/lib/billing/pageFeatures";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { QueryErrorState } from "@/components/query-error-state";
+import { SubscriptionFeatureLock } from "./subscription-feature-lock";
 
 export function SubscriptionFeatureBoundary({
   children,
@@ -25,6 +23,7 @@ export function SubscriptionFeatureBoundary({
     enabled: feature !== null,
     staleTime: 60_000,
     retry: false,
+    refetchInterval: 60_000,
   });
   if (!feature) return children;
   if (billing.isLoading)
@@ -39,18 +38,9 @@ export function SubscriptionFeatureBoundary({
   return (
     <div className="space-y-5">
       <PageHeader title={t(`features.${feature}`)} subtitle={t("featureRequiresPlan")} />
-      <Card>
-        <CardContent className="space-y-4 p-6">
-          <p className="text-sm text-muted-foreground">
-            {t(canManage ? "featureUpgradeHint" : "featureAskOwner")}
-          </p>
-          {canManage ? (
-            <Button asChild>
-              <Link href="/billing">{t("viewPlans")}</Link>
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+      <SubscriptionFeatureLock feature={feature} canManage={canManage}
+        currentPlan={billing.data?.plan} availablePlans={billing.data?.featurePlans?.[feature]}
+        isTrial={Boolean(billing.data?.trialOffer)} />
     </div>
   );
 }

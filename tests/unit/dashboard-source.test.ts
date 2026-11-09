@@ -59,7 +59,7 @@ describe("dashboard source layout", () => {
     expect(serviceSource).toContain('SUM(l."lineTotalKgs")');
     expect(serviceSource).toContain("hasCompleteCostData");
     expect(dashboardSource).toContain('t("notCalculated")');
-    expect(dashboardSource).toContain('t("grossProfitMissingCostHint")');
+    expect(dashboardSource).toContain('t("kpi.missingCost")');
     expect(dashboardSource).toContain('t("noSalesForPeriod")');
     expect(dashboardSource).toContain('t("topProducts")');
     expect(dashboardSource).toContain('t("lowStockProducts")');

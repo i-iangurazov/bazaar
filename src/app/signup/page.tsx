@@ -28,6 +28,7 @@ import { useToast } from "@/components/ui/toast";
 import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { TRIAL_DAYS } from "@/lib/billing/trial";
 
 type RequestValues = {
   email: string;
@@ -277,6 +278,11 @@ const SignupPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {mode === "open" ? (
+            <p className="rounded-md bg-secondary p-3 text-sm text-muted-foreground" data-trial-offer>
+              {t(modeQuery.data?.trialPreviewEnabled ? "trialOffer" : "trialStandardOffer", { days: TRIAL_DAYS })}
+            </p>
+          ) : null}
           {formError ? <p className="text-sm font-medium text-danger">{translateError(tErrors, formError)}</p> : null}
           {mode === "invite_only" ? (
             <form onSubmit={handleRequestSubmit}>

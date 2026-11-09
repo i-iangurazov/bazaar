@@ -331,7 +331,7 @@ const OMarketPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      <MarketplacePlanNotice />
+      <MarketplacePlanNotice canManage={role === "ADMIN"} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         <Card className="bazaar-admin-surface">

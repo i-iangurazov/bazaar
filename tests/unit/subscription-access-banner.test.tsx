@@ -12,18 +12,17 @@ const state = vi.hoisted(() => ({
   query: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
-vi.mock("next-intl", () => ({
+vi.mock("next-intl", async (importOriginal) => {
+  const { createTranslator } = await importOriginal<typeof import("next-intl")>();
+  return {
   useLocale: () => state.locale,
   useTranslations: (namespace: string) => {
-    if (namespace !== "billing.accessNotice") throw new Error(namespace);
-    const copy = { ru, kg, en }[state.locale].billing.accessNotice;
-    return (key: keyof typeof copy, values: Record<string, string> = {}) =>
-      Object.entries(values).reduce(
-        (text, [name, value]) => text.replace(`{${name}}`, value),
-        copy[key],
-      );
+    if (!["billing.accessNotice", "billing.trial"].includes(namespace)) throw new Error(namespace);
+    const copy = namespace === "billing.trial" ? { ru, kg, en }[state.locale].billing.trial
+      : { ru, kg, en }[state.locale].billing.accessNotice;
+    return createTranslator({ locale: state.locale, messages: { section: copy }, namespace: "section" });
   },
-}));
+}; });
 vi.mock("@/lib/trpc", () => ({ trpc: { billing: { features: { useQuery: state.query } } } }));
 import {
   SubscriptionAccessBanner,
@@ -54,6 +53,20 @@ beforeEach(() => {
   state.query.mockReset();
 });
 describe("non-blocking subscription grace and viewing notices", () => {
+  it.each(["ru", "kg", "en"] as const)("explains the current trial and exact end in %s", (locale) => {
+    state.locale = locale;
+    const value = {
+      ...modern, trialActive: true,
+      trialEndsAt: new Date(Date.now() + 6 * 86_400_000),
+      trialOffer: { days: 7, previewPlan: "BUSINESS" },
+      access: { ...modern.access, inGrace: false, hasAccess: true },
+    };
+    const root = renderNotice(value);
+    expect(root.querySelector('[data-subscription-access-notice="trial"]')).not.toBeNull();
+    expect(root.textContent).toContain(formatDateTime(value.trialEndsAt, locale));
+    expect(root.textContent).not.toMatch(/undefined|\{count|\{date/);
+    expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
+  });
   it.each(["ru", "kg", "en"] as const)(
     "renders a concrete grace deadline and billing link in %s",
     (locale) => {

@@ -24,6 +24,39 @@ const wholesale = () => screen.getByLabelText("wholesalePrice · KGS") as HTMLIn
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 describe("individual price editor during shared publication", () => {
+  it.each(["68,50", "68.50"])("saves locale price %s as the same amount", (raw) => {
+    render(<StoreExtraPrices {...props} />);
+    expect(retail().inputMode).toBe("decimal");
+    fireEvent.change(retail(), { target: { value: "68," } });
+    expect(retail().value).toBe("68,");
+    fireEvent.change(retail(), { target: { value: raw } });
+    fireEvent.click(screen.getByRole("button", { name: "saveAdditionalPrices" }));
+    expect(state.mutate).toHaveBeenCalledWith(expect.objectContaining({ retailPriceKgs: 68.5 }));
+  });
+  it.each(["68,5x", "68,501", "-68,50"])("blocks invalid extra price %s", (raw) => {
+    render(<StoreExtraPrices {...props} />);
+    fireEvent.change(retail(), { target: { value: raw } });
+    expect(
+      (screen.getByRole("button", { name: "saveAdditionalPrices" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "saveAdditionalPrices" }));
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
+  it("preserves a more precise untouched foreign-currency price while editing another kind", () => {
+    render(
+      <StoreExtraPrices {...props} currencyCode="USD" currencyRateKgsPerUnit={87} retail={700} />,
+    );
+    fireEvent.change(screen.getByLabelText("wholesalePrice · USD"), { target: { value: "2,50" } });
+    const save = screen.getByRole("button", { name: "saveAdditionalPrices" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    expect(state.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        retailPriceKgs: undefined,
+        wholesalePriceKgs: 217.5,
+      }),
+    );
+  });
   it("refreshes untouched prices, preserves the edited kind and submits only that kind", () => {
     const view = render(<StoreExtraPrices {...props} />);
     fireEvent.change(retail(), { target: { value: "115" } });
@@ -45,9 +78,9 @@ describe("individual price editor during shared publication", () => {
     view.rerender(<StoreExtraPrices {...props} productId="second" retail={200} wholesale={150} />);
     expect(retail().value).toBe("200");
     expect(wholesale().value).toBe("150");
-    expect((screen.getByRole("button", { name: "saveAdditionalPrices" }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByRole("button", { name: "saveAdditionalPrices" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(state.mutate).not.toHaveBeenCalled();
   });
 });

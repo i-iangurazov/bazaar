@@ -90,7 +90,9 @@ export const getSubscriptionPaymentConfig = (
 };
 
 export const selfServeSignupEnabled = () =>
-  process.env.BILLING_SELF_SERVE_SIGNUP === "1" && getSubscriptionPaymentConfig().ready;
+  // Trial creation and owner reminders must not depend on merchant activation.
+  // Checkout independently requires a ready, verified payment configuration.
+  process.env.BILLING_SELF_SERVE_SIGNUP === "1";
 
 // Persist only a credential identity, never the API key itself.
 export const goPayMerchantId = (apiKey: string) =>

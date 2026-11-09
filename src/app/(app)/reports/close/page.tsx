@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
+import { SubscriptionFeatureLock } from "@/components/billing/subscription-feature-lock";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,7 +50,6 @@ const PeriodClosePage = () => {
   const t = useTranslations("periodClose");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const tBilling = useTranslations("billing");
   const locale = useLocale();
   const { data: session, status } = useSession();
   const canView = ["ADMIN", "MANAGER"].includes(session?.user?.role ?? "");
@@ -167,7 +167,11 @@ const PeriodClosePage = () => {
           </CardContent>
         </Card>
       ) : (
-        <p className="mt-6 text-sm text-muted-foreground">{tBilling("featureRequiresPlan")}</p>
+        billing.data && !billing.data.featureFlags.periodClose ? (
+          <div className="mt-6"><SubscriptionFeatureLock feature="periodClose"
+            currentPlan={billing.data.plan} availablePlans={billing.data.featurePlans?.periodClose}
+            canManage={session?.user?.role === "ADMIN"} isTrial={Boolean(billing.data.trialOffer)} /></div>
+        ) : null
       )}
 
       <Card className="mt-6">

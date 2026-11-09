@@ -13,6 +13,9 @@ type AccessNoticeState = {
   billingCatalogVersion: string;
   lifetimeAccess: boolean;
   subscriptionStatus: string;
+  trialActive?: boolean;
+  trialEndsAt?: Date | string | null;
+  trialOffer?: { days: number; previewPlan: string } | null;
   access: { inGrace: boolean; hasAccess: boolean; graceEndsAt: Date | string | null };
 };
 
@@ -28,6 +31,7 @@ export function SubscriptionAccessNotice({
   className?: string;
 }) {
   const t = useTranslations("billing.accessNotice");
+  const trial = useTranslations("billing.trial");
   const locale = useLocale();
   if (
     !state ||
@@ -40,26 +44,31 @@ export function SubscriptionAccessNotice({
     state.access.inGrace &&
     state.access.graceEndsAt &&
     Number.isFinite(new Date(state.access.graceEndsAt).getTime());
-  if (!grace && state.access.hasAccess) return null;
+  const trialEnd = state.trialEndsAt ? new Date(state.trialEndsAt) : null;
+  const activeTrial = state.trialActive && state.trialOffer && trialEnd &&
+    Number.isFinite(trialEnd.getTime()) && trialEnd.getTime() > Date.now();
+  if (!grace && !activeTrial && state.access.hasAccess) return null;
+  const remaining = activeTrial ? Math.ceil((trialEnd!.getTime() - Date.now()) / 86_400_000) : 0;
   return (
     <Alert
-      variant={grace ? "warning" : "info"}
+      variant={grace || (activeTrial && remaining <= 1) ? "warning" : "info"}
       className={className}
-      data-subscription-access-notice={grace ? "grace" : "read-only"}
+      data-subscription-access-notice={activeTrial ? "trial" : grace ? "grace" : "read-only"}
     >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <AlertTitle>{t(grace ? "graceTitle" : "expiredTitle")}</AlertTitle>
+          <AlertTitle>{activeTrial ? trial("remaining", { count: remaining }) : t(grace ? "graceTitle" : "expiredTitle")}</AlertTitle>
           <AlertDescription>
-            {grace
+            {activeTrial ? trial("deadline", { date: formatDateTime(trialEnd!, locale) }) : grace
               ? t("graceDescription", { date: formatDateTime(state.access.graceEndsAt!, locale) })
               : t("expiredDescription")}
           </AlertDescription>
+          {activeTrial ? <p className="text-sm text-muted-foreground">{trial("scope")}</p> : null}
           {!canManage ? <p className="text-sm">{t("askOwner")}</p> : null}
         </div>
         {canManage && showBillingLink ? (
           <Button asChild variant="secondary" className="min-h-11 w-full shrink-0 sm:w-auto">
-            <Link href="/billing">{t("renew")}</Link>
+            <Link href="/billing">{activeTrial ? trial("choose") : t("renew")}</Link>
           </Button>
         ) : null}
       </div>

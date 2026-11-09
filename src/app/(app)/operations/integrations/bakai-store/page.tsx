@@ -861,7 +861,7 @@ const BakaiStorePage = () => {
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      <MarketplacePlanNotice />
+      <MarketplacePlanNotice canManage={role === "ADMIN"} />
 
       <Card className="bazaar-admin-surface">
         <CardHeader className="bazaar-admin-section-header">

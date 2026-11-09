@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TRIAL_DAYS } from "@/lib/billing/trial";
 
 import { PLAN_FEATURE_CODES } from "@/lib/billing/plans";
 import { ADDITIONAL_STORE_CAPS, subscriptionPrice } from "@/lib/billing/subscriptionPricing";
@@ -37,6 +38,7 @@ export function MarketingPricing({
         </p>
         <h2>{t("publicPricing.title")}</h2>
         <p>{t("publicPricing.description")}</p>
+        <p>{t("trial.offer", { days: TRIAL_DAYS })}</p>
       </div>
       <div className={styles.planGrid}>
         {plans.map((plan, index) => {

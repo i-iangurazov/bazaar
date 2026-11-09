@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 
 import { PLAN_CODES } from "@/lib/billing/plans";
+import { previewTrialPreparation, prepareTrialSubscription } from "@/server/billing/trialPreparation";
 import { adminProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
@@ -21,6 +22,21 @@ const paymentProcedure = adminProcedure.use(({ ctx, next }) => {
 });
 
 export const subscriptionPaymentsRouter = router({
+  trialPreparation: paymentProcedure
+    .use(rateLimit({ max: 12, windowMs: 60_000, prefix: "trial-preparation-preview" }))
+    .input(z.object({ plan: z.enum(PLAN_CODES) }))
+    .query(async ({ ctx, input }) => {
+      try { return await previewTrialPreparation({ ...input, organizationId: ctx.user.organizationId, actorId: ctx.user.id }); }
+      catch (error) { throw toTRPCError(error); }
+    }),
+  prepareTrial: paymentProcedure
+    .use(rateLimit({ max: 6, windowMs: 60_000, prefix: "trial-preparation" }))
+    .input(z.object({ plan: z.enum(PLAN_CODES), confirmationToken: z.string().min(1).max(3000), confirmed: z.literal(true) }))
+    .mutation(async ({ ctx, input }) => {
+      try { return await prepareTrialSubscription({ ...input, organizationId: ctx.user.organizationId, actorId: ctx.user.id,
+        requestId: ctx.requestId }); }
+      catch (error) { throw toTRPCError(error); }
+    }),
   quote: paymentProcedure
     .use(rateLimit({ max: 60, windowMs: 60_000, prefix: "billing-quote" }))
     .input(subscriptionQuoteInputSchema)

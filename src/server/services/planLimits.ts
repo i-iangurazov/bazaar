@@ -20,6 +20,7 @@ import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganization
 import { contractPlan, createContractTerms, readContractTerms } from "@/server/billing/contractTerms";
 import { readPurchaseSnapshot } from "@/server/billing/purchaseSnapshot";
 import { AppError } from "@/server/services/errors";
+import { readTrialOffer } from "@/server/billing/trialPolicy";
 
 export type PlanTier = PlanCode;
 export type PlanLimits = {
@@ -137,13 +138,21 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     ? await db.subscriptionPeriod.findFirst({
         where: { organizationId, startsAt: org.trialEndsAt }, orderBy: { startsAt: "asc" },
       }) : null;
-  const purchase = readPurchaseSnapshot((latestPeriod ?? initialTrialPurchase)?.purchaseSnapshot);
+  // A new trial remains the same preview until its original end, even when a
+  // future paid period has already been purchased. This matches database guards
+  // and avoids removing sampled features on early payment for a lower tier.
+  const hasPreview = Boolean(org.subscriptionContract?.trialOffer) && !lifetimeAccess &&
+    org.subscriptionBillingMode === "SELF_SERVE";
+  const futurePurchase = readPurchaseSnapshot(initialTrialPurchase?.purchaseSnapshot);
+  const purchase = readPurchaseSnapshot((latestPeriod ?? (hasPreview ? null : initialTrialPurchase))?.purchaseSnapshot);
   const version = catalogVersion(org.subscriptionContract?.catalogVersion);
   const terms = readContractTerms(org.subscriptionContract?.termsSnapshot) ?? createContractTerms(version);
   if (terms.catalogVersion !== version) throw new AppError("billingContractNeedsReview", "CONFLICT", 409);
   const plan = purchase?.plan ?? org.plan;
   const extras = purchase?.extras ?? EMPTY_SUBSCRIPTION_EXTRAS;
-  const entitlements = purchase?.entitlements ?? contractPlan(terms, plan, extras);
+  const trialOffer = !lifetimeAccess && org.subscriptionBillingMode === "SELF_SERVE" &&
+    version === "2026-11" && !purchase ? readTrialOffer(org.subscriptionContract?.trialOffer) : null;
+  const entitlements = purchase?.entitlements ?? trialOffer?.entitlements ?? contractPlan(terms, plan, extras);
   return {
     ...org,
     plan,
@@ -153,8 +162,9 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     subscriptionExtras: extras,
     contractTerms: terms,
     entitlements,
+    trialOffer,
     activeSubscriptionPeriod: activePeriod,
-    activePurchase: purchase,
+    activePurchase: purchase ?? (trialOffer ? futurePurchase : null),
   };
 };
 
@@ -232,7 +242,7 @@ export const assertFeatureEnabled = async (input: {
   const effectiveFeature = input.feature === "priceBooks" && org.billingCatalogVersion === LEGACY_CATALOG_VERSION
     ? "storePrices" : input.feature;
   if (!org.entitlements.features[effectiveFeature]) {
-    throw new AppError(getFeatureLockedErrorKey(effectiveFeature), "FORBIDDEN", 403);
+    throw new AppError(getFeatureLockedErrorKey(effectiveFeature), "FORBIDDEN", 403, { feature: effectiveFeature });
   }
   return org;
 };

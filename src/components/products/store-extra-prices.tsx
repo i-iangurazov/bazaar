@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/price-input";
+import { parsePriceInput } from "@/lib/priceInput";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { reportError } from "@/lib/reporting";
@@ -56,16 +57,18 @@ export function StoreExtraPrices(props: {
   });
   const valid =
     (Boolean(props.variantId) || retail.trim() !== "") &&
-    [retail, wholesale].every(
-      (v) => v.trim() === "" || (Number.isFinite(Number(v)) && Number(v) >= 0),
-    );
+    (["retail", "wholesale"] as const).every((kind) => {
+      if (!dirty.current[kind]) return true;
+      const raw = kind === "retail" ? retail : wholesale;
+      const amount = parsePriceInput(raw);
+      return !raw.trim() || (amount !== null && amount >= 0);
+    });
   return (
     <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1 text-xs">
           {t("retailPrice")} · {currency}
-          <Input
-            type="number"
+          <PriceInput
             min="0"
             step="0.01"
             aria-required={!props.variantId}
@@ -79,8 +82,7 @@ export function StoreExtraPrices(props: {
         </label>
         <label className="space-y-1 text-xs">
           {t("wholesalePrice")} · {currency}
-          <Input
-            type="number"
+          <PriceInput
             min="0"
             step="0.01"
             value={wholesale}
@@ -111,12 +113,12 @@ export function StoreExtraPrices(props: {
             retailPriceKgs: dirty.current.retail
               ? retail.trim() === ""
                 ? null
-                : convertToKgs(Number(retail), rate, currency)
+                : convertToKgs(parsePriceInput(retail)!, rate, currency)
               : undefined,
             wholesalePriceKgs: dirty.current.wholesale
               ? wholesale.trim() === ""
                 ? null
-                : convertToKgs(Number(wholesale), rate, currency)
+                : convertToKgs(parsePriceInput(wholesale)!, rate, currency)
               : undefined,
           })
         }

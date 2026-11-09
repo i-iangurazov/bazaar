@@ -13,6 +13,8 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ADDITIONAL_STORE_CAPS, CURRENT_CATALOG_VERSION, EMPTY_SUBSCRIPTION_EXTRAS, type SubscriptionExtras, type SubscriptionMonths } from "@/lib/billing/subscriptionPricing";
 import { QueryErrorState } from "@/components/query-error-state";
+import { SubscriptionPreparationNotice } from "@/components/billing/subscription-preparation-notice";
+import { TrialPreparation } from "@/components/billing/trial-preparation";
 import { SubscriptionAddons } from "@/components/billing/subscription-addons";
 import {
   Select,
@@ -161,7 +163,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
             ) : settings.data.accountPaused ? (
               <p className="text-sm text-muted-foreground">{t("accountPaused")}</p>
             ) : !settings.data.available ? (
-              <p className="text-sm text-muted-foreground">{t("unavailable")}</p>
+              <p className="text-sm text-muted-foreground">{billing("trial.paymentUnavailable")}</p>
             ) : null}
             {settings.data.catalogVersion !== CURRENT_CATALOG_VERSION ? (
               <p className="rounded-md bg-secondary p-3 text-sm text-muted-foreground">
@@ -295,7 +297,8 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                       setConfirmOpen(true);
                     }}
                   >
-                    {quote.isFetching ? common("loading") : t("pay", { amount: money(amount) })}
+                    {quote.isFetching ? common("loading") : quote.data
+                      ? t("pay", { amount: money(amount) }) : billing("trial.choose")}
                   </Button>
                 </div>
                 <div className="space-y-2 sm:max-w-xs">
@@ -325,7 +328,12 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                   </div>
                   <p className="text-xs text-muted-foreground">{t("extrasHint")}</p>
                 </fieldset> : null}
-                {quote.isError ? <QueryErrorState error={quote.error} onRetry={() => void quote.refetch()} /> : quote.data ? (
+                {quote.isError ? quote.error.message === "billingDowngradeNeedsPreparation"
+                  ? <div className="space-y-3"><SubscriptionPreparationNotice modules={quote.error.data?.details?.modules} trial={settings.data.trialPreview} />
+                    {settings.data.trialPreview ? <TrialPreparation plan={plan} onPrepared={() => {
+                      requestKey.current = ""; setConsent(null); setAccepted(false); void quote.refetch(); refresh();
+                    }} /> : null}</div>
+                  : <QueryErrorState error={quote.error} onRetry={() => void quote.refetch()} /> : quote.data ? (
                   <div className="space-y-2 rounded-md border border-input p-4" aria-live="polite" data-subscription-quote>
                     <p className="font-semibold">{t("total", { amount: money(quote.data.amountMinor) })}</p>
                     <p className="text-sm text-muted-foreground">{t(quote.data.kind === "UPGRADE" ? "upgradeDates" : "renewDates", { start: formatDateTime(quote.data.startsAt, locale), end: formatDateTime(quote.data.endsAt, locale) })}</p>

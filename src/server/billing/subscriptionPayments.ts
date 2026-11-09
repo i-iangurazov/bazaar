@@ -81,6 +81,7 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
     termsVersion: config.termsVersion,
     billingMode: organization.subscriptionBillingMode,
     lifetimeAccess: organization.lifetimeAccess,
+    trialPreview: Boolean(organization.trialOffer),
     catalogVersion: organization.billingCatalogVersion,
     currentExtras: organization.subscriptionExtras,
     currentMonths: organization.activePurchase?.months ?? 1,

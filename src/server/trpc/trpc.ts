@@ -237,7 +237,7 @@ const ensureActivePlan = t.middleware(async ({ ctx, next, type, path }) => {
     if (feature && !org.entitlements.features[feature]) {
       const errorFeature = feature === "priceBooks" && org.billingCatalogVersion === "2026-10"
         ? "storePrices" : feature;
-      throw new AppError(getFeatureLockedErrorKey(errorFeature), "FORBIDDEN", 403);
+      throw new AppError(getFeatureLockedErrorKey(errorFeature), "FORBIDDEN", 403, { feature: errorFeature });
     }
   } catch (error) {
     throw toTRPCError(error);

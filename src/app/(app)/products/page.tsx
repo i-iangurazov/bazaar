@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { ListViewOptions, ListToolbar, FilterField } from "@/components/list-toolbar";
 import { ProductListSearch } from "@/components/products/product-list-search";
 import { PageHeader } from "@/components/page-header";
+import { SubscriptionFeatureAvailability } from "@/components/billing/subscription-feature-lock";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
 import {
   isDescriptionGenerationJobRunning,
@@ -3719,6 +3720,10 @@ const ProductsPage = () => {
           ) : undefined
         }
       />
+      {canManageProducts && billing.data ? <SubscriptionFeatureAvailability
+        features={["bulkProducts", "bulkAiContent", "priceBooks", "assortments", "bundles"]}
+        flags={billing.data.featureFlags} featurePlans={billing.data.featurePlans}
+        currentPlan={billing.data.plan} canManage={isAdmin} isTrial={Boolean(billing.data.trialOffer)} /> : null}
       <ListToolbar
         total={productsTotal}
         loading={

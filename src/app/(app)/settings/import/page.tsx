@@ -12,6 +12,7 @@ import {
 } from "@/components/import-dry-run-preview";
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
+import { SubscriptionFeatureLock } from "@/components/billing/subscription-feature-lock";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -2754,7 +2755,9 @@ const ImportPage = () => {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={tBilling("featureRequiresPlan")} />
-        <p className="mt-4 text-sm text-muted-foreground">{tBilling("featureAskOwner")}</p>
+        <div className="mt-4"><SubscriptionFeatureLock feature="imports" canManage={false}
+          currentPlan={billing.data?.plan} availablePlans={billing.data?.featurePlans?.imports}
+          isTrial={Boolean(billing.data?.trialOffer)} /></div>
       </div>
     );
 

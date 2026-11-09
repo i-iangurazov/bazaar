@@ -99,7 +99,20 @@ export const applyLoyaltyToOrder = async (tx: LoyaltyTx, input: ApplyInput) => {
   const order = await tx.customerOrder.findFirst({ where: { id: input.customerOrderId, organizationId: input.organizationId, storeId: input.storeId } });
   if (!order || !["DRAFT", "CONFIRMED", "READY"].includes(order.status)) throw new AppError("posSaleNotEditable", "CONFLICT", 409);
   const previous = await tx.loyaltyOrderApplication.findUnique({ where: { customerOrderId: order.id } });
-  const requestedAccount = await tx.loyaltyAccount.findUnique({ where: { memberId: input.memberId }, select: { id: true } });
+  let requestedAccount = await tx.loyaltyAccount.findUnique({ where: { memberId: input.memberId }, select: { id: true } });
+  if (!requestedAccount) {
+    // Obtain every account lock before the shared programme lock below. A new
+    // member must not acquire its account in the opposite order during quote.
+    // Account creation takes a programme FK lock. Lock the previous account
+    // first so that this implicit lock cannot invert preparation's ordering.
+    if (previous?.accountId) await lockLoyaltyAccount(tx, previous.accountId);
+    const program = await assertLoyaltyEnabled(tx, input.organizationId, input.storeId);
+    const member = await tx.loyaltyMember.findFirst({ where: { id: input.memberId,
+      organizationId: input.organizationId, programId: program.id, status: "ACTIVE" } });
+    if (!member) throw new AppError("loyaltyMemberNotAvailable", "NOT_FOUND", 404);
+    requestedAccount = await ensureAccount(tx, { organizationId: input.organizationId,
+      programId: program.id, memberId: member.id });
+  }
   for (const accountId of [...new Set([previous?.accountId, requestedAccount?.id].filter((id): id is string => Boolean(id)))].sort()) await lockLoyaltyAccount(tx, accountId);
   const requested = Math.max(0, Math.trunc(input.requestedPoints ?? 0));
   if (previous?.status === "APPLIED") {
@@ -110,6 +123,16 @@ export const applyLoyaltyToOrder = async (tx: LoyaltyTx, input: ApplyInput) => {
     }
     await releaseLoyaltyForOrder(tx, { customerOrderId: order.id });
   }
+  // Compatible across ordinary sales, but exclusive against trial preparation.
+  // Re-read enabled/rules in quote after waiting: a previously read enabled
+  // programme must not create a new discount after preparation disabled it.
+  // Claim the org FK lock before programme SHARE as well: an ordinary settings
+  // writer locks org before programme, while application/reservation inserts
+  // otherwise acquire their org FK lock only after programme SHARE.
+  await tx.$queryRaw`SELECT id FROM "Organization"
+    WHERE id = ${input.organizationId} FOR KEY SHARE`;
+  await tx.$queryRaw`SELECT id FROM "LoyaltyProgram"
+    WHERE "organizationId" = ${input.organizationId} FOR SHARE`;
   const quote = await quoteLoyaltyForOrder(tx, input);
   if (requested > quote.redeemPoints) throw new AppError("loyaltyInsufficientPoints", "CONFLICT", 409);
   const reservationKey = `${reserveKey(order.id)}:${randomUUID()}`;

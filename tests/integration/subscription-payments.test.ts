@@ -581,7 +581,7 @@ describeDb("subscription payments with real database and signed provider protoco
         .subscriptionBillingMode,
     ).toBe("MANUAL");
     vi.stubEnv("BILLING_PAYMENTS_MODE", "disabled");
-    expect((await register()).subscriptionBillingMode).toBe("MANUAL");
+    expect((await register()).subscriptionBillingMode).toBe("SELF_SERVE");
   });
   it("forbids payment operations during impersonation", async () => {
     const user = {

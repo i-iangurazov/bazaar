@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
+import { SubscriptionFeatureLock } from "./subscription-feature-lock";
 
 const subscriptionFailureKeys = new Set([
   "billingUsageLimitReached",
@@ -34,7 +35,7 @@ export function MarketplaceSubscriptionFailure({ report }: { report: unknown }) 
   );
 }
 
-export function MarketplacePlanNotice() {
+export function MarketplacePlanNotice({ canManage = false }: { canManage?: boolean }) {
   const t = useTranslations("billing.marketplace");
   const query = trpc.billing.features.useQuery(undefined, { staleTime: 60_000, retry: false });
   if (!query.data || query.data.billingCatalogVersion !== "2026-11" || query.data.lifetimeAccess)
@@ -50,6 +51,9 @@ export function MarketplacePlanNotice() {
     <Card>
       <CardContent className="space-y-2 p-4 text-sm">
         <p>{t(live ? "included" : "fileOnly")}</p>
+        {!live ? <SubscriptionFeatureLock compact feature="marketplaces" canManage={canManage}
+          currentPlan={query.data.plan} availablePlans={query.data.featurePlans?.marketplaces}
+          isTrial={Boolean(query.data.trialOffer)} /> : null}
         {live && channel ? (
           <p className="font-medium">{t("selected", { channel: labels[channel] ?? channel })}</p>
         ) : null}

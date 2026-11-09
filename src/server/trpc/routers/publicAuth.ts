@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { TRIAL_DAYS } from "@/lib/billing/trial";
+import { selfServeSignupEnabled } from "@/server/billing/paymentConfig";
 import type { LegalEntityType } from "@prisma/client";
 
 import { publicProcedure, rateLimit, router } from "@/server/trpc/trpc";
@@ -35,6 +37,8 @@ const sanitizeUserAudit = <T extends { passwordHash?: string }>(user: T | null) 
 export const publicAuthRouter = router({
   signupMode: publicProcedure.query(() => ({
     mode: process.env.SIGNUP_MODE ?? "invite_only",
+    trialDays: TRIAL_DAYS,
+    trialPreviewEnabled: selfServeSignupEnabled(),
   })),
 
   requestAccess: publicProcedure

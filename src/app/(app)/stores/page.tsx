@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { SubscriptionFeatureLock } from "@/components/billing/subscription-feature-lock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -1123,6 +1124,9 @@ const StoresPage = () => {
                       <div className="space-y-1">
                         <FormLabel>{t("trackExpiryLots")}</FormLabel>
                         <FormDescription>{t("trackExpiryHint")}</FormDescription>
+                        {billing.data && !billing.data.featureFlags.expiryLots ? <SubscriptionFeatureLock compact
+                          feature="expiryLots" canManage={isAdmin} currentPlan={billing.data.plan}
+                          availablePlans={billing.data.featurePlans?.expiryLots} isTrial={Boolean(billing.data.trialOffer)} /> : null}
                       </div>
                       <FormControl>
                         <Switch

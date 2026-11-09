@@ -13,11 +13,12 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/trpc", () => ({ trpc: { billing: { features: { useQuery: () => state } } } }));
 vi.mock("next-intl", () => ({
   useTranslations: (scope: string) => {
-    const catalog: Record<string, string> =
+    const catalog: Record<string, unknown> =
       scope === "errors" ? messages.errors : messages.billing.marketplace;
     return Object.assign(
       (key: string, values?: Record<string, string>) => {
-        let value = catalog[key] ?? key;
+        const entry = catalog[key];
+        let value = typeof entry === "string" ? entry : key;
         for (const [name, replacement] of Object.entries(values ?? {}))
           value = value.replace(`{${name}}`, replacement);
         return value;

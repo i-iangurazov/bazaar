@@ -10,6 +10,7 @@ import {
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
 import { translateError } from "@/lib/translateError";
+import { parsePriceInput } from "@/lib/priceInput";
 import { PriceAutosaveQueue, type PriceSaveState } from "@/lib/priceAutosaveQueue";
 import {
   priceAutosavePendingKey,
@@ -110,9 +111,12 @@ export const ProductPriceAutosave = forwardRef<
         }
         const raw = form.getValues(path),
           sent = requests?.find((r) => (r.variantId ?? null) === (p.variantId ?? null))?.[kind];
+        const rawAmount = parsePriceInput(raw);
         const same =
           !requests ||
-          (text(raw).trim() === "" ? sent === null : Number(raw) === Number(fromKgs(sent)));
+          (text(raw).trim() === ""
+            ? sent === null
+            : rawAmount !== null && rawAmount === parsePriceInput(fromKgs(sent)));
         form.resetField(path, { defaultValue: fromKgs(p[kind]) });
         if (!same) form.setValue(path, raw, { shouldDirty: true });
         else settled.current.delete(path);
@@ -155,12 +159,14 @@ export const ProductPriceAutosave = forwardRef<
         const fields = helpers.current.dirty().filter((d) => settled.current.has(d.path));
         if (!fields.length) return [];
         const retail = form.getValues("retailPriceKgs");
-        if (text(retail).trim() === "" || !Number.isFinite(Number(retail)) || Number(retail) < 0)
-          throw new Error("retailPriceRequired");
+        const retailAmount = parsePriceInput(retail);
+        if (retailAmount === null || retailAmount < 0) throw new Error("retailPriceRequired");
         const entries = new Map<string, ProductPricePatch>();
         for (const d of fields) {
-          const raw = text(form.getValues(d.path)).trim();
-          if (raw !== "" && (!Number.isFinite(Number(raw)) || Number(raw) < 0))
+          const value = form.getValues(d.path);
+          const raw = text(value).trim();
+          const amount = parsePriceInput(value);
+          if (raw !== "" && (amount === null || amount < 0))
             throw new Error("priceAutosaveInvalid");
           if (d.kind === "retailPriceKgs" && !d.variantId && raw === "")
             throw new Error("retailPriceRequired");
@@ -170,7 +176,7 @@ export const ProductPriceAutosave = forwardRef<
             raw === ""
               ? null
               : convertToKgs(
-                  Number(raw),
+                  amount!,
                   context.current.currencyRateKgsPerUnit,
                   context.current.currencyCode,
                 );

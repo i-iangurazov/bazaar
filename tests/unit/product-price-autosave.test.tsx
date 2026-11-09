@@ -8,6 +8,7 @@ import {
   type PriceAutosaveHandle,
 } from "@/components/products/product-price-autosave";
 import { priceAutosavePendingKey, savePriceAutosavePending } from "@/lib/productPriceAutosave";
+import { PriceInput } from "@/components/ui/price-input";
 const api = vi.hoisted(() => ({
   save: vi.fn(),
   reconcile: vi.fn(),
@@ -83,7 +84,7 @@ function Harness({ currency = "KGS", rate = 1 }: { currency?: string; rate?: num
             name={path}
             control={form.control}
             render={({ field }) => (
-              <input
+              <PriceInput
                 aria-label={path}
                 {...field}
                 onChange={(e) => {
@@ -142,7 +143,7 @@ it("saves a blurred price and resets only its own dirty baseline", async () => {
   render(<Harness />);
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Unsaved name" } });
   edit("retailPriceKgs", "900");
-  await waitFor(() => expect(screen.getByText("saved", {exact:true}).textContent).toBe("saved"));
+  await waitFor(() => expect(screen.getByText("saved", { exact: true }).textContent).toBe("saved"));
   expect(api.save).toHaveBeenCalledTimes(1);
   expect(api.save.mock.calls[0][0]).toMatchObject({
     ...ctx,
@@ -246,4 +247,32 @@ it("saves existing variant IDs and converts foreign display amounts to canonical
     currencyRateKgsPerUnit: 87,
     prices: [{ variantId: "variant", retailPriceKgs: 870 }],
   });
+});
+it.each(["68,50", "68.50"])(
+  "autosaves locale price %s without changing its amount",
+  async (raw) => {
+    render(<Harness />);
+    edit("retailPriceKgs", raw);
+    await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
+    expect(api.save.mock.calls[0][0].prices).toEqual([{ variantId: null, retailPriceKgs: 68.5 }]);
+    await waitFor(() => expect(screen.getByTestId("dirty").textContent).toBe("{}"));
+  },
+);
+it("keeps a separator draft until blur and converts a comma variant price to authoritative KGS", async () => {
+  render(<Harness currency="USD" rate={87} />);
+  const input = screen.getByLabelText("variants.0.retailPriceKgs") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "68," } });
+  expect(input.value).toBe("68,");
+  expect(api.save).not.toHaveBeenCalled();
+  edit("variants.0.retailPriceKgs", "68,50");
+  await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
+  expect(api.save.mock.calls[0][0].prices).toEqual([
+    { variantId: "variant", retailPriceKgs: 5959.5 },
+  ]);
+});
+it.each(["68,5x", "68,501", "-68,50"])("does not autosave invalid amount %s", async (raw) => {
+  render(<Harness />);
+  edit("wholesalePriceKgs", raw);
+  await screen.findByRole("alert");
+  expect(api.save).not.toHaveBeenCalled();
 });

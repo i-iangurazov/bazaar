@@ -1223,7 +1223,7 @@ const MMarketSettingsPage = () => {
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      <MarketplacePlanNotice />
+      <MarketplacePlanNotice canManage={role === "ADMIN"} />
 
       <Card className="bazaar-admin-surface overflow-hidden">
         <CardHeader className="bazaar-admin-section-header">

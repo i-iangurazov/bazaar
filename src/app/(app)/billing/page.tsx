@@ -116,6 +116,9 @@ const BillingPage = () => {
               billingCatalogVersion: billingQuery.data.billingCatalogVersion,
               lifetimeAccess: billingQuery.data.lifetimeAccess,
               subscriptionStatus: billingQuery.data.subscriptionStatus,
+              trialActive: billingQuery.data.trialActive,
+              trialEndsAt: billingQuery.data.trialEndsAt,
+              trialOffer: billingQuery.data.trialOffer,
               access: {
                 inGrace: billingQuery.data.inGrace,
                 hasAccess: billingQuery.data.hasAccess,
@@ -152,7 +155,7 @@ const BillingPage = () => {
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Badge variant={planBadgeVariant[billingQuery.data.planTier]}>
-                  {t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
+                  {billingQuery.data.trialOffer ? t("plans.trial") : t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
                 </Badge>
                 <Badge
                   variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}
@@ -184,6 +187,7 @@ const BillingPage = () => {
               ) : billingQuery.data.subscriptionActive ? (
                 <p className="text-sm text-success">{t("subscriptionActive")}</p>
               ) : null}
+              {billingQuery.data.trialOffer ? <p>{t("trial.scope")}</p> : null}
               {pendingRequest ? (
                 <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-foreground">
                   <p className="font-semibold">{t("pendingRequestTitle")}</p>
@@ -201,7 +205,7 @@ const BillingPage = () => {
           <SubscriptionPayments onUpdated={() => void billingQuery.refetch()} />
           <SubscriptionUsage />
 
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-2" id="plans">
             <CardHeader>
               <CardTitle>{t("usageTitle")}</CardTitle>
             </CardHeader>
@@ -226,7 +230,7 @@ const BillingPage = () => {
               </p>
               <div>
                 <p>
-                  {t("planPricePrimary", {
+                  {billingQuery.data.trialOffer ? t("trial.free") : t("planPricePrimary", {
                     amount: formatNumber(billingQuery.data.monthlyPriceKgs),
                   })}
                 </p>
@@ -243,7 +247,9 @@ const BillingPage = () => {
                 const tier = planItem.planTier as PlanTier;
                 const isCurrent = tier === currentPlan;
                 const canRequestUpgrade =
-                  Boolean(currentPlan) && getPlanRank(tier) > getPlanRank(currentPlan as PlanTier);
+                  billingQuery.data?.subscriptionBillingMode === "MANUAL" &&
+                  !billingQuery.data?.lifetimeAccess && Boolean(currentPlan) &&
+                  getPlanRank(tier) > getPlanRank(currentPlan as PlanTier);
                 const hasPendingRequest = Boolean(pendingRequest);
                 const requestedThisPlan =
                   pendingRequest && pendingRequest.requestedPlan === planItem.plan;

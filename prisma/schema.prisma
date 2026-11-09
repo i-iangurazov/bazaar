@@ -662,6 +662,7 @@ model SubscriptionContract {
   catalogVersion             String       @default("2026-10")
   lifetimeAccess             Boolean      @default(false)
   termsSnapshot              Json         @default("{}")
+  trialOffer                 Json?
   selectedMarketplaceChannel String?
   selectedSenderDomain       String?
   createdAt                  DateTime     @default(now())

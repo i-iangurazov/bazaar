@@ -279,7 +279,7 @@ describe("subscription payment consent and recovery", () => {
     expect(screen.getByText("billing.payments.legacyExtras")).toBeTruthy();
     Object.assign(mocks.data, { billingMode: "SELF_SERVE", available: false });
     view.rerender(<SubscriptionPayments onUpdated={vi.fn()} />);
-    expect(screen.getByText("billing.payments.unavailable")).toBeTruthy();
+    expect(screen.getByText("billing.trial.paymentUnavailable")).toBeTruthy();
     expect(document.querySelectorAll("[data-subscription-addons] [data-addon]")).toHaveLength(2);
     expect(mocks.mutate).not.toHaveBeenCalled();
   });

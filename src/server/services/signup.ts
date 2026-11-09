@@ -14,11 +14,11 @@ import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { PUBLISHED_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
 import { createContractTerms } from "@/server/billing/contractTerms";
 import { selfServeSignupEnabled } from "@/server/billing/paymentConfig";
+import { TRIAL_DAYS } from "@/lib/billing/trial";
+import { createTrialOffer } from "@/server/billing/trialPolicy";
 import { parseAcquisition, type Acquisition } from "@/lib/acquisition";
 
 const validatedAttribution = (value?: Acquisition) => parseAcquisition(JSON.stringify(value));
-
-const DEFAULT_TRIAL_DAYS = Number(process.env.TRIAL_DAYS ?? "14");
 
 export class EmailVerificationDeliveryError extends Error {
   verifyLink: string;
@@ -157,6 +157,9 @@ export const registerBusinessFromToken = async (input: {
   return prisma.$transaction(async (tx) => {
     const token = await consumeAuthToken({ purpose: "REGISTRATION", token: input.token }, tx);
     const userId = token.userId!;
+    // Multiple valid onboarding tokens must not create multiple organizations
+    // or restart a trial for the same identity under concurrent submissions.
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
@@ -187,9 +190,9 @@ export const registerBusinessFromToken = async (input: {
       }
       await assertWithinLimits({ organizationId, kind: "stores" });
     } else {
-      const trialDays =
-        Number.isFinite(DEFAULT_TRIAL_DAYS) && DEFAULT_TRIAL_DAYS > 0 ? DEFAULT_TRIAL_DAYS : 14;
-      const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
+      const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+      const selfServe = selfServeSignupEnabled();
+      const terms = createContractTerms(PUBLISHED_CATALOG_VERSION);
       const createdOrg = await tx.organization.create({
         data: {
           name: input.orgName.trim(),
@@ -197,9 +200,10 @@ export const registerBusinessFromToken = async (input: {
           subscriptionStatus: "ACTIVE",
           trialEndsAt,
           currentPeriodEndsAt: trialEndsAt,
-          subscriptionBillingMode: selfServeSignupEnabled() ? "SELF_SERVE" : "MANUAL",
+          subscriptionBillingMode: selfServe ? "SELF_SERVE" : "MANUAL",
           subscriptionContract: { create: { catalogVersion: PUBLISHED_CATALOG_VERSION,
-            termsSnapshot: createContractTerms(PUBLISHED_CATALOG_VERSION) } },
+            termsSnapshot: terms,
+            ...(selfServe ? { trialOffer: createTrialOffer(terms) } : {}) } },
         },
       });
       organizationId = createdOrg.id;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -31,6 +31,7 @@ import {
   ReportsIcon,
 } from "@/components/icons";
 import { formatCurrency, formatDate, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { toIntlLocale } from "@/lib/locales";
 import {
   convertFromKgs,
   normalizeCurrencyCode,
@@ -112,6 +113,19 @@ export default function DashboardPage() {
   const money = (value: number) =>
     formatCurrency(convertFromKgs(value, currencyRate, currencyCode), locale, currencyCode);
   const number = (value: number) => formatNumber(value, locale);
+  const kpiGroupSeparator = new Intl.NumberFormat(toIntlLocale(locale))
+    .formatToParts(1000).find((part) => part.type === "group")?.value;
+  // Keep the formatted amount intact; add wrap opportunities only between groups and words.
+  const renderKpiValue = (value: string) => value.split(/(\s+)/u).map((part, index) => {
+    if (/^\s+$/u.test(part)) return <Fragment key={index}>{part}<wbr /></Fragment>;
+    if (!kpiGroupSeparator || /\s/u.test(kpiGroupSeparator)) return part;
+    const groups = part.split(kpiGroupSeparator);
+    return <Fragment key={index}>{groups.map((group, groupIndex) => (
+      <Fragment key={groupIndex}>
+        {group}{groupIndex < groups.length - 1 ? <>{kpiGroupSeparator}<wbr /></> : null}
+      </Fragment>
+    ))}</Fragment>;
+  });
   const scopedHref = (path: string, params: Record<string, string> = {}) => {
     const url = new URL(path, "https://local.invalid");
     if (storeId) url.searchParams.set(path.startsWith("/pos") ? "store" : "storeId", storeId);
@@ -122,23 +136,21 @@ export default function DashboardPage() {
     scopedHref("/reports/analytics", { dateFrom: from, dateTo: to });
   const renderTrendBadge = (delta: number | null | undefined) => {
     if (delta === null || delta === undefined) return null;
+    const unchanged = Math.abs(delta) < 0.05;
     const Icon = delta < 0 ? ArrowDownIcon : ArrowUpIcon;
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 text-xs",
+          "flex items-start gap-1 text-xs leading-5",
           delta > 0 ? "text-success" : delta < 0 ? "text-danger" : "text-muted-foreground",
         )}
       >
-        {Math.abs(delta) < 0.05 ? (
-          t("unchanged")
-        ) : (
-          <>
-            <Icon className="h-3.5 w-3.5" aria-hidden />
-            {formatNumber(Math.abs(delta), locale, { maximumFractionDigits: 1 })}%
-          </>
-        )}
-        <span className="text-muted-foreground">{t("vsYesterday")}</span>
+        {!unchanged ? <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
+        <span className="min-w-0">
+          {unchanged ? t("kpi.unchangedSinceYesterday") : t("kpi.comparedToYesterday", {
+            value: `${delta > 0 ? "+" : "−"}${formatNumber(Math.abs(delta), locale, { maximumFractionDigits: 1 })}`,
+          })}
+        </span>
       </span>
     );
   };
@@ -232,21 +244,21 @@ export default function DashboardPage() {
       key: "sales",
       label: t("todaySales"),
       value: money(business!.todaySalesKgs),
-      hint: t("todaySalesHint"),
+      hint: t("kpi.completedSales"),
       trend: comparison?.salesDeltaPercent,
     },
     {
       key: "receipts",
       label: tWorkspace("todayOrders"),
       value: number(business!.receiptsCount),
-      hint: tWorkspace("todayOrdersHint"),
+      hint: t("kpi.completedOrders"),
       trend: comparison?.receiptsDeltaPercent,
     },
     {
       key: "average",
       label: t("averageReceipt"),
       value: business!.receiptsCount ? money(business!.averageReceiptKgs) : tCommon("notAvailable"),
-      hint: t("averageReceiptHint"),
+      hint: t("kpi.todayAverage"),
       trend: comparison?.averageReceiptDeltaPercent,
     },
     {
@@ -255,9 +267,9 @@ export default function DashboardPage() {
       value:
         business!.grossProfitKgs === null ? t("notCalculated") : money(business!.grossProfitKgs),
       hint: !business!.receiptsCount
-        ? tWorkspace("noProfitYet")
+        ? t("kpi.afterFirstSale")
         : business!.grossMarginPercent === null
-          ? t("grossProfitMissingCostHint")
+          ? t("kpi.missingCost")
           : t("grossMargin", {
               value: formatNumber(business!.grossMarginPercent, locale, {
                 maximumFractionDigits: 1,
@@ -351,12 +363,12 @@ export default function DashboardPage() {
             href={reportHref()}
             data-dashboard-kpi={kpi.key}
             className={cn(
-              "group min-w-0 rounded-lg border border-border bg-card p-4 text-foreground transition-colors hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:p-5",
+              "group flex min-w-0 flex-col rounded-lg border border-border bg-card p-3 text-foreground transition-colors hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:p-5",
               index === 0 && "border-primary/30",
             )}
           >
-            <div className="flex items-start justify-between gap-2">
-              <h2 className="min-w-0 break-words text-sm font-medium text-muted-foreground">
+            <div className="flex min-h-10 items-start justify-between gap-2 sm:min-h-0">
+              <h2 className="min-w-0 break-words text-sm font-medium leading-5 text-muted-foreground">
                 {kpi.label}
               </h2>
               <ChevronRightIcon
@@ -364,12 +376,12 @@ export default function DashboardPage() {
                 aria-hidden
               />
             </div>
-            <p className="mt-3 break-words text-xl font-semibold tabular-nums leading-tight tracking-tight [font-size:clamp(1.125rem,3cqi,1.75rem)]">
-              {kpi.value}
+            <p className="mt-2 break-normal text-lg font-semibold tabular-nums leading-snug tracking-tight sm:mt-3 sm:text-2xl">
+              {renderKpiValue(kpi.value)}
             </p>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">{kpi.hint}</p>
+            <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{kpi.hint}</p>
             {kpi.trend !== null && kpi.trend !== undefined ? (
-              <div className="mt-2">{renderTrendBadge(kpi.trend)}</div>
+              <div className="mt-auto pt-2">{renderTrendBadge(kpi.trend)}</div>
             ) : null}
           </Link>
         ))}

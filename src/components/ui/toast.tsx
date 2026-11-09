@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CloseIcon, StatusDangerIcon, StatusSuccessIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { isTranslatedFeatureLock } from "@/lib/billing/featureLocks";
+import { SubscriptionFeatureToastAction } from "@/components/billing/subscription-feature-lock";
 
 type ToastVariant = "success" | "error" | "info";
 
@@ -51,6 +53,7 @@ const generateId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${M
 
 export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
   const pathname = usePathname();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef(new Map<string, number>());
@@ -143,6 +146,8 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                         {toast.actionLabel}
                       </Link>
                     </div>
+                  ) : isTranslatedFeatureLock(toast.description, tErrors) ? (
+                    <div className="es-toast__body"><SubscriptionFeatureToastAction /></div>
                   ) : null}
                 </div>
                 <Tooltip>

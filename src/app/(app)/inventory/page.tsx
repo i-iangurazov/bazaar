@@ -23,6 +23,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { commonListFields, useScopedListState } from "@/lib/useScopedListState";
 import { ListViewOptions, ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
+import { SubscriptionFeatureAvailability } from "@/components/billing/subscription-feature-lock";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
 import { HelpLink } from "@/components/help-link";
 import { SavedTableViews } from "@/components/saved-table-views";
@@ -2376,6 +2377,10 @@ const InventoryPage = () => {
         </p>
       ) : null}
 
+      {canManage && billing.data ? <SubscriptionFeatureAvailability
+        features={["replenishment", "expiryLots", "assortments"]}
+        flags={billing.data.featureFlags} featurePlans={billing.data.featurePlans}
+        currentPlan={billing.data.plan} canManage={isAdmin} isTrial={Boolean(billing.data.trialOffer)} /> : null}
       {trackExpiryLots && canExpiryLots ? (
         <Card className="mb-6">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

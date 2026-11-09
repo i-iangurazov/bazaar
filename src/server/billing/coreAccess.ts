@@ -28,7 +28,7 @@ export async function assertReadableFeature(
   )
     throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   if (!org.entitlements.features[feature])
-    throw new AppError(getFeatureLockedErrorKey(feature), "FORBIDDEN", 403);
+    throw new AppError(getFeatureLockedErrorKey(feature), "FORBIDDEN", 403, { feature });
   return org;
 }
 

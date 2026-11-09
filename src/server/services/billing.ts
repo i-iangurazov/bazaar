@@ -1,6 +1,6 @@
 import { OrganizationSubscriptionStatus, PlanUpgradeRequestStatus } from "@prisma/client";
 import type { OrganizationPlan } from "@prisma/client";
-import { getPlanRank } from "@/lib/billing/plans";
+import { getPlanRank, PLAN_CODES, PLAN_FEATURE_CODES } from "@/lib/billing/plans";
 
 import { prisma } from "@/server/db/prisma";
 import { writeAuditLog } from "@/server/services/audit";
@@ -104,6 +104,7 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     trialExpired,
     subscriptionActive: accessState.subscriptionActive,
     trialActive: accessState.trialActive,
+    trialOffer: org.trialOffer,
     hasAccess: accessState.hasAccess,
     inGrace: accessState.inGrace,
     graceEndsAt: accessState.graceEndsAt,
@@ -146,6 +147,11 @@ export const getBillingFeatureSummary = async (input: { organizationId: string }
     selectedMarketplaceChannel: effective.subscriptionContract?.selectedMarketplaceChannel ?? null,
     features: Object.entries(effective.entitlements.features).filter(([,enabled]) => enabled).map(([feature]) => feature),
     featureFlags: effective.entitlements.features,
+    featurePlans: Object.fromEntries(PLAN_FEATURE_CODES.map(feature =>
+      [feature, PLAN_CODES.filter(plan => effective.contractTerms.plans[plan].features[feature])])),
+    trialOffer: effective.trialOffer,
+    trialEndsAt: effective.trialEndsAt,
+    trialActive: resolveOrganizationAccessState(effective).trialActive,
     access: resolveOrganizationAccessState(effective),
   };
 };
@@ -160,11 +166,14 @@ export const requestPlanUpgrade = async (input: {
   prisma.$transaction(async (tx) => {
     const org = await tx.organization.findUnique({
       where: { id: input.organizationId },
-      select: { id: true, plan: true },
+      select: { id: true, plan: true, subscriptionBillingMode: true },
     });
     if (!org) {
       throw new AppError("orgNotFound", "NOT_FOUND", 404);
     }
+
+    if (org.subscriptionBillingMode === "SELF_SERVE")
+      throw new AppError("billingSelfServeRequired", "CONFLICT", 409);
 
     const currentTier = toPlanTier(org.plan);
     const requestedTier = toPlanTier(input.requestedPlan);
