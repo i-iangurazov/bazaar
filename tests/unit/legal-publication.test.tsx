@@ -172,10 +172,12 @@ describe("live checkout must bind to the real published offer", () => {
   });
   it.each([
     { BILLING_LEGAL_RELEASE_APPROVED: "" },
+    { BILLING_LEGAL_RELEASE_APPROVED: "2026-11-10-v1" },
     { BILLING_SUPPORT_EMAIL_VERIFIED: "" },
     { BILLING_PUBLIC_CONTACT_ADDRESS: "" },
     { BILLING_LIVE_ACTIVATION_CONFIRMED: "" },
     { BILLING_TERMS_VERSION: "old-version" },
+    { BILLING_TERMS_VERSION: "2026-11-10-v1" },
     { BILLING_SELLER_NAME: "Another seller" },
     { BILLING_TERMS_URL: "https://evil.example/legal/offer" },
     { BILLING_TERMS_URL: "https://bazaar.kg/terms" },

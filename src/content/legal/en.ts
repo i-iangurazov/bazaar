@@ -5,12 +5,12 @@ export const enLegal: LegalCopy = {
   navigation: "Bazaar documents",
   contents: "On this page",
   draft: "Draft · local preview only",
-  published: "Version dated 10 November 2026",
+  published: "Version dated 11 November 2026",
   paymentSystemsTitle: "Payment methods",
   paymentSystemsNotice:
     "Available payment methods and restrictions are shown on the provider page opened from your Bazaar invoice. Owning a card or bank app does not guarantee support for a particular method.",
   draftNotice:
-    "Draft for review. Entrepreneur and Bakai KGS account details are prepared, and the support mailbox is verified. Public address, refund and receipt requirements are being clarified with GoPay. This is unpublished and is not an effective offer. Viewing this page does not enable payments.",
+    "Draft for review. Current entrepreneur and Bakai KGS account details and the building address, excluding floor and apartment details, are prepared; the support mailbox is verified. Until separately approved, this text is available only in the local preview, remains unpublished and is not an effective offer. Viewing this page does not enable payments.",
   missing: "To be completed from the entrepreneur's documents",
   sellerTitle: "Service provider details",
   sellerIntro:
@@ -147,7 +147,7 @@ export const enLegal: LegalCopy = {
           id: "review",
           title: "4. Review and timing",
           paragraphs: [
-            "The provider reviews the request within 10 business days of receipt: checks the invoice, provider status and access supplied, and communicates the result and justification of the amount. Following a refund decision, the provider submits the operation to the payment provider within 3 business days. Any shorter statutory review or refund deadline takes precedence. Requests for further information do not automatically extend mandatory deadlines.",
+            "The provider reviews the request within 3 business days of receipt: checks the invoice, provider status and access supplied, and communicates the result and justification of the amount. Following approval of a refund, the provider submits the operation to GoPay or the servicing bank within 2 business days. Any shorter statutory review or refund deadline takes precedence. Requests for further information do not automatically extend mandatory deadlines.",
             "The time for funds to reach the account after a refund is processed depends on the payment provider and the payer's bank. The provider supplies confirmation once the refund is processed. If funds do not arrive, contact your bank with that confirmation and inform the provider.",
           ],
         },

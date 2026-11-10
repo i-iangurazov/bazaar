@@ -1,0 +1,45 @@
+{
+  "recordType": "owner-approved-pre-publication-check",
+  "termsVersion": "2026-11-11-v1",
+  "locales": ["ru", "kg", "en"],
+  "ownerDecision": {
+    "refundReviewBusinessDays": 3,
+    "approvedRefundSubmissionBusinessDays": 2,
+    "bankArrivalTimingSeparate": true,
+    "shorterMandatoryLawPrevails": true,
+    "publicBuildingAddressAuthorized": true,
+    "floorAndApartmentsExcluded": true,
+    "earlierFiveDayChoiceSupersededBeforePublication": true
+  },
+  "publication": {
+    "sellerDataLocation": "Private server environment only",
+    "sellerDefaultsContainPersonalData": false,
+    "registeredAddressAutomaticallyLoaded": false,
+    "currency": "KGS",
+    "bank": "Bakai",
+    "oldReleaseApprovalAcceptedForNewTerms": false,
+    "checkoutEnabledByLegalApprovalAlone": false,
+    "firstLiveCheckoutScope": "Separate own organization; protected friends remain excluded"
+  },
+  "localChecks": {
+    "unitAndRenderedComponentTestsPassed": 169,
+    "typecheck": "passed",
+    "lint": "passed",
+    "translations": "passed",
+    "formatAndDiff": "passed",
+    "privateActualSellerPreviews": 12,
+    "ciAndProductionVerification": "Required for the exact release commit after this record"
+  },
+  "remainingAcceptance": [
+    "Genuine own-organization bank payment and settlement",
+    "Executable paid full/partial refund process and confirmation",
+    "Buyer tax-document process; IS ESF access not yet confirmed",
+    "General rollout only after the own-organization pilot"
+  ],
+  "notPromised": [
+    "Automatic GoPay refund API",
+    "Automatic fiscalization or IS ESF issuance",
+    "Bank refund arrival within two business days",
+    "Completed real bank pilot"
+  ]
+}
