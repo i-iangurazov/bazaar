@@ -1,9 +1,9 @@
-WHATSAPP AI — OPERATOR RUNBOOK (2026-11-07)
+WHATSAPP AI — OPERATOR RUNBOOK (updated 2026-11-11)
 
 Status and scope
 ---------------
 The application implementation is gated OFF by default. A passing mock protocol
-suite is not a real Gupshup/Meta/FreedomPay pilot. Do not enable customer sending
+suite is not a real Gupshup/Meta/GoPay pilot. Do not enable customer sending
 or paid packs until the external prerequisites and the pilot below are complete.
 No customer stock, financial documents, existing subscription contracts or
 lifetime grants are rewritten by this module.
@@ -16,8 +16,8 @@ share this balance. Existing explicit lifetime grants remain effective.
 Unpaid self-service trials, expired subscriptions and STARTER cannot send.
 Read history, stop, human takeover, archive and local erasure remain available.
 
-Extra pack: 1,000 messages / 3,490 KGS. One-time FreedomPay payment; no recurring
-card debit. Up to 10 packs per checkout. Included units are reserved first, then
+Extra pack: 1,000 messages / 3,490 KGS. One-time GoPay payment; no recurring
+automatic debit. Up to 10 packs per checkout. Included units are reserved first, then
 paid lots by earliest expiry. Paid lots expire 12 months after verified payment,
 not at monthly renewal. A delivery belongs to the send reservation's month.
 A technical retry or repeated receipt does not debit another unit. Manual API
@@ -25,6 +25,11 @@ replies from Bazaar also count; messages typed directly in WhatsApp Business
 are recorded as staff echoes and do not consume Bazaar reply credit.
 Never change a sold offer entry in src/lib/whatsapp-ai.ts. Add a new version;
 old pending invoices must retain their original amount and units.
+All new Bazaar service purchases use GoPay. Historical FreedomPay invoices keep
+their recorded provider and reconciliation; missing GoPay configuration never
+switches a new checkout to FreedomPay. See docs/gopay-billing.md for the current
+payment setup, event handling and shutdown procedure. The historical verification
+report from 2026-11-07 is not evidence of a completed GoPay or WhatsApp pilot.
 
 Supported launch flow: KG recipients (+996), 24-hour service window, text and
 normalized customer images. Other countries, voice notes, documents, video,
@@ -106,7 +111,8 @@ Before enabling
    checksPass needs a linked Git provider. A public repository URL alone does
    not establish automatic deploys: verify GitHub linking before calling this
    continuous delivery. A running inactive worker is not a completed live pilot.
-5. Obtain the FreedomPay test merchant. Approve/publicize pack terms, validity,
+5. Use a separate GoPay Test merchant/key pair in isolated non-production data.
+   Approve/publicize pack terms, validity,
    refund handling and seller details before live collection. Existing legal
    publication checks also apply. Initial payment integration has no recurring
    automatic debit. Never enable a test merchant in Vercel Production.
@@ -160,8 +166,12 @@ Real-number pilot (required; not substituted by automated tests)
   data. Simulate a connection timeout and worker restart; no automatic resend.
 - Quota exhaustion, staff reply accounting, monthly boundary, purchased lots,
   provider wallet depletion and the provider-enforced incoming spend cap.
-- A real sandbox FreedomPay payment, rejected payment, duplicate callback,
-  delayed server callback and refund. Redirect alone must grant nothing.
+- A real GoPay Test payment, rejected payment, duplicate callback and delayed
+  server callback in an isolated environment. Redirect alone must grant nothing.
+  Before Live pack collection, verify the agreed own-organization bank pilot,
+  settlement and an executable manual refund procedure. Canceling an unpaid
+  GoPay invoice is not a refund of a committed payment; the current adapter does
+  not provide a paid-refund API. Never report a refund based only on a fixture.
 - Verify the number's BSUID-country payload before enabling phone-less customers.
 - Verify actual media download URL/auth behavior and the provider's download rate
   limits; do not claim the fixture tests establish those merchant capabilities.

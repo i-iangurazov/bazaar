@@ -47,6 +47,7 @@ type BillingModalState = {
   trialDays: number;
   currentPeriodDays: number;
   subscriptionBillingMode: "MANUAL" | "SELF_SERVE";
+  canEnableSelfServe: boolean;
 };
 
 const normalizePlanForEditor = (plan: string): BillingModalState["plan"] => {
@@ -458,6 +459,9 @@ const PlatformPage = () => {
                               plan: normalizePlanForEditor(org.plan),
                               subscriptionStatus: org.subscriptionStatus,
                               subscriptionBillingMode: org.subscriptionBillingMode,
+                              canEnableSelfServe:
+                                org.subscriptionBillingMode === "SELF_SERVE" ||
+                                org.canEnableSelfServe,
                               trialDays: TRIAL_DAYS,
                               currentPeriodDays: 30,
                             })
@@ -531,7 +535,7 @@ const PlatformPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MANUAL">{t("billingModeManual")}</SelectItem>
-                  <SelectItem value="SELF_SERVE" disabled={!summaryQuery.data?.paymentsAvailable}>
+                  <SelectItem value="SELF_SERVE" disabled={!billingModal.canEnableSelfServe}>
                     {t("billingModeSelfServe")}
                   </SelectItem>
                 </SelectContent>

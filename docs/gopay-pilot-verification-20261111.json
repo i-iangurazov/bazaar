@@ -1,0 +1,76 @@
+{
+  "recordType": "pre-release-verification",
+  "date": "2026-11-11",
+  "baselineCommit": "7244a8427e5de71609aee1007b138a06e8c8515d",
+  "goalComplete": false,
+  "scope": [
+    "Restrict new GoPay Live purchases to one own organization during the first pilot",
+    "Keep existing subscription and WhatsApp invoices resumable and reconcilable outside that scope",
+    "Use the target organization's capability in platform billing controls",
+    "Correct English platform tariff names to match the billing page"
+  ],
+  "newSetting": {
+    "name": "BILLING_LIVE_PILOT_ORGANIZATION_ID",
+    "serverOnly": true,
+    "exactOrganizationIdRequired": true,
+    "invalidNonemptyValue": "New Live checkout closed",
+    "emptyOrAbsentValue": "Existing general rollout rules; not an emergency stop",
+    "bypassesLegalOrMerchantReadiness": false,
+    "bypassesLifetimeOrWhatsAppReadiness": false,
+    "productionValueChangedDuringLocalVerification": false
+  },
+  "verification": {
+    "node": "22.23.4",
+    "unitAndRenderedComponentTests": { "passed": 167, "failed": 0, "skipped": 0 },
+    "isolatedDatabaseTests": { "passed": 114, "failed": 0, "skipped": 0 },
+    "database": "Explicit disposable loopback PostgreSQL, stopped and removed after checks",
+    "providerTransport": "Independent synthetic GoPay protocol fixture; no real API calls",
+    "typecheck": "passed",
+    "lint": "passed",
+    "translationValidation": "passed",
+    "formatAndDiffCheck": "passed",
+    "independentCodeReview": "No blocking findings; additional callback-first and lifetime-contract regressions added",
+    "visual": {
+      "source": "Actual PlatformPage and shared UI/CSS, synthetic auth and query data, saving disabled",
+      "locales": ["ru", "kg", "en"],
+      "viewports": ["1440x1000", "390x844"],
+      "themes": ["light", "dark"],
+      "checked": [
+        "Pilot self-service option available",
+        "Other organization self-service option disabled",
+        "Existing self-service selection retained",
+        "Mobile footer reachable by scrolling",
+        "English Starter, Business and Enterprise labels restored"
+      ],
+      "evidenceDirectory": ".local/qa/gopay-pilot-20261111/visual/",
+      "doesNotProveBankPayment": true
+    },
+    "productionBuild": "Required in CI before deployment; not rerun locally to limit Mac load",
+    "ciForThisChange": "Pending at creation of this pre-release record"
+  },
+  "coverage": [
+    "New invoice rejected before persistence/provider call outside pilot",
+    "Matching prior idempotency key resumes the original invoice; new key remains rejected",
+    "Callback-first, reconciliation-first and repeated delivery grant exactly once",
+    "Platform operator organization differs from the permitted target",
+    "Both protected friend IDs and a separate lifetime contract remain protected",
+    "Seven-day trial, old contracts, renewals and paid-tail regression suites remain green"
+  ],
+  "notCompletedByThisRecord": [
+    "Publication of final legal pages without the owner's residential address",
+    "Confirmed seller-specific fees, settlement and executable full/partial refunds",
+    "Confirmed tax document process and existing IS ESF access",
+    "Agreed genuine own-organization Live bank payment, settlement and refund",
+    "General opening of Live checkout or WhatsApp package sales"
+  ],
+  "ownerFacts": {
+    "taxRegime": "Unified tax",
+    "provisionalCashlessRatePercent": 2,
+    "provisionalCashRatePercent": 4,
+    "saasTaxClassificationConfirmed": false,
+    "alternativeActivityAddressAvailable": false,
+    "residentialAddressPublicationAllowed": false,
+    "isEsfAccessConfirmed": false
+  },
+  "acceptanceClarification": "Thirteen provider questions are not thirteen mandatory email replies. Existing accepted terms may establish facts; real banking evidence and lawful seller/buyer documents remain necessary."
+}

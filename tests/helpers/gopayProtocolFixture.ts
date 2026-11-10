@@ -23,7 +23,7 @@ export function fixtureGoPaySignature(secret: string, nonce: string, rawBody: st
   return createHmac("sha512", secret).update(`${nonce}\n${rawBody}\n`).digest("hex").toUpperCase();
 }
 
-export function goPayProtocolFixture() {
+export function goPayProtocolFixture({ isTest = true }: { isTest?: boolean } = {}) {
   const payments = new Map<string, GoPayFixturePayment>();
   const nonces = new Set<string>();
   let initializationResponseLost = false;
@@ -65,7 +65,7 @@ export function goPayProtocolFixture() {
         order_id: String(body.order_id),
         amount: String(body.amount),
         status: "CREATED",
-        testing_mode: true,
+        testing_mode: isTest,
         checkout_url: `https://pay.gopay.kg/p/${paymentId}/`,
         created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),

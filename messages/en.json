@@ -922,15 +922,15 @@
     "billingSaved": "Subscription settings updated.",
     "plans": {
       "starter": {
-        "name": "Name",
+        "name": "Starter",
         "short": "Short"
       },
       "business": {
-        "name": "Name",
+        "name": "Business",
         "short": "Short"
       },
       "enterprise": {
-        "name": "Name",
+        "name": "Enterprise",
         "short": "Short"
       },
       "trial": "Trial",

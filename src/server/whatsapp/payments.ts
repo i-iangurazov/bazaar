@@ -3,6 +3,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import {
+  canCreateBillingCheckout,
   getGoPayCredentials,
   getSubscriptionPaymentConfig,
   paymentOrderId,
@@ -76,7 +77,10 @@ export async function whatsAppPaymentState(actor: WhatsAppActor) {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
   return {
-    ready: payment.ready && config.salesReady && config.paymentsApproved,
+    ready:
+      canCreateBillingCheckout(actor.organizationId) &&
+      config.salesReady &&
+      config.paymentsApproved,
     mode: payment.mode,
     provider: payment.provider,
     termsVersion: payment.termsVersion,
@@ -129,6 +133,8 @@ export async function createWhatsAppCheckout(
         throw new AppError("billingPaymentMismatch", "CONFLICT", 409);
       return { invoice: existing, created: false };
     }
+    if (!canCreateBillingCheckout(actor.organizationId))
+      throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
     const pending = await tx.whatsAppInvoice.findFirst({
       where: { organizationId: actor.organizationId, pendingSlot: actor.organizationId },
     });

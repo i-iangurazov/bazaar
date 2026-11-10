@@ -5,7 +5,12 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { contractPlan } from "./contractTerms";
-import { getGoPayCredentials, getSubscriptionPaymentConfig, paymentOrderId } from "./paymentConfig";
+import {
+  canCreateBillingCheckout,
+  getGoPayCredentials,
+  getSubscriptionPaymentConfig,
+  paymentOrderId,
+} from "./paymentConfig";
 import { initializeGoPay, getGoPayStatus } from "./gopay";
 import { subscriptionPaymentDescription } from "./checkoutDescription";
 import {
@@ -67,6 +72,7 @@ export const presentInvoice = (
 
 export const getSubscriptionPaymentState = async (organizationId: string) => {
   const config = getSubscriptionPaymentConfig();
+  const checkoutAvailable = canCreateBillingCheckout(organizationId);
   const now = new Date();
   const [organization, pending, lastPeriod, nextPeriod] = await Promise.all([
     getOrganizationPlan(organizationId),
@@ -84,7 +90,7 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
   const nextPurchase = readPurchaseSnapshot(nextPeriod?.purchaseSnapshot);
   return {
     provider: config.provider,
-    available: config.ready,
+    available: checkoutAvailable,
     mode: config.mode,
     sellerName: config.sellerName,
     termsUrl: config.termsUrl,
@@ -111,7 +117,7 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
     paidUntil: organization.currentPeriodEndsAt,
     accountPaused: organization.subscriptionStatus === "CANCELED",
     canPurchase:
-      config.ready &&
+      checkoutAvailable &&
       organization.subscriptionBillingMode === "SELF_SERVE" &&
       !organization.lifetimeAccess &&
       organization.subscriptionStatus !== "CANCELED" &&
@@ -203,6 +209,8 @@ export const createSubscriptionCheckout = async (input: {
         throw new AppError("idempotencyConflict", "CONFLICT", 409);
       return { value: prior, initialize: false };
     }
+    if (!canCreateBillingCheckout(org.id))
+      throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
     const pending = await tx.subscriptionInvoice.findFirst({
       where: { organizationId: org.id, OR: [{ pendingSlot: org.id }, { status: "REVIEW" }] },
     });

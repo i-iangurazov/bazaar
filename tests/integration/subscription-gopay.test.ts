@@ -10,15 +10,18 @@ import {
 import { handleFreedomPayNotification } from "@/server/billing/paymentWebhook";
 import { handleGoPayNotification } from "@/server/billing/goPayWebhook";
 import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
+import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 import { prisma } from "@/server/db/prisma";
 import { getOrganizationPlan } from "@/server/services/planLimits";
 import {
   checkWhatsAppPayment,
   createWhatsAppCheckout,
   reconcileWhatsAppPayments,
+  whatsAppPaymentState,
 } from "@/server/whatsapp/payments";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { syntheticSeller, syntheticSellerEnvironment } from "../helpers/legalSeller";
 import {
   GOPAY_FIXTURE_API_KEY,
   GOPAY_FIXTURE_API_SECRET,
@@ -34,6 +37,7 @@ describeDb("GoPay checkout, settlement and provider isolation with real PostgreS
   let fixture: ReturnType<typeof goPayProtocolFixture>;
   let f: Awaited<ReturnType<typeof seedBase>>;
   let caller: ReturnType<typeof createTestCaller>;
+  let termsVersion: string;
 
   const purchase = async (
     plan: "STARTER" | "BUSINESS" | "ENTERPRISE" = "STARTER",
@@ -50,7 +54,7 @@ describeDb("GoPay checkout, settlement and provider isolation with real PostgreS
       action,
       quoteToken: quote.quoteToken,
       expectedAmountMinor: quote.amountMinor,
-      termsVersion: "gopay-qa-v1",
+      termsVersion,
       acceptedTerms: true as const,
       locale: "ru" as const,
       idempotencyKey,
@@ -114,7 +118,7 @@ describeDb("GoPay checkout, settlement and provider isolation with real PostgreS
         quantity,
         offerVersion: WHATSAPP_OFFER_VERSION,
         termsAccepted: true,
-        termsVersion: "gopay-qa-v1",
+        termsVersion,
         expectedAmountMinor: quantity * 349_000,
         idempotencyKey: randomUUID(),
         locale: "ru",
@@ -122,8 +126,31 @@ describeDb("GoPay checkout, settlement and provider isolation with real PostgreS
     };
   };
 
+  const enableLivePilot = (organizationId: string) => {
+    termsVersion = LEGAL_TERMS_VERSION;
+    for (const [key, value] of Object.entries({
+      ...syntheticSellerEnvironment,
+      BILLING_PAYMENTS_MODE: "live",
+      BILLING_LIVE_ACTIVATION_CONFIRMED: "1",
+      BILLING_LIVE_PILOT_ORGANIZATION_ID: organizationId,
+      BILLING_PUBLIC_URL: "https://bazaar.kg",
+      BILLING_TERMS_URL: "https://bazaar.kg/legal/offer",
+      BILLING_TERMS_VERSION: termsVersion,
+      BILLING_SELLER_NAME: syntheticSeller.legalName!,
+      BILLING_LEGAL_RELEASE_APPROVED: LEGAL_TERMS_VERSION,
+      BILLING_SUPPORT_EMAIL_VERIFIED: "1",
+      BILLING_PUBLIC_CONTACT_ADDRESS: "Кыргызстан, Бишкек, синтетический адрес для обращений 1",
+      VERCEL_ENV: "production",
+    }))
+      vi.stubEnv(key, value);
+    // Only the independent fixture changes mode. All provider traffic remains intercepted.
+    fixture = goPayProtocolFixture({ isTest: false });
+    vi.stubGlobal("fetch", fixture.transport);
+  };
+
   beforeEach(async () => {
     await resetDatabase();
+    termsVersion = "gopay-qa-v1";
     for (const [key, value] of Object.entries({
       BILLING_PAYMENT_PROVIDER: "gopay",
       BILLING_PAYMENTS_MODE: "sandbox",
@@ -136,6 +163,7 @@ describeDb("GoPay checkout, settlement and provider isolation with real PostgreS
       BILLING_TERMS_URL: "http://localhost:3120/terms",
       BILLING_TERMS_VERSION: "gopay-qa-v1",
       BILLING_SELLER_NAME: "Synthetic GoPay seller",
+      BILLING_LIVE_PILOT_ORGANIZATION_ID: "",
       HARDENING_EXTERNAL_PROVIDER_MODE: "sandbox",
       VERCEL_ENV: "development",
     }))
@@ -164,6 +192,331 @@ describeDb("GoPay checkout, settlement and provider isolation with real PostgreS
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+  });
+
+  it("refuses a non-pilot subscription before creating an invoice or contacting GoPay", async () => {
+    const pilot = await prisma.organization.create({ data: { name: "Synthetic own Live pilot" } });
+    enableLivePilot(pilot.id);
+    const before = await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } });
+    expect(await caller.billing.payments.get()).toMatchObject({
+      available: false,
+      canPurchase: false,
+    });
+    await expect(purchase()).rejects.toThrow("billingPaymentsUnavailable");
+    expect(await prisma.subscriptionInvoice.count()).toBe(0);
+    expect(await prisma.subscriptionPeriod.count()).toBe(0);
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).toEqual(
+      before,
+    );
+    expect(fixture.transport).not.toHaveBeenCalled();
+  });
+
+  it("allows a correctly configured Live pilot and grants its paid period exactly once", async () => {
+    enableLivePilot(f.org.id);
+    expect(await caller.billing.payments.get()).toMatchObject({
+      available: true,
+      canPurchase: true,
+    });
+    const { invoice } = await purchase();
+    expect(invoice).toMatchObject({
+      provider: "GOPAY",
+      status: "PENDING",
+      isTest: false,
+      amountMinor: 200_000,
+    });
+    const payment = fixture.commit(onlyPayment());
+    for (const response of await Promise.all(
+      [1, 2, 3].map(() => handleGoPayNotification(fixture.notification(payment))),
+    )) {
+      expect(response.status).toBe(200);
+    }
+    expect(await prisma.subscriptionPeriod.count({ where: { invoiceId: invoice.id } })).toBe(1);
+    expect(
+      await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } }),
+    ).toMatchObject({ status: "PAID", isTest: false });
+  });
+
+  it("reconciles a non-pilot Live invoice after restriction without losing history or granting twice", async () => {
+    enableLivePilot("");
+    const { invoice, request } = await purchase();
+    const payment = fixture.commit(onlyPayment());
+    const pilot = await prisma.organization.create({ data: { name: "New own Live pilot" } });
+    vi.stubEnv("BILLING_LIVE_PILOT_ORGANIZATION_ID", pilot.id);
+    expect(await caller.billing.payments.get()).toMatchObject({
+      available: false,
+      canPurchase: false,
+      pendingInvoice: { id: invoice.id },
+    });
+    expect((await caller.billing.payments.invoices({})).items.map((row) => row.id)).toEqual([
+      invoice.id,
+    ]);
+    expect(await caller.billing.payments.checkout(request)).toMatchObject({
+      id: invoice.id,
+      status: "PENDING",
+      checkoutUrl: invoice.checkoutUrl,
+    });
+    const callsBeforeNewCheckout = fixture.transport.mock.calls.length;
+    await expect(
+      caller.billing.payments.checkout({ ...request, idempotencyKey: randomUUID() }),
+    ).rejects.toThrow("billingPaymentsUnavailable");
+    expect(await prisma.subscriptionInvoice.count()).toBe(1);
+    expect(fixture.transport).toHaveBeenCalledTimes(callsBeforeNewCheckout);
+    expect(fixture.payments.size).toBe(1);
+    await readyToCheck(invoice.id);
+    expect((await caller.billing.payments.check({ invoiceId: invoice.id })).status).toBe("PAID");
+    expect((await handleGoPayNotification(fixture.notification(payment))).status).toBe(200);
+    await readyToCheck(invoice.id);
+    expect((await caller.billing.payments.check({ invoiceId: invoice.id })).status).toBe("PAID");
+    expect(await prisma.subscriptionPeriod.count({ where: { invoiceId: invoice.id } })).toBe(1);
+    expect(await prisma.subscriptionInvoice.count()).toBe(1);
+  });
+
+  it("accepts a Live callback first after the customer is excluded from the pilot and grants once", async () => {
+    enableLivePilot("");
+    const { invoice } = await purchase();
+    const payment = fixture.commit(onlyPayment());
+    const pilot = await prisma.organization.create({ data: { name: "Different Live pilot" } });
+    vi.stubEnv("BILLING_LIVE_PILOT_ORGANIZATION_ID", pilot.id);
+    expect(await caller.billing.payments.get()).toMatchObject({
+      available: false,
+      canPurchase: false,
+    });
+    expect(await prisma.subscriptionPeriod.count({ where: { invoiceId: invoice.id } })).toBe(0);
+    expect((await handleGoPayNotification(fixture.notification(payment))).status).toBe(200);
+    const granted = await prisma.subscriptionPeriod.findUniqueOrThrow({
+      where: { invoiceId: invoice.id },
+    });
+    expect(
+      await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } }),
+    ).toMatchObject({ status: "PAID", isTest: false });
+    expect((await handleGoPayNotification(fixture.notification(payment))).status).toBe(200);
+    await readyToCheck(invoice.id);
+    expect((await caller.billing.payments.check({ invoiceId: invoice.id })).status).toBe("PAID");
+    expect(
+      await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { invoiceId: invoice.id } }),
+    ).toEqual(granted);
+    expect(await prisma.subscriptionPeriod.count({ where: { organizationId: f.org.id } })).toBe(1);
+    expect(
+      (await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } }))
+        .currentPeriodEndsAt,
+    ).toEqual(granted.endsAt);
+    expect(await prisma.subscriptionInvoice.count()).toBe(1);
+    expect(fixture.payments.size).toBe(1);
+  });
+
+  it("refuses new WhatsApp invoices outside the Live pilot without changing their balances", async () => {
+    const pilot = await prisma.organization.create({ data: { name: "Synthetic Live pilot" } });
+    enableLivePilot(pilot.id);
+    const { actor, input } = await prepareWhatsApp();
+    const before = await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } });
+    expect(await whatsAppPaymentState(actor)).toMatchObject({ ready: false, invoices: [] });
+    await expect(createWhatsAppCheckout(actor, f.store.id, input, "qa")).rejects.toThrow(
+      "billingPaymentsUnavailable",
+    );
+    expect(await prisma.whatsAppInvoice.count()).toBe(0);
+    expect(await prisma.whatsAppCreditLot.count()).toBe(0);
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).toEqual(
+      before,
+    );
+    expect(fixture.transport).not.toHaveBeenCalled();
+  });
+
+  it("keeps WhatsApp approval guards even for the allowed Live pilot", async () => {
+    enableLivePilot(f.org.id);
+    const { actor, input } = await prepareWhatsApp();
+    vi.stubEnv("WHATSAPP_PACK_PAYMENTS_APPROVED", "0");
+    expect((await whatsAppPaymentState(actor)).ready).toBe(false);
+    await expect(createWhatsAppCheckout(actor, f.store.id, input, "qa")).rejects.toThrow(
+      "billingPaymentsUnavailable",
+    );
+    expect(await prisma.whatsAppInvoice.count()).toBe(0);
+    expect(fixture.transport).not.toHaveBeenCalled();
+    vi.stubEnv("WHATSAPP_PACK_PAYMENTS_APPROVED", "1");
+    expect((await whatsAppPaymentState(actor)).ready).toBe(true);
+    const invoice = await createWhatsAppCheckout(actor, f.store.id, input, "qa");
+    expect(invoice).toMatchObject({ provider: "GOPAY", isTest: false, status: "PENDING" });
+    expect(
+      (await handleGoPayNotification(fixture.notification(fixture.commit(onlyPayment())))).status,
+    ).toBe(200);
+    expect(await prisma.whatsAppCreditLot.count()).toBe(1);
+    expect(await prisma.subscriptionPeriod.count()).toBe(0);
+  });
+
+  it("automatically reconciles a historical non-pilot WhatsApp invoice exactly once", async () => {
+    enableLivePilot("");
+    const { actor, input } = await prepareWhatsApp();
+    const invoice = await createWhatsAppCheckout(actor, f.store.id, input, "qa");
+    const payment = fixture.commit(onlyPayment());
+    const pilot = await prisma.organization.create({ data: { name: "Another Live pilot" } });
+    vi.stubEnv("BILLING_LIVE_PILOT_ORGANIZATION_ID", pilot.id);
+    expect(await whatsAppPaymentState(actor)).toMatchObject({
+      ready: false,
+      invoices: [{ id: invoice.id }],
+    });
+    expect(await createWhatsAppCheckout(actor, f.store.id, input, "qa")).toMatchObject({
+      id: invoice.id,
+      status: "PENDING",
+      checkoutUrl: invoice.checkoutUrl,
+    });
+    const callsBeforeNewCheckout = fixture.transport.mock.calls.length;
+    await expect(
+      createWhatsAppCheckout(actor, f.store.id, { ...input, idempotencyKey: randomUUID() }, "qa"),
+    ).rejects.toThrow("billingPaymentsUnavailable");
+    expect(await prisma.whatsAppInvoice.count()).toBe(1);
+    expect(fixture.transport).toHaveBeenCalledTimes(callsBeforeNewCheckout);
+    await prisma.whatsAppInvoice.update({
+      where: { id: invoice.id },
+      data: { nextCheckAt: new Date(0), processingUntil: null },
+    });
+    expect((await reconcileWhatsAppPayments()).details.failed).toBe(0);
+    expect((await handleGoPayNotification(fixture.notification(payment))).status).toBe(200);
+    expect(await prisma.whatsAppCreditLot.count()).toBe(1);
+    expect(await prisma.whatsAppInvoice.count()).toBe(1);
+    expect(await prisma.subscriptionPeriod.count()).toBe(0);
+  });
+
+  it("does not turn a protected lifetime friend into a paying Live pilot", async () => {
+    const id = [...LIFETIME_ORGANIZATION_IDS][0]!;
+    enableLivePilot(id);
+    const friend = await prisma.organization.create({
+      data: {
+        id,
+        name: "Synthetic protected friend",
+        plan: "ENTERPRISE",
+        subscriptionBillingMode: "MANUAL",
+        subscriptionContract: { create: { lifetimeAccess: true, catalogVersion: "2026-10" } },
+      },
+    });
+    const user = await prisma.user.create({
+      data: {
+        organizationId: id,
+        name: "Friend owner",
+        email: "synthetic-friend@example.invalid",
+        passwordHash: "hash",
+        role: "ADMIN",
+        isOrgOwner: true,
+      },
+    });
+    const customer = createTestCaller({ ...user, organizationId: id });
+    expect(await customer.billing.payments.get()).toMatchObject({
+      available: false,
+      canPurchase: false,
+      lifetimeAccess: true,
+    });
+    await expect(
+      customer.billing.payments.checkout({
+        plan: "ENTERPRISE",
+        months: 1,
+        extras: emptyExtras,
+        action: "RENEW",
+        idempotencyKey: randomUUID(),
+        termsVersion,
+        expectedAmountMinor: 550_000,
+        acceptedTerms: true,
+        locale: "ru",
+      }),
+    ).rejects.toThrow("billingLifetimeProtected");
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id } })).toEqual(friend);
+    expect(await prisma.subscriptionInvoice.count()).toBe(0);
+    expect(await prisma.subscriptionPeriod.count()).toBe(0);
+    expect(fixture.transport).not.toHaveBeenCalled();
+  });
+
+  it("checks a platform owner's target organization and preserves existing self-serve settings", async () => {
+    enableLivePilot(f.org.id);
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: { subscriptionBillingMode: "MANUAL" },
+    });
+    const other = await prisma.organization.create({
+      data: { name: "Non-pilot manual customer", subscriptionBillingMode: "MANUAL" },
+    });
+    const operatorUser = await prisma.user.create({
+      data: {
+        organizationId: other.id,
+        name: "Synthetic platform operator",
+        email: "synthetic-platform-operator@example.invalid",
+        passwordHash: "hash",
+        role: "ADMIN",
+      },
+    });
+    const operator = createTestCaller({
+      ...operatorUser,
+      organizationId: other.id,
+      isPlatformOwner: true,
+    });
+    const organizations = await operator.platformOwner.listOrganizations();
+    expect(organizations.find((row) => row.id === f.org.id)?.canEnableSelfServe).toBe(true);
+    expect(organizations.find((row) => row.id === other.id)?.canEnableSelfServe).toBe(false);
+    await expect(
+      operator.platformOwner.updateOrganizationBilling({
+        organizationId: other.id,
+        plan: "STARTER",
+        subscriptionStatus: "ACTIVE",
+        subscriptionBillingMode: "SELF_SERVE",
+      }),
+    ).rejects.toThrow("billingPaymentsUnavailable");
+    expect(
+      (await prisma.organization.findUniqueOrThrow({ where: { id: other.id } }))
+        .subscriptionBillingMode,
+    ).toBe("MANUAL");
+    await expect(
+      operator.platformOwner.updateOrganizationBilling({
+        organizationId: f.org.id,
+        plan: "STARTER",
+        subscriptionStatus: "ACTIVE",
+        subscriptionBillingMode: "SELF_SERVE",
+      }),
+    ).resolves.toMatchObject({ subscriptionBillingMode: "SELF_SERVE" });
+    await prisma.organization.update({
+      where: { id: other.id },
+      data: { subscriptionBillingMode: "SELF_SERVE" },
+    });
+    await expect(
+      operator.platformOwner.updateOrganizationBilling({
+        organizationId: other.id,
+        plan: "STARTER",
+        subscriptionStatus: "ACTIVE",
+        subscriptionBillingMode: "SELF_SERVE",
+      }),
+    ).resolves.toMatchObject({ subscriptionBillingMode: "SELF_SERVE" });
+    expect(await prisma.subscriptionInvoice.count()).toBe(0);
+    expect(fixture.transport).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unlisted lifetime contract protected when it is the platform owner's allowed target", async () => {
+    const lifetime = await prisma.organization.create({
+      data: {
+        name: "Synthetic separate lifetime contract",
+        subscriptionBillingMode: "MANUAL",
+        subscriptionContract: { create: { lifetimeAccess: true, catalogVersion: "2026-11" } },
+      },
+    });
+    expect(LIFETIME_ORGANIZATION_IDS.has(lifetime.id)).toBe(false);
+    enableLivePilot(lifetime.id);
+    const operator = createTestCaller({
+      ...f.adminUser,
+      organizationId: f.org.id,
+      isPlatformOwner: true,
+    });
+    expect(
+      (await operator.platformOwner.listOrganizations()).find((row) => row.id === lifetime.id)
+        ?.canEnableSelfServe,
+    ).toBe(false);
+    await expect(
+      operator.platformOwner.updateOrganizationBilling({
+        organizationId: lifetime.id,
+        plan: "STARTER",
+        subscriptionStatus: "ACTIVE",
+        subscriptionBillingMode: "SELF_SERVE",
+      }),
+    ).rejects.toThrow("billingLifetimeProtected");
+    expect(await prisma.organization.findUniqueOrThrow({ where: { id: lifetime.id } })).toEqual(
+      lifetime,
+    );
+    expect(await prisma.subscriptionInvoice.count()).toBe(0);
+    expect(await prisma.subscriptionPeriod.count()).toBe(0);
+    expect(fixture.transport).not.toHaveBeenCalled();
   });
 
   it.each([

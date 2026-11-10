@@ -12,7 +12,10 @@ import {
   listPendingPlanUpgradeRequests,
   reviewPlanUpgradeRequest,
 } from "@/server/services/billing";
-import { getSubscriptionPaymentConfig } from "@/server/billing/paymentConfig";
+import {
+  canCreateBillingCheckout,
+  getSubscriptionPaymentConfig,
+} from "@/server/billing/paymentConfig";
 import {
   checkSubscriptionInvoice,
   listSubscriptionPaymentReviews,
@@ -120,7 +123,7 @@ export const platformOwnerRouter = router({
     ),
 
   listOrganizations: platformOwnerProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.organization.findMany({
+    const organizations = await ctx.prisma.organization.findMany({
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -132,6 +135,7 @@ export const platformOwnerRouter = router({
         trialEndsAt: true,
         currentPeriodEndsAt: true,
         subscriptionBillingMode: true,
+        subscriptionContract: { select: { lifetimeAccess: true } },
         stores: {
           select: {
             id: true,
@@ -150,6 +154,13 @@ export const platformOwnerRouter = router({
         },
       },
     });
+    return organizations.map(({ subscriptionContract, ...organization }) => ({
+      ...organization,
+      canEnableSelfServe:
+        canCreateBillingCheckout(organization.id) &&
+        !subscriptionContract?.lifetimeAccess &&
+        !LIFETIME_ORGANIZATION_IDS.has(organization.id),
+    }));
   }),
 
   updateOrganizationBilling: platformOwnerProcedure
@@ -175,7 +186,7 @@ export const platformOwnerRouter = router({
         if (
           input.subscriptionBillingMode === "SELF_SERVE" &&
           before.subscriptionBillingMode !== "SELF_SERVE" &&
-          !getSubscriptionPaymentConfig().ready
+          !canCreateBillingCheckout(input.organizationId)
         )
           throw new TRPCError({ code: "CONFLICT", message: "billingPaymentsUnavailable" });
 

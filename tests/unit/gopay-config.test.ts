@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 import {
+  canCreateBillingCheckout,
   getGoPayCredentials,
   getSubscriptionPaymentConfig,
   goPayMerchantId,
   paymentOrderId,
   selfServeSignupEnabled,
 } from "@/server/billing/paymentConfig";
+import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
 import { syntheticSeller, syntheticSellerEnvironment } from "../helpers/legalSeller";
 import {
   GOPAY_FIXTURE_API_KEY,
@@ -245,5 +247,83 @@ describe("GoPay merchant configuration and historical credential isolation", () 
     vi.stubEnv("GOPAY_WEBHOOK_SECRET", "");
     expect(selfServeSignupEnabled()).toBe(true);
     expect(getSubscriptionPaymentConfig().ready).toBe(false);
+  });
+});
+
+describe("new Live checkout pilot scope", () => {
+  const pilot = "synthetic-pilot-org";
+
+  it.each([undefined, ""])("keeps the general rollout when the pilot setting is %s", (value) => {
+    const env = { ...live, BILLING_LIVE_PILOT_ORGANIZATION_ID: value };
+    expect(canCreateBillingCheckout(pilot, env)).toBe(true);
+    expect(canCreateBillingCheckout("another-org", env)).toBe(true);
+  });
+
+  it("allows only the exact organization without changing global merchant readiness", () => {
+    const env = { ...live, BILLING_LIVE_PILOT_ORGANIZATION_ID: pilot };
+    expect(canCreateBillingCheckout(pilot, env)).toBe(true);
+    expect(canCreateBillingCheckout("another-org", env)).toBe(false);
+    expect(canCreateBillingCheckout(pilot.toUpperCase(), env)).toBe(false);
+    expect(getSubscriptionPaymentConfig(env).ready).toBe(true);
+  });
+
+  it.each([
+    " ",
+    "*",
+    "one,two",
+    "one/two",
+    " leading",
+    "trailing ",
+    "with\nnewline",
+    "a".repeat(81),
+  ])("closes new Live checkout for an invalid pilot setting %j", (value) => {
+    const env = { ...live, BILLING_LIVE_PILOT_ORGANIZATION_ID: value };
+    expect(canCreateBillingCheckout(pilot, env)).toBe(false);
+    expect(canCreateBillingCheckout(value, env)).toBe(false);
+    expect(getSubscriptionPaymentConfig(env).ready).toBe(true);
+  });
+
+  it.each([...LIFETIME_ORGANIZATION_IDS])(
+    "never uses protected friend %s as the Live pilot",
+    (id) => {
+      expect(
+        canCreateBillingCheckout(id, { ...live, BILLING_LIVE_PILOT_ORGANIZATION_ID: id }),
+      ).toBe(false);
+    },
+  );
+
+  it.each([
+    { BILLING_LEGAL_RELEASE_APPROVED: "draft" },
+    { BILLING_LIVE_ACTIVATION_CONFIRMED: "0" },
+    { GOPAY_WEBHOOK_SECRET: "" },
+    { HARDENING_EXTERNAL_PROVIDER_MODE: "disabled" },
+    { BILLING_PAYMENTS_MODE: "disabled" },
+    { BILLING_PAYMENT_PROVIDER: "freedompay" },
+  ])("does not override merchant, legal or provider guards", (change) => {
+    expect(
+      canCreateBillingCheckout(pilot, {
+        ...live,
+        BILLING_LIVE_PILOT_ORGANIZATION_ID: pilot,
+        ...change,
+      }),
+    ).toBe(false);
+  });
+
+  it("leaves isolated sandbox checkout unchanged and still rejects sandbox on production", () => {
+    const env = { ...sandbox, BILLING_LIVE_PILOT_ORGANIZATION_ID: "invalid,scope" };
+    expect(canCreateBillingCheckout("another-org", env)).toBe(true);
+    expect(canCreateBillingCheckout("another-org", { ...env, VERCEL_ENV: "production" })).toBe(
+      false,
+    );
+  });
+
+  it("keeps historical GoPay credentials usable outside the pilot", () => {
+    for (const [key, value] of Object.entries(live)) vi.stubEnv(key, value);
+    vi.stubEnv("BILLING_LIVE_PILOT_ORGANIZATION_ID", pilot);
+    expect(canCreateBillingCheckout("historical-customer")).toBe(false);
+    expect(getGoPayCredentials(goPayMerchantId(GOPAY_FIXTURE_API_KEY))).toEqual({
+      apiKey: GOPAY_FIXTURE_API_KEY,
+      apiSecret: GOPAY_FIXTURE_API_SECRET,
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { BillingPaymentProvider } from "@prisma/client";
 import { legalPublicationState, LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import { LIFETIME_ORGANIZATION_IDS } from "./lifetimeOrganizations";
 export type PaymentMode = "disabled" | "sandbox" | "live";
 
 const localHost = (host: string) => ["localhost", "127.0.0.1", "[::1]"].includes(host);
@@ -90,6 +91,23 @@ export const getSubscriptionPaymentConfig = (
     termsVersion,
     sellerName,
   };
+};
+
+// Applies only to creating new purchases. Persisted invoices keep their own
+// provider identity and remain verifiable after the pilot scope changes.
+export const canCreateBillingCheckout = (
+  organizationId: string,
+  env: Record<string, string | undefined> = process.env,
+) => {
+  const config = getSubscriptionPaymentConfig(env);
+  if (!config.ready) return false;
+  const pilot = env.BILLING_LIVE_PILOT_ORGANIZATION_ID;
+  if (config.mode !== "live" || pilot === undefined || pilot === "") return true;
+  return (
+    /^[A-Za-z0-9_-]{1,80}$/.test(pilot) &&
+    pilot === organizationId &&
+    !LIFETIME_ORGANIZATION_IDS.has(organizationId)
+  );
 };
 
 export const selfServeSignupEnabled = () =>
