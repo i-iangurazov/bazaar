@@ -50,6 +50,45 @@ All write scenarios use a disposable PostgreSQL 16 cluster on `127.0.0.1:55610` 
 
 Screenshots and PDF pages were visually inspected, in addition to assertions. Evidence is recorded in `.local/qa/receiving-commerce-20261110/`; release checks are summarized in the delivery report. Counts above overlap and must not be added together. Mobile checks use a browser viewport, not a physical iPhone.
 
+## CI follow-up and dependency scan boundary
+
+Run `42789474837` for `c4951974` exposed two separate CI failures: the workflow DOM test used an unsupported `exact` option on Testing Library's role query, and `reporting-browser` could not bind host port 55440 during container initialization, before checkout. The former needs its type correction; the latter is an infrastructure startup failure and produced no application test result. No service port is changed in this correction.
+
+The apparent green `dependency-security / osv-scan` was invalid evidence. Its log shows an unsupported `--ignore-vuln` flag, scanner exit 127 and a reporter error opening the missing `results.json`, followed by an empty SARIF upload. The original upstream reusable workflow continues after scanner errors. The corrected job uses the same pinned official v2.3.0 scanner/reporter actions, supported `--config=osv-scanner.toml`, and `--all-packages`. Before reporting it requires valid JSON containing the scanned, nonempty `pnpm-lock.yaml` inventory. A clean scan has packages without vulnerability entries; missing/empty output cannot masquerade as a clean scan. Reporting still uses `--fail-on-vuln=true`; JSON and SARIF are retained as artifacts.
+
+Exactly the four pre-existing advisory exclusions are preserved, with provenance from `275ef784` in the configuration. That original commit and the existing security notes recorded no applicability rationale. This repair neither adds exclusions nor labels those advisories harmless.
+
+The official prebuilt **OSV-Scanner 2.3.0** (SHA256 checked against its release checksums) was run against the actual lockfile with the same configuration. It scanned **1,346 package versions** and returned exit **1**, identifying **128 distinct advisory IDs across 47 package versions** after the existing exclusions. These are dependency advisory matches, not 128 demonstrated exploitable paths in Bazaar. Complete JSON, compact summaries and scanner logs are in `.local/qa/receiving-commerce-20261110/security/`. The dependency gate must remain red while unresolved findings remain; successful receiving checks do not waive it.
+
+Verification of the failure boundary:
+
+- **10/10** offline tests execute the actual workflow JSON gate: clean inventory and genuine findings pass to the reporter; missing, blank, truncated, error-only, wrong-lockfile, empty-inventory and malformed-inventory outputs fail.
+- A real clean one-package synthetic lockfile scanned with the same binary returned **0** and passed the gate.
+- The real Bazaar findings JSON passes inventory validation and retains scanner exit **1** for the vulnerability-reporting stage.
+- A deliberately invalid TOML configuration returned **127**, produced zero JSON bytes and failed the actual gate. This reproduces and closes the original false-green path.
+
+### Separate dependency remediation plan
+
+No dependency versions are changed by this receiving/CI correction. A controlled follow-up should prioritize the following groups, then repeat the complete dependency scan and existing regression gates:
+
+| Group | Current scanned versions | Candidate fixed branch and required verification |
+| --- | --- | --- |
+| Next.js / image processing | Next 14.2.35; sharp 0.32.6 / 0.34.5 | Evaluate Next **15.5.28 or later patched 15.x** and the sharp actually resolved by its image optimizer. This is a framework migration: verify auth, async request APIs, routes, caching, images, builds and worker/native contracts. |
+| Native Android / iOS | Capacitor 8.5.0 | **8.5.1 or later patched 8.x**; align platform/core packages, rebuild both native applications and verify navigation, links, HTTP and plugins. Installing an npm update alone does not update distributed native binaries. |
+| Authentication and translations | next-auth 4.24.13; next-intl 3.26.5 | Feed candidates: next-auth **4.24.15**; next-intl **4.9.2**. Translation upgrade crosses a major and must be checked with the chosen Next branch and all locales. |
+| Validation | Zod 3.25.76 / 4.1.11 | Feed candidate: **4.6.6**. Inventory Zod 3 callers, tRPC/resolver compatibility, parsing/error behavior and public schemas before migrating; do not blindly override the transitive major. |
+| Test tooling | Vitest / mocker 2.1.9; Vite 5.4.21 | Feed candidate: **Vitest 4.1.11** plus a compatible patched Vite branch. Verify mocking, environment setup, database isolation, browser tooling and all tests. |
+| Remaining direct/transitive packages | ws 8.20.0, fast-xml-parser 5.3.4 and other reported package versions | Feed candidates include ws **8.21.0** and fast-xml-parser **5.7.0**. Update the owning dependency where possible, remove stale duplicate resolutions, and rescan; the complete per-advisory fixed-version list is in `security/upgrade-candidates.json`. |
+
+Two critical entries were checked against upstream maintainer advisories, beyond the aggregated feed:
+
+- [Next.js GHSA-2464-fhr4-w9xw](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw): affected range includes 14.2.35; patched versions are 15.5.28 / 16.4.1. The maintainer describes an image-processing issue on glibc Linux and a sharp >= 0.35.5 workaround. Bazaar's actual deployed image-processing path and platform conditions still require applicability verification; no exploit was attempted.
+- [Capacitor GHSA-rvm3-566m-v7fv](https://github.com/ionic-team/capacitor/security/advisories/GHSA-rvm3-566m-v7fv): 8.5.0 is affected and 8.5.1 patched. The issue concerns a user-activated WebView link to an internal proxy path; disabling CapacitorHttp alone is insufficient. Native reachability and shipped build versions require verification; this is not a claim that Bazaar has been compromised.
+
+The other upgrade numbers are candidates derived from the recorded OSV advisory ranges, pending compatibility and maintainer-release verification. They are not an approved bulk-upgrade instruction.
+
+Official OSV references: [v2.3.0 configuration](https://github.com/google/osv-scanner/blob/v2.3.0/docs/configuration.md), [v2.3.0 result model](https://github.com/google/osv-scanner/blob/v2.3.0/pkg/models/results.go), [upstream reusable workflow and its continuation behavior](https://github.com/google/osv-scanner-action/blob/v2.3.0/.github/workflows/osv-scanner-reusable.yml).
+
 ## References used
 
 - [ERPNext: FIFO and Moving Average](https://docs.frappe.io/erpnext/fifo-and-moving-average) — moving-average valuation of stock.

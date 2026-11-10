@@ -1,0 +1,20 @@
+# Preserve exactly the existing CI exceptions from commit 275ef784fcb467ce639b0a5a5764fdf47f48b604.
+# That change recorded no applicability rationale; this syntax repair does not add
+# exceptions or claim that the advisories are harmless. Review them separately.
+# Official v2.3.0 schema: https://github.com/google/osv-scanner/blob/v2.3.0/docs/configuration.md
+
+[[IgnoredVulns]]
+id = "GHSA-2g4f-4pwh-qvx6"
+reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."
+
+[[IgnoredVulns]]
+id = "GHSA-67mh-4wv8-2f99"
+reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."
+
+[[IgnoredVulns]]
+id = "GHSA-4r6h-8v6p-xvw6"
+reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."
+
+[[IgnoredVulns]]
+id = "GHSA-5pgg-2g8v-p4x9"
+reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."

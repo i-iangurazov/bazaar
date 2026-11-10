@@ -12,18 +12,72 @@ permissions:
 
 jobs:
   dependency-security:
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
       security-events: write
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.0
-    with:
-      scan-args: |-
-        --lockfile=pnpm-lock.yaml
-        --ignore-vuln=GHSA-2g4f-4pwh-qvx6
-        --ignore-vuln=GHSA-67mh-4wv8-2f99
-        --ignore-vuln=GHSA-4r6h-8v6p-xvw6
-        --ignore-vuln=GHSA-5pgg-2g8v-p4x9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify scanner failure handling
+        run: node --test scripts/deployment/osv-results.test.mjs
+      - name: Scan lockfile with OSV v2.3.0
+        id: scanner
+        # Exit 1 means findings; the report gate and reporter still must run.
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@9ca325867d8b4f9a3ccd4a0ca372e3cc7fcee3ef # v2.3.0
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --config=osv-scanner.toml
+            --all-packages
+            --format=json
+            --output=osv-results.json
+      - name: Require a real lockfile scan result
+        id: verify-scan
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const report = JSON.parse(fs.readFileSync('osv-results.json', 'utf8'));
+          assert(Array.isArray(report.results), 'OSV did not produce a results array');
+          const scanned = report.results.find(result =>
+            result.source?.type === 'lockfile' &&
+            typeof result.source.path === 'string' &&
+            path.basename(result.source.path) === 'pnpm-lock.yaml');
+          // --all-packages includes clean dependencies too; [] is not proof of
+          // scanning this nonempty lockfile. A clean scan has packages without vulnerabilities.
+          assert(scanned && Array.isArray(scanned.packages) && scanned.packages.length > 0,
+            'OSV did not scan the nonempty pnpm-lock.yaml');
+          assert(scanned.packages.every(result =>
+            typeof result.package?.name === 'string' &&
+            typeof result.package.version === 'string'), 'OSV package inventory is malformed');
+          console.log(`Verified OSV package inventory: ${scanned.packages.length} lockfile packages`);
+          NODE
+      - name: Report findings without hiding scanner failures
+        id: reporter
+        uses: google/osv-scanner-action/osv-reporter-action@9ca325867d8b4f9a3ccd4a0ca372e3cc7fcee3ef # v2.3.0
+        with:
+          scan-args: |-
+            --new=osv-results.json
+            --output=osv-results.sarif
+            --gh-annotations=false
+            --fail-on-vuln=true
+      - name: Upload dependency scan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-security-results
+          path: |
+            osv-results.json
+            osv-results.sarif
+          if-no-files-found: error
+      - name: Upload dependency results to code scanning
+        if: always() && steps.verify-scan.outcome == 'success' && steps.reporter.outcome != 'skipped'
+        uses: github/codeql-action/upload-sarif@014f16e7ab1402f30e7c3329d33797e7948572db # v4.31.3
+        with:
+          sarif_file: osv-results.sarif
 
   codeql:
     runs-on: ubuntu-latest

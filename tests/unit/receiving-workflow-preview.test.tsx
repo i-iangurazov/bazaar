@@ -101,7 +101,7 @@ describe("receiving workflow preview lifecycle", () => {
       messages={{ inventory: ru.inventory, common: ru.common, errors: ru.errors }}>
       <InventoryReceivingPage draftOwner={{ userId: owner.userId, organizationId: owner.organizationId }} />
     </NextIntlClientProvider>);
-    await waitFor(() => expect(screen.getByRole("button", { name: ru.inventory.receivingRecovery.check, exact: true })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: ru.inventory.receivingRecovery.check })).toBeTruthy());
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)); });
     expect(api.preview).not.toHaveBeenCalled();
     const commerce = view.container.querySelector('[data-receiving-commerce-line]')!;
