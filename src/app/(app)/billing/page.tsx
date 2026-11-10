@@ -113,6 +113,7 @@ const BillingPage = () => {
           <SubscriptionAccessNotice
             canManage={isAdmin}
             showBillingLink={false}
+            showTrialScope={false}
             state={{
               billingCatalogVersion: billingQuery.data.billingCatalogVersion,
               lifetimeAccess: billingQuery.data.lifetimeAccess,
@@ -149,72 +150,116 @@ const BillingPage = () => {
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("planTitle")}</CardTitle>
+          <Card data-subscription-overview>
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle>{t("accessTitle")}</CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={planBadgeVariant[billingQuery.data.planTier]}>
+                    {billingQuery.data.trialOffer
+                      ? t("plans.trial")
+                      : t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
+                  </Badge>
+                  <Badge
+                    variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}
+                  >
+                    {t(
+                      `subscriptionStatuses.${statusKeyMap[billingQuery.data.subscriptionStatus]}`,
+                    )}
+                  </Badge>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={planBadgeVariant[billingQuery.data.planTier]}>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 text-sm">
+                <div className="space-y-1 text-muted-foreground">
+                  {billingQuery.data.trialEndsAt &&
+                  (billingQuery.data.trialActive || !billingQuery.data.subscriptionActive) ? (
+                    <p data-current-trial-end>
+                      {t("trialEndsAt", {
+                        date: formatDateTime(billingQuery.data.trialEndsAt, locale),
+                      })}
+                    </p>
+                  ) : null}
+                  {billingQuery.data.currentPeriodEndsAt &&
+                  (!billingQuery.data.trialActive || billingQuery.data.subscriptionActive) ? (
+                    <p data-current-subscription-end>
+                      {t(billingQuery.data.trialActive ? "accessEndsAt" : "currentPeriodEndsAt", {
+                        date: formatDateTime(billingQuery.data.currentPeriodEndsAt, locale),
+                      })}
+                    </p>
+                  ) : null}
+                  {billingQuery.data.trialExpired &&
+                  (billingQuery.data.billingCatalogVersion !== CURRENT_CATALOG_VERSION ||
+                    billingQuery.data.lifetimeAccess ||
+                    billingQuery.data.subscriptionStatus === "CANCELED") ? (
+                    <p className="text-warning-foreground">{t("trialExpired")}</p>
+                  ) : !billingQuery.data.trialActive && billingQuery.data.subscriptionActive ? (
+                    <p className="text-success">{t("subscriptionActive")}</p>
+                  ) : null}
+                </div>
+                <p className="font-medium text-foreground">
                   {billingQuery.data.trialOffer
-                    ? t("plans.trial")
-                    : t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
-                </Badge>
-                <Badge
-                  variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}
-                >
-                  {t(`subscriptionStatuses.${statusKeyMap[billingQuery.data.subscriptionStatus]}`)}
-                </Badge>
-                {billingQuery.data.trialEndsAt && !billingQuery.data.subscriptionActive ? (
-                  <span>
-                    {t("trialEndsAt", {
-                      date: formatDateTime(billingQuery.data.trialEndsAt, locale),
-                    })}
-                  </span>
+                    ? t("trial.free")
+                    : t("planPricePrimary", {
+                        amount: formatNumber(billingQuery.data.monthlyPriceKgs),
+                      })}
+                </p>
+              </div>
+              <dl className="grid grid-cols-3 gap-3">
+                {(
+                  [
+                    ["stores", billingQuery.data.usage.stores, billingQuery.data.limits.maxStores],
+                    [
+                      "products",
+                      billingQuery.data.usage.products,
+                      billingQuery.data.limits.maxProducts,
+                    ],
+                    ["users", billingQuery.data.usage.users, billingQuery.data.limits.maxUsers],
+                  ] as const
+                ).map(([resource, used, limit]) => (
+                  <div key={resource} className="min-w-0 rounded-md bg-muted/50 px-3 py-2">
+                    <dt className="text-xs text-muted-foreground">
+                      {t(`comparison.rows.${resource}`)}
+                    </dt>
+                    <dd className="mt-1 text-base font-semibold tabular-nums text-foreground">
+                      {formatNumber(used)}{" "}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        / {formatNumber(limit)}
+                      </span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="flex flex-col gap-4 border-t border-border pt-3 sm:flex-row sm:items-start sm:justify-between">
+                <details className="min-w-0 text-sm" data-current-subscription-features>
+                  <summary className="cursor-pointer font-medium text-foreground">
+                    {t("includesTitle")}
+                  </summary>
+                  {billingQuery.data.trialActive && billingQuery.data.trialOffer ? (
+                    <p className="mt-3 text-sm text-muted-foreground">{t("trial.scope")}</p>
+                  ) : null}
+                  <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {featureOrder
+                      .filter((feature) => billingQuery.data?.featureFlags[feature])
+                      .map((feature) => (
+                        <li key={feature} className="flex items-start gap-2">
+                          <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+                          <span>{t(`features.${feature}`)}</span>
+                        </li>
+                      ))}
+                  </ul>
+                </details>
+                {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
+                !billingQuery.data.lifetimeAccess &&
+                billingQuery.data.subscriptionStatus !== "CANCELED" ? (
+                  <div className="pt-2">
+                    <Button asChild>
+                      <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
+                    </Button>
+                  </div>
                 ) : null}
               </div>
-              {billingQuery.data.currentPeriodEndsAt ? (
-                <p>
-                  {t("currentPeriodEndsAt", {
-                    date: formatDateTime(billingQuery.data.currentPeriodEndsAt, locale),
-                  })}
-                </p>
-              ) : null}
-              {billingQuery.data.trialExpired &&
-              (billingQuery.data.billingCatalogVersion !== CURRENT_CATALOG_VERSION ||
-                billingQuery.data.lifetimeAccess ||
-                billingQuery.data.subscriptionStatus === "CANCELED") ? (
-                <p className="text-sm text-warning-foreground">{t("trialExpired")}</p>
-              ) : billingQuery.data.trialActive ? (
-                <p>{t("trialActive")}</p>
-              ) : billingQuery.data.subscriptionActive ? (
-                <p className="text-sm text-success">{t("subscriptionActive")}</p>
-              ) : null}
-              {billingQuery.data.trialOffer ? <p>{t("trial.scope")}</p> : null}
-              <details className="pt-2" data-current-subscription-features>
-                <summary className="cursor-pointer font-medium text-foreground">
-                  {t("includesTitle")}
-                </summary>
-                <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {featureOrder
-                    .filter((feature) => billingQuery.data?.featureFlags[feature])
-                    .map((feature) => (
-                      <li key={feature} className="flex items-start gap-2">
-                        <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-                        <span>{t(`features.${feature}`)}</span>
-                      </li>
-                    ))}
-                </ul>
-              </details>
-              {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
-              !billingQuery.data.lifetimeAccess &&
-              billingQuery.data.subscriptionStatus !== "CANCELED" ? (
-                <div className="pt-2">
-                  <Button asChild>
-                    <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
-                  </Button>
-                </div>
-              ) : null}
               {pendingRequest ? (
                 <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-foreground">
                   <p className="font-semibold">{t("pendingRequestTitle")}</p>
@@ -234,42 +279,17 @@ const BillingPage = () => {
             selectedPlan={checkoutPlan}
             onPlanSelected={setCheckoutPlan}
           />
-          <SubscriptionUsage trial={Boolean(billingQuery.data.trialOffer)} />
-
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>{t("usageTitle")}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-              <p>
-                {t("usageStores", {
-                  count: billingQuery.data.usage.stores,
-                  limit: billingQuery.data.limits.maxStores,
-                })}
-              </p>
-              <p>
-                {t("usageUsers", {
-                  count: billingQuery.data.usage.users,
-                  limit: billingQuery.data.limits.maxUsers,
-                })}
-              </p>
-              <p>
-                {t("usageProducts", {
-                  count: billingQuery.data.usage.products,
-                  limit: billingQuery.data.limits.maxProducts,
-                })}
-              </p>
-              <div>
-                <p>
-                  {billingQuery.data.trialOffer
-                    ? t("trial.free")
-                    : t("planPricePrimary", {
-                        amount: formatNumber(billingQuery.data.monthlyPriceKgs),
-                      })}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <details
+            className="rounded-lg border border-border bg-card p-4 sm:p-5"
+            data-subscription-usage-details
+          >
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
+              {t("usage.title")}
+            </summary>
+            <div className="mt-4">
+              <SubscriptionUsage trial={Boolean(billingQuery.data.trialOffer)} />
+            </div>
+          </details>
 
           <Card className="scroll-mt-24 lg:col-span-2" id="plans">
             <CardHeader>
@@ -299,7 +319,7 @@ const BillingPage = () => {
                         <CardTitle className="text-base">
                           {t(`plans.${tier.toLowerCase()}.name`)}
                         </CardTitle>
-                        {isCurrent ? (
+                        {isCurrent && !billingQuery.data?.trialOffer ? (
                           <Badge variant="success">{t("currentPlanBadge")}</Badge>
                         ) : null}
                       </div>
@@ -341,33 +361,6 @@ const BillingPage = () => {
                           })}
                         </p>
                       </div>
-                      <div>
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {t("includesTitle")}
-                        </p>
-                        <ul className="space-y-1 text-xs">
-                          {featureOrder.map((feature) => {
-                            const enabled = Boolean(planItem.featureFlags[feature]);
-                            return (
-                              <li key={feature} className="flex items-center gap-2">
-                                {enabled ? (
-                                  <CheckIcon className="h-3.5 w-3.5 text-success" aria-hidden />
-                                ) : (
-                                  <LockIcon
-                                    className="h-3.5 w-3.5 text-muted-foreground"
-                                    aria-hidden
-                                  />
-                                )}
-                                <span
-                                  className={enabled ? "text-foreground" : "text-muted-foreground"}
-                                >
-                                  {t(`features.${feature}`)}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
                       {canSelectPayment ? (
                         <Button
                           asChild
@@ -404,141 +397,137 @@ const BillingPage = () => {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>{t("comparisonTitle")}</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table className="min-w-[760px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("comparison.columnFeature")}</TableHead>
-                    {planOrder.map((plan) => (
-                      <TableHead key={plan}>{t(`plans.${plan.toLowerCase()}.name`)}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>{t("comparison.rows.stores")}</TableCell>
-                    {planOrder.map((plan) => {
-                      const planItem = billingQuery.data?.planCatalog.find(
-                        (item) => item.planTier === plan,
-                      );
-                      return (
-                        <TableCell key={plan}>
-                          {planItem ? planItem.limits.maxStores : "-"}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                  {billingQuery.data.billingCatalogVersion === CURRENT_CATALOG_VERSION ? (
+            <details data-billing-comparison>
+              <summary className="cursor-pointer p-4 text-sm font-semibold text-foreground sm:p-5">
+                {t("comparisonTitle")}
+              </summary>
+              <CardContent className="overflow-x-auto">
+                <Table className="min-w-[760px]">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell>{t("publicPricing.maxStores")}</TableCell>
+                      <TableHead>{t("comparison.columnFeature")}</TableHead>
                       {planOrder.map((plan) => (
-                        <TableCell key={plan}>{1 + ADDITIONAL_STORE_CAPS[plan]}</TableCell>
+                        <TableHead key={plan}>{t(`plans.${plan.toLowerCase()}.name`)}</TableHead>
                       ))}
                     </TableRow>
-                  ) : null}
-                  <TableRow>
-                    <TableCell>{t("comparison.rows.products")}</TableCell>
-                    {planOrder.map((plan) => {
-                      const planItem = billingQuery.data?.planCatalog.find(
-                        (item) => item.planTier === plan,
-                      );
-                      return (
-                        <TableCell key={plan}>
-                          {planItem ? planItem.limits.maxProducts : "-"}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>{t("comparison.rows.users")}</TableCell>
-                    {planOrder.map((plan) => {
-                      const planItem = billingQuery.data?.planCatalog.find(
-                        (item) => item.planTier === plan,
-                      );
-                      return (
-                        <TableCell key={plan}>
-                          {planItem ? planItem.limits.maxUsers : "-"}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                  {comparisonFeatures.map((feature) => (
-                    <TableRow key={feature}>
-                      <TableCell>{t(`features.${feature}`)}</TableCell>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell>{t("comparison.rows.stores")}</TableCell>
                       {planOrder.map((plan) => {
                         const planItem = billingQuery.data?.planCatalog.find(
                           (item) => item.planTier === plan,
                         );
-                        const enabled = planItem ? Boolean(planItem.featureFlags[feature]) : false;
                         return (
-                          <TableCell key={`${feature}-${plan}`}>
-                            {enabled ? (
-                              <span className="inline-flex items-center gap-1 text-success">
-                                <CheckIcon className="h-3.5 w-3.5" aria-hidden />
-                                {t("comparison.included")}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                <LockIcon className="h-3.5 w-3.5" aria-hidden />
-                                {t("comparison.locked")}
-                              </span>
-                            )}
+                          <TableCell key={plan}>
+                            {planItem ? planItem.limits.maxStores : "-"}
                           </TableCell>
                         );
                       })}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
+                    {billingQuery.data.billingCatalogVersion === CURRENT_CATALOG_VERSION ? (
+                      <TableRow>
+                        <TableCell>{t("publicPricing.maxStores")}</TableCell>
+                        {planOrder.map((plan) => (
+                          <TableCell key={plan}>{1 + ADDITIONAL_STORE_CAPS[plan]}</TableCell>
+                        ))}
+                      </TableRow>
+                    ) : null}
+                    <TableRow>
+                      <TableCell>{t("comparison.rows.products")}</TableCell>
+                      {planOrder.map((plan) => {
+                        const planItem = billingQuery.data?.planCatalog.find(
+                          (item) => item.planTier === plan,
+                        );
+                        return (
+                          <TableCell key={plan}>
+                            {planItem ? planItem.limits.maxProducts : "-"}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                    <TableRow>
+                      <TableCell>{t("comparison.rows.users")}</TableCell>
+                      {planOrder.map((plan) => {
+                        const planItem = billingQuery.data?.planCatalog.find(
+                          (item) => item.planTier === plan,
+                        );
+                        return (
+                          <TableCell key={plan}>
+                            {planItem ? planItem.limits.maxUsers : "-"}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                    {comparisonFeatures.map((feature) => (
+                      <TableRow key={feature}>
+                        <TableCell>{t(`features.${feature}`)}</TableCell>
+                        {planOrder.map((plan) => {
+                          const planItem = billingQuery.data?.planCatalog.find(
+                            (item) => item.planTier === plan,
+                          );
+                          const enabled = planItem
+                            ? Boolean(planItem.featureFlags[feature])
+                            : false;
+                          return (
+                            <TableCell key={`${feature}-${plan}`}>
+                              {enabled ? (
+                                <span className="inline-flex items-center gap-1 text-success">
+                                  <CheckIcon className="h-3.5 w-3.5" aria-hidden />
+                                  {t("comparison.included")}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                  <LockIcon className="h-3.5 w-3.5" aria-hidden />
+                                  {t("comparison.locked")}
+                                </span>
+                              )}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </details>
           </Card>
 
-          <Card data-billing-upgrade-cta>
-            <CardHeader>
-              <CardTitle>{t("ctaTitle")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                {billingQuery.data.lifetimeAccess
-                  ? t("payments.lifetimeAccess")
-                  : billingQuery.data.subscriptionBillingMode === "SELF_SERVE"
-                    ? t(
-                        billingQuery.data.subscriptionStatus === "CANCELED"
-                          ? "payments.accountPaused"
-                          : "payments.configureExtrasHint",
-                      )
-                    : t("ctaHint")}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild type="button" variant="secondary">
-                  <a href={t("ctaWhatsappLink")} target="_blank" rel="noreferrer">
-                    {t("ctaWhatsapp")}
-                  </a>
+          <div
+            className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+            data-billing-upgrade-cta
+          >
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{t("payments.support")}</p>
+              {billingQuery.data.subscriptionBillingMode === "MANUAL" &&
+              !billingQuery.data.lifetimeAccess ? (
+                <p className="text-xs text-muted-foreground">{t("ctaHint")}</p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild type="button" variant="secondary">
+                <a href={t("ctaWhatsappLink")} target="_blank" rel="noreferrer">
+                  {t("ctaWhatsapp")}
+                </a>
+              </Button>
+              {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
+              !billingQuery.data.lifetimeAccess &&
+              billingQuery.data.subscriptionStatus !== "CANCELED" ? (
+                <Button asChild>
+                  <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
                 </Button>
-                {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
-                !billingQuery.data.lifetimeAccess &&
-                billingQuery.data.subscriptionStatus !== "CANCELED" ? (
-                  <Button asChild>
-                    <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
-                  </Button>
-                ) : billingQuery.data.subscriptionBillingMode === "MANUAL" &&
-                  !billingQuery.data.lifetimeAccess ? (
-                  <Button
-                    type="button"
-                    disabled={
-                      !currentPlan || currentPlan === "ENTERPRISE" || Boolean(pendingRequest)
-                    }
-                    onClick={() => setRequestedPlan("ENTERPRISE")}
-                  >
-                    {t("requestUpgrade")}
-                  </Button>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+              ) : billingQuery.data.subscriptionBillingMode === "MANUAL" &&
+                !billingQuery.data.lifetimeAccess ? (
+                <Button
+                  type="button"
+                  disabled={!currentPlan || currentPlan === "ENTERPRISE" || Boolean(pendingRequest)}
+                  onClick={() => setRequestedPlan("ENTERPRISE")}
+                >
+                  {t("requestUpgrade")}
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">{t("empty")}</p>

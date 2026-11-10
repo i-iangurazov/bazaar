@@ -1,0 +1,90 @@
+{
+  "recordType": "pre-release-verification",
+  "recordedAt": "2026-11-10T21:21:14.907315+00:00",
+  "baselineCommit": "a91c063f5b7ae7a936fca5c98b6a30fe943e271c",
+  "scope": [
+    "Simplify billing overview and checkout while preserving authoritative prices, paid periods, legal consent, pending-payment recovery and existing rights",
+    "Reuse the activation design for all newly generated service emails and new campaign rendering",
+    "Keep legacy delivery payloads and provider idempotency keys compatible across the template release"
+  ],
+  "localChecks": {
+    "targetedTestsPassed": 259,
+    "targetedTestFiles": 19,
+    "failed": 0,
+    "skipped": 0,
+    "postVisualEmailRerun": {
+      "testsPassed": 40,
+      "files": 2,
+      "legacyGoldenSnapshotsUnchanged": 5,
+      "qualification": "Repeated subset, not added to the targeted total"
+    },
+    "lint": "Passed for all changed product and test files after type-only import corrections",
+    "translations": "passed",
+    "prismaClientGeneration": "passed with a synthetic nonconnectable database URL; no database was contacted",
+    "typecheck": "Memory-capped local attempt stopped at its 2 GB heap limit; full semantic check required in CI",
+    "productionBuild": "Required in cloud CI; not run locally to avoid heating the owner Mac"
+  },
+  "visual": {
+    "billing": {
+      "source": "Actual page/components/shared CSS with isolated synthetic query/session data; mutations disabled",
+      "locales": [
+        "ru",
+        "kg",
+        "en"
+      ],
+      "viewports": [
+        "1440x1000",
+        "390x844"
+      ],
+      "checked": [
+        "Current trial versus future paid period",
+        "Visible amount and subscription period",
+        "Native details for limits/features/comparison",
+        "Manual and lifetime access",
+        "GoPay and historical FreedomPay pending recovery",
+        "Consent initially unchecked and mobile footer reachable",
+        "Dark desktop theme",
+        "Manager access denied"
+      ],
+      "horizontalOverflow": false
+    },
+    "email": {
+      "source": "Actual generation functions, synthetic data; no email sent",
+      "variants": 36,
+      "frameWidths": [
+        560,
+        375
+      ],
+      "frameViews": 72,
+      "horizontalOverflow": false,
+      "foundAndFixed": "Spacing between quantity and total on mobile order messages; consistent branded CTA",
+      "qualification": "Browser HTML previews do not certify every email client",
+      "mailSending": "No new test email was sent; prior real payment confirmation delivery is verified separately"
+    }
+  },
+  "compatibility": {
+    "transportAutomaticallyWrapsStoredHtml": false,
+    "storedBillingReminderBodiesChanged": false,
+    "orderDeliveryVersion": "New rows explicitly branded-v1; existing NULL retains its previous renderer",
+    "campaignVersion": "New identities use existing contentVersion 2; persisted v1 keeps its renderer",
+    "directRecovery": "Only typed 409 invalid_idempotent_request and no prior/claimed/forced send can replay the legacy renderer with exactly the same key",
+    "merchantIdentityAndUnsubscribePreserved": true,
+    "financialHandlersChanged": false,
+    "customerInventoryLayoutChanged": false,
+    "friendOrganizationContractsChanged": false,
+    "legacySnapshotWhitespace": "Generated whole-payload snapshots deliberately preserve original HTML blank-line spaces"
+  },
+  "databaseChange": {
+    "migration": "20261111010000_order_email_template_version",
+    "operation": "Add one nullable VARCHAR(32) column to email delivery logs",
+    "updatesBackfillsOrDefaults": false,
+    "lockTimeoutSeconds": 5,
+    "olderBusinessRecordsRewritten": false,
+    "integrationRegression": "Queued legacy/current order retries and same body/key; required in disposable CI database"
+  },
+  "publication": {
+    "ciForThisCommit": "pending at creation",
+    "productionForThisCommit": "pending at creation"
+  },
+  "evidenceDirectory": ".local/qa/gopay-pilot-20261111/"
+}

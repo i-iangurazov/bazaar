@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { locales } from "@/lib/locales";
 import { adminProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { createInvite } from "@/server/services/invites";
@@ -21,6 +22,7 @@ export const invitesRouter = router({
         email: z.string().email(),
         role: z.enum(["ADMIN", "MANAGER", "STAFF", "CASHIER"]),
         storeIds: z.array(z.string()).default([]),
+        locale: z.enum(locales).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -37,7 +39,11 @@ export const invitesRouter = router({
         let emailSent = false;
         if (baseUrl) {
           try {
-            await sendInviteEmail({ email: result.invite.email, inviteLink: `${baseUrl}/invite/${result.token}` });
+            await sendInviteEmail({
+              email: result.invite.email,
+              inviteLink: `${baseUrl}/invite/${result.token}`,
+              locale: input.locale,
+            });
             emailSent = true;
           } catch (emailError) {
             ctx.logger.warn(
@@ -46,7 +52,7 @@ export const invitesRouter = router({
                 email: result.invite.email,
                 requestId: ctx.requestId,
               },
-              "invite email delivery failed"
+              "invite email delivery failed",
             );
           }
         }

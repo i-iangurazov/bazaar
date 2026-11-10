@@ -4,9 +4,15 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { prisma } from "@/server/db/prisma";
+import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 import { isProductionRuntime } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
-import { EmailProviderError, sendTransactionalEmail } from "@/server/services/email";
+import {
+  EmailProviderError,
+  sendTransactionalEmail,
+  type EmailPayload,
+} from "@/server/services/email";
+import { escapeEmailHtml, renderBrandedEmail } from "@/server/services/emailTemplate";
 import { getLogger } from "@/server/logging";
 import { loyaltyDeliveryFailureReason } from "./authErrors";
 import { createRateLimiter } from "@/server/middleware/rateLimiter";
@@ -19,6 +25,52 @@ export const CARD_TOKEN_TTL_SECONDS = 120;
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_WINDOW_MS = 10 * 60_000;
 const OTP_MAX_PER_WINDOW = 5;
+
+export const buildLoyaltyOtpEmail = (input: {
+  email: string;
+  code: string;
+  challengeId: string;
+  locale?: string | null;
+}): EmailPayload => {
+  const locale = normalizeLocale(input.locale) ?? defaultLocale;
+  const copies: Record<Locale, { subject: string; title: string; intro: string; expires: string }> =
+    {
+      ru: {
+        subject: "Код подтверждения BAZAAR",
+        title: "Код подтверждения",
+        intro: "Ваш код подтверждения:",
+        expires: `Код действует ${OTP_TTL_MINUTES} минут.`,
+      },
+      kg: {
+        subject: "BAZAAR ырастоо коду",
+        title: "Ырастоо коду",
+        intro: "Сиздин ырастоо кодуңуз:",
+        expires: `Код ${OTP_TTL_MINUTES} мүнөт жарактуу.`,
+      },
+      en: {
+        subject: "BAZAAR verification code",
+        title: "Verification code",
+        intro: "Your verification code:",
+        expires: `The code is valid for ${OTP_TTL_MINUTES} minutes.`,
+      },
+    };
+  const copy = copies[locale];
+  return {
+    to: input.email,
+    subject: copy.subject,
+    text: `${copy.intro} ${input.code}\n${copy.expires}`,
+    html: renderBrandedEmail({
+      locale,
+      title: copy.title,
+      preheader: copy.expires,
+      contentHtml: `<p style="margin:0 0 12px;">${escapeEmailHtml(copy.intro)}</p>
+        <p style="margin:0 0 16px;font-size:30px;font-weight:700;line-height:40px;letter-spacing:4px;color:#1d4ed8;">${escapeEmailHtml(input.code)}</p>
+        <p style="margin:0;color:#6b7280;">${escapeEmailHtml(copy.expires)}</p>`,
+    }),
+    tags: [{ name: "kind", value: "loyalty_otp" }],
+    idempotencyKey: `loyalty-otp-${input.challengeId}`,
+  };
+};
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const randomToken = () => randomBytes(32).toString("hex");
@@ -93,7 +145,11 @@ export const resolveJoinTarget = async (
 };
 
 /** Emails one OTP. Never logs the code; delivery is skipped in tests. */
-export const requestJoinOtp = async (input: { programStoreId: string; email: string }) => {
+export const requestJoinOtp = async (input: {
+  programStoreId: string;
+  email: string;
+  locale?: string | null;
+}) => {
   const target = await resolveJoinTarget(input.programStoreId);
   if (!target || !target.enabled) throw new AppError("loyaltyDisabled", "FORBIDDEN", 403);
   const email = normalizeEmail(input.email);
@@ -142,14 +198,9 @@ export const requestJoinOtp = async (input: { programStoreId: string; email: str
     if (!isTestRuntime() && isLocalOtpOutboxEnabled()) {
       await writeLocalOutbox(email, code);
     } else if (!isTestRuntime()) {
-      const delivery = await sendTransactionalEmail({
-        to: email,
-        subject: "Код подтверждения BAZAAR",
-        text: `Ваш код подтверждения: ${code}\nКод действует ${OTP_TTL_MINUTES} минут.`,
-        html: `<p>Ваш код подтверждения: <b>${code}</b></p><p>Код действует ${OTP_TTL_MINUTES} минут.</p>`,
-        tags: [{ name: "kind", value: "loyalty_otp" }],
-        idempotencyKey: `loyalty-otp-${challenge.id}`,
-      });
+      const delivery = await sendTransactionalEmail(
+        buildLoyaltyOtpEmail({ email, code, challengeId: challenge.id, locale: input.locale }),
+      );
       if (delivery.provider !== "resend" || !delivery.id)
         throw new Error("emailDeliveryNotAccepted");
     }

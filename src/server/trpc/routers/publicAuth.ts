@@ -243,7 +243,7 @@ export const publicAuthRouter = router({
 
         const resetLink = `${process.env.NEXTAUTH_URL ?? ""}/reset/${raw}`;
         try {
-          await sendResetEmail({ email: user.email, resetLink });
+          await sendResetEmail({ email: user.email, resetLink, locale: user.preferredLocale });
         } catch (emailError) {
           ctx.logger.warn(
             {

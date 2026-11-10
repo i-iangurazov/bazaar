@@ -23,7 +23,6 @@ import {
 import { QueryErrorState } from "@/components/query-error-state";
 import { SubscriptionPreparationNotice } from "@/components/billing/subscription-preparation-notice";
 import { TrialPreparation } from "@/components/billing/trial-preparation";
-import { SubscriptionAddons } from "@/components/billing/subscription-addons";
 import {
   SubscriptionQuoteSummary,
   type SubscriptionQuote,
@@ -223,8 +222,13 @@ export function SubscriptionPayments({
 
   return (
     <Card data-subscription-payments id="subscription-checkout" className="scroll-mt-24">
-      <CardHeader>
+      <CardHeader className="gap-1">
         <CardTitle>{t("title")}</CardTitle>
+        {settings.data && !pending ? (
+          <p className="text-xs text-muted-foreground">
+            {t("providerDescription", { provider: providerName(settings.data.provider) })}
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-5">
         {settings.isLoading ? (
@@ -259,7 +263,7 @@ export function SubscriptionPayments({
             ) : null}
             {settings.data.scheduledSubscription ? (
               <div
-                className="space-y-2 rounded-md border border-input p-4"
+                className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-4"
                 data-scheduled-subscription
               >
                 <h3 className="text-sm font-semibold">{t("scheduledTitle")}</h3>
@@ -279,16 +283,12 @@ export function SubscriptionPayments({
                 </p>
               </div>
             ) : null}
-            <SubscriptionAddons t={billing} locale={locale} />
             {!settings.data.canPurchase && !settings.data.lifetimeAccess && !pending ? (
               <Button asChild variant="secondary">
                 <a href="https://wa.me/996709911300" target="_blank" rel="noreferrer">
                   {t("support")}
                 </a>
               </Button>
-            ) : null}
-            {settings.data.canPurchase ? (
-              <p className="text-sm text-muted-foreground">{t("configureExtrasHint")}</p>
             ) : null}
             {pending ? (
               <div className="space-y-3 rounded-md border border-input p-4" data-pending-invoice>
@@ -367,65 +367,187 @@ export function SubscriptionPayments({
                 </div>
               </div>
             ) : settings.data.canPurchase ? (
-              <div className="space-y-3" data-checkout-form>
-                <p className="text-sm text-muted-foreground">
-                  {t("description", { provider: providerName(settings.data.provider) })}
-                </p>
-                {settings.data.canChange ? (
-                  <div className="max-w-sm space-y-2">
-                    <label htmlFor="subscription-action" className="block text-sm font-medium">
-                      {t("purchaseAction")}
-                    </label>
-                    <Select
-                      value={action}
-                      onValueChange={(value) => {
-                        setAction(value as "RENEW" | "CHANGE");
-                        requestKey.current = "";
-                      }}
-                    >
-                      <SelectTrigger id="subscription-action">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="RENEW">{t("renewAction")}</SelectItem>
-                        <SelectItem value="CHANGE">{t("changeAction")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+              <div
+                className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-start"
+                data-checkout-form
+              >
+                <div className="space-y-5">
+                  {settings.data.canChange ? (
+                    <div className="max-w-sm space-y-2">
+                      <label htmlFor="subscription-action" className="block text-sm font-medium">
+                        {t("purchaseAction")}
+                      </label>
+                      <Select
+                        value={action}
+                        onValueChange={(value) => {
+                          setAction(value as "RENEW" | "CHANGE");
+                          requestKey.current = "";
+                        }}
+                      >
+                        <SelectTrigger id="subscription-action">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="RENEW">{t("renewAction")}</SelectItem>
+                          <SelectItem value="CHANGE">{t("changeAction")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label htmlFor="subscription-plan" className="block text-sm font-medium">
+                        {t("plan")}
+                      </label>
+                      <Select
+                        value={plan}
+                        onValueChange={(value) => {
+                          setSelected(value as PlanCode);
+                          onPlanSelected?.(value as PlanCode);
+                          setExtras({
+                            ...selectedExtras,
+                            stores: Math.min(
+                              selectedExtras.stores,
+                              ADDITIONAL_STORE_CAPS[value as PlanCode],
+                            ),
+                          });
+                          requestKey.current = "";
+                        }}
+                      >
+                        <SelectTrigger id="subscription-plan">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {settings.data.catalog.map((item) => (
+                            <SelectItem key={item.plan} value={item.plan}>
+                              {name(item.plan)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="subscription-months" className="block text-sm font-medium">
+                        {t("term")}
+                      </label>
+                      <Select
+                        value={String(selectedMonths)}
+                        disabled={action === "CHANGE"}
+                        onValueChange={(value) => {
+                          setMonths(Number(value) as SubscriptionMonths);
+                          requestKey.current = "";
+                        }}
+                      >
+                        <SelectTrigger id="subscription-months">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {([1, 6, 12] as const).map((term) => (
+                            <SelectItem key={term} value={String(term)}>
+                              {t(`term${term}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                ) : null}
-                <label htmlFor="subscription-plan" className="block text-sm font-medium">
-                  {t("plan")}
-                </label>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="w-full sm:max-w-xs">
-                    <Select
-                      value={plan}
-                      onValueChange={(value) => {
-                        setSelected(value as PlanCode);
-                        onPlanSelected?.(value as PlanCode);
-                        setExtras({
-                          ...selectedExtras,
-                          stores: Math.min(
-                            selectedExtras.stores,
-                            ADDITIONAL_STORE_CAPS[value as PlanCode],
-                          ),
-                        });
-                        requestKey.current = "";
-                      }}
-                    >
-                      <SelectTrigger id="subscription-plan">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {settings.data.catalog.map((item) => (
-                          <SelectItem key={item.plan} value={item.plan}>
-                            {name(item.plan)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {settings.data.catalogVersion === CURRENT_CATALOG_VERSION ? (
+                    <fieldset className="space-y-3 rounded-lg border border-border p-4">
+                      <legend className="text-sm font-medium">{t("extrasTitle")}</legend>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label htmlFor="subscription-extra-stores" className="block text-sm">
+                            {t("extrastores")}
+                          </label>
+                          {ADDITIONAL_STORE_CAPS[plan] > 0 ? (
+                            <Select
+                              value={String(selectedExtras.stores)}
+                              onValueChange={(value) => {
+                                setExtras({ ...selectedExtras, stores: Number(value) });
+                                requestKey.current = "";
+                              }}
+                            >
+                              <SelectTrigger id="subscription-extra-stores">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from(
+                                  { length: ADDITIONAL_STORE_CAPS[plan] + 1 },
+                                  (_, count) => (
+                                    <SelectItem key={count} value={String(count)}>
+                                      {t("extraStoreCount", { count })}
+                                    </SelectItem>
+                                  ),
+                                )}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">{t("starterOneStore")}</p>
+                          )}
+                        </div>
+                        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-input p-3">
+                          <Checkbox
+                            checked={selectedExtras.productPacks === 1}
+                            onCheckedChange={(checked) => {
+                              setExtras({
+                                ...selectedExtras,
+                                productPacks: checked === true ? 1 : 0,
+                              });
+                              requestKey.current = "";
+                            }}
+                          />
+                          <span className="text-sm">{t("extraproductPacks")}</span>
+                        </label>
+                      </div>
+                    </fieldset>
+                  ) : null}
+                </div>
+                <div className="space-y-4">
+                  {quote.isFetching ? (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      {common("loading")}
+                    </p>
+                  ) : quote.isError ? (
+                    quote.error.message === "billingDowngradeNeedsPreparation" ? (
+                      <div className="space-y-3">
+                        <SubscriptionPreparationNotice
+                          modules={quote.error.data?.details?.modules}
+                          trial={settings.data.trialPreview}
+                        />
+                        {settings.data.trialPreview ? (
+                          <TrialPreparation
+                            plan={plan}
+                            onPrepared={() => {
+                              requestKey.current = "";
+                              setConsent(null);
+                              setAccepted(false);
+                              void quote.refetch();
+                              refresh();
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <QueryErrorState error={quote.error} onRetry={() => void quote.refetch()} />
+                        {quote.error.message === "billingDowngradeNextPeriod" ? (
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              setAction("RENEW");
+                              requestKey.current = "";
+                            }}
+                          >
+                            {t("renewAction")}
+                          </Button>
+                        ) : null}
+                      </div>
+                    )
+                  ) : quote.data ? (
+                    <SubscriptionQuoteSummary quote={quote.data} />
+                  ) : null}
                   <Button
+                    className="w-full"
                     disabled={!quote.data || quote.isFetching || quote.isError}
                     onClick={() => {
                       if (!settings.data || !quote.data) return;
@@ -464,127 +586,23 @@ export function SubscriptionPayments({
                         : billing("trial.choose")}
                   </Button>
                 </div>
-                <div className="space-y-2 sm:max-w-xs">
-                  <label htmlFor="subscription-months" className="block text-sm font-medium">
-                    {t("term")}
-                  </label>
-                  <Select
-                    value={String(selectedMonths)}
-                    disabled={action === "CHANGE"}
-                    onValueChange={(value) => {
-                      setMonths(Number(value) as SubscriptionMonths);
-                      requestKey.current = "";
-                    }}
-                  >
-                    <SelectTrigger id="subscription-months">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {([1, 6, 12] as const).map((term) => (
-                        <SelectItem key={term} value={String(term)}>
-                          {t(`term${term}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {settings.data.catalogVersion === CURRENT_CATALOG_VERSION ? (
-                  <fieldset className="space-y-3">
-                    <legend className="text-sm font-medium">{t("extrasTitle")}</legend>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <label htmlFor="subscription-extra-stores" className="block text-sm">
-                          {t("extrastores")}
-                        </label>
-                        {ADDITIONAL_STORE_CAPS[plan] > 0 ? (
-                          <Select
-                            value={String(selectedExtras.stores)}
-                            onValueChange={(value) => {
-                              setExtras({ ...selectedExtras, stores: Number(value) });
-                              requestKey.current = "";
-                            }}
-                          >
-                            <SelectTrigger id="subscription-extra-stores">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from(
-                                { length: ADDITIONAL_STORE_CAPS[plan] + 1 },
-                                (_, count) => (
-                                  <SelectItem key={count} value={String(count)}>
-                                    {t("extraStoreCount", { count })}
-                                  </SelectItem>
-                                ),
-                              )}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">{t("starterOneStore")}</p>
-                        )}
-                      </div>
-                      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-input p-3">
-                        <Checkbox
-                          checked={selectedExtras.productPacks === 1}
-                          onCheckedChange={(checked) => {
-                            setExtras({
-                              ...selectedExtras,
-                              productPacks: checked === true ? 1 : 0,
-                            });
-                            requestKey.current = "";
-                          }}
-                        />
-                        <span className="text-sm">{t("extraproductPacks")}</span>
-                      </label>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{t("extrasHint")}</p>
-                  </fieldset>
-                ) : null}
-                {quote.isFetching ? (
-                  <p role="status" className="text-sm text-muted-foreground">
-                    {common("loading")}
-                  </p>
-                ) : quote.isError ? (
-                  quote.error.message === "billingDowngradeNeedsPreparation" ? (
-                    <div className="space-y-3">
-                      <SubscriptionPreparationNotice
-                        modules={quote.error.data?.details?.modules}
-                        trial={settings.data.trialPreview}
-                      />
-                      {settings.data.trialPreview ? (
-                        <TrialPreparation
-                          plan={plan}
-                          onPrepared={() => {
-                            requestKey.current = "";
-                            setConsent(null);
-                            setAccepted(false);
-                            void quote.refetch();
-                            refresh();
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <QueryErrorState error={quote.error} onRetry={() => void quote.refetch()} />
-                      {quote.error.message === "billingDowngradeNextPeriod" ? (
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setAction("RENEW");
-                            requestKey.current = "";
-                          }}
-                        >
-                          {t("renewAction")}
-                        </Button>
-                      ) : null}
-                    </div>
-                  )
-                ) : quote.data ? (
-                  <SubscriptionQuoteSummary quote={quote.data} />
-                ) : null}
-                <p className="text-xs text-muted-foreground">{t("planChangeHint")}</p>
               </div>
             ) : null}
+            <details
+              id="subscription-addons"
+              className="border-t border-border pt-4 text-sm"
+              data-subscription-addons
+            >
+              <summary className="cursor-pointer font-medium text-foreground">
+                {t("extrasDetails")}
+              </summary>
+              <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                <p>{billing("publicPricing.storeExtra")}</p>
+                <p>{billing("publicPricing.reserveExtra")}</p>
+                <p>{billing("publicPricing.storeCountingNote")}</p>
+                <p className="text-xs">{t("extrasHint")}</p>
+              </div>
+            </details>
             <p
               aria-live="polite"
               role={notice ? "status" : undefined}
@@ -766,24 +784,28 @@ export function SubscriptionPayments({
                     {t("sandbox", { provider: providerName(consent.provider) })}
                   </p>
                 ) : null}
-                <p className="text-sm">
-                  {t("confirmDescription", {
-                    plan: name(consent?.plan ?? plan),
-                    amount: money(consent?.amount ?? amount),
-                  })}
-                </p>
                 {consent ? (
-                  <SubscriptionQuoteSummary quote={consent.quote} className="border-0 p-0" />
+                  <SubscriptionQuoteSummary
+                    quote={consent.quote}
+                    mode="confirmation"
+                    className="border-0 bg-transparent p-0"
+                  />
                 ) : null}
-                <p className="text-xs text-muted-foreground">
-                  {t("providerDescription", {
-                    provider: providerName(consent?.provider ?? settings.data?.provider),
-                  })}
-                </p>
+                <dl className="grid gap-3 text-xs sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">{t("seller")}</dt>
+                    <dd className="mt-1 text-foreground">{consent?.sellerName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">{t("provider")}</dt>
+                    <dd className="mt-1 text-foreground">
+                      {providerName(consent?.provider ?? settings.data?.provider)}
+                    </dd>
+                  </div>
+                </dl>
                 <p className="text-sm text-muted-foreground">
                   {t(consent?.isTest ? "testPaymentPolicy" : "renewalPolicy")}
                 </p>
-                <p className="text-xs text-muted-foreground">{consent?.sellerName}</p>
                 <div className="flex items-start gap-3">
                   <Checkbox
                     id="subscription-terms"

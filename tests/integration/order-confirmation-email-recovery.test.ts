@@ -10,6 +10,7 @@ import { ORDER_CONFIRMATION_EMAIL_JOB_NAME } from "@/server/jobs/orderConfirmati
 import { runJob } from "@/server/jobs";
 import { createBazaarApiKey, createBazaarApiOrderOperation } from "@/server/services/bazaarApi";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
+import { orderConfirmationEmailOperationKey } from "@/server/services/orderEmailOutbox";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -65,7 +66,9 @@ describeDb("API order confirmation email recovery", () => {
     });
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response("provider unavailable", { status: 503, headers: { "Retry-After": "60" } }))
+      .mockResolvedValueOnce(
+        new Response("provider unavailable", { status: 503, headers: { "Retry-After": "60" } }),
+      )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: "resend-recovered-1" }), {
           status: 200,
@@ -97,7 +100,14 @@ describeDb("API order confirmation email recovery", () => {
     expect(failedLog.status).toBe(CustomerOrderEmailStatus.FAILED);
     expect(failedLog.attemptCount).toBe(1);
     expect(failedLog.nextAttemptAt).toBeInstanceOf(Date);
+    expect(failedLog.templateVersion).toBe("branded-v1");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).html).toContain(
+      'data-bazaar-email-template="v1"',
+    );
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("Idempotency-Key")).toBe(
+      `customer-order-confirmation-${orderId}`,
+    );
 
     await prisma.customerOrderEmailLog.update({
       where: { id: failedLog.id },
@@ -118,8 +128,13 @@ describeDb("API order confirmation email recovery", () => {
     expect(sentLog.status).toBe(CustomerOrderEmailStatus.SENT);
     expect(sentLog.attemptCount).toBe(2);
     expect(sentLog.providerMessageId).toBe("resend-recovered-1");
+    expect(sentLog.templateVersion).toBe("branded-v1");
     expect(order.confirmationEmailSentAt).toBeInstanceOf(Date);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1].body).toBe(fetchMock.mock.calls[0][1].body);
+    expect(new Headers(fetchMock.mock.calls[1][1].headers).get("Idempotency-Key")).toBe(
+      new Headers(fetchMock.mock.calls[0][1].headers).get("Idempotency-Key"),
+    );
 
     const replay = await createBazaarApiOrderOperation(input);
     expect(replay.replayed).toBe(true);
@@ -158,6 +173,90 @@ describeDb("API order confirmation email recovery", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps a pre-rollout NULL-template outbox retry on the original HTML and operation identity", async () => {
+    const { org, store, product } = await seedBase();
+    const order = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        number: "SYNTHETIC-LEGACY-EMAIL",
+        status: "CONFIRMED",
+        customerName: "Synthetic legacy customer",
+        customerEmail: "legacy.customer@example.test",
+        confirmedAt: new Date("2026-11-11T10:00:00Z"),
+        subtotalKgs: 125,
+        totalKgs: 125,
+        lines: {
+          create: { productId: product.id, qty: 1, unitPriceKgs: 125, lineTotalKgs: 125 },
+        },
+      },
+    });
+    const log = await prisma.customerOrderEmailLog.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        customerOrderId: order.id,
+        type: CustomerOrderEmailType.CONFIRMATION,
+        status: CustomerOrderEmailStatus.QUEUED,
+        recipientEmail: order.customerEmail,
+        operationKey: orderConfirmationEmailOperationKey(order.id),
+        templateVersion: null,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("synthetic temporary failure", {
+          status: 503,
+          headers: { "Retry-After": "60" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "synthetic-legacy-recovered" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      sendOrderConfirmationEmail({
+        organizationId: org.id,
+        customerOrderId: order.id,
+        deliveryLogId: log.id,
+      }),
+    ).rejects.toMatchObject({ message: "orderEmailSendFailed" });
+    const first = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("Idempotency-Key")).toBe(
+      `customer-order-confirmation-${order.id}`,
+    );
+    expect(first.html).toContain("This message was sent by BAZAAR.");
+    expect(first.html).not.toContain("data-bazaar-email-template");
+    const failed = await prisma.customerOrderEmailLog.findUniqueOrThrow({ where: { id: log.id } });
+    expect(failed).toMatchObject({ status: "FAILED", templateVersion: null, attemptCount: 1 });
+    await prisma.customerOrderEmailLog.update({
+      where: { id: log.id },
+      data: { nextAttemptAt: new Date(Date.now() - 1000) },
+    });
+    const recovered = await runJob(ORDER_CONFIRMATION_EMAIL_JOB_NAME, { logId: log.id });
+    expect(recovered).toMatchObject({ status: "ok", details: { sent: 1, failed: 0 } });
+    const sent = await prisma.customerOrderEmailLog.findUniqueOrThrow({ where: { id: log.id } });
+    expect(sent).toMatchObject({ status: "SENT", templateVersion: null, attemptCount: 2 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1].body).toBe(fetchMock.mock.calls[0][1].body);
+    expect(new Headers(fetchMock.mock.calls[1][1].headers).get("Idempotency-Key")).toBe(
+      new Headers(fetchMock.mock.calls[0][1].headers).get("Idempotency-Key"),
+    );
+    await expect(
+      sendOrderConfirmationEmail({
+        organizationId: org.id,
+        customerOrderId: order.id,
+        deliveryLogId: log.id,
+      }),
+    ).resolves.toMatchObject({ status: "skipped", reason: "alreadySent" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("claims one retry under concurrent delivery attempts", async () => {
     const { org, store, product, adminUser } = await seedBase({ allowNegativeStock: true });
     await prisma.product.update({
@@ -173,7 +272,9 @@ describeDb("API order confirmation email recovery", () => {
     });
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response("provider unavailable", { status: 503, headers: { "Retry-After": "60" } }))
+      .mockResolvedValueOnce(
+        new Response("provider unavailable", { status: 503, headers: { "Retry-After": "60" } }),
+      )
       .mockResolvedValue(
         new Response(JSON.stringify({ id: "resend-concurrent-1" }), {
           status: 200,
@@ -230,11 +331,17 @@ describeDb("API order confirmation email recovery", () => {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
-      staleResponse: new Response("stale failed", { status: 503, headers: { "Retry-After": "60" } }),
+      staleResponse: new Response("stale failed", {
+        status: 503,
+        headers: { "Retry-After": "60" },
+      }),
     },
     {
       newerOutcome: "failed" as const,
-      newerResponse: new Response("newer failed", { status: 503, headers: { "Retry-After": "60" } }),
+      newerResponse: new Response("newer failed", {
+        status: 503,
+        headers: { "Retry-After": "60" },
+      }),
       staleResponse: new Response(JSON.stringify({ id: "stale-sent" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -255,7 +362,9 @@ describeDb("API order confirmation email recovery", () => {
       const heldAttempt = deferred<Response>();
       const fetchMock = vi
         .fn()
-        .mockResolvedValueOnce(new Response("initial failure", { status: 503, headers: { "Retry-After": "60" } }))
+        .mockResolvedValueOnce(
+          new Response("initial failure", { status: 503, headers: { "Retry-After": "60" } }),
+        )
         .mockImplementationOnce(() => heldAttempt.promise)
         .mockResolvedValueOnce(newerResponse);
       vi.stubGlobal("fetch", fetchMock);

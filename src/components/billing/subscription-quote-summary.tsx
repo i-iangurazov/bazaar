@@ -15,9 +15,11 @@ export type SubscriptionQuote = inferRouterOutputs<AppRouter>["billing"]["paymen
 export function SubscriptionQuoteSummary({
   quote,
   className,
+  mode = "checkout",
 }: {
   quote: SubscriptionQuote;
   className?: string;
+  mode?: "checkout" | "confirmation";
 }) {
   const t = useTranslations("billing.payments");
   const billing = useTranslations("billing");
@@ -29,53 +31,35 @@ export function SubscriptionQuoteSummary({
       aria-label={t("configuration")}
       aria-live="polite"
       data-subscription-quote
-      className={cn("space-y-3 rounded-md border border-input p-4", className)}
+      className={cn("space-y-4 rounded-lg border border-input bg-muted/20 p-4", className)}
     >
-      <dl className="grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="text-muted-foreground">{t("plan")}</dt>
-          <dd className="font-medium">
-            {billing(`plans.${toPlanCode(quote.plan).toLowerCase()}.name`)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">{t("term")}</dt>
-          <dd>{t(`term${quote.months}`)}</dd>
-        </div>
-        <div className="sm:col-span-2">
-          <dt className="text-muted-foreground">{t("period")}</dt>
-          <dd>
-            {formatDateTime(quote.startsAt, locale)} — {formatDateTime(quote.endsAt, locale)}
-          </dd>
-        </div>
-        <div className="sm:col-span-2">
-          <dt className="text-muted-foreground">{t("extrasTitle")}</dt>
-          <dd>
-            {t("extrasSummary", {
-              stores: quote.extras.stores,
-              products: quote.extras.productPacks * 1000,
-              users:
-                quote.catalogVersion === CURRENT_CATALOG_VERSION
-                  ? quote.extras.productPacks * 2
-                  : quote.extras.userPacks * 5,
-            })}
-          </dd>
-        </div>
-      </dl>
-      <p className="text-sm" data-subscription-selected-limits>
-        {t("limitsSummary", {
-          stores: quote.entitlements.limits.maxStores,
-          products: quote.entitlements.limits.maxProducts,
-          users: quote.entitlements.limits.maxActiveUsers,
-        })}
-      </p>
-      <div className="space-y-1 border-t border-border pt-3 text-sm">
+      {mode === "confirmation" ? (
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt className="text-muted-foreground">{t("plan")}</dt>
+            <dd className="font-semibold text-foreground">
+              {billing(`plans.${toPlanCode(quote.plan).toLowerCase()}.name`)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">{t("term")}</dt>
+            <dd>{t(`term${quote.months}`)}</dd>
+          </div>
+        </dl>
+      ) : null}
+      <div className="space-y-2 text-sm">
         {quote.kind === "UPGRADE" ? (
           <>
             <p>{t("serviceValue", { amount: money(quote.serviceValueMinor) })}</p>
             <p>{t("credit", { amount: money(quote.creditMinor) })}</p>
           </>
         ) : null}
+        <p
+          className="text-xl font-semibold tracking-tight text-foreground"
+          data-subscription-amount-due
+        >
+          {t("total", { amount: money(quote.amountMinor) })}
+        </p>
         {quote.savingsMinor > 0 ? (
           <>
             <p className="text-muted-foreground">
@@ -89,15 +73,40 @@ export function SubscriptionQuoteSummary({
             </p>
           </>
         ) : null}
-        {quote.kind === "UPGRADE" ? (
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {t("termReference", { months: quote.months, amount: money(quote.termAmountMinor) })}
-          </p>
-        ) : null}
-        <p className="pt-1 text-lg font-semibold text-foreground" data-subscription-amount-due>
-          {t("total", { amount: money(quote.amountMinor) })}
-        </p>
       </div>
+      <dl className="space-y-3 border-t border-border pt-3 text-sm">
+        <div>
+          <dt className="text-muted-foreground">{t("period")}</dt>
+          <dd className="mt-1 font-medium text-foreground">
+            {formatDateTime(quote.startsAt, locale)} — {formatDateTime(quote.endsAt, locale)}
+          </dd>
+        </div>
+        {mode === "confirmation" ||
+        quote.extras.stores ||
+        quote.extras.productPacks ||
+        quote.extras.userPacks ? (
+          <div>
+            <dt className="text-muted-foreground">{t("extrasTitle")}</dt>
+            <dd>
+              {t("extrasSummary", {
+                stores: quote.extras.stores,
+                products: quote.extras.productPacks * 1000,
+                users:
+                  quote.catalogVersion === CURRENT_CATALOG_VERSION
+                    ? quote.extras.productPacks * 2
+                    : quote.extras.userPacks * 5,
+              })}
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+      <p className="text-sm font-medium" data-subscription-selected-limits>
+        {t("limitsSummary", {
+          stores: quote.entitlements.limits.maxStores,
+          products: quote.entitlements.limits.maxProducts,
+          users: quote.entitlements.limits.maxActiveUsers,
+        })}
+      </p>
       <p className="text-sm text-muted-foreground">
         {quote.kind === "UPGRADE"
           ? t("upgradeDates", {
@@ -115,7 +124,7 @@ export function SubscriptionQuoteSummary({
       {quote.scheduledReduction ? (
         <p className="rounded-md bg-secondary p-3 text-sm">{t("scheduledReduction")}</p>
       ) : null}
-      <details className="text-sm" data-subscription-selected-features>
+      <details className="border-t border-border pt-3 text-sm" data-subscription-selected-features>
         <summary className="cursor-pointer font-medium">{t("featuresTitle")}</summary>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {enabled.map((feature) => (
@@ -125,9 +134,19 @@ export function SubscriptionQuoteSummary({
             </li>
           ))}
         </ul>
+        <div className="mt-3 space-y-2 text-xs leading-relaxed text-muted-foreground">
+          {quote.kind === "UPGRADE" ? (
+            <p>
+              {t("termReference", { months: quote.months, amount: money(quote.termAmountMinor) })}
+            </p>
+          ) : null}
+          <p>{t("monthlyQuotas")}</p>
+          <p>{t("planChangeHint")}</p>
+        </div>
       </details>
-      <p className="text-xs leading-relaxed text-muted-foreground">{t("monthlyQuotas")}</p>
-      <p className="text-xs leading-relaxed text-muted-foreground">{t("oneTimePayment")}</p>
+      {mode === "checkout" ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">{t("noAutomaticCharges")}</p>
+      ) : null}
     </section>
   );
 }

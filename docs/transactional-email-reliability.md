@@ -1,5 +1,47 @@
 # Transactional email reliability
 
+## Shared email presentation
+
+New account verification, password reset, organization invitation, loyalty-code,
+subscription-payment and subscription-reminder messages use
+`src/server/services/emailTemplate.ts`. It follows the account-verification design:
+a fluid bordered card, Bazaar logo, shared typography and blue action buttons.
+HTML uses inline styles and presentation tables; a plain-text alternative remains
+part of every message. Russian, Kyrgyz and English account/billing content remains
+localized. Customer-order content retains its existing languages and store identity.
+
+The design is applied when content is generated, never in the delivery transport.
+Stored subscription outbox HTML, text, sender and operation keys are sent verbatim
+on retry. This matters because a provider idempotency key cannot safely be reused
+with a different request body merely to change its appearance.
+
+Customer-order delivery logs have an optional `templateVersion`. New queued
+deliveries explicitly select `branded-v1`; existing null values retain the original
+renderer for retries. The additive migration only adds a nullable column and does
+not rewrite orders, stock, subscriptions or historical delivery logs. Direct sends
+retain the version of their previous delivery log. Do not remove the legacy renderer
+while older delivery operations remain recoverable.
+
+An older direct send can have reached the provider before its local log was saved.
+Only the provider's typed `409 invalid_idempotent_request` permits recovery with
+the original renderer and the same key; concurrent requests and other failures do
+not trigger that compatibility path. No replacement key is generated. The provider
+must return an accepted message ID before the local delivery is marked sent.
+This follows the provider's distinct [idempotency error contracts](https://resend.com/docs/api-reference/errors).
+When rolling back unrelated UI work, retain these renderer-version compatibility
+paths while deliveries from the newer version remain recoverable.
+
+Campaigns and automations reuse their existing `contentVersion`: new content uses
+version 2 and the shared presentation shell, while persisted version 1 keeps its
+original rendering. Merchant blocks, logos, colors, product links and unsubscribe
+links remain part of the merchant's message. A design upgrade must not silently
+change the body of an already-started campaign batch.
+
+The preview and regression fixtures contain synthetic data only. They do not send
+mail or contact payment providers. Browser previews verify HTML presentation,
+not every mail client's rendering or inbox delivery. Actual provider acceptance
+and delivery remain separate lifecycle states.
+
 Single Resend sends now have a 15-second total budget, a 5-second deadline per attempt (including response body reading), and at most three attempts. Rate limits, server failures and network interruptions can retry; permanent HTTP failures and malformed successful responses cannot. The same serialized payload and idempotency key are used throughout one call. A successful result requires a nonempty provider message ID. It confirms provider acceptance, not inbox delivery.
 
 Caller-supplied idempotency keys are preserved. Calls without a key generate a random key once for their internal retries. That fallback does not deduplicate a later independent invocation. Resend retains keys for 24 hours and requires the same request payload for reuse; callers that retry durable operations must preserve their operation identity and payload within that window. [Resend idempotency documentation](https://resend.com/docs/dashboard/emails/idempotency-keys), [send-email API](https://resend.com/docs/api-reference/emails/send-email).

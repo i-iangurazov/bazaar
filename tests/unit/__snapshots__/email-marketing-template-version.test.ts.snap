@@ -1,0 +1,64 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`persisted marketing email rendering versions > preserves the exact legacy HTML, whitespace, variables and plain text 1`] = `
+{
+  "html": "
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Corner &amp; Market — 11.11.2026 &lt;special&gt;</div>
+    <div style="background:#fef3c7;padding:24px;font-family:Roboto, Arial, Helvetica, sans-serif;">
+      <div style="max-width:640px;margin:0 auto;background:#fff7ed;border:1px solid #fed7aa;">
+        
+        <div style="padding:22px 24px;border-bottom:1px solid #fed7aa;text-align:left;">
+          <img src="https://assets.example.invalid/merchant-logo.png" alt="Corner &amp; Market" width="140" style="display:block;width:140px;max-width:100%;max-height:120px;height:auto;object-fit:contain;margin:0 0 8px;" />
+          <div style="font-size:18px;font-weight:800;color:#7c3aed;">Corner &amp; Market</div>
+          
+        </div>
+      
+        <div style="padding:8px 24px 22px;text-align:left;">
+          <h2 style="margin:0 0 10px;color:#292524;font-size:20px;line-height:1.3;">Hello Aida &amp; Co</h2>
+          <div style="color:#57534e;font-size:15px;line-height:1.65;font-weight:400;">Collection from Corner &amp; Market. &lt;script&gt;unsafe&lt;/script&gt;</div>
+        </div>
+      
+          <div style="padding:8px 24px 24px;text-align:left;">
+            <a href="https://www.bazaar.kg/catalog" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700;">View collection</a>
+          </div>
+        
+          <div style="padding:8px 16px 24px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+              <tr>
+          <td style="width:50%;padding:8px;vertical-align:top;">
+            <div style="border:1px solid #fed7aa;padding:14px;background:#fff7ed;text-align:left;">
+              <img src="https://assets.example.invalid/coffee.png" alt="Coffee &lt;Arabica&gt;" style="display:block;width:100%;height:auto;margin:0 0 12px;" />
+              <h3 style="margin:0 0 8px;color:#292524;font-size:16px;line-height:1.35;">Coffee &lt;Arabica&gt;</h3>
+              <p style="margin:0 0 10px;color:#57534e;font-size:13px;line-height:1.45;">Fresh &amp; roasted</p>
+              <p style="margin:0 0 12px;color:#292524;font-size:15px;font-weight:800;">450 сом</p>
+              <a href="https://www.bazaar.kg/catalog/coffee" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700;">Подробнее</a>
+            </div>
+          </td>
+        </tr>
+            </table>
+          </div>
+        
+        <div style="padding:18px 24px;border-top:1px solid #fed7aa;color:#57534e;font-size:12px;line-height:1.55;text-align:left;">
+          <p style="margin:0 0 8px;">Вы получили это письмо, потому что ваш email есть в базе клиентов магазина.</p>
+          <p style="margin:0;">Corner &amp; Market</p>
+          <p style="margin:8px 0 0;"><a href="https://www.bazaar.kg/api/email-marketing/unsubscribe?token=synthetic" style="color:#7c3aed;text-decoration:underline;">Отписаться от рассылки</a></p>
+        </div>
+      
+      </div>
+    </div>
+  ",
+  "text": "Corner & Market
+
+Hello Aida & Co
+
+Collection from Corner & Market. <script>unsafe</script>
+
+View collection: https://www.bazaar.kg/catalog
+
+Coffee <Arabica> - Fresh & roasted - 450 сом - Подробнее: https://www.bazaar.kg/catalog/coffee
+
+Вы получили это письмо, потому что ваш email есть в базе клиентов магазина.
+Corner & Market
+Отписаться от рассылки: https://www.bazaar.kg/api/email-marketing/unsubscribe?token=synthetic",
+}
+`;

@@ -739,6 +739,7 @@ const UsersPage = () => {
                   inviteMutation.mutate({
                     ...values,
                     storeIds: values.role === "ADMIN" ? [] : values.storeIds,
+                    locale: normalizeLocale(locale) ?? defaultLocale,
                   }),
                 )}
               >

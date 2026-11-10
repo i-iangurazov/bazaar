@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { getLogger } from "@/server/logging";
 import { assertExternalProviderCallAllowed, isProductionRuntime } from "@/server/config/runtime";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
+import { escapeEmailHtml, renderBrandedEmail, renderEmailButton } from "./emailTemplate";
 
 export type EmailTag = {
   name: string;
@@ -138,20 +139,6 @@ const fetchEmailAttempt = async (init: RequestInit, timeoutMs: number) => {
   }
 };
 export const MARKETING_EMAIL_FROM = "no-reply@bazaar.kg";
-
-const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
-
-const getEmailLogoUrl = () => {
-  const explicit = (process.env.EMAIL_LOGO_URL ?? "").trim();
-  if (explicit) {
-    return explicit;
-  }
-  const baseUrl = trimTrailingSlash((process.env.NEXTAUTH_URL ?? "").trim());
-  if (!baseUrl) {
-    return null;
-  }
-  return `${baseUrl}/brand/logo.png`;
-};
 
 const getEmailProvider = () => {
   const configured = (process.env.EMAIL_PROVIDER ?? "").trim().toLowerCase();
@@ -507,13 +494,12 @@ export const sendMarketingEmail = async (
   });
 };
 
-export const sendVerificationEmail = async (input: {
+export const buildVerificationEmail = (input: {
   email: string;
   verifyLink: string;
-  locale?: EmailLocale | null;
+  locale?: string | null;
   expiresInMinutes?: number;
-}) => {
-  const logoUrl = getEmailLogoUrl();
+}): EmailPayload => {
   const locale: EmailLocale = normalizeLocale(input.locale) ?? defaultLocale;
   const expiresInHours = Math.max(1, Math.round((input.expiresInMinutes ?? 60) / 60));
   const copies: Record<
@@ -558,50 +544,149 @@ export const sendVerificationEmail = async (input: {
   };
   const copy = copies[locale];
 
-  await sendEmail({
+  return {
     to: input.email,
     subject: copy.subject,
     text: `${copy.greeting}\n\n${copy.intro}\n${copy.expires}\n\n${copy.cta}: ${input.verifyLink}\n\n${copy.ignore}`,
-    html: `
-      <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
-        <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
-          ${
-            logoUrl
-              ? `<img src="${logoUrl}" alt="BAZAAR" width="180" height="48" style="display:block;height:auto;width:180px;max-width:100%;margin:0 0 12px;" />`
-              : '<h1 style="margin:0 0 8px;font-size:20px;line-height:1.3;color:#111827;">BAZAAR</h1>'
-          }
-          <p style="margin:0 0 8px;color:#111827;">${copy.greeting}</p>
-          <p style="margin:0 0 16px;color:#374151;">${copy.intro}</p>
-          <p style="margin:0 0 16px;color:#374151;">${copy.expires}</p>
-          <a href="${input.verifyLink}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">
-            ${copy.cta}
-          </a>
-          <p style="margin:16px 0 6px;color:#6b7280;font-size:13px;">${copy.fallback}</p>
-          <p style="margin:0 0 16px;color:#6b7280;font-size:13px;word-break:break-all;">${input.verifyLink}</p>
-          <p style="margin:0;color:#6b7280;font-size:13px;">${copy.ignore}</p>
-        </div>
-      </div>
-    `,
+    html: renderBrandedEmail({
+      locale,
+      preheader: `${copy.intro} ${copy.expires}`,
+      contentHtml: `<p style="margin:0 0 8px;color:#111827;">${escapeEmailHtml(copy.greeting)}</p>
+        <p style="margin:0 0 16px;color:#374151;">${escapeEmailHtml(copy.intro)}</p>
+        <p style="margin:0 0 16px;color:#374151;">${escapeEmailHtml(copy.expires)}</p>
+        ${renderEmailButton({ href: input.verifyLink, label: copy.cta })}
+        <p style="margin:16px 0 6px;color:#6b7280;font-size:13px;">${escapeEmailHtml(copy.fallback)}</p>
+        <p style="margin:0;color:#6b7280;font-size:13px;word-break:break-all;"><a href="${escapeEmailHtml(input.verifyLink)}" style="color:#1d4ed8;">${escapeEmailHtml(input.verifyLink)}</a></p>`,
+      footerHtml: `<p style="margin:0;">${escapeEmailHtml(copy.ignore)}</p>`,
+    }),
     tags: [{ name: "kind", value: "signup_verification" }],
+  };
+};
+
+export const sendVerificationEmail = async (
+  input: Parameters<typeof buildVerificationEmail>[0],
+) => {
+  await sendEmail(buildVerificationEmail(input));
+};
+
+type AuthLinkCopy = {
+  subject: string;
+  title: string;
+  intro: string;
+  cta: string;
+  fallback: string;
+  ignore: string;
+};
+
+const buildAuthLinkEmail = (input: {
+  email: string;
+  link: string;
+  locale: EmailLocale;
+  copy: AuthLinkCopy;
+  kind: "password_reset" | "organization_invite";
+}): EmailPayload => ({
+  to: input.email,
+  subject: input.copy.subject,
+  text: `${input.copy.intro} ${input.link}\n\n${input.copy.ignore}`,
+  html: renderBrandedEmail({
+    locale: input.locale,
+    title: input.copy.title,
+    preheader: input.copy.intro,
+    contentHtml: `<p style="margin:0 0 16px;">${escapeEmailHtml(input.copy.intro)}</p>
+      ${renderEmailButton({ href: input.link, label: input.copy.cta })}
+      <p style="margin:16px 0 6px;color:#6b7280;font-size:13px;">${escapeEmailHtml(input.copy.fallback)}</p>
+      <p style="margin:0;color:#6b7280;font-size:13px;word-break:break-all;"><a href="${escapeEmailHtml(input.link)}" style="color:#1d4ed8;">${escapeEmailHtml(input.link)}</a></p>`,
+    footerHtml: `<p style="margin:0;">${escapeEmailHtml(input.copy.ignore)}</p>`,
+  }),
+  tags: [{ name: "kind", value: input.kind }],
+});
+
+export const buildResetEmail = (input: {
+  email: string;
+  resetLink: string;
+  locale?: string | null;
+}): EmailPayload => {
+  const locale = normalizeLocale(input.locale) ?? defaultLocale;
+  const copies: Record<EmailLocale, AuthLinkCopy> = {
+    ru: {
+      subject: "Сброс пароля BAZAAR",
+      title: "Сброс пароля",
+      intro: "Откройте ссылку, чтобы задать новый пароль:",
+      cta: "Задать новый пароль",
+      fallback: "Если кнопка не работает, скопируйте ссылку в браузер:",
+      ignore: "Если вы не запрашивали сброс пароля, проигнорируйте это письмо.",
+    },
+    kg: {
+      subject: "BAZAAR сырсөзүн калыбына келтирүү",
+      title: "Сырсөздү калыбына келтирүү",
+      intro: "Жаңы сырсөз коюу үчүн шилтемени ачыңыз:",
+      cta: "Жаңы сырсөз коюу",
+      fallback: "Эгер баскыч иштебесе, төмөнкү шилтемени браузерге көчүрүңүз:",
+      ignore: "Эгер сырсөздү калыбына келтирүүнү сурабасаңыз, бул катты четке кагыңыз.",
+    },
+    en: {
+      subject: "Password reset",
+      title: "Reset your password",
+      intro: "Open this link to reset your password:",
+      cta: "Reset password",
+      fallback: "If the button does not work, copy this link into your browser:",
+      ignore: "If you did not request a password reset, you can ignore this email.",
+    },
+  };
+  return buildAuthLinkEmail({
+    email: input.email,
+    link: input.resetLink,
+    locale,
+    copy: copies[locale],
+    kind: "password_reset",
   });
 };
 
-export const sendResetEmail = async (input: { email: string; resetLink: string }) => {
-  await sendEmail({
-    to: input.email,
-    subject: "Password reset",
-    text: `Open this link to reset your password: ${input.resetLink}`,
-    html: `<p>Open this link to reset your password:</p><p><a href="${input.resetLink}">${input.resetLink}</a></p>`,
-    tags: [{ name: "kind", value: "password_reset" }],
+export const sendResetEmail = async (input: Parameters<typeof buildResetEmail>[0]) => {
+  await sendEmail(buildResetEmail(input));
+};
+
+export const buildInviteEmail = (input: {
+  email: string;
+  inviteLink: string;
+  locale?: string | null;
+}): EmailPayload => {
+  const locale = normalizeLocale(input.locale) ?? defaultLocale;
+  const copies: Record<EmailLocale, AuthLinkCopy> = {
+    ru: {
+      subject: "Приглашение в организацию BAZAAR",
+      title: "Вас пригласили в BAZAAR",
+      intro: "Откройте ссылку, чтобы принять приглашение в организацию:",
+      cta: "Принять приглашение",
+      fallback: "Если кнопка не работает, скопируйте ссылку в браузер:",
+      ignore: "Если вы не ожидали приглашения, проигнорируйте это письмо.",
+    },
+    kg: {
+      subject: "BAZAAR уюмуна чакыруу",
+      title: "Сиз BAZAAR системасына чакырылдыңыз",
+      intro: "Уюмга чакырууну кабыл алуу үчүн шилтемени ачыңыз:",
+      cta: "Чакырууну кабыл алуу",
+      fallback: "Эгер баскыч иштебесе, төмөнкү шилтемени браузерге көчүрүңүз:",
+      ignore: "Эгер чакырууну күтпөсөңүз, бул катты четке кагыңыз.",
+    },
+    en: {
+      subject: "Organization invite",
+      title: "You are invited to BAZAAR",
+      intro: "Open this link to accept your invite:",
+      cta: "Accept invitation",
+      fallback: "If the button does not work, copy this link into your browser:",
+      ignore: "If you were not expecting this invitation, you can ignore this email.",
+    },
+  };
+  return buildAuthLinkEmail({
+    email: input.email,
+    link: input.inviteLink,
+    locale,
+    copy: copies[locale],
+    kind: "organization_invite",
   });
 };
 
-export const sendInviteEmail = async (input: { email: string; inviteLink: string }) => {
-  await sendEmail({
-    to: input.email,
-    subject: "Organization invite",
-    text: `Open this link to accept your invite: ${input.inviteLink}`,
-    html: `<p>Open this link to accept your invite:</p><p><a href="${input.inviteLink}">${input.inviteLink}</a></p>`,
-    tags: [{ name: "kind", value: "organization_invite" }],
-  });
+export const sendInviteEmail = async (input: Parameters<typeof buildInviteEmail>[0]) => {
+  await sendEmail(buildInviteEmail(input));
 };

@@ -23,11 +23,13 @@ export function SubscriptionAccessNotice({
   state,
   canManage,
   showBillingLink = true,
+  showTrialScope = true,
   className,
 }: {
   state: AccessNoticeState | null | undefined;
   canManage: boolean;
   showBillingLink?: boolean;
+  showTrialScope?: boolean;
   className?: string;
 }) {
   const t = useTranslations("billing.accessNotice");
@@ -82,7 +84,9 @@ export function SubscriptionAccessNotice({
                 ? t("graceDescription", { date: formatDateTime(state.access.graceEndsAt!, locale) })
                 : t(expiredTrial ? "trialExpiredDescription" : "expiredDescription")}
           </AlertDescription>
-          {activeTrial ? <p className="text-sm text-muted-foreground">{trial("scope")}</p> : null}
+          {activeTrial && showTrialScope ? (
+            <p className="text-sm text-muted-foreground">{trial("scope")}</p>
+          ) : null}
           {!canManage ? <p className="text-sm">{t("askOwner")}</p> : null}
         </div>
         {canManage && showBillingLink ? (

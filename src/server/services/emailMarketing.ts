@@ -49,6 +49,7 @@ import {
   type ResendDnsRecord,
 } from "@/server/services/email";
 import { AppError } from "@/server/services/errors";
+import { renderBrandedEmail } from "@/server/services/emailTemplate";
 import { assertReadableFeature } from "@/server/billing/coreAccess";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { toJson } from "@/server/services/json";
@@ -216,6 +217,7 @@ type EmailCampaignComposerInput = {
 };
 
 type NormalizedEmailCampaign = {
+  contentVersion?: number;
   id: string | null;
   storeId: string;
   name: string;
@@ -318,7 +320,9 @@ const defaultEmailMutedTextColor = "#4b5563";
 const defaultEmailBorderColor = "#e5e7eb";
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const maxCampaignRecipients = 5_000;
-const emailContentVersion = 1;
+// Persisted content versions also select the rendering contract used on retry.
+// Only new identities or editable drafts opt into the shared frame.
+const emailContentVersion = 2;
 const publicSenderDomains = new Set([
   "gmail.com",
   "googlemail.com",
@@ -784,7 +788,7 @@ const normalizeAudience = (
 
 const normalizeCampaignInput = (
   input: EmailCampaignComposerInput,
-  options?: { requireSubject?: boolean; requireContent?: boolean },
+  options?: { requireSubject?: boolean; requireContent?: boolean; contentVersion?: number },
 ): NormalizedEmailCampaign => {
   const subject = input.subject.trim();
   if ((options?.requireSubject ?? true) && !subject) {
@@ -809,6 +813,7 @@ const normalizeCampaignInput = (
     `Кампания ${new Intl.DateTimeFormat("ru-KG").format(new Date())}`;
 
   return {
+    contentVersion: options?.contentVersion ?? emailContentVersion,
     id: trimOptional(input.id),
     storeId: input.storeId,
     name: campaignName.slice(0, 180),
@@ -2981,7 +2986,9 @@ export const renderEmailCampaign = (input: {
     }
   }
 
-  const html = `
+  // Persisted v1 campaigns can have an uncertain provider operation in flight.
+  // Keep their complete payload, including whitespace, stable for the same key.
+  const legacyHtml = `
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
     <div style="background:${backgroundColor};padding:24px;font-family:${fontFamily};">
       <div style="max-width:640px;margin:0 auto;background:${contentBackgroundColor};border:1px solid ${borderColor};">
@@ -2989,6 +2996,31 @@ export const renderEmailCampaign = (input: {
       </div>
     </div>
   `;
+
+  const hasMerchantHeader = input.campaign.blocks.some((block) => block.type === "header");
+  const html =
+    (input.campaign.contentVersion ?? 1) >= 2
+      ? renderBrandedEmail({
+          preheader: input.campaign.preheader
+            ? renderVariables(input.campaign.preheader, variableContext)
+            : undefined,
+          contentHtml: htmlParts.join(""),
+          // Merchant headers and logos are already part of the customer blocks.
+          // Keep their placement instead of adding another brand header above.
+          brandName: hasMerchantHeader ? "" : undefined,
+          logoUrl: hasMerchantHeader ? null : undefined,
+          theme: {
+            backgroundColor,
+            contentBackgroundColor,
+            textColor,
+            mutedTextColor,
+            borderColor,
+            brandColor,
+            fontFamily,
+          },
+          contentPadding: false,
+        })
+      : legacyHtml;
 
   return { html, text: textParts.filter(Boolean).join("\n\n") };
 };
@@ -3551,7 +3583,7 @@ export const sendSavedEmailCampaignToAudience = async (input: {
       borderColor: existing.borderColor,
       fontFamily: existing.fontFamily,
       audience: parseCampaignAudience(existing.audienceJson),
-    });
+    }, { contentVersion: existing.contentVersion });
     const baseUrl = requireEmailMarketingPublicAppBaseUrl();
     assertEmailCampaignButtonUrlsValid(campaignInput, baseUrl);
     const sender = await resolveCampaignSender({
@@ -3896,6 +3928,7 @@ export const handleResendEmailWebhook = async (input: {
 };
 
 const campaignRecordToInput = (campaign: {
+  contentVersion?: number;
   id?: string | null;
   storeId: string;
   campaignType?: EmailCampaignType;
@@ -3950,7 +3983,7 @@ const campaignRecordToInput = (campaign: {
     borderColor: campaign.borderColor ?? defaultEmailBorderColor,
     fontFamily: campaign.fontFamily,
     logoStoreId: null,
-  });
+  }, { contentVersion: campaign.contentVersion ?? 1 });
 
 export const deliverEmailCampaign = async (input: {
   organizationId: string;
@@ -4951,7 +4984,7 @@ export const duplicateEmailCampaign = async (input: {
       organizationId: campaign.organizationId,
       storeId: campaign.storeId,
       createdById: input.actorId,
-      contentVersion: campaign.contentVersion,
+      contentVersion: emailContentVersion,
       campaignType: campaign.campaignType,
       senderIdentityId: campaign.senderIdentityId,
       duplicatedFromId: campaign.id,
@@ -5371,7 +5404,7 @@ export const updateEmailAutomation = async (input: {
 	      fontFamily: input.fontFamily,
 	      logoStoreId: input.logoStoreId === undefined ? undefined : trimOptional(input.logoStoreId),
 	      blocksJson: blocks ? (blocks as unknown as Prisma.InputJsonValue) : undefined,
-	      contentVersion: emailContentVersion,
+	      contentVersion: automation.contentVersion,
 	    },
 	  });
     await writeAuditLog(tx, {
@@ -5489,6 +5522,7 @@ const loadOrderForEmail = async (input: { organizationId: string; orderId: strin
 
 const automationToCampaign = (input: {
 	  automation: {
+	    contentVersion?: number;
 	    id: string;
 	    storeId: string;
 	    senderIdentityId: string | null;
@@ -5530,7 +5564,11 @@ const automationToCampaign = (input: {
 	      fontFamily: input.automation.fontFamily,
 	      logoStoreId: input.automation.logoStoreId ?? input.automation.storeId,
 	    },
-    { requireSubject: true, requireContent: true },
+    {
+      requireSubject: true,
+      requireContent: true,
+      contentVersion: input.automation.contentVersion ?? 1,
+    },
   );
 
 export const testEmailAutomation = async (input: {

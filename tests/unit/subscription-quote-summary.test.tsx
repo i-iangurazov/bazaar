@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
+import { fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { describe, expect, it } from "vitest";
 import {
@@ -47,7 +48,11 @@ const quote = (overrides: Partial<SubscriptionQuote> = {}): SubscriptionQuote =>
   quoteToken: "synthetic-signed-quote",
   ...overrides,
 });
-function renderSummary(value: SubscriptionQuote, locale: "ru" | "kg" | "en" = "ru") {
+function renderSummary(
+  value: SubscriptionQuote,
+  locale: "ru" | "kg" | "en" = "ru",
+  mode: "checkout" | "confirmation" = "checkout",
+) {
   const root = document.createElement("div");
   root.innerHTML = renderToStaticMarkup(
     <NextIntlClientProvider
@@ -55,13 +60,49 @@ function renderSummary(value: SubscriptionQuote, locale: "ru" | "kg" | "en" = "r
       timeZone="Asia/Bishkek"
       messages={{ billing: { ru, kg, en }[locale].billing }}
     >
-      <SubscriptionQuoteSummary quote={value} />
+      <SubscriptionQuoteSummary quote={value} mode={mode} />
     </NextIntlClientProvider>,
   );
   return root;
 }
 
 describe("server-calculated subscription order summary", () => {
+  it.each(["ru", "kg", "en"] as const)(
+    "keeps checkout concise and restores full purchase identity in %s confirmation",
+    (locale) => {
+      const value = quote();
+      const copy = { ru, kg, en }[locale].billing;
+      const checkout = renderSummary(value, locale);
+      const confirmation = renderSummary(value, locale, "confirmation");
+      const labels = (root: HTMLElement) =>
+        Array.from(root.querySelectorAll("dt")).map((node) => node.textContent);
+      expect(labels(checkout)).not.toContain(copy.payments.plan);
+      expect(labels(checkout)).not.toContain(copy.payments.term);
+      expect(labels(confirmation)).toContain(copy.payments.plan);
+      expect(labels(confirmation)).toContain(copy.payments.term);
+      for (const root of [checkout, confirmation]) {
+        expect(root.querySelectorAll("[data-subscription-amount-due]")).toHaveLength(1);
+        expect(root.querySelectorAll("[data-subscription-savings]")).toHaveLength(1);
+        expect(root.querySelector("[data-subscription-amount-due]")?.closest("details")).toBeNull();
+        expect(
+          root.querySelector("[data-subscription-selected-limits]")?.closest("details"),
+        ).toBeNull();
+        expect(root.textContent).toContain(formatDateTime(value.startsAt, locale));
+        expect(root.textContent).toContain(formatDateTime(value.endsAt, locale));
+        const details = root.querySelector(
+          "[data-subscription-selected-features]",
+        ) as HTMLDetailsElement;
+        expect(details.open).toBe(false);
+        expect(details.textContent).toContain(copy.payments.monthlyQuotas);
+        expect(details.textContent).toContain(copy.features.pos);
+        fireEvent.click(details.querySelector("summary")!);
+        expect(details.open).toBe(true);
+      }
+      expect(checkout.textContent?.split(copy.payments.noAutomaticCharges)).toHaveLength(2);
+      expect(confirmation.textContent).toContain(copy.plans.business.name);
+      expect(confirmation.textContent).toContain(copy.payments.term6);
+    },
+  );
   it.each(["ru", "kg", "en"] as const)(
     "shows the complete six-month total, saving, access dates and selected limits in %s",
     (locale) => {
@@ -87,32 +128,35 @@ describe("server-calculated subscription order summary", () => {
       expect(root.textContent).not.toMatch(/undefined|NaN|\{amount\}|\{date\}/);
     },
   );
-  it.each(["ru", "kg", "en"] as const)("shows a twelve-month price without a monthly suffix, automatic debit or lost trial days in %s", (locale) => {
-    const root = renderSummary(
-      quote({
-        months: 12,
-        amountMinor: 5100000,
-        serviceValueMinor: 5100000,
-        fullAmountMinor: 6000000,
-        termAmountMinor: 5100000,
-        savingsMinor: 900000,
-        discountBps: 1500,
-        effectiveTiming: "AFTER_TRIAL",
-        endsAt: "2028-01-31T18:00:00.000Z",
-      }),
-      locale,
-    );
-    expect(root.querySelector("[data-subscription-amount-due]")?.textContent).toContain(
-      formatCurrencyKGS(51000, locale),
-    );
-    expect(root.querySelector("[data-subscription-amount-due]")?.textContent).not.toMatch(
-      /\/(?:мес|ай|month)/,
-    );
-    expect(root.querySelector("[data-subscription-savings]")?.textContent).toContain(
-      formatCurrencyKGS(9000, locale),
-    );
-    expect(root.textContent).toContain({ ru, kg, en }[locale].billing.payments.timingAfterTrial);
-  });
+  it.each(["ru", "kg", "en"] as const)(
+    "shows a twelve-month price without a monthly suffix, automatic debit or lost trial days in %s",
+    (locale) => {
+      const root = renderSummary(
+        quote({
+          months: 12,
+          amountMinor: 5100000,
+          serviceValueMinor: 5100000,
+          fullAmountMinor: 6000000,
+          termAmountMinor: 5100000,
+          savingsMinor: 900000,
+          discountBps: 1500,
+          effectiveTiming: "AFTER_TRIAL",
+          endsAt: "2028-01-31T18:00:00.000Z",
+        }),
+        locale,
+      );
+      expect(root.querySelector("[data-subscription-amount-due]")?.textContent).toContain(
+        formatCurrencyKGS(51000, locale),
+      );
+      expect(root.querySelector("[data-subscription-amount-due]")?.textContent).not.toMatch(
+        /\/(?:мес|ай|month)/,
+      );
+      expect(root.querySelector("[data-subscription-savings]")?.textContent).toContain(
+        formatCurrencyKGS(9000, locale),
+      );
+      expect(root.textContent).toContain({ ru, kg, en }[locale].billing.payments.timingAfterTrial);
+    },
+  );
   it("uses the server's prorated amount due and credit instead of displaying the full term as the charge", () => {
     const root = renderSummary(
       quote({

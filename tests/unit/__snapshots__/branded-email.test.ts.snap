@@ -1,0 +1,313 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`real transactional email builders > uses one shared frame and preserves historical text/tags/key for order CANCELLATION 1`] = `
+{
+  "html": "
+  <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
+      <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">&lt;script&gt;synthetic()&lt;/script&gt; &amp; &quot;Store&quot;</p>
+      <h1 style="margin:0 0 12px;color:#111827;font-size:22px;line-height:1.3;">Order SYNTHETIC-001 canceled</h1>
+      <p style="margin:0 0 16px;color:#374151;">Hello &lt;img src=x onerror=&quot;synthetic()&quot;&gt;, your order was canceled.</p>
+      
+      <dl style="margin:0;color:#111827;">
+        <dt style="color:#6b7280;font-size:12px;">Status</dt>
+        <dd style="margin:0 0 10px;font-weight:700;">Canceled</dd>
+        <dt style="color:#6b7280;font-size:12px;">Canceled at</dt>
+        <dd style="margin:0 0 10px;">Nov 11, 2026, 4:00 PM</dd>
+      </dl>
+      <p style="margin:0 0 16px;color:#374151;">If a payment has already been captured, refund handling will follow the store policy.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+          <tr>
+            <th align="left" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Item</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Qty</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+                  <div style="font-weight:600;color:#111827;">&lt;script&gt;product()&lt;/script&gt; (Synthetic variant)</div>
+                  <div style="color:#6b7280;font-size:12px;">SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-</div>
+                </td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">2</td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">KGS 1,250.00</td>
+              </tr>
+        </tbody>
+      </table>
+      <p style="margin:16px 0 0;font-size:18px;font-weight:700;color:#111827;">Total: KGS 1,250.00</p>
+    
+      <p style="margin:20px 0 0;color:#6b7280;font-size:12px;">This message was sent by BAZAAR.</p>
+    </div>
+  </div>
+",
+  "idempotencyKey": "customer-order-cancellation-synthetic-order-email",
+  "subject": "Order SYNTHETIC-001 canceled",
+  "tags": [
+    {
+      "name": "kind",
+      "value": "order_cancellation",
+    },
+    {
+      "name": "order_id",
+      "value": "synthetic-order-email",
+    },
+  ],
+  "text": "Hello <img src=x onerror="synthetic()">,
+
+Your order SYNTHETIC-001 from <script>synthetic()</script> & "Store" was canceled.
+Status: Canceled
+Canceled at: Nov 11, 2026, 4:00 PM
+
+If a payment has already been captured, refund handling will follow the store policy.
+
+Order summary:
+- <script>product()</script> (Synthetic variant) x 2: KGS 1,250.00
+
+Total: KGS 1,250.00",
+  "to": "synthetic@example.invalid",
+}
+`;
+
+exports[`real transactional email builders > uses one shared frame and preserves historical text/tags/key for order CONFIRMATION 1`] = `
+{
+  "html": "
+  <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
+      <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">&lt;script&gt;synthetic()&lt;/script&gt; &amp; &quot;Store&quot;</p>
+      <h1 style="margin:0 0 12px;color:#111827;font-size:22px;line-height:1.3;">Order SYNTHETIC-001 confirmation</h1>
+      <p style="margin:0 0 16px;color:#374151;">Hello &lt;img src=x onerror=&quot;synthetic()&quot;&gt;, your order has been received.</p>
+      
+      <dl style="margin:0;color:#111827;">
+        <dt style="color:#6b7280;font-size:12px;">Order date</dt>
+        <dd style="margin:0 0 10px;">Nov 11, 2026, 4:00 PM</dd>
+        <dt style="color:#6b7280;font-size:12px;">Customer</dt>
+        <dd style="margin:0 0 10px;">&lt;img src=x onerror=&quot;synthetic()&quot;&gt;</dd>
+        <dt style="color:#6b7280;font-size:12px;">Delivery/pickup</dt>
+        <dd style="margin:0 0 10px;">Synthetic address</dd>
+      </dl>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+          <tr>
+            <th align="left" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Item</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Qty</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+                  <div style="font-weight:600;color:#111827;">&lt;script&gt;product()&lt;/script&gt; (Synthetic variant)</div>
+                  <div style="color:#6b7280;font-size:12px;">SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-</div>
+                </td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">2</td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">KGS 1,250.00</td>
+              </tr>
+        </tbody>
+      </table>
+      <p style="margin:16px 0 0;font-size:18px;font-weight:700;color:#111827;">Total: KGS 1,250.00</p>
+    
+      <p style="margin:20px 0 0;color:#6b7280;font-size:12px;">This message was sent by BAZAAR.</p>
+    </div>
+  </div>
+",
+  "idempotencyKey": "customer-order-confirmation-synthetic-order-email",
+  "subject": "Order SYNTHETIC-001 confirmation",
+  "tags": [
+    {
+      "name": "kind",
+      "value": "order_confirmation",
+    },
+    {
+      "name": "order_id",
+      "value": "synthetic-order-email",
+    },
+  ],
+  "text": "Hello <img src=x onerror="synthetic()">,
+
+Your order SYNTHETIC-001 has been received by <script>synthetic()</script> & "Store".
+Order date: Nov 11, 2026, 4:00 PM
+Status: CONFIRMED
+Customer: <img src=x onerror="synthetic()">
+Delivery/pickup: Synthetic address
+
+Items:
+- <script>product()</script> (Synthetic variant) x 2: KGS 1,250.00
+
+Total: KGS 1,250.00",
+  "to": "synthetic@example.invalid",
+}
+`;
+
+exports[`real transactional email builders > uses one shared frame and preserves historical text/tags/key for order FOLLOW_UP 1`] = `
+{
+  "html": "
+  <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
+      <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">&lt;script&gt;synthetic()&lt;/script&gt; &amp; &quot;Store&quot;</p>
+      <h1 style="margin:0 0 12px;color:#111827;font-size:22px;line-height:1.3;">How was order SYNTHETIC-001?</h1>
+      <p style="margin:0 0 16px;color:#374151;">Hello &lt;img src=x onerror=&quot;synthetic()&quot;&gt;, we hope everything went well with your order.</p>
+      
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+          <tr>
+            <th align="left" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Item</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Qty</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+                  <div style="font-weight:600;color:#111827;">&lt;script&gt;product()&lt;/script&gt; (Synthetic variant)</div>
+                  <div style="color:#6b7280;font-size:12px;">SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-</div>
+                </td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">2</td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">KGS 1,250.00</td>
+              </tr>
+        </tbody>
+      </table>
+      <p style="margin:16px 0 0;font-size:18px;font-weight:700;color:#111827;">Total: KGS 1,250.00</p>
+      <p style="margin:16px 0 0;color:#374151;">Thank you for your purchase.</p>
+    
+      <p style="margin:20px 0 0;color:#6b7280;font-size:12px;">This message was sent by BAZAAR.</p>
+    </div>
+  </div>
+",
+  "idempotencyKey": "customer-order-follow-up-synthetic-order-email",
+  "subject": "How was order SYNTHETIC-001?",
+  "tags": [
+    {
+      "name": "kind",
+      "value": "order_follow_up",
+    },
+    {
+      "name": "order_id",
+      "value": "synthetic-order-email",
+    },
+  ],
+  "text": "Hello <img src=x onerror="synthetic()">,
+
+We hope everything went well with your order SYNTHETIC-001 from <script>synthetic()</script> & "Store".
+Thank you for your purchase.
+
+Order summary:
+- <script>product()</script> (Synthetic variant) x 2: KGS 1,250.00
+
+Total: KGS 1,250.00",
+  "to": "synthetic@example.invalid",
+}
+`;
+
+exports[`real transactional email builders > uses one shared frame and preserves historical text/tags/key for order OWNER_NOTIFICATION 1`] = `
+{
+  "html": "
+  <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
+      <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">&lt;script&gt;synthetic()&lt;/script&gt; &amp; &quot;Store&quot;</p>
+      <h1 style="margin:0 0 12px;color:#111827;font-size:22px;line-height:1.3;">Новый заказ SYNTHETIC-001</h1>
+      <p style="margin:0 0 16px;color:#374151;">В Bazaar поступил новый заказ.</p>
+      
+      <dl style="margin:0;color:#111827;">
+        <dt style="color:#6b7280;font-size:12px;">Номер</dt>
+        <dd style="margin:0 0 10px;font-weight:700;">SYNTHETIC-001</dd>
+        <dt style="color:#6b7280;font-size:12px;">Источник</dt>
+        <dd style="margin:0 0 10px;">API</dd>
+        <dt style="color:#6b7280;font-size:12px;">Дата</dt>
+        <dd style="margin:0 0 10px;">11 нояб. 2026 г., 16:00</dd>
+      </dl>
+      <p style="margin:16px 0 0;"><a href="https://example.invalid/sales/orders/synthetic-order-email" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:600;">Открыть заказ в Bazaar</a></p>
+    
+      <p style="margin:20px 0 0;color:#6b7280;font-size:12px;">This message was sent by BAZAAR.</p>
+    </div>
+  </div>
+",
+  "idempotencyKey": "owner-new-order-synthetic-order-email-synthetic@example.invalid",
+  "subject": "Новый заказ SYNTHETIC-001",
+  "tags": [
+    {
+      "name": "kind",
+      "value": "owner_new_order",
+    },
+    {
+      "name": "order_id",
+      "value": "synthetic-order-email",
+    },
+  ],
+  "text": "В Bazaar поступил новый заказ.
+Номер: SYNTHETIC-001
+Магазин: <script>synthetic()</script> & "Store"
+Источник: API
+Дата: 11 нояб. 2026 г., 16:00
+Открыть заказ: https://example.invalid/sales/orders/synthetic-order-email",
+  "to": "synthetic@example.invalid",
+}
+`;
+
+exports[`real transactional email builders > uses one shared frame and preserves historical text/tags/key for order TRACKING 1`] = `
+{
+  "html": "
+  <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
+      <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">&lt;script&gt;synthetic()&lt;/script&gt; &amp; &quot;Store&quot;</p>
+      <h1 style="margin:0 0 12px;color:#111827;font-size:22px;line-height:1.3;">Tracking for order SYNTHETIC-001</h1>
+      <p style="margin:0 0 16px;color:#374151;">Hello &lt;img src=x onerror=&quot;synthetic()&quot;&gt;, tracking information is available for your order.</p>
+      
+      <dl style="margin:0;color:#111827;">
+        <dt style="color:#6b7280;font-size:12px;">Tracking number</dt>
+        <dd style="margin:0 0 10px;font-weight:700;">SYNTHETIC-TRACKING</dd>
+        <dt style="color:#6b7280;font-size:12px;">Carrier</dt>
+        <dd style="margin:0 0 10px;">Synthetic carrier</dd>
+        <dt style="color:#6b7280;font-size:12px;">Status</dt>
+        <dd style="margin:0 0 10px;">In transit</dd>
+      </dl>
+      <p style="margin:16px 0;"><a href="https://example.invalid/action/synthetic-token?context=email&amp;next=billing" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:600;">Track order</a></p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+          <tr>
+            <th align="left" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Item</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Qty</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+                  <div style="font-weight:600;color:#111827;">&lt;script&gt;product()&lt;/script&gt; (Synthetic variant)</div>
+                  <div style="color:#6b7280;font-size:12px;">SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-SYNTHETIC-LONG-SKU-</div>
+                </td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">2</td>
+                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">KGS 1,250.00</td>
+              </tr>
+        </tbody>
+      </table>
+    
+      <p style="margin:20px 0 0;color:#6b7280;font-size:12px;">This message was sent by BAZAAR.</p>
+    </div>
+  </div>
+",
+  "idempotencyKey": "customer-order-tracking-synthetic-order-email-SYNTHETIC-TRACKING",
+  "subject": "Tracking for order SYNTHETIC-001",
+  "tags": [
+    {
+      "name": "kind",
+      "value": "order_tracking",
+    },
+    {
+      "name": "order_id",
+      "value": "synthetic-order-email",
+    },
+  ],
+  "text": "Hello <img src=x onerror="synthetic()">,
+
+Tracking information was added for order SYNTHETIC-001.
+Tracking number: SYNTHETIC-TRACKING
+Carrier: Synthetic carrier
+Status: In transit
+Tracking link: https://example.invalid/action/synthetic-token?context=email&next=billing
+
+Order summary:
+- <script>product()</script> (Synthetic variant) x 2: KGS 1,250.00",
+  "to": "synthetic@example.invalid",
+}
+`;

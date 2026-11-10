@@ -2863,6 +2863,7 @@ model CustomerOrderEmailLog {
   status            CustomerOrderEmailStatus
   recipientEmail    String?
   provider          String?
+  templateVersion   String?                  @db.VarChar(32)
   providerMessageId String?
   errorMessage      String?                  @db.Text
   operationKey      String?                  @unique @db.VarChar(191)

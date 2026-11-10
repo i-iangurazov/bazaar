@@ -15,7 +15,12 @@ import {
 import { defaultTimeZone } from "@/lib/timezone";
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
-import { sendTransactionalEmail, type EmailPayload } from "@/server/services/email";
+import {
+  EmailProviderError,
+  sendTransactionalEmail,
+  type EmailPayload,
+} from "@/server/services/email";
+import { renderBrandedEmail, renderEmailButton } from "@/server/services/emailTemplate";
 import {
   ORDER_EMAIL_MAX_ATTEMPTS as ORDER_CONFIRMATION_MAX_ATTEMPTS,
   resolveOrderEmailRetryAt,
@@ -36,7 +41,7 @@ type OrderEmailLine = {
   } | null;
 };
 
-type OrderEmailRecord = {
+export type OrderEmailRecord = {
   id: string;
   organizationId: string;
   storeId: string;
@@ -191,8 +196,10 @@ const persistEmailLog = async (input: {
   deliveryLogId?: string;
   deliveryOperationKey?: string;
   nextAttemptAt?: Date | null;
+  templateVersion?: string | null;
 }) => {
   const data = {
+    ...(input.templateVersion !== undefined ? { templateVersion: input.templateVersion } : {}),
     status: input.status,
     recipientEmail: input.recipientEmail ?? null,
     provider: input.provider ?? null,
@@ -442,14 +449,21 @@ const buildLinesText = (order: OrderEmailRecord) =>
         .join("\n")
     : "-";
 
-const buildLinesHtml = (order: OrderEmailRecord) =>
-  order.lines.length
+const buildLinesHtml = (
+  order: OrderEmailRecord,
+  templateVersion: OrderEmailTemplateVersion = null,
+) => {
+  const branded = templateVersion === ORDER_EMAIL_TEMPLATE_VERSION;
+  const numericHeadingPadding = branded ? "8px 0 8px 12px" : "8px 0";
+  const numericCellPadding = branded ? "10px 0 10px 12px" : "10px 0";
+  const numericWhiteSpace = branded ? "white-space:nowrap;" : "";
+  return order.lines.length
     ? `<table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <thead>
           <tr>
             <th align="left" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Item</th>
-            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Qty</th>
-            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:8px 0;color:#6b7280;font-size:12px;">Total</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:${numericHeadingPadding};color:#6b7280;font-size:12px;${numericWhiteSpace}">Qty</th>
+            <th align="right" style="border-bottom:1px solid #e5e7eb;padding:${numericHeadingPadding};color:#6b7280;font-size:12px;${numericWhiteSpace}">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -461,16 +475,22 @@ const buildLinesHtml = (order: OrderEmailRecord) =>
                   <div style="font-weight:600;color:#111827;">${escapeHtml(line.product.name)}${escapeHtml(variant)}</div>
                   <div style="color:#6b7280;font-size:12px;">${escapeHtml(line.product.sku)}</div>
                 </td>
-                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">${line.qty}</td>
-                <td align="right" style="padding:10px 0;border-bottom:1px solid #f3f4f6;color:#111827;">${escapeHtml(formatMoney(line.lineTotalKgs, order))}</td>
+                <td align="right" style="padding:${numericCellPadding};border-bottom:1px solid #f3f4f6;color:#111827;${numericWhiteSpace}">${line.qty}</td>
+                <td align="right" style="padding:${numericCellPadding};border-bottom:1px solid #f3f4f6;color:#111827;${numericWhiteSpace}">${escapeHtml(formatMoney(line.lineTotalKgs, order))}</td>
               </tr>`;
             })
             .join("")}
         </tbody>
       </table>`
     : `<p style="color:#6b7280;">No items.</p>`;
+};
 
-const emailFrame = (input: { title: string; intro: string; body: string; storeName: string }) => `
+const legacyEmailFrame = (input: {
+  title: string;
+  intro: string;
+  body: string;
+  storeName: string;
+}) => `
   <div style="font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7fb;padding:24px;">
     <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;">
       <p style="margin:0 0 6px;color:#6b7280;font-size:13px;">${escapeHtml(input.storeName)}</p>
@@ -482,7 +502,39 @@ const emailFrame = (input: { title: string; intro: string; body: string; storeNa
   </div>
 `;
 
-const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: string) => {
+// A persisted delivery version keeps provider retries byte-compatible across releases.
+export const ORDER_EMAIL_TEMPLATE_VERSION = "branded-v1";
+type OrderEmailTemplateVersion = typeof ORDER_EMAIL_TEMPLATE_VERSION | null;
+export type OrderEmailPresentation = { merchantBrand?: boolean };
+const isDifferentIdempotentEmailBody = (error: unknown) => {
+  if (!(error instanceof EmailProviderError) || error.status !== 409) return false;
+  try {
+    return JSON.parse(error.responseText).name === "invalid_idempotent_request";
+  } catch {
+    return false;
+  }
+};
+const emailFrame = (
+  input: { title: string; intro: string; body: string; storeName: string; locale?: "en" | "ru" },
+  templateVersion: OrderEmailTemplateVersion,
+  presentation?: OrderEmailPresentation,
+) =>
+  templateVersion === ORDER_EMAIL_TEMPLATE_VERSION
+    ? renderBrandedEmail({
+        locale: input.locale ?? "en",
+        title: input.title,
+        preheader: input.intro,
+        ...(presentation?.merchantBrand ? { brandName: input.storeName, logoUrl: null } : {}),
+        contentHtml: `${presentation?.merchantBrand ? "" : `<p style="margin:0 0 8px;color:#6b7280;font-size:13px">${escapeHtml(input.storeName)}</p>`}<p style="margin:0 0 16px;color:#374151;line-height:1.6">${escapeHtml(input.intro)}</p>${input.body}`,
+      })
+    : legacyEmailFrame(input);
+
+const buildConfirmationPayload = (
+  order: OrderEmailRecord,
+  recipientEmail: string,
+  templateVersion: OrderEmailTemplateVersion,
+  presentation?: OrderEmailPresentation,
+) => {
   const subject = `Order ${order.number} confirmation`;
   const customerName = formatOptional(order.customerName, "Customer");
   const text = [
@@ -500,11 +552,12 @@ const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: strin
     `Total: ${formatMoney(order.totalKgs, order)}`,
   ].join("\n");
 
-  const html = emailFrame({
-    storeName: order.store.name,
-    title: `Order ${order.number} confirmation`,
-    intro: `Hello ${customerName}, your order has been received.`,
-    body: `
+  const html = emailFrame(
+    {
+      storeName: order.store.name,
+      title: `Order ${order.number} confirmation`,
+      intro: `Hello ${customerName}, your order has been received.`,
+      body: `
       <dl style="margin:0;color:#111827;">
         <dt style="color:#6b7280;font-size:12px;">Order date</dt>
         <dd style="margin:0 0 10px;">${escapeHtml(formatOrderEmailDate(order.confirmedAt ?? order.createdAt))}</dd>
@@ -513,10 +566,13 @@ const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: strin
         <dt style="color:#6b7280;font-size:12px;">Delivery/pickup</dt>
         <dd style="margin:0 0 10px;">${escapeHtml(formatOptional(order.customerAddress))}</dd>
       </dl>
-      ${buildLinesHtml(order)}
+      ${buildLinesHtml(order, templateVersion)}
       <p style="margin:16px 0 0;font-size:18px;font-weight:700;color:#111827;">Total: ${escapeHtml(formatMoney(order.totalKgs, order))}</p>
     `,
-  });
+    },
+    templateVersion,
+    presentation,
+  );
 
   return {
     to: recipientEmail,
@@ -531,7 +587,12 @@ const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: strin
   };
 };
 
-const buildOwnerNotificationPayload = (order: OrderEmailRecord, recipientEmail: string) => {
+const buildOwnerNotificationPayload = (
+  order: OrderEmailRecord,
+  recipientEmail: string,
+  templateVersion: OrderEmailTemplateVersion,
+  presentation?: OrderEmailPresentation,
+) => {
   const baseUrl = (process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "")
     .trim()
     .replace(/\/+$/, "");
@@ -548,11 +609,13 @@ const buildOwnerNotificationPayload = (order: OrderEmailRecord, recipientEmail: 
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
-  const html = emailFrame({
-    storeName: order.store.name,
-    title: subject,
-    intro: "В Bazaar поступил новый заказ.",
-    body: `
+  const html = emailFrame(
+    {
+      locale: "ru",
+      storeName: order.store.name,
+      title: subject,
+      intro: "В Bazaar поступил новый заказ.",
+      body: `
       <dl style="margin:0;color:#111827;">
         <dt style="color:#6b7280;font-size:12px;">Номер</dt>
         <dd style="margin:0 0 10px;font-weight:700;">${escapeHtml(order.number)}</dd>
@@ -563,11 +626,16 @@ const buildOwnerNotificationPayload = (order: OrderEmailRecord, recipientEmail: 
       </dl>
       ${
         orderUrl
-          ? `<p style="margin:16px 0 0;"><a href="${escapeHtml(orderUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:600;">Открыть заказ в Bazaar</a></p>`
+          ? templateVersion === ORDER_EMAIL_TEMPLATE_VERSION
+            ? `<div style="margin:16px 0 0;">${renderEmailButton({ href: orderUrl, label: "Открыть заказ в Bazaar" })}</div>`
+            : `<p style="margin:16px 0 0;"><a href="${escapeHtml(orderUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:600;">Открыть заказ в Bazaar</a></p>`
           : ""
       }
     `,
-  });
+    },
+    templateVersion,
+    presentation,
+  );
   return {
     to: recipientEmail,
     subject,
@@ -581,7 +649,12 @@ const buildOwnerNotificationPayload = (order: OrderEmailRecord, recipientEmail: 
   };
 };
 
-const buildCancellationPayload = (order: OrderEmailRecord, recipientEmail: string) => {
+const buildCancellationPayload = (
+  order: OrderEmailRecord,
+  recipientEmail: string,
+  templateVersion: OrderEmailTemplateVersion,
+  presentation?: OrderEmailPresentation,
+) => {
   const subject = `Order ${order.number} canceled`;
   const customerName = formatOptional(order.customerName, "Customer");
   const canceledAt = formatOrderEmailDate(order.canceledAt ?? new Date());
@@ -601,11 +674,12 @@ const buildCancellationPayload = (order: OrderEmailRecord, recipientEmail: strin
     `Total: ${formatMoney(order.totalKgs, order)}`,
   ].join("\n");
 
-  const html = emailFrame({
-    storeName: order.store.name,
-    title: `Order ${order.number} canceled`,
-    intro: `Hello ${customerName}, your order was canceled.`,
-    body: `
+  const html = emailFrame(
+    {
+      storeName: order.store.name,
+      title: `Order ${order.number} canceled`,
+      intro: `Hello ${customerName}, your order was canceled.`,
+      body: `
       <dl style="margin:0;color:#111827;">
         <dt style="color:#6b7280;font-size:12px;">Status</dt>
         <dd style="margin:0 0 10px;font-weight:700;">${escapeHtml(statusLabel)}</dd>
@@ -613,10 +687,13 @@ const buildCancellationPayload = (order: OrderEmailRecord, recipientEmail: strin
         <dd style="margin:0 0 10px;">${escapeHtml(canceledAt)}</dd>
       </dl>
       <p style="margin:0 0 16px;color:#374151;">If a payment has already been captured, refund handling will follow the store policy.</p>
-      ${buildLinesHtml(order)}
+      ${buildLinesHtml(order, templateVersion)}
       <p style="margin:16px 0 0;font-size:18px;font-weight:700;color:#111827;">Total: ${escapeHtml(formatMoney(order.totalKgs, order))}</p>
     `,
-  });
+    },
+    templateVersion,
+    presentation,
+  );
 
   return {
     to: recipientEmail,
@@ -631,7 +708,12 @@ const buildCancellationPayload = (order: OrderEmailRecord, recipientEmail: strin
   };
 };
 
-const buildTrackingPayload = (order: OrderEmailRecord, recipientEmail: string) => {
+const buildTrackingPayload = (
+  order: OrderEmailRecord,
+  recipientEmail: string,
+  templateVersion: OrderEmailTemplateVersion,
+  presentation?: OrderEmailPresentation,
+) => {
   const trackingNumber = formatOptional(order.trackingNumber);
   const carrier = formatOptional(order.trackingCarrier);
   const subject = `Tracking for order ${order.number}`;
@@ -652,11 +734,12 @@ const buildTrackingPayload = (order: OrderEmailRecord, recipientEmail: string) =
     .filter((line): line is string => line !== null)
     .join("\n");
 
-  const html = emailFrame({
-    storeName: order.store.name,
-    title: `Tracking for order ${order.number}`,
-    intro: `Hello ${customerName}, tracking information is available for your order.`,
-    body: `
+  const html = emailFrame(
+    {
+      storeName: order.store.name,
+      title: `Tracking for order ${order.number}`,
+      intro: `Hello ${customerName}, tracking information is available for your order.`,
+      body: `
       <dl style="margin:0;color:#111827;">
         <dt style="color:#6b7280;font-size:12px;">Tracking number</dt>
         <dd style="margin:0 0 10px;font-weight:700;">${escapeHtml(trackingNumber)}</dd>
@@ -667,12 +750,17 @@ const buildTrackingPayload = (order: OrderEmailRecord, recipientEmail: string) =
       </dl>
       ${
         trackingUrl
-          ? `<p style="margin:16px 0;"><a href="${escapeHtml(trackingUrl)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:600;">Track order</a></p>`
+          ? templateVersion === ORDER_EMAIL_TEMPLATE_VERSION
+            ? `<div style="margin:16px 0;">${renderEmailButton({ href: trackingUrl, label: "Track order" })}</div>`
+            : `<p style="margin:16px 0;"><a href="${escapeHtml(trackingUrl)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:600;">Track order</a></p>`
           : ""
       }
-      ${buildLinesHtml(order)}
+      ${buildLinesHtml(order, templateVersion)}
     `,
-  });
+    },
+    templateVersion,
+    presentation,
+  );
 
   return {
     to: recipientEmail,
@@ -687,7 +775,12 @@ const buildTrackingPayload = (order: OrderEmailRecord, recipientEmail: string) =
   };
 };
 
-const buildFollowUpPayload = (order: OrderEmailRecord, recipientEmail: string) => {
+const buildFollowUpPayload = (
+  order: OrderEmailRecord,
+  recipientEmail: string,
+  templateVersion: OrderEmailTemplateVersion,
+  presentation?: OrderEmailPresentation,
+) => {
   const subject = `How was order ${order.number}?`;
   const customerName = formatOptional(order.customerName, "Customer");
   const text = [
@@ -702,16 +795,20 @@ const buildFollowUpPayload = (order: OrderEmailRecord, recipientEmail: string) =
     `Total: ${formatMoney(order.totalKgs, order)}`,
   ].join("\n");
 
-  const html = emailFrame({
-    storeName: order.store.name,
-    title: `How was order ${order.number}?`,
-    intro: `Hello ${customerName}, we hope everything went well with your order.`,
-    body: `
-      ${buildLinesHtml(order)}
+  const html = emailFrame(
+    {
+      storeName: order.store.name,
+      title: `How was order ${order.number}?`,
+      intro: `Hello ${customerName}, we hope everything went well with your order.`,
+      body: `
+      ${buildLinesHtml(order, templateVersion)}
       <p style="margin:16px 0 0;font-size:18px;font-weight:700;color:#111827;">Total: ${escapeHtml(formatMoney(order.totalKgs, order))}</p>
       <p style="margin:16px 0 0;color:#374151;">Thank you for your purchase.</p>
     `,
-  });
+    },
+    templateVersion,
+    presentation,
+  );
 
   return {
     to: recipientEmail,
@@ -726,24 +823,26 @@ const buildFollowUpPayload = (order: OrderEmailRecord, recipientEmail: string) =
   };
 };
 
-const buildEmailPayload = (
+export const buildOrderEmailPayload = (
   type: CustomerOrderEmailType,
   order: OrderEmailRecord,
   recipientEmail: string,
+  templateVersion: OrderEmailTemplateVersion = ORDER_EMAIL_TEMPLATE_VERSION,
+  presentation?: OrderEmailPresentation,
 ): EmailPayload => {
   if (type === CustomerOrderEmailType.CONFIRMATION) {
-    return buildConfirmationPayload(order, recipientEmail);
+    return buildConfirmationPayload(order, recipientEmail, templateVersion, presentation);
   }
   if (type === CustomerOrderEmailType.OWNER_NOTIFICATION) {
-    return buildOwnerNotificationPayload(order, recipientEmail);
+    return buildOwnerNotificationPayload(order, recipientEmail, templateVersion, presentation);
   }
   if (type === CustomerOrderEmailType.TRACKING) {
-    return buildTrackingPayload(order, recipientEmail);
+    return buildTrackingPayload(order, recipientEmail, templateVersion, presentation);
   }
   if (type === CustomerOrderEmailType.CANCELLATION) {
-    return buildCancellationPayload(order, recipientEmail);
+    return buildCancellationPayload(order, recipientEmail, templateVersion, presentation);
   }
-  return buildFollowUpPayload(order, recipientEmail);
+  return buildFollowUpPayload(order, recipientEmail, templateVersion, presentation);
 };
 
 const hasSentEmail = async (order: OrderEmailRecord, type: CustomerOrderEmailType) => {
@@ -817,7 +916,9 @@ const sendOrderEmail = async (input: {
 
   const recipientEmail =
     input.type === CustomerOrderEmailType.OWNER_NOTIFICATION
-      ? normalizeRecipientEmail(delivery.claimed?.recipientEmail ?? delivery.existing?.recipientEmail)
+      ? normalizeRecipientEmail(
+          delivery.claimed?.recipientEmail ?? delivery.existing?.recipientEmail,
+        )
       : normalizeRecipientEmail(order.customerEmail);
   if (!recipientEmail) {
     if (delivery.claimed) {
@@ -880,10 +981,32 @@ const sendOrderEmail = async (input: {
     throw new AppError("trackingNumberMissing", "BAD_REQUEST", 400);
   }
 
-  const payload = buildEmailPayload(input.type, order, recipientEmail);
+  // New outbox rows opt into the shared design; unversioned existing deliveries
+  // retain their original HTML when replaying the same provider operation.
+  const previousDelivery =
+    delivery.claimed ??
+    (!input.force
+      ? await prisma.customerOrderEmailLog.findFirst({
+          where: {
+            organizationId: order.organizationId,
+            customerOrderId: order.id,
+            type: input.type,
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: { templateVersion: true },
+        })
+      : null);
+  let templateVersion: OrderEmailTemplateVersion = previousDelivery
+    ? previousDelivery.templateVersion === ORDER_EMAIL_TEMPLATE_VERSION
+      ? ORDER_EMAIL_TEMPLATE_VERSION
+      : null
+    : ORDER_EMAIL_TEMPLATE_VERSION;
   const sender = await resolveStorePrimaryVerifiedSender({
     organizationId: order.organizationId,
     storeId: order.storeId,
+  });
+  const payload = buildOrderEmailPayload(input.type, order, recipientEmail, templateVersion, {
+    merchantBrand: Boolean(sender),
   });
   if (sender) {
     payload.from = sender.from;
@@ -893,7 +1016,30 @@ const sendOrderEmail = async (input: {
     payload.idempotencyKey = `${payload.idempotencyKey}-${Date.now()}`;
   }
   try {
-    const result = await sendTransactionalEmail(payload);
+    let result;
+    try {
+      result = await sendTransactionalEmail(payload);
+    } catch (error) {
+      if (
+        previousDelivery ||
+        delivery.claimed ||
+        input.force ||
+        !payload.idempotencyKey ||
+        !isDifferentIdempotentEmailBody(error)
+      ) {
+        throw error;
+      }
+      // An older direct send may have been accepted before its local log
+      // was saved. Resend explicitly rejected the changed body; retry only the
+      // original renderer with the SAME key to recover that accepted operation.
+      // Do not do this for concurrent requests, network errors or generic 409s.
+      const legacyPayload = buildOrderEmailPayload(input.type, order, recipientEmail, null);
+      legacyPayload.from = payload.from;
+      legacyPayload.replyTo = payload.replyTo;
+      legacyPayload.idempotencyKey = payload.idempotencyKey;
+      templateVersion = null;
+      result = await sendTransactionalEmail(legacyPayload);
+    }
     const sentAt = new Date();
     if (delivery.claimed) {
       const owned = await persistClaimedSent({
@@ -919,6 +1065,7 @@ const sendOrderEmail = async (input: {
         recipientEmail,
         provider: result.provider,
         providerMessageId: result.id,
+        templateVersion,
         triggeredById: input.triggeredById,
         deliveryOperationKey: input.deliveryOperationKey,
         nextAttemptAt: null,
@@ -929,7 +1076,9 @@ const sendOrderEmail = async (input: {
     const message = error instanceof Error ? error.message : "emailSendFailed";
     const attemptCount = delivery.claimed?.attemptCount ?? 1;
     const nextAttemptAt = resolveOrderEmailRetryAt({
-      hasClaim: Boolean(delivery.claimed), attemptCount, error,
+      hasClaim: Boolean(delivery.claimed),
+      attemptCount,
+      error,
     });
     if (delivery.claimed) {
       const owned = await persistClaimedTerminalLog({
@@ -951,6 +1100,7 @@ const sendOrderEmail = async (input: {
         status: CustomerOrderEmailStatus.FAILED,
         recipientEmail,
         errorMessage: message,
+        templateVersion,
         triggeredById: input.triggeredById,
         deliveryOperationKey: input.deliveryOperationKey,
         nextAttemptAt,
@@ -1013,19 +1163,25 @@ export const processQueuedOrderConfirmationEmails = async (input?: {
   const limit = Math.min(Math.max(input?.limit ?? 100, 1), 500);
   await prisma.customerOrderEmailLog.updateMany({
     where: {
-      type: { in: [CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.OWNER_NOTIFICATION] },
+      type: {
+        in: [CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.OWNER_NOTIFICATION],
+      },
       OR: [
         { operationKey: { startsWith: "customer-order-confirmation:" } },
         { operationKey: { startsWith: "owner-new-order:" } },
       ],
       status: CustomerOrderEmailStatus.PROCESSING,
-      AND: [{ OR: [
-        { leaseExpiresAt: { lte: now } },
+      AND: [
         {
-          leaseExpiresAt: null,
-          updatedAt: { lt: new Date(now.getTime() - ORDER_CONFIRMATION_PROCESSING_TIMEOUT_MS) },
+          OR: [
+            { leaseExpiresAt: { lte: now } },
+            {
+              leaseExpiresAt: null,
+              updatedAt: { lt: new Date(now.getTime() - ORDER_CONFIRMATION_PROCESSING_TIMEOUT_MS) },
+            },
+          ],
         },
-      ] }],
+      ],
     },
     data: {
       status: CustomerOrderEmailStatus.FAILED,
@@ -1039,7 +1195,9 @@ export const processQueuedOrderConfirmationEmails = async (input?: {
   const queued = await prisma.customerOrderEmailLog.findMany({
     where: {
       ...(input?.logId ? { id: input.logId } : {}),
-      type: { in: [CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.OWNER_NOTIFICATION] },
+      type: {
+        in: [CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.OWNER_NOTIFICATION],
+      },
       OR: [
         { operationKey: { startsWith: "customer-order-confirmation:" } },
         { operationKey: { startsWith: "owner-new-order:" } },

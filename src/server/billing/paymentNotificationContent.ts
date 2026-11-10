@@ -2,6 +2,11 @@ import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
 import type { PlanCode } from "@/lib/billing/plans";
 import type { SubscriptionPaymentNotificationKind } from "./paymentNotificationPolicy";
+import {
+  escapeEmailHtml,
+  renderBrandedEmail,
+  renderEmailButton,
+} from "@/server/services/emailTemplate";
 
 const content = {
   ru: {
@@ -47,13 +52,6 @@ const content = {
     plans: { STARTER: "Starter", BUSINESS: "Business", ENTERPRISE: "Enterprise" },
   },
 };
-const escape = (value: string) =>
-  value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!,
-  );
-
 export function subscriptionPaymentNotificationContent(input: {
   kind: SubscriptionPaymentNotificationKind;
   organizationName: string;
@@ -90,6 +88,19 @@ export function subscriptionPaymentNotificationContent(input: {
     locale,
     subject,
     text: [...paragraphs, `${copy.action}: ${url}`, copy.footer].join("\n\n"),
-    html: `<!doctype html><html lang="${locale === "kg" ? "ky" : locale}"><body style="font-family:Arial,sans-serif;color:#171717"><main style="max-width:600px;margin:32px auto;padding:24px"><h1 style="font-size:22px">${escape(subject)}</h1>${paragraphs.map((p) => `<p style="line-height:1.6">${escape(p)}</p>`).join("")}<p><a style="display:inline-block;background:#1555eb;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px" href="${url}">${escape(copy.action)}</a></p><p style="font-size:13px;color:#666;line-height:1.6">${escape(copy.footer)}</p></main></body></html>`,
+    html: renderBrandedEmail({
+      locale,
+      title: subject,
+      preheader: paragraphs[0],
+      contentHtml: `${paragraphs
+        .map(
+          (paragraph) =>
+            `<p style="margin:0 0 16px;line-height:1.6">${escapeEmailHtml(paragraph)}</p>`,
+        )
+        .join(
+          "",
+        )}<div style="margin:24px 0 0">${renderEmailButton({ href: url, label: copy.action })}</div>`,
+      footerHtml: escapeEmailHtml(copy.footer),
+    }),
   };
 }

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type * as NextIntlModule from "next-intl";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +15,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
 vi.mock("next-intl", async (importOriginal) => {
-  const { createTranslator } = await importOriginal<typeof import("next-intl")>();
+  const { createTranslator } = await importOriginal<typeof NextIntlModule>();
   return {
     useLocale: () => state.locale,
     useTranslations: (namespace: string) => {
@@ -107,6 +108,7 @@ describe("non-blocking subscription grace and viewing notices", () => {
       const root = renderNotice(value);
       expect(root.querySelector('[data-subscription-access-notice="trial"]')).not.toBeNull();
       expect(root.textContent).toContain(formatDateTime(value.trialEndsAt, locale));
+      expect(root.textContent).toContain({ ru, kg, en }[locale].billing.trial.scope);
       expect(root.textContent).not.toMatch(/undefined|\{count|\{date/);
       expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
     },

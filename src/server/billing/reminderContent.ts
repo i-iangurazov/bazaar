@@ -1,6 +1,11 @@
 import { normalizeLocale, defaultLocale } from "@/lib/locales";
 import { formatDateTime } from "@/lib/i18nFormat";
 import type { ReminderState } from "./reminderPolicy";
+import {
+  escapeEmailHtml,
+  renderBrandedEmail,
+  renderEmailButton,
+} from "@/server/services/emailTemplate";
 
 const content = {
   ru: {
@@ -46,13 +51,6 @@ const content = {
       "There are no automatic charges. If you have already paid, wait for payment confirmation in your account; do not pay again. This is a service notice to an organization owner, not advertising.",
   },
 };
-const escape = (value: string) =>
-  value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!,
-  );
-
 export function subscriptionReminderContent(
   state: ReminderState,
   organizationName: string,
@@ -76,6 +74,12 @@ export function subscriptionReminderContent(
     locale,
     subject: copy.subject,
     text: `${body}\n\n${copy.action}: ${url}\n\n${copy.footer}`,
-    html: `<!doctype html><html lang="${locale === "kg" ? "ky" : locale}"><body style="font-family:Arial,sans-serif;color:#171717"><main style="max-width:600px;margin:32px auto;padding:24px"><h1 style="font-size:22px">${escape(copy.subject)}</h1><p style="line-height:1.6">${escape(body)}</p><p><a style="display:inline-block;background:#1555eb;color:white;text-decoration:none;padding:12px 18px;border-radius:8px" href="${url}">${escape(copy.action)}</a></p><p style="font-size:13px;color:#666;line-height:1.6">${escape(copy.footer)}</p></main></body></html>`,
+    html: renderBrandedEmail({
+      locale,
+      title: copy.subject,
+      preheader: body,
+      contentHtml: `<p style="margin:0 0 16px;line-height:1.6">${escapeEmailHtml(body)}</p><div style="margin:24px 0 0">${renderEmailButton({ href: url, label: copy.action })}</div>`,
+      footerHtml: escapeEmailHtml(copy.footer),
+    }),
   };
 }

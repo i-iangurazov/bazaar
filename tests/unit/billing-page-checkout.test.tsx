@@ -144,7 +144,7 @@ describe("billing page automated checkout and preserved access paths", () => {
       ),
     ).toBeTruthy();
   });
-  it.each(["MANAGER", "CASHIER"])(
+  it.each(["MANAGER", "STAFF", "CASHIER"])(
     "does not query billing details or expose checkout to %s",
     (role) => {
       state.role = role;
@@ -159,6 +159,6 @@ describe("billing page automated checkout and preserved access paths", () => {
     mount();
     expect(screen.queryByRole("link", { name: ru.billing.payments.openCheckout })).toBeNull();
     expect(screen.queryByRole("button", { name: ru.billing.requestUpgrade })).toBeNull();
-    expect(screen.getByText(ru.billing.payments.accountPaused)).toBeTruthy();
+    expect(screen.getByText(ru.billing.subscriptionStatuses.canceled)).toBeTruthy();
   });
 });
