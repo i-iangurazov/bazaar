@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type ComponentProps } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
@@ -67,7 +67,6 @@ export const ReportSelect = ({
 export function useReportScope(mode: "sales" | "hub") {
   const params = useSearchParams();
   const pathname = usePathname();
-  const router = useRouter();
   const query = params.toString();
   const state = useMemo(() => reportUrlState(query, mode), [query, mode]);
   const { data: session, status } = useSession();
@@ -129,7 +128,9 @@ export function useReportScope(mode: "sales" | "hub") {
     if (values.report === "sales") values.report = undefined;
     if (values.source === "all") values.source = undefined;
     if (values.onlineChannel === "ONLINE") values.onlineChannel = undefined;
-    router.replace(reportHref(pathname, values), { scroll: false });
+    // Report filters are client URL state. Next's native-history integration
+    // updates useSearchParams without a server-route transition resetting scroll.
+    window.history.replaceState(null, "", reportHref(pathname, values));
   };
   const fingerprint = JSON.stringify([
     session?.user.id,

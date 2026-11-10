@@ -248,3 +248,46 @@ Primary references:
 Local raw evidence: `scan-final.json`, `scan-final-unfiltered.json`, their logs,
 `advisory-matrix.json`, `dependency-policy-tests.log`, `dependency-unit.log` and
 `sheetjs-source-integrity.json` under `.local/qa/security-upgrade-20261110/`.
+
+## CI compatibility follow-up before publication
+
+The first candidate, `b34fceee`, was correctly held by CI run
+[42816453753](https://github.com/i-iangurazov/bazaar/actions/runs/42816453753).
+The dependency and CodeQL analyses, both native builds, worker container, catalogue
+scale, Baam, landing, stock browser and stabilization jobs passed. Two browser
+checks demonstrated compatibility defects; they were fixed before publication,
+without weakening assertions or disabling the release gate.
+
+Report grouping triggered a server-route navigation despite `scroll:false`:
+the same mounted navigation node moved from viewport y=486.47 to 1634.47. A local
+instrumented trace showed scrollY 887 -> 0 while document height and node identity
+remained unchanged. Report filters now use Next 15's documented native-history URL
+integration. Query validation, fresh report requests, replacement of the current
+history entry, deep links and stale-export/account/store guards remain. The original
+**20 desktop/mobile scroll cases**, including their unchanged 4-pixel tolerance,
+pass; **10 browser loading/error/retry/search/export/history checks** and **26 focused
+unit checks** pass. No report amounts, markup or CSS changed.
+
+Returning from product creation exposed a delayed receiving-draft restoration:
+the old field regained focus after the new quantity input had already been focused.
+Pending restorations now check their identity and are invalidated on successful
+product handoff. The saved catalogue scroll is restored independently, including a
+cache hit that completes before the first timer. Missing/failed product resolution
+keeps the existing restoration fallback. Six actual-component timer regressions
+pass, including a demonstrated failing cache-hit control before the final fix.
+The new-document desktop/mobile and existing-document handoffs passed **3/3** real
+browser cases against the final standalone build, with viewport screenshots
+inspected and unchanged stock, prices, costs, movements and subscription fingerprints.
+Existing document layouts and accounting remain.
+
+The final local whole-file regression audit after these changes contains **4,351
+passing tests in 491 files**, with the same three PgBouncer cases assigned to CI.
+This remains an explicitly combined full run plus superseding focused reruns, not a
+claim of a fresh complete execution. The next exact-revision CI and actual site and
+worker publication must still finish successfully before the release is complete.
+
+Local evidence: `ci-reporting-failure/`, `receiving-handoff-browser-before/`,
+`receiving-handoff-browser/`, `receiving-handoff-unit-final.log`,
+`ci-browser-fixes-unit.json`, and `local-regression-audit.json`.
+
+Primary reference: [Next 15 native history integration](https://nextjs.org/docs/15/app/getting-started/linking-and-navigating#native-history-api).

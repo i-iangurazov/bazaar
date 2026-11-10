@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InventoryReceivingPage } from "@/components/inventory/receiving-workflow";
-import { writeReceivingPending } from "@/components/inventory/receiving-draft-storage";
+import { writeReceivingDraft, writeReceivingPending } from "@/components/inventory/receiving-draft-storage";
 import ru from "../../messages/ru.json";
 
 const api = vi.hoisted(() => {
@@ -18,11 +18,11 @@ const api = vi.hoisted(() => {
     get stores() { return { get list() { return { invalidate }; } }; },
     inventory: { searchProducts: { invalidate, fetch: vi.fn().mockResolvedValue(search) } },
   };
-  return { preview, invalidate, query, stores: [store], search, utils,
+  return { preview, invalidate, query, stores: [store], search, utils, searchParams: "",
     session: { user: { id: "user-one", organizationId: "org-one", role: "ADMIN" } },
     router: { push: vi.fn() }, toast: vi.fn(), mutate: vi.fn() };
 });
-vi.mock("next/navigation", () => ({ useRouter: () => api.router, useSearchParams: () => new URLSearchParams() }));
+vi.mock("next/navigation", () => ({ useRouter: () => api.router, useSearchParams: () => new URLSearchParams(api.searchParams) }));
 vi.mock("next-auth/react", () => ({ useSession: () => ({ data: api.session, status: "authenticated" }) }));
 vi.mock("@/lib/useSse", () => ({ useSse: () => undefined }));
 vi.mock("@/lib/use-debounced-value", () => ({ useDebouncedValue: (value: unknown) => value }));
@@ -48,7 +48,15 @@ vi.mock("@/lib/trpc", () => ({ trpc: {
   },
 } }));
 
-afterEach(() => { cleanup(); sessionStorage.clear(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+  api.searchParams = "";
+  api.utils.inventory.searchProducts.fetch.mockResolvedValue(api.search);
+  vi.useRealTimers();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("receiving workflow preview lifecycle", () => {
   it("adds and edits a real receiving row without an update loop when tRPC property proxies change identity", async () => {
@@ -111,4 +119,74 @@ describe("receiving workflow preview lifecycle", () => {
     expect(commerce.querySelector('input')?.disabled).toBe(true);
     expect(api.mutate).not.toHaveBeenCalled();
   });
+
+  it.each(["created", "cached", "missing", "failed"] as const)(
+    "keeps the intended handoff focus after delayed draft restoration when the returned product is %s",
+    async outcome => {
+      vi.useFakeTimers();
+      vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+      vi.stubGlobal("scrollTo", vi.fn());
+      Element.prototype.scrollIntoView = vi.fn();
+      Element.prototype.scrollTo = vi.fn();
+      const draftKey = "receiving-focus-handoff";
+      const owner = { userId: "user-one", organizationId: "org-one", storeId: "store-one" };
+      expect(writeReceivingDraft(draftKey, owner, {
+        storeId: owner.storeId, dateTime: "2026-11-10T14:00", supplierName: "", referenceNumber: "", note: "",
+        search: "Known batch item", currencyCode: "KGS", currencyRateKgsPerUnit: 1,
+        focusedElement: { target: "lineInput", key: "product-one:BASE", field: "quantity" },
+        pageScrollY: 120, searchResultsScrollTop: 60,
+        lines: [{ key: "product-one:BASE", productId: "product-one", variantId: null, productName: "Known batch item",
+          variantName: null, sku: "KNOWN", barcode: null, imageUrl: null, currentStock: 10,
+          quantityInput: "3", unitCostInput: "12.5" }],
+      })).toBe(true);
+      api.searchParams = new URLSearchParams({
+        storeId: owner.storeId, receivingDraftKey: draftKey, returnSource: "stockReceiving", createdProductId: "product-new",
+      }).toString();
+      const created = outcome === "created" || outcome === "cached";
+      const returnedProduct = {
+        ...api.search[0], product: { ...api.search[0].product, id: "product-new", name: "Newly created item" },
+      };
+      let resolveProduct!: (results: typeof api.search) => void;
+      let rejectProduct!: (error: Error) => void;
+      if (outcome === "cached") api.utils.inventory.searchProducts.fetch.mockResolvedValueOnce([returnedProduct]);
+      else api.utils.inventory.searchProducts.fetch.mockImplementationOnce(() => new Promise((resolve, reject) => {
+        resolveProduct = resolve;
+        rejectProduct = reject;
+      }));
+      const view = render(<NextIntlClientProvider locale="ru" timeZone="Asia/Bishkek"
+        messages={{ inventory: ru.inventory, common: ru.common, errors: ru.errors }}>
+        <InventoryReceivingPage draftOwner={{ userId: owner.userId, organizationId: owner.organizationId }} />
+      </NextIntlClientProvider>);
+      if (outcome === "cached") await act(async () => { await Promise.resolve(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(api.utils.inventory.searchProducts.fetch).toHaveBeenCalledWith({
+        storeId: owner.storeId, productId: "product-new", limit: 100,
+      });
+      const oldQuantity = view.container.querySelector<HTMLInputElement>('[data-receiving-input="quantity"]')!;
+      if (outcome !== "cached") expect(document.activeElement).toBe(oldQuantity);
+      const priorScrollRestores = vi.mocked(window.scrollTo).mock.calls.length;
+
+      // Resolve before the late 150/500 ms restoration callbacks. These must
+      // not steal focus back from a successfully added product's quantity.
+      await act(async () => {
+        if (outcome === "failed") rejectProduct(new Error("Product lookup failed"));
+        else if (outcome !== "cached") resolveProduct(outcome === "missing" ? [] : [returnedProduct]);
+      });
+      await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+      const quantities = view.container.querySelectorAll<HTMLInputElement>('[data-receiving-input="quantity"]');
+      expect(quantities).toHaveLength(created ? 2 : 1);
+      const intendedQuantity = created ? quantities[1] : oldQuantity;
+      expect(document.activeElement).toBe(intendedQuantity);
+      await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+      expect(document.activeElement).toBe(intendedQuantity);
+      if (created) expect(window.scrollTo).toHaveBeenCalledTimes(priorScrollRestores);
+      else expect(vi.mocked(window.scrollTo).mock.calls.length).toBeGreaterThan(priorScrollRestores);
+      expect(Element.prototype.scrollTo).toHaveBeenCalledWith({ top: 60 });
+      expect(oldQuantity.value).toBe("3");
+      expect(view.container.querySelector<HTMLInputElement>('[data-receiving-input="unitCost"]')?.value).toBe("12.5");
+      expect((screen.getByRole("searchbox", { name: ru.inventory.receivingSearchPlaceholderShort }) as HTMLInputElement).value)
+        .toBe("Known batch item");
+      expect(api.mutate).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -579,6 +579,9 @@ export const InventoryReceivingPage = ({
 
     const view = pendingRestoreViewRef.current;
     const restoreView = (clearPending = false) => {
+      // A successfully created product has its own quantity-entry focus. Do
+      // not let a late restore of the previous draft steal that focus/scroll.
+      if (pendingRestoreViewRef.current !== view) return;
       if (typeof view.searchResultsScrollTop === "number") {
         searchResultsRef.current?.scrollTo({ top: view.searchResultsScrollTop });
       }
@@ -692,6 +695,11 @@ export const InventoryReceivingPage = ({
         });
         const result = results.find((item) => item.product.id === createdProductId) ?? results[0];
         if (result && storeRefreshSequenceRef.current === refreshSequence) {
+          const catalogScrollTop = pendingRestoreViewRef.current?.searchResultsScrollTop;
+          if (typeof catalogScrollTop === "number") {
+            searchResultsRef.current?.scrollTo({ top: catalogScrollTop });
+          }
+          pendingRestoreViewRef.current = null;
           addSearchResult(result, "manual", { selectQuantity: true });
         }
       } catch (error) {
