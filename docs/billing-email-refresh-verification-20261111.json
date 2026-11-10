@@ -86,5 +86,26 @@
     "ciForThisCommit": "pending at creation",
     "productionForThisCommit": "pending at creation"
   },
-  "evidenceDirectory": ".local/qa/gopay-pilot-20261111/"
+  "evidenceDirectory": ".local/qa/gopay-pilot-20261111/",
+  "cloudAttemptCorrections": {
+    "run": "https://github.com/i-iangurazov/bazaar/actions/runs/42904995952",
+    "published": false,
+    "typecheck": "Removed a redundant months field from the synthetic billing UI fixture; subscriptionPrice already supplies the identical value. No product behavior changed.",
+    "dependency": {
+      "package": "fast-xml-parser",
+      "from": "5.11.2",
+      "to": "5.12.0",
+      "advisory": "https://github.com/advisories/GHSA-474x-hrwr-fgx4",
+      "configuration": "Only the historical FreedomPay XML parser imports this package; stopNodes is not enabled. The advisory is addressed by upgrading the dependency, without weakening the security gate.",
+      "independentReview": "No compatibility blocker found; signed text, entities and nested/repeated XML require regression coverage."
+    },
+    "followUpUnitTests": {
+      "passed": 263,
+      "failed": 0,
+      "skipped": 0,
+      "files": 6,
+      "qualification": "Overlaps earlier checks; not added to their test count."
+    },
+    "fullCloudRecheck": "Required for the follow-up commit before production publication"
+  }
 }

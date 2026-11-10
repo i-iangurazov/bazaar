@@ -97,7 +97,6 @@ export function createBillingUiFixture(state: BillingUiState = "paidTrial") {
       kind: "RENEWAL",
       organizationId: "synthetic-billing-ui",
       plan: selection.plan,
-      months: selection.months,
       extras: selection.extras,
       entitlements: selected,
       ...price,
