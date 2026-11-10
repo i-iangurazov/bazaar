@@ -116,7 +116,7 @@ export function MarketingPricing({
               {([6, 12] as const).map(months => <tr key={months}>
                 <th scope="row">{t(months === 6 ? "publicPricing.halfYearTotal" : "publicPricing.yearTotal")}</th>
                 {plans.map(plan => <td key={plan.code}>
-                  {t("planPricePrimary", { amount: number(subscriptionPrice(plan.monthlyPriceKgs * 100, months).amountMinor / 100) })}
+                  {t("publicPricing.periodPrice", { amount: number(subscriptionPrice(plan.monthlyPriceKgs * 100, months).amountMinor / 100) })}
                 </td>)}
               </tr>)}
             </thead>

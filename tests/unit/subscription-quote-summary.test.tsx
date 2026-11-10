@@ -70,6 +70,9 @@ describe("server-calculated subscription order summary", () => {
       expect(root.querySelector("[data-subscription-amount-due]")?.textContent).toContain(
         formatCurrencyKGS(28500, locale),
       );
+      expect(root.querySelector("[data-subscription-amount-due]")?.textContent).not.toMatch(
+        /\/(?:мес|ай|month)/,
+      );
       expect(root.querySelector("[data-subscription-savings]")?.textContent).toContain(
         formatCurrencyKGS(1500, locale),
       );
@@ -84,7 +87,7 @@ describe("server-calculated subscription order summary", () => {
       expect(root.textContent).not.toMatch(/undefined|NaN|\{amount\}|\{date\}/);
     },
   );
-  it("shows a twelve-month price without implying an automatic debit or losing remaining trial days", () => {
+  it.each(["ru", "kg", "en"] as const)("shows a twelve-month price without a monthly suffix, automatic debit or lost trial days in %s", (locale) => {
     const root = renderSummary(
       quote({
         months: 12,
@@ -97,14 +100,18 @@ describe("server-calculated subscription order summary", () => {
         effectiveTiming: "AFTER_TRIAL",
         endsAt: "2028-01-31T18:00:00.000Z",
       }),
+      locale,
     );
     expect(root.querySelector("[data-subscription-amount-due]")?.textContent).toContain(
-      formatCurrencyKGS(51000, "ru"),
+      formatCurrencyKGS(51000, locale),
+    );
+    expect(root.querySelector("[data-subscription-amount-due]")?.textContent).not.toMatch(
+      /\/(?:мес|ай|month)/,
     );
     expect(root.querySelector("[data-subscription-savings]")?.textContent).toContain(
-      formatCurrencyKGS(9000, "ru"),
+      formatCurrencyKGS(9000, locale),
     );
-    expect(root.textContent).toContain(ru.billing.payments.timingAfterTrial);
+    expect(root.textContent).toContain({ ru, kg, en }[locale].billing.payments.timingAfterTrial);
   });
   it("uses the server's prorated amount due and credit instead of displaying the full term as the charge", () => {
     const root = renderSummary(

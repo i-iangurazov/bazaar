@@ -711,6 +711,7 @@
       "tryFree": "Try for free",
       "halfYearTotal": "6-month total · save 5%",
       "yearTotal": "12-month total · save 15%",
+      "periodPrice": "{amount} KGS",
       "maxStores": "Maximum stores with add-ons",
       "ai": "Monthly AI operations: Baam and content combined",
       "images": "Studio images per month",

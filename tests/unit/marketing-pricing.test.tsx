@@ -60,6 +60,49 @@ describe("public tariff rendering", () => {
     expect(root.querySelector('a[href="/billing#subscription-addons"]')).not.toBeNull();
   });
 
+  it.each([
+    ["ru", ru],
+    ["kg", kg],
+    ["en", en],
+  ] as const)("shows full six- and twelve-month totals without a monthly suffix in %s", (locale, messages) => {
+    const t = createTranslator({ locale, messages, namespace: "billing" });
+    const root = document.createElement("div");
+    root.innerHTML = renderToStaticMarkup(
+      <MarketingPricing plans={getPlanCatalogEntries()} locale={locale} t={t} />,
+    );
+    const number = new Intl.NumberFormat(locale === "kg" ? "ky-KG" : locale);
+    const currency = locale === "en" ? "KGS" : "сом";
+    // Independently stated totals catch both incorrect amounts and per-month labels.
+    for (const [header, amounts] of [
+      [messages.billing.publicPricing.halfYearTotal, [11400, 19950, 31350]],
+      [messages.billing.publicPricing.yearTotal, [20400, 35700, 56100]],
+    ] as const) {
+      const row = [...root.querySelectorAll("tr")].find(
+        (item) => item.querySelector('th[scope="row"]')?.textContent === header,
+      );
+      expect(row, header).toBeDefined();
+      expect([...row!.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual(
+        amounts.map((amount) => `${number.format(amount)} ${currency}`),
+      );
+      expect(row?.textContent).not.toMatch(/\/(?:мес|ай|month)/);
+    }
+    const monthly = [...root.querySelectorAll("tr")].find(
+      (row) => row.querySelector('th[scope="row"]')?.textContent === messages.billing.publicPricing.monthlyPrice,
+    );
+    expect([...monthly!.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual(
+      [2000, 3500, 5500].map((amount) => t("planPricePrimary", { amount: number.format(amount) })),
+    );
+    for (const [addon, amount] of [["stores", 1000], ["reserve", 500]] as const) {
+      expect(root.querySelector(`[data-addon="${addon}"]`)?.textContent).toContain(
+        t("planPricePrimary", { amount: number.format(amount) }),
+      );
+    }
+    for (const card of root.querySelectorAll("article")) {
+      expect(card.textContent).toContain(messages.billing.publicPricing.monthlySuffix);
+    }
+    expect(root.textContent).not.toMatch(/\{amount\}|undefined|NaN/);
+  });
+
   it("preserves an agreed legacy fractional KGS override without changing the public catalog", () => {
     vi.stubEnv("PLAN_PRICE_STARTER_KGS", "1890.50");
     const t = createTranslator({ locale: "en", messages: en, namespace: "billing" });
