@@ -1,5 +1,9 @@
 import { getServerAuthToken } from "@/server/auth/token";
-import { isManagedProductImageUrl } from "@/server/services/productImageStorage";
+import {
+  fetchPublicProductImage,
+  parseProductImageHttpUrl,
+  readLocalProductImage,
+} from "@/server/services/productImageFetch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,27 +121,36 @@ const resolveManagedSourceUrl = (rawSourceUrl: string, requestUrl: URL) => {
     return null;
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(sourceUrl, requestUrl.origin);
-  } catch {
-    return null;
+  const appUrls = [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXTAUTH_URL]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => parseProductImageHttpUrl(value))
+    .filter((value): value is URL => Boolean(value));
+  if (!appUrls.length && process.env.NODE_ENV !== "production") {
+    appUrls.push(new URL(requestUrl.origin));
   }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return null;
-  }
-
-  const managedCandidatePath = `${parsed.pathname}${parsed.search}`;
-  const isManaged =
-    isManagedProductImageUrl(sourceUrl) ||
-    isManagedProductImageUrl(parsed.toString()) ||
-    isManagedProductImageUrl(managedCandidatePath) ||
-    isManagedProductImageUrl(parsed.pathname);
-  if (!isManaged) {
-    return null;
-  }
-
-  return parsed.toString();
+  const configuredR2Url = process.env.R2_PUBLIC_BASE_URL
+    ? parseProductImageHttpUrl(process.env.R2_PUBLIC_BASE_URL)
+    : null;
+  const r2Url = configuredR2Url && !configuredR2Url.port ? configuredR2Url : null;
+  const r2Prefix = r2Url ? `${r2Url.pathname.replace(/\/+$/, "")}/` : null;
+  const localPaths = ["/uploads/imported-products/", "/uploads/product-images/"];
+  const allowUrl = (url: URL) => {
+    if (url.username || url.password) return false;
+    return (
+      appUrls.some((app) => app.origin === url.origin) &&
+      localPaths.some((prefix) => url.pathname.startsWith(prefix))
+    ) || Boolean(r2Url && r2Prefix && r2Url.origin === url.origin && url.pathname.startsWith(r2Prefix));
+  };
+  const isRetailPath = sourceUrl.startsWith("/retails/") || sourceUrl.startsWith("retails/");
+  const parsed = isRetailPath
+    ? r2Url && parseProductImageHttpUrl(sourceUrl.replace(/^\/+/, ""), new URL(r2Prefix ?? "/", r2Url))
+    : parseProductImageHttpUrl(sourceUrl, appUrls[0] ?? new URL(requestUrl.origin));
+  if (!parsed || !allowUrl(parsed)) return null;
+  return {
+    url: parsed,
+    allowUrl,
+    isLocalUpload: appUrls.some((app) => app.origin === parsed.origin) && localPaths.some((prefix) => parsed.pathname.startsWith(prefix)),
+  };
 };
 
 export const GET = async (request: Request) => {
@@ -161,18 +174,30 @@ export const GET = async (request: Request) => {
   }
 
   try {
-    const sourceResponse = await fetch(managedSourceUrl, { cache: "no-store" });
-    if (!sourceResponse.ok) {
+    const configuredMaxBytes = Number(process.env.PRODUCT_IMAGE_MAX_BYTES);
+    const maxBytes = Number.isFinite(configuredMaxBytes) && configuredMaxBytes > 0
+      ? configuredMaxBytes
+      : 5 * 1024 * 1024;
+    const image = (
+      managedSourceUrl.isLocalUpload
+        ? await readLocalProductImage(managedSourceUrl.url.pathname, maxBytes)
+        : null
+    ) ?? await fetchPublicProductImage(managedSourceUrl.url.toString(), {
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]),
+      maxBytes,
+      allowUrl: managedSourceUrl.allowUrl,
+    });
+    if (!image) {
       return Response.json({ message: "imageReadFailed" }, { status: 502 });
     }
 
-    const body = await sourceResponse.arrayBuffer();
+    const body = new Uint8Array(image.buffer);
     if (!body.byteLength) {
       return Response.json({ message: "imageReadFailed" }, { status: 400 });
     }
 
-    const byHeader = normalizeImageMimeType(sourceResponse.headers.get("content-type") ?? "");
-    const byUrl = normalizeImageMimeType(resolveMimeTypeFromUrl(managedSourceUrl));
+    const byHeader = normalizeImageMimeType(image.contentType);
+    const byUrl = normalizeImageMimeType(resolveMimeTypeFromUrl(managedSourceUrl.url.toString()));
     const byBytes = inferImageMimeTypeFromBytes(new Uint8Array(body.slice(0, 16)));
     const contentType = byHeader.startsWith("image/")
       ? byHeader

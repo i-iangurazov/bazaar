@@ -6,12 +6,10 @@ const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  experimental: {
-    outputFileTracingExcludes: {
-      "*": ["./tmp/**/*", "./artifacts/**/*", "./.local/**/*"],
-    },
-    serverComponentsExternalPackages: ["pdfkit", "heic-convert", "heic-decode", "libheif-js"],
+  outputFileTracingExcludes: {
+    "*": ["./tmp/**/*", "./artifacts/**/*", "./.local/**/*"],
   },
+  serverExternalPackages: ["pdfkit", "heic-convert", "heic-decode", "libheif-js"],
 };
 
 export default withNextIntl(nextConfig);

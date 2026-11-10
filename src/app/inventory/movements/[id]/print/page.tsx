@@ -14,8 +14,8 @@ import { getServerAuthToken } from "@/server/auth/token";
 import { getProductMovementDocument } from "@/server/services/productMovements";
 
 type PageProps = {
-  params: { id: string };
-  searchParams?: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 const safeDecodeURIComponent = (value: string) => {
@@ -26,12 +26,15 @@ const safeDecodeURIComponent = (value: string) => {
   }
 };
 
-const getSearchParam = (searchParams: PageProps["searchParams"], key: string) => {
+const getSearchParam = (searchParams: Awaited<PageProps["searchParams"]>, key: string) => {
   const value = searchParams?.[key];
   return Array.isArray(value) ? value[0] : value;
 };
 
-const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
+const MovementPrintPage = async ({ params: paramsPromise, searchParams: searchParamsPromise }: PageProps) => {
+  const params = await paramsPromise;
+  const searchParams = await searchParamsPromise;
+
   const token = await getServerAuthToken();
   if (!token?.sub || !token.organizationId) {
     redirect("/login");

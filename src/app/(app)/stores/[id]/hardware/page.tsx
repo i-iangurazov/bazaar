@@ -95,41 +95,41 @@ const HardwarePage = () => {
         labelTemplate: z.enum(PRICE_TAG_TEMPLATES),
         labelPaperMode: z.enum(["A4", "ROLL", "LABEL_PRINTER", "THERMAL"]),
         labelBarcodeType: z.enum(["auto", "ean13", "code128"]),
-        labelDefaultCopies: z.coerce.number().int().min(1, t("copiesRequired")).max(100),
+        labelDefaultCopies: z.coerce.number<number>().int().min(1, t("copiesRequired")).max(100),
         labelShowProductName: z.boolean(),
         labelShowPrice: z.boolean(),
         labelShowSku: z.boolean(),
         labelShowStoreName: z.boolean(),
         labelRollGapMm: z.coerce
-          .number()
+          .number<number>()
           .min(PRICE_TAG_ROLL_LIMITS.gapMm.min)
           .max(PRICE_TAG_ROLL_LIMITS.gapMm.max),
         labelRollXOffsetMm: z.coerce
-          .number()
+          .number<number>()
           .min(PRICE_TAG_ROLL_LIMITS.offsetMm.min)
           .max(PRICE_TAG_ROLL_LIMITS.offsetMm.max),
         labelRollYOffsetMm: z.coerce
-          .number()
+          .number<number>()
           .min(PRICE_TAG_ROLL_LIMITS.offsetMm.min)
           .max(PRICE_TAG_ROLL_LIMITS.offsetMm.max),
         labelWidthMm: z.coerce
-          .number()
+          .number<number>()
           .min(PRICE_TAG_ROLL_LIMITS.widthMm.min)
           .max(PRICE_TAG_ROLL_LIMITS.widthMm.max),
         labelHeightMm: z.coerce
-          .number()
+          .number<number>()
           .min(PRICE_TAG_ROLL_LIMITS.heightMm.min)
           .max(PRICE_TAG_ROLL_LIMITS.heightMm.max),
-        labelMarginTopMm: z.coerce.number().min(0).max(20),
-        labelMarginRightMm: z.coerce.number().min(0).max(20),
-        labelMarginBottomMm: z.coerce.number().min(0).max(20),
-        labelMarginLeftMm: z.coerce.number().min(0).max(20),
+        labelMarginTopMm: z.coerce.number<number>().min(0).max(20),
+        labelMarginRightMm: z.coerce.number<number>().min(0).max(20),
+        labelMarginBottomMm: z.coerce.number<number>().min(0).max(20),
+        labelMarginLeftMm: z.coerce.number<number>().min(0).max(20),
         connectorDeviceId: z.string().optional().default(""),
       }),
     [t],
   );
 
-  const form = useForm<HardwareFormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
       receiptPrintMode: PrinterPrintMode.PDF,

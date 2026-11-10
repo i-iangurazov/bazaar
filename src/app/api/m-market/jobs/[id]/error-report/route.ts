@@ -11,9 +11,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -31,7 +31,9 @@ const MMARKET_IMPORT_ENDPOINTS: Record<MMarketEnvironment, string> = {
   PROD: "https://market.mbank.kg/api/crm/products/import_products/",
 };
 
-export const GET = async (_request: Request, { params }: RouteParams) => {
+export const GET = async (_request: Request, { params: paramsPromise }: RouteParams) => {
+  const params = await paramsPromise;
+
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });

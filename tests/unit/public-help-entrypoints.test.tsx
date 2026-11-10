@@ -30,8 +30,11 @@ describe("public guide language and legacy entry points", () => {
       state.locale = locale;
       const params = { category: "inventory", guide: "receiving" };
       const guide = getHelpGuide(params.category, params.guide)!;
-      const page = await GuidePage({ params, searchParams: { from: "/inventory/receiving" } });
-      const children = page.props.children as ReactElement[];
+      const page = await GuidePage({ params: Promise.resolve(params), searchParams: Promise.resolve({ from: "/inventory/receiving" }) });
+      const children = page.props.children as [
+        ReactElement<{ dangerouslySetInnerHTML: { __html: string } }>,
+        ReactElement<{ sourceRoute?: string }>,
+      ];
       const script = children[0].props.dangerouslySetInnerHTML.__html;
       const structured = JSON.parse(script);
       expect(structured.name).toBe(guide.title[locale]);
@@ -39,7 +42,7 @@ describe("public guide language and legacy entry points", () => {
         guide.steps.map((step) => step.body[locale]),
       );
       expect(structured.step[0].url).toBe("https://www.bazaar.kg/help/inventory/receiving#step-1");
-      expect((await generateMetadata({ params })).title).toBe(
+      expect((await generateMetadata({ params: Promise.resolve(params) })).title).toBe(
         `${guide.title[locale]} — Bazaar Guide`,
       );
       expect(children[1].props.sourceRoute).toBe("/inventory/receiving");
@@ -47,7 +50,7 @@ describe("public guide language and legacy entry points", () => {
   );
   it("preserves not-found handling rather than rendering an unrelated instruction", async () => {
     await expect(
-      GuidePage({ params: { category: "inventory", guide: "missing-guide" }, searchParams: {} }),
+      GuidePage({ params: Promise.resolve({ category: "inventory", guide: "missing-guide" }), searchParams: Promise.resolve({}) }),
     ).rejects.toThrow("notFound");
   });
   it.each([false, true])(
@@ -59,13 +62,13 @@ describe("public guide language and legacy entry points", () => {
       );
     },
   );
-  it("preserves repeated query values and a nested path when removing a legacy locale prefix", () => {
-    expect(() =>
+  it("preserves repeated query values and a nested path when removing a legacy locale prefix", async () => {
+    await expect(
       LegacyRoute({
-        params: { locale: "en", slug: ["help", "inventory", "receiving"] },
-        searchParams: { from: "/inventory/receiving", tag: ["stock", "cost"], absent: undefined },
+        params: Promise.resolve({ locale: "en", slug: ["help", "inventory", "receiving"] }),
+        searchParams: Promise.resolve({ from: "/inventory/receiving", tag: ["stock", "cost"], absent: undefined }),
       }),
-    ).toThrow(
+    ).rejects.toThrow(
       "redirect:/help/inventory/receiving?from=%2Finventory%2Freceiving&tag=stock&tag=cost",
     );
   });

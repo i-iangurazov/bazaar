@@ -11,10 +11,12 @@ export const generateStaticParams = () =>
   helpGuides.map((item) => ({ category: item.category, guide: item.slug }));
 
 export const generateMetadata = async ({
-  params,
+  params: paramsPromise,
 }: {
-  params: { category: string; guide: string };
+  params: Promise<{ category: string; guide: string }>;
 }): Promise<Metadata> => {
+  const params = await paramsPromise;
+
   const item = getHelpGuide(params.category, params.guide);
   if (!item) return {};
   const locale = normalizeLocale(await getLocale()) ?? defaultLocale;
@@ -31,12 +33,15 @@ export const generateMetadata = async ({
 };
 
 const GuidePage = async ({
-  params,
-  searchParams,
+  params: paramsPromise,
+  searchParams: searchParamsPromise,
 }: {
-  params: { category: string; guide: string };
-  searchParams: { from?: string };
+  params: Promise<{ category: string; guide: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) => {
+  const params = await paramsPromise;
+  const searchParams = await searchParamsPromise;
+
   const item = getHelpGuide(params.category, params.guide);
   if (!item) notFound();
   const locale = normalizeLocale(await getLocale()) ?? defaultLocale;

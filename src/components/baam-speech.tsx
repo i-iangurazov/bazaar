@@ -5,7 +5,7 @@ import { baamCopy } from "@/lib/baam/copy";
 
 let finishActiveSpeech: (() => void) | undefined;
 export function BaamSpeech({ text, locale }: { text: string; locale: string }) {
-  const ownFinish = useRef<(() => void) | undefined>();
+  const ownFinish = useRef<(() => void) | undefined>(undefined);
   const [supported, setSupported] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   useEffect(() => {

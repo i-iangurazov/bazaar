@@ -53,7 +53,7 @@ export const generateMetadata = async (): Promise<Metadata> => {
 const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   const locale = (await getLocale()) ?? defaultLocale;
   const messages = await getMessages();
-  const theme = resolveThemePreference(cookies().get(themeCookieName)?.value);
+  const theme = resolveThemePreference((await cookies()).get(themeCookieName)?.value);
   const htmlClassName = themeClassName(theme);
 
   return (

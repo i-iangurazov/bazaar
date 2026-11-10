@@ -20,7 +20,7 @@ import { AppError } from "./errors";
 async function structured<T>(
   config: TextAiConfig,
   name: string,
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  schema: z.ZodType<T, unknown>,
   instructions: string,
   context: unknown,
   signal: AbortSignal,

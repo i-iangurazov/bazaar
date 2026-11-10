@@ -8,6 +8,7 @@ import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 import { extname, resolve, sep } from "node:path";
 
 import sharp from "sharp";
+import type { Metadata } from "sharp";
 import {
   Prisma,
   ProductImageStudioBackground,
@@ -382,7 +383,7 @@ export const validateUploadedImage = async (input: {
     throw new AppError("imageTooLarge", "BAD_REQUEST", 400);
   }
 
-  let metadata: sharp.Metadata;
+  let metadata: Metadata;
   try {
     metadata = await sharp(sourceImage.buffer).metadata();
   } catch {

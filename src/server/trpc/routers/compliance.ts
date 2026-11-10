@@ -17,7 +17,7 @@ const complianceSchema = z.object({
   enableMarking: z.boolean(),
   markingMode: z.nativeEnum(MarkingMode),
   kkmProviderKey: z.string().nullable().optional(),
-  kkmSettings: z.record(z.unknown()).nullable().optional(),
+  kkmSettings: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export const complianceRouter = router({

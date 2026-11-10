@@ -26,7 +26,7 @@ describe("m-market error report route", () => {
     mockGetServerAuthToken.mockResolvedValue(null);
 
     const response = await mMarketErrorReportGet(new Request("http://localhost"), {
-      params: { id: "job-1" },
+      params: Promise.resolve({ id: "job-1" }),
     });
 
     expect(response.status).toBe(401);
@@ -40,7 +40,7 @@ describe("m-market error report route", () => {
     });
 
     const response = await mMarketErrorReportGet(new Request("http://localhost"), {
-      params: { id: "job-1" },
+      params: Promise.resolve({ id: "job-1" }),
     });
 
     expect(response.status).toBe(403);
@@ -96,7 +96,7 @@ describe("m-market error report route", () => {
     });
 
     const response = await mMarketErrorReportGet(new Request("http://localhost"), {
-      params: { id: "job-1" },
+      params: Promise.resolve({ id: "job-1" }),
     });
 
     expect(response.status).toBe(200);
@@ -183,7 +183,7 @@ describe("m-market error report route", () => {
     });
 
     const response = await mMarketErrorReportGet(new Request("http://localhost"), {
-      params: { id: "job-2" },
+      params: Promise.resolve({ id: "job-2" }),
     });
 
     expect(response.status).toBe(200);
@@ -243,7 +243,7 @@ describe("m-market error report route", () => {
     });
 
     const response = await mMarketErrorReportGet(new Request("http://localhost"), {
-      params: { id: "job-3" },
+      params: Promise.resolve({ id: "job-3" }),
     });
 
     expect(response.status).toBe(200);

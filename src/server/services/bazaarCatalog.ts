@@ -1,6 +1,6 @@
 import { catalogVariantLabel } from "@/lib/catalogVariantLabel";
 import { catalogVisibilityWhere } from "./catalogVisibility";
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import {
   Prisma,
   BazaarCatalogFontFamily,
@@ -106,11 +106,10 @@ const resolveProductListImageUrl = (product: {
   return null;
 };
 
-const createSlugCandidate = () => {
-  const bytes = randomBytes(SLUG_LENGTH);
+export const createSlugCandidate = () => {
   let result = "";
   for (let index = 0; index < SLUG_LENGTH; index += 1) {
-    result += slugAlphabet[bytes[index] % slugAlphabet.length];
+    result += slugAlphabet[randomInt(slugAlphabet.length)];
   }
   return result;
 };

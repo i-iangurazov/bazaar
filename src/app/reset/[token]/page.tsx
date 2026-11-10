@@ -47,7 +47,7 @@ const ResetTokenPage = () => {
     [t],
   );
 
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { password: "" },
   });

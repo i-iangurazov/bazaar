@@ -117,8 +117,10 @@ const getLegalEntityLabel = (tStores: Translator, value?: string | null) => {
   }
 };
 
-export const GET = async (_request: Request, { params }: { params: { id: string } }) => {
-  const localeCookie = cookies().get("NEXT_LOCALE")?.value;
+export const GET = async (_request: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) => {
+  const params = await paramsPromise;
+
+  const localeCookie = (await cookies()).get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
   let messages: MessageTree | undefined;
   try {

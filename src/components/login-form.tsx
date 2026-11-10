@@ -69,7 +69,7 @@ export const LoginForm = () => {
     password: z.string().min(1, t("passwordRequired")),
   });
 
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
       email: "",

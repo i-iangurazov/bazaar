@@ -39,16 +39,19 @@ const primary: Record<string, string[]> = {
   supplier_create: ["name", "phone", "email"],
   customer_create: ["storeId", "name", "phone", "email"],
 };
-function unwrap(schema: z.ZodTypeAny): z.ZodTypeAny {
+function unwrap(schema: z.core.$ZodType): z.core.$ZodType {
   if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable)
     return unwrap(schema.unwrap());
-  if (schema instanceof z.ZodDefault) return unwrap(schema.removeDefault());
-  if (schema instanceof z.ZodEffects) return unwrap(schema.innerType());
+  if (schema instanceof z.ZodDefault) return unwrap(schema.unwrap());
+  if (schema instanceof z.ZodPipe) {
+    // A preprocess pipe starts with a transform; describe its validated input.
+    return unwrap(schema.in instanceof z.ZodTransform ? schema.out : schema.in);
+  }
   return schema;
 }
 export function describeWorkflowField(
   key: string,
-  schema: z.ZodTypeAny,
+  schema: z.core.$ZodType,
   locale: string,
 ): WorkflowField {
   const raw = unwrap(schema),
@@ -57,12 +60,12 @@ export function describeWorkflowField(
     key,
     label: baamText(locale, ...label),
     kind: "text",
-    required: !schema.isOptional() && !schema.isNullable(),
+    required: !z.safeParse(schema, undefined).success && !z.safeParse(schema, null).success,
   };
   if (raw instanceof z.ZodObject) {
     field.kind = "object";
     field.fields = Object.entries(raw.shape).map(([name, value]) =>
-      describeWorkflowField(name, value as z.ZodTypeAny, locale),
+      describeWorkflowField(name, value as z.core.$ZodType, locale),
     );
   } else if (raw instanceof z.ZodArray) {
     field.kind = "array";
@@ -72,21 +75,25 @@ export function describeWorkflowField(
       locale,
     );
     field.item.required = true;
-    field.min = raw._def.minLength?.value;
-    field.max = raw._def.maxLength?.value ?? 40;
+    const bounds = z.toJSONSchema(raw, { io: "input" });
+    field.min = typeof bounds.minItems === "number" ? bounds.minItems : undefined;
+    field.max = typeof bounds.maxItems === "number" ? bounds.maxItems : 40;
   } else if (raw instanceof z.ZodNumber) {
     field.kind = "number";
     field.integer = raw.isInt;
-    field.min = raw.minValue ?? undefined;
-    field.max = raw.maxValue ?? undefined;
+    const minimum = raw.minValue;
+    const maximum = raw.maxValue;
+    // Zod 4 uses infinities for open bounds; the workflow wire contract omits them.
+    field.min = minimum !== null && Number.isFinite(minimum) ? minimum : undefined;
+    field.max = maximum !== null && Number.isFinite(maximum) ? maximum : undefined;
   } else if (raw instanceof z.ZodBoolean) field.kind = "boolean";
-  else if (raw instanceof z.ZodEnum || raw instanceof z.ZodNativeEnum) {
+  else if (raw instanceof z.ZodEnum) {
     field.kind = "select";
-    const values: unknown[] = raw instanceof z.ZodEnum ? raw.options : Object.values(raw.enum);
+    const values: unknown[] = raw.options;
     field.options = values
       .filter((v): v is string => typeof v === "string")
       .map((value) => ({ value, label: enums[value] ? baamText(locale, ...enums[value]) : value }));
-  } else if (raw instanceof z.ZodString && raw.isDatetime) field.kind = "date";
+  } else if (raw instanceof z.ZodString && z.toJSONSchema(raw).format === "date-time") field.kind = "date";
   if (lookups[key] && field.kind !== "array") {
     field.kind = "lookup";
     field.lookup = lookups[key];
@@ -105,7 +112,7 @@ export function workflowFields(kind: string, locale: string): WorkflowField[] {
   if (!(raw instanceof z.ZodObject))
     throw new AppError("baamActionUnavailable", "BAD_REQUEST", 400);
   let fields = Object.entries(raw.shape).map(([key, schema]) =>
-    describeWorkflowField(key, schema as z.ZodTypeAny, locale),
+    describeWorkflowField(key, schema as z.core.$ZodType, locale),
   );
   const line = /^(purchase|order|pos|return)_(add|update|remove)_line$/.exec(kind);
   if (line) {

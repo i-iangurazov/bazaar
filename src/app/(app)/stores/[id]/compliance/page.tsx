@@ -119,7 +119,7 @@ const CompliancePage = () => {
     [],
   );
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: emptyForm,
   });
@@ -168,7 +168,7 @@ const CompliancePage = () => {
     },
   });
 
-  const handleSubmit = (values: FormValues) => {
+  const handleSubmit = (values: z.output<typeof schema>) => {
     let parsedSettings: Record<string, unknown> | null = null;
     if (values.kkmSettingsText?.trim()) {
       try {

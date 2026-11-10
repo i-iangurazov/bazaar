@@ -7,7 +7,9 @@ import { resolveJoinTarget } from "@/server/services/loyalty/memberAuth";
 
 export const dynamic = "force-dynamic";
 
-const JoinPage = async ({ params }: { params: { programStoreId: string } }) => {
+const JoinPage = async ({ params: paramsPromise }: { params: Promise<{ programStoreId: string }> }) => {
+  const params = await paramsPromise;
+
   const t = await getTranslations("loyalty");
   let target = null;
   let failed = false;

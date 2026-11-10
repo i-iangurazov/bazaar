@@ -193,12 +193,12 @@ const StockCountDetailPage = () => {
   const editSchema = useMemo(
     () =>
       z.object({
-        countedQty: z.coerce.number().multipleOf(0.001).min(0, t("countedNonNegative")),
+        countedQty: z.coerce.number<number>().multipleOf(0.001).min(0, t("countedNonNegative")),
       }),
     [t],
   );
 
-  const editForm = useForm<z.infer<typeof editSchema>>({
+  const editForm = useForm<z.input<typeof editSchema>, unknown, z.output<typeof editSchema>>({
     resolver: zodResolver(editSchema),
     defaultValues: { countedQty: 0 },
   });

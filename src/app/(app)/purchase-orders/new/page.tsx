@@ -75,13 +75,14 @@ const NewPurchaseOrderPage = () => {
 
   const lineSchema = useMemo(() => {
     const optionalCost = z.preprocess(
-      (value) => (value === "" || value === null ? undefined : value),
-      z.coerce.number().min(0, t("unitCostNonNegative")).optional(),
+      (value: number | string | null | undefined) =>
+        value === "" || value === null ? undefined : value,
+      z.coerce.number<number>().min(0, t("unitCostNonNegative")).optional(),
     );
     return z.object({
       productId: z.string().min(1, t("productRequired")),
       variantId: z.string().optional().nullable(),
-      qtyOrdered: z.coerce.number().multipleOf(0.001).positive(t("qtyPositive")),
+      qtyOrdered: z.coerce.number<number>().multipleOf(0.001).positive(t("qtyPositive")),
       unitSelection: z.string().min(1, t("unitRequired")),
       unitCost: optionalCost,
     });
@@ -97,7 +98,7 @@ const NewPurchaseOrderPage = () => {
     [t, lineSchema],
   );
 
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
       storeId: "",
@@ -141,9 +142,17 @@ const NewPurchaseOrderPage = () => {
   const [productCache, setProductCache] = useState<Record<string, ProductCacheEntry>>({});
   const [variantCache, setVariantCache] = useState<Record<string, string>>({});
   const qtyInputRef = useRef<HTMLInputElement | null>(null);
+  const lineSearchHideRef = useRef<number | null>(null);
   const createAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
+  const clearLineSearchHide = useCallback(() => {
+    if (lineSearchHideRef.current !== null) {
+      window.clearTimeout(lineSearchHideRef.current);
+      lineSearchHideRef.current = null;
+    }
+  }, []);
+  useEffect(() => clearLineSearchHide, [clearLineSearchHide]);
 
-  const lineForm = useForm<z.infer<typeof lineSchema>>({
+  const lineForm = useForm<z.input<typeof lineSchema>, unknown, z.output<typeof lineSchema>>({
     resolver: zodResolver(lineSchema),
     defaultValues: {
       productId: "",
@@ -167,7 +176,8 @@ const NewPurchaseOrderPage = () => {
     { enabled: !isForbidden && Boolean(lineProductId) },
   );
   const lineUnitSelection = lineForm.watch("unitSelection");
-  const lineQtyOrdered = lineForm.watch("qtyOrdered");
+  const lineQtyOrderedResult = lineSchema.shape.qtyOrdered.safeParse(lineForm.watch("qtyOrdered"));
+  const lineQtyOrdered = lineQtyOrderedResult.success ? lineQtyOrderedResult.data : Number.NaN;
   const lineProduct = lineProductId ? productCache[lineProductId] : undefined;
 
   const applySelectedProduct = (product: { id: string; name: string; sku: string }) => {
@@ -197,7 +207,14 @@ const NewPurchaseOrderPage = () => {
     return true;
   };
 
-  const lines = form.watch("lines");
+  const draftLines = form.watch("lines");
+  const lines = useMemo(
+    () => draftLines.map((line) => {
+      const cost = lineSchema.shape.unitCost.safeParse(line.unitCost);
+      return { ...line, unitCost: cost.success ? cost.data : undefined };
+    }),
+    [draftLines, lineSchema],
+  );
   const selectedStore = storesQuery.data?.find((store) => store.id === storeId) ?? null;
 
   const resolveUnitLabel = (unit?: ProductCacheEntry["baseUnit"]) => {
@@ -294,6 +311,7 @@ const NewPurchaseOrderPage = () => {
   }, [lineProductQuery.data]);
 
   const closeLineDialog = () => {
+    clearLineSearchHide();
     setLineDialogOpen(false);
     setEditingIndex(null);
     lineForm.reset({
@@ -780,7 +798,7 @@ const NewPurchaseOrderPage = () => {
               if (productEntry) {
                 setProductCache((prev) => ({
                   ...prev,
-                  [values.productId]: productEntry,
+                  [values.productId]: { ...prev[values.productId], ...productEntry },
                 }));
               }
               closeLineDialog();
@@ -809,8 +827,17 @@ const NewPurchaseOrderPage = () => {
                               lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
                             }
                           }}
-                          onFocus={() => setShowResults(true)}
-                          onBlur={() => setTimeout(() => setShowResults(false), 150)}
+                          onFocus={() => {
+                            clearLineSearchHide();
+                            setShowResults(true);
+                          }}
+                          onBlur={() => {
+                            clearLineSearchHide();
+                            lineSearchHideRef.current = window.setTimeout(() => {
+                              lineSearchHideRef.current = null;
+                              setShowResults(false);
+                            }, 150);
+                          }}
                           placeholder={t("productSearchPlaceholder")}
                           ariaLabel={t("productSearchPlaceholder")}
                           supportsTabSubmit
@@ -900,7 +927,8 @@ const NewPurchaseOrderPage = () => {
                         {...field}
                         ref={qtyInputRef}
                         type="number"
-                        inputMode="numeric"
+                        step="0.001"
+                        inputMode="decimal"
                         placeholder={t("qtyPlaceholder")}
                       />
                     </FormControl>
@@ -965,6 +993,7 @@ const NewPurchaseOrderPage = () => {
                     <FormControl>
                       <Input
                         {...field}
+                        value={field.value ?? ""}
                         type="number"
                         inputMode="decimal"
                         step="0.01"

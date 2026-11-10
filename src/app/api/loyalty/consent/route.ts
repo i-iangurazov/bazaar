@@ -6,7 +6,7 @@ import { approveLoyaltyConsent } from "@/server/services/loyalty/consent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const identity = () => getSessionMember(cookies().get(LOYALTY_SESSION_COOKIE)?.value ?? "");
+const identity = async () => getSessionMember((await cookies()).get(LOYALTY_SESSION_COOKIE)?.value ?? "");
 export async function GET() {
   const context = await identity();
   if (!context) return Response.json({ message: "loyaltyUnauthorized" }, { status: 401 });
@@ -28,6 +28,6 @@ export async function POST(request: Request) {
   if (!context) return Response.json({ message: "loyaltyUnauthorized" }, { status: 401 });
   const parsed = z.object({ id: z.string() }).strict().safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ message: "invalidInput" }, { status: 400 });
-  const approved = await approveLoyaltyConsent(cookies().get(LOYALTY_SESSION_COOKIE)?.value ?? "", parsed.data.id);
+  const approved = await approveLoyaltyConsent((await cookies()).get(LOYALTY_SESSION_COOKIE)?.value ?? "", parsed.data.id);
   return Response.json({ approved }, { status: approved ? 200 : 409 });
 }

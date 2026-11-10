@@ -1,5 +1,5 @@
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
-import { z, type ZodErrorMap } from "zod";
+import { type ZodErrorMap } from "zod";
 
 type ZodLocaleMessages = {
   invalidInput: string;
@@ -80,10 +80,10 @@ export const createLocalizedZodErrorMap = (localeInput?: string | null): ZodErro
   const locale = normalizeLocale(localeInput) ?? defaultLocale;
   const messages = localeMessages[locale];
 
-  return (issue, ctx) => {
+  return (issue) => {
     switch (issue.code) {
-      case z.ZodIssueCode.invalid_type: {
-        if (issue.received === "undefined") {
+      case "invalid_type": {
+        if (issue.input === undefined) {
           return { message: messages.required };
         }
         if (issue.expected === "number" || issue.expected === "bigint") {
@@ -100,53 +100,48 @@ export const createLocalizedZodErrorMap = (localeInput?: string | null): ZodErro
         }
         return { message: messages.invalidInput };
       }
-      case z.ZodIssueCode.invalid_string: {
-        if (issue.validation === "email") {
+      case "invalid_format": {
+        if (issue.format === "email") {
           return { message: messages.invalidEmail };
         }
-        if (issue.validation === "url") {
+        if (issue.format === "url") {
           return { message: messages.invalidUrl };
         }
         return { message: messages.invalidString };
       }
-      case z.ZodIssueCode.invalid_enum_value:
-      case z.ZodIssueCode.invalid_literal:
-      case z.ZodIssueCode.unrecognized_keys:
-      case z.ZodIssueCode.invalid_union:
-      case z.ZodIssueCode.invalid_union_discriminator:
-      case z.ZodIssueCode.invalid_arguments:
-      case z.ZodIssueCode.invalid_return_type:
-      case z.ZodIssueCode.invalid_date:
-      case z.ZodIssueCode.invalid_intersection_types:
-      case z.ZodIssueCode.not_multiple_of:
-      case z.ZodIssueCode.not_finite:
+      case "invalid_value":
+      case "unrecognized_keys":
+      case "invalid_union":
+      case "invalid_key":
+      case "invalid_element":
+      case "not_multiple_of":
         return { message: messages.invalidOption };
-      case z.ZodIssueCode.too_small: {
-        if (issue.type === "number" || issue.type === "bigint" || issue.type === "date") {
+      case "too_small": {
+        if (issue.origin === "number" || issue.origin === "bigint" || issue.origin === "date") {
           return { message: messages.minNumber(formatValue(issue.minimum)) };
         }
-        if (issue.type === "string") {
+        if (issue.origin === "string") {
           return { message: messages.minString(formatValue(issue.minimum)) };
         }
-        if (issue.type === "array" || issue.type === "set") {
+        if (issue.origin === "array" || issue.origin === "set") {
           return { message: messages.minItems(formatValue(issue.minimum)) };
         }
         return { message: messages.invalidInput };
       }
-      case z.ZodIssueCode.too_big: {
-        if (issue.type === "number" || issue.type === "bigint" || issue.type === "date") {
+      case "too_big": {
+        if (issue.origin === "number" || issue.origin === "bigint" || issue.origin === "date") {
           return { message: messages.maxNumber(formatValue(issue.maximum)) };
         }
-        if (issue.type === "string") {
+        if (issue.origin === "string") {
           return { message: messages.maxString(formatValue(issue.maximum)) };
         }
-        if (issue.type === "array" || issue.type === "set") {
+        if (issue.origin === "array" || issue.origin === "set") {
           return { message: messages.maxItems(formatValue(issue.maximum)) };
         }
         return { message: messages.invalidInput };
       }
-      case z.ZodIssueCode.custom:
-        return { message: issue.message || ctx.defaultError || messages.invalidInput };
+      case "custom":
+        return { message: issue.message || messages.invalidInput };
       default:
         return { message: messages.invalidInput };
     }

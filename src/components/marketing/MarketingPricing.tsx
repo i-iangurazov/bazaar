@@ -4,11 +4,12 @@ import { TRIAL_DAYS } from "@/lib/billing/trial";
 import { PLAN_FEATURE_CODES } from "@/lib/billing/plans";
 import { ADDITIONAL_STORE_CAPS, subscriptionPrice } from "@/lib/billing/subscriptionPricing";
 import { formatNumber } from "@/lib/i18nFormat";
+import type { BillingTranslator } from "@/lib/i18n/billingTranslator";
 import type { PlanDefinition } from "@/server/billing/planCatalog";
 import { SubscriptionAddons } from "@/components/billing/subscription-addons";
 import styles from "./marketing.module.css";
 
-type Translate = (key: string, values?: Record<string, string | number>) => string;
+const planMessageKeys = { STARTER: "starter", BUSINESS: "business", ENTERPRISE: "enterprise" } as const;
 
 export function MarketingPricing({
   plans,
@@ -17,9 +18,9 @@ export function MarketingPricing({
 }: {
   plans: PlanDefinition[];
   locale: string;
-  t: Translate;
+  t: BillingTranslator;
 }) {
-  const name = (plan: PlanDefinition) => t(`plans.${plan.code.toLowerCase()}.name`);
+  const name = (plan: PlanDefinition) => t(`plans.${planMessageKeys[plan.code]}.name`);
   const number = (value: number) => formatNumber(value, locale, { maximumFractionDigits: 2 });
   const capacityRows = [
     ["stores", "maxStores"],
@@ -58,7 +59,7 @@ export function MarketingPricing({
                 <span className={styles.recommended}>{t("publicPricing.recommended")}</span>
               ) : null}
               <h3>{name(plan)}</h3>
-              <p>{t(`planDescriptions.${plan.code.toLowerCase()}`)}</p>
+              <p>{t(`planDescriptions.${planMessageKeys[plan.code]}`)}</p>
               <div className={styles.planPrice}>
                 <b>{number(plan.monthlyPriceKgs)}</b>
                 <span>{t("publicPricing.monthlySuffix")}</span>

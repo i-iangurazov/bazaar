@@ -700,13 +700,13 @@ const ProductDetailPage = () => {
   const componentSchema = useMemo(
     () =>
       z.object({
-        qty: z.coerce.number().multipleOf(0.001).positive(t("bundleQtyPositive")),
+        qty: z.coerce.number<number>().multipleOf(0.001).positive(t("bundleQtyPositive")),
         variantId: z.string().optional().nullable(),
       }),
     [t],
   );
 
-  const componentForm = useForm<z.infer<typeof componentSchema>>({
+  const componentForm = useForm<z.input<typeof componentSchema>, unknown, z.output<typeof componentSchema>>({
     resolver: zodResolver(componentSchema),
     defaultValues: { qty: 1, variantId: null },
   });
@@ -714,12 +714,12 @@ const ProductDetailPage = () => {
   const assembleSchema = useMemo(
     () =>
       z.object({
-        qty: z.coerce.number().multipleOf(0.001).positive(t("bundleQtyPositive")),
+        qty: z.coerce.number<number>().multipleOf(0.001).positive(t("bundleQtyPositive")),
       }),
     [t],
   );
 
-  const assembleForm = useForm<z.infer<typeof assembleSchema>>({
+  const assembleForm = useForm<z.input<typeof assembleSchema>, unknown, z.output<typeof assembleSchema>>({
     resolver: zodResolver(assembleSchema),
     defaultValues: { qty: 1 },
   });

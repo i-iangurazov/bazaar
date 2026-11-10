@@ -7,9 +7,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const normalizeImageMimeType = (value: string) => value.toLowerCase().split(";")[0]?.trim() ?? "";
@@ -50,7 +50,9 @@ const resolveManagedSourceUrl = (rawSourceUrl: string, requestUrl: URL) => {
   }
 };
 
-export const GET = async (request: Request, { params }: RouteParams) => {
+export const GET = async (request: Request, { params: paramsPromise }: RouteParams) => {
+  const params = await paramsPromise;
+
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });

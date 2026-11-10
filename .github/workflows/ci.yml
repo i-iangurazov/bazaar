@@ -19,8 +19,11 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
       - name: Verify scanner failure handling
-        run: node --test scripts/deployment/osv-results.test.mjs
+        run: node --test scripts/deployment/osv-results.test.mjs scripts/deployment/dependency-policy.test.mjs
       - name: Scan lockfile with OSV v2.3.0
         id: scanner
         # Exit 1 means findings; the report gate and reporter still must run.
@@ -55,6 +58,8 @@ jobs:
             typeof result.package.version === 'string'), 'OSV package inventory is malformed');
           console.log(`Verified OSV package inventory: ${scanned.packages.length} lockfile packages`);
           NODE
+      - name: Verify narrowly scoped publisher archive policy
+        run: node scripts/deployment/dependency-policy.mjs --report osv-results.json
       - name: Report findings without hiding scanner failures
         id: reporter
         uses: google/osv-scanner-action/osv-reporter-action@9ca325867d8b4f9a3ccd4a0ca372e3cc7fcee3ef # v2.3.0
@@ -94,7 +99,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -136,8 +141,10 @@ jobs:
           --health-timeout=5s
           --health-retries=5
     env:
-      DATABASE_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public
-      DATABASE_TEST_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public
+      # Concurrency regressions deliberately hold multiple actor transactions and
+      # an observer together. Do not derive this isolated pool from runner CPUs.
+      DATABASE_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public&connection_limit=8
+      DATABASE_TEST_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public&connection_limit=8
       RUN_DB_TESTS: "1"
       ALLOW_TEST_DB_RESET: "1"
       EXPECTED_TEST_DB_NAME: bazaar_hardening_ci
@@ -149,7 +156,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -197,7 +204,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -240,7 +247,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
@@ -288,7 +295,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
@@ -335,7 +342,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
@@ -384,7 +391,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
@@ -410,7 +417,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
@@ -435,7 +442,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
       - uses: actions/setup-java@v4
         with:
@@ -464,7 +471,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -486,7 +493,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
       - name: Build the standalone Linux WhatsApp worker without runtime secrets
         run: docker build --progress=plain -f Dockerfile.whatsapp-worker -t bazaar-whatsapp-worker:ci .
       - name: Verify isolated container startup, health, restart and graceful shutdown
@@ -574,7 +581,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

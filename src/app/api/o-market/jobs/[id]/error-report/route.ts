@@ -9,9 +9,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -24,7 +24,9 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 const hasOwn = (value: Record<string, unknown>, key: string) =>
   Object.prototype.hasOwnProperty.call(value, key);
 
-export const GET = async (_request: Request, { params }: RouteParams) => {
+export const GET = async (_request: Request, { params: paramsPromise }: RouteParams) => {
+  const params = await paramsPromise;
+
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });

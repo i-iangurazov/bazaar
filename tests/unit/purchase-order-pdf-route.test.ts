@@ -86,7 +86,7 @@ describe("purchase order pdf route", () => {
 
   it("returns application/pdf", async () => {
     const response = await purchaseOrderPdfGet(new Request("http://localhost"), {
-      params: { id: "po-1" },
+      params: Promise.resolve({ id: "po-1" }),
     });
 
     expect(response.status).toBe(200);
@@ -97,7 +97,7 @@ describe("purchase order pdf route", () => {
 
   it("formats totals with the purchase-order currency snapshot", async () => {
     await purchaseOrderPdfGet(new Request("http://localhost"), {
-      params: { id: "po-1" },
+      params: Promise.resolve({ id: "po-1" }),
     });
 
     expect(formatStoreMoneyMock).toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe("purchase order pdf route", () => {
     });
 
     const response = await purchaseOrderPdfGet(new Request("http://localhost"), {
-      params: { id: "po-1" },
+      params: Promise.resolve({ id: "po-1" }),
     });
 
     expect(response.status).toBe(403);
@@ -133,7 +133,7 @@ describe("purchase order pdf route", () => {
     prisma.userStoreAccess.findFirst.mockResolvedValue(null);
 
     const response = await purchaseOrderPdfGet(new Request("http://localhost"), {
-      params: { id: "po-1" },
+      params: Promise.resolve({ id: "po-1" }),
     });
 
     expect(response.status).toBe(403);
@@ -144,7 +144,7 @@ describe("purchase order pdf route", () => {
     prisma.purchaseOrder.findFirst.mockResolvedValue(null);
 
     const response = await purchaseOrderPdfGet(new Request("http://localhost"), {
-      params: { id: "cross-org-po" },
+      params: Promise.resolve({ id: "cross-org-po" }),
     });
 
     expect(response.status).toBe(404);

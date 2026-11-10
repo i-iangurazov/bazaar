@@ -30,6 +30,8 @@ export default defineConfig({
     globalSetup: [],
     setupFiles: [],
     fileParallelism: false,
+    maxWorkers: 1,
+    isolate: true,
     env: { NODE_ENV: "test", RUN_DB_TESTS: "0", SKIP_DB_TESTS: "1" },
   },
 });

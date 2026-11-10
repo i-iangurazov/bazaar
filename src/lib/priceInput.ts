@@ -18,9 +18,9 @@ export const parsePriceInput = (value: unknown): number | null => {
 
 export const optionalPriceInputSchema = (invalidMessage: string, nonNegativeMessage: string) =>
   z.preprocess(
-    (value) => {
+    (value: number | string | null | undefined) => {
       if (value == null || (typeof value === "string" && !value.trim())) return undefined;
       return parsePriceInput(value) ?? NaN;
     },
-    z.number({ invalid_type_error: invalidMessage }).min(0, nonNegativeMessage).optional(),
+    z.number({ error: invalidMessage }).min(0, nonNegativeMessage).optional(),
   );

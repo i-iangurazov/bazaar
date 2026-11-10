@@ -6,6 +6,8 @@ export default defineConfig({
     include: ["tests/marketing/*.integration.test.ts"],
     environment: "node",
     fileParallelism: false,
+    maxWorkers: 1,
+    isolate: true,
     testTimeout: 30_000,
     env: {
       NODE_ENV: "test",

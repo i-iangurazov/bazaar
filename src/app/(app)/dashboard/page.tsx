@@ -38,6 +38,7 @@ import {
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
+import { activityTranslationValues } from "@/lib/i18n/activityValues";
 import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
 import { addBusinessDays, businessDateKey, businessDateOnlyToUtc } from "@/lib/timezone";
 import { trpc } from "@/lib/trpc";
@@ -640,7 +641,7 @@ export default function DashboardPage() {
                   <li key={item.id} className="py-3">
                     <p className="text-sm leading-5">
                       {item.summaryKey
-                        ? tAudit(item.summaryKey, item.summaryValues ?? {})
+                        ? tAudit(item.summaryKey, activityTranslationValues(item.summaryValues))
                         : tAudit.has(`actions.${item.action}`)
                           ? tAudit(`actions.${item.action}`)
                           : tWorkspace.has(`activityActions.${item.action}`)

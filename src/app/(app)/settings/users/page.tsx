@@ -123,7 +123,7 @@ const UsersPage = () => {
     [t, isEditing],
   );
 
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: "",
@@ -150,7 +150,7 @@ const UsersPage = () => {
     [t],
   );
 
-  const resetForm = useForm<z.infer<typeof resetSchema>>({
+  const resetForm = useForm<z.input<typeof resetSchema>, unknown, z.output<typeof resetSchema>>({
     resolver: zodResolver(resetSchema),
     defaultValues: {
       password: "",
@@ -168,7 +168,7 @@ const UsersPage = () => {
     [t],
   );
 
-  const inviteForm = useForm<z.infer<typeof inviteSchema>>({
+  const inviteForm = useForm<z.input<typeof inviteSchema>, unknown, z.output<typeof inviteSchema>>({
     resolver: zodResolver(inviteSchema),
     defaultValues: {
       email: "",

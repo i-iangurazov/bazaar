@@ -2,7 +2,9 @@ import { getAuthTokenFromCookieHeader } from "@/server/auth/token";
 import { whatsappImageForActor } from "@/server/whatsapp/media";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export async function GET(request: Request, { params }: { params: { messageId: string } }) {
+export async function GET(request: Request, { params: paramsPromise }: { params: Promise<{ messageId: string }> }) {
+  const params = await paramsPromise;
+
   const headers = {
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",

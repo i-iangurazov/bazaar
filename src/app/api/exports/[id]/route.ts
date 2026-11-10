@@ -8,9 +8,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const textResponse = (message: string, status: number) =>
@@ -28,7 +28,9 @@ const buildContentDisposition = (fileName: string) => {
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 };
 
-export const GET = async (_request: Request, { params }: RouteParams) => {
+export const GET = async (_request: Request, { params: paramsPromise }: RouteParams) => {
+  const params = await paramsPromise;
+
   const token = await getServerAuthToken();
   if (!token?.sub || !token.organizationId) {
     return textResponse("unauthorized", 401);

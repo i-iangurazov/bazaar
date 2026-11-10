@@ -790,9 +790,10 @@ export const ProductForm = ({
       t("priceNonNegative"),
     );
     const optionalStockQty = z.preprocess(
-      (value) => (value === "" || value === null || value === undefined ? undefined : value),
+      (value: number | string | null | undefined) =>
+        value === "" || value === null || value === undefined ? undefined : value,
       z.coerce
-        .number()
+        .number<number>()
         .multipleOf(0.001, t("stockNonNegative"))
         .min(0, t("stockNonNegative"))
         .optional(),
@@ -837,7 +838,7 @@ export const ProductForm = ({
               id: z.string().optional(),
               packName: z.string().min(1, t("packNameRequired")),
               packBarcode: z.string().optional().nullable(),
-              multiplierToBase: z.coerce.number().int().positive(t("packMultiplierRequired")),
+              multiplierToBase: z.coerce.number<number>().int().positive(t("packMultiplierRequired")),
               allowInPurchasing: z.boolean().optional(),
               allowInReceiving: z.boolean().optional(),
             }),
@@ -870,7 +871,7 @@ export const ProductForm = ({
             z.object({
               componentProductId: z.string().min(1, t("bundleSelectComponent")),
               componentVariantId: z.string().optional().nullable(),
-              qty: z.coerce.number().multipleOf(0.001).positive(t("bundleQtyPositive")),
+              qty: z.coerce.number<number>().multipleOf(0.001).positive(t("bundleQtyPositive")),
               componentName: z.string().optional(),
               componentSku: z.string().optional(),
             }),
@@ -928,7 +929,7 @@ export const ProductForm = ({
         }
       });
   }, [categoryStoreId, enableBarcode, enableSku, productId, retailWholesaleEnabled, t, tErrors]);
-  type VariantFormRow = z.infer<typeof schema>["variants"][number];
+  type VariantFormRow = z.input<typeof schema>["variants"][number];
 
   const toAttributeEntries = (attributes: Record<string, unknown>) => {
     const entries = Object.entries(attributes ?? {}).map(([key, value]) => ({
@@ -947,7 +948,7 @@ export const ProductForm = ({
     return entries;
   };
 
-  const form = useForm<z.infer<typeof schema>>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: {
       sku: initialValues.sku,

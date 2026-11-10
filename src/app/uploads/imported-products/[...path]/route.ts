@@ -15,7 +15,8 @@ const root = resolve(process.cwd(), "public/uploads/imported-products");
 // These content-addressed URLs were already public. Next production snapshots
 // public/ at startup; new uploads need a route until a later process restart.
 // Keep the same URL for product galleries, the studio and catalogue consumers.
-export async function GET(_request: Request, { params }: { params: { path: string[] } }) {
+export async function GET(_request: Request, { params: paramsPromise }: { params: Promise<{ path: string[] }> }) {
+  const params = await paramsPromise;
   const parts = params.path;
   if (
     parts.length !== 4 ||

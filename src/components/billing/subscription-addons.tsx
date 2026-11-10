@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ADDITIONAL_STORE_CAPS, EXTRA_MONTHLY_PRICES_MINOR } from "@/lib/billing/subscriptionPricing";
 import { formatNumber } from "@/lib/i18nFormat";
+import type { BillingTranslator } from "@/lib/i18n/billingTranslator";
 import { cn } from "@/lib/utils";
-
-type Translate = (key: string, values?: Record<string, string | number>) => string;
 
 /** The same published add-ons on the landing and in the subscription workspace. */
 export function SubscriptionAddons({
@@ -16,7 +15,7 @@ export function SubscriptionAddons({
   className,
   manageHref,
 }: {
-  t: Translate;
+  t: BillingTranslator;
   locale: string;
   className?: string;
   manageHref?: string;

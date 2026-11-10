@@ -124,7 +124,7 @@ const valueSchema: z.ZodType<WorkflowValue> = z.lazy(() =>
     ),
   ]),
 );
-export const workflowValuesSchema = z
+const workflowValuesRecordSchema = z
   .record(
     z
       .string()
@@ -140,6 +140,25 @@ export const workflowValuesSchema = z
       (v === null || typeof v !== "object" || Object.values(v).every((x) => depth(x, level + 1)));
     if (!depth(value)) ctx.addIssue({ code: "custom", message: "invalidInput" });
   });
+// Zod 4 skips __proto__ record entries before key refinements. Validate the
+// original input too, so forbidden form paths are rejected rather than discarded.
+export const workflowValuesSchema = z.preprocess(
+  (value: WorkflowValues, ctx) => {
+    const inspect = (input: unknown, path: (string | number)[] = [], level = 0): void => {
+      if (!input || typeof input !== "object" || level > 6) return;
+      for (const [key, child] of Object.entries(input)) {
+        if (["__proto__", "constructor", "prototype"].includes(key)) {
+          ctx.addIssue({ code: "custom", message: "invalidInput", path: [...path, key] });
+          return;
+        }
+        inspect(child, [...path, Array.isArray(input) ? Number(key) : key], level + 1);
+      }
+    };
+    inspect(value);
+    return value;
+  },
+  workflowValuesRecordSchema,
+);
 export type WorkflowOption = {
   value: string;
   label: string;

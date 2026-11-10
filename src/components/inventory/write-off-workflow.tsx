@@ -152,7 +152,7 @@ export const InventoryWriteOffsPage = ({
     Boolean(canManageStock && storeId && lines.length),
   );
   const { refetch: refetchPresentation } = presentation;
-  const productDetailsRefreshTimer = useRef<ReturnType<typeof setTimeout>>();
+  const productDetailsRefreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const refreshProductDetails = useCallback(() => {
     clearTimeout(productDetailsRefreshTimer.current);
     productDetailsRefreshTimer.current = setTimeout(() => {

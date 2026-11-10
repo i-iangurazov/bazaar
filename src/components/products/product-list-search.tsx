@@ -13,7 +13,7 @@ export function ProductListSearch({
   ...props
 }: ComponentProps<typeof ListSearch> & { scopeKey: string }) {
   const [draft, setDraft] = useState(value);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const composing = useRef(false);
   const committed = useRef(value);
   const scope = useRef(scopeKey);

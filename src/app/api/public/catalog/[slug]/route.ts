@@ -12,8 +12,9 @@ const publicCatalogQuerySchema = z.object({
   productIds: z.array(z.string().trim().min(1).max(191)).max(100).default([]),
 });
 
-export const GET = async (request: Request, context: { params: { slug: string } }) => {
-  const slug = context.params.slug;
+export const GET = async (request: Request, context: { params: Promise<{ slug: string }> }) => {
+  const params = await context.params;
+  const slug = params.slug;
   const url = new URL(request.url);
   const parsed = publicCatalogQuerySchema.safeParse({
     page: url.searchParams.get("page") ?? undefined,

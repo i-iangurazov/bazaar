@@ -2,6 +2,9 @@
 !package.json
 !pnpm-lock.yaml
 !tsconfig.json
+!vendor/
+!vendor/xlsx-0.20.3.tgz
+!vendor/xlsx-source.json
 !prisma/
 !prisma/**
 !src/
@@ -9,3 +12,4 @@
 !scripts/
 !scripts/whatsapp-worker.ts
 !scripts/whatsapp-worker-health.ts
+!scripts/whatsapp-recover-connection.ts

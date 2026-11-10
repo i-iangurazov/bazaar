@@ -4,7 +4,9 @@ import { isScheduledJobGroup, runScheduledJobGroup } from "@/server/jobs/schedul
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = async (request: Request, { params }: { params: { group: string } }) => {
+export const GET = async (request: Request, { params: paramsPromise }: { params: Promise<{ group: string }> }) => {
+  const params = await paramsPromise;
+
   const secret = process.env.CRON_SECRET?.trim() ?? "";
   if (secret.length < MIN_CRON_SECRET_LENGTH) {
     return Response.json({ error: "cron_not_configured" }, { status: 503 });

@@ -27,7 +27,8 @@ const checkoutSchema = z.object({
 
 const toMessage = (value: unknown) => (value instanceof Error ? value.message : "genericMessage");
 
-export const POST = async (request: Request, context: { params: { slug: string } }) => {
+export const POST = async (request: Request, context: { params: Promise<{ slug: string }> }) => {
+  const params = await context.params;
   const body = await request.json().catch(() => null);
   const parsed = checkoutSchema.safeParse(body);
   if (!parsed.success) {
@@ -46,7 +47,7 @@ export const POST = async (request: Request, context: { params: { slug: string }
         .map((pair) => pair.trim().split("="))
         .find(([name]) => name === LOYALTY_SESSION_COOKIE)?.[1] ?? null;
     const operation = await createCatalogCheckoutOrderOperation({
-      slug: context.params.slug,
+      slug: params.slug,
       idempotencyKey,
       customerName: parsed.data.customerName,
       customerEmail: parsed.data.customerEmail,

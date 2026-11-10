@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .node-version
       - name: Verify smoke transport guards offline
         run: node --test scripts/deployment/public-smoke.test.mjs
       - name: Wait for exact production alias and probe public routes

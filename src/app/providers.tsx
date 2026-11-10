@@ -107,10 +107,10 @@ export const Providers = ({
   );
 
   useEffect(() => {
-    const previousErrorMap = z.getErrorMap();
-    z.setErrorMap(createLocalizedZodErrorMap(locale));
+    const previousErrorMap = z.config().customError;
+    z.config({ customError: createLocalizedZodErrorMap(locale) });
     return () => {
-      z.setErrorMap(previousErrorMap);
+      z.config({ customError: previousErrorMap });
     };
   }, [locale]);
 

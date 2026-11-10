@@ -70,8 +70,10 @@ const resolveReceiptPdfAction = (request: Request) => {
   return "download";
 };
 
-export const GET = async (request: Request, { params }: { params: { id: string } }) => {
-  const localeCookie = cookies().get("NEXT_LOCALE")?.value;
+export const GET = async (request: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) => {
+  const params = await paramsPromise;
+
+  const localeCookie = (await cookies()).get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
 
   let messages: MessageTree | undefined;

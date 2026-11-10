@@ -57,9 +57,24 @@ describe("catalog discount router contract", () => {
     });
 
     expect(result.success).toBe(false);
-    const messages = result.success ? [] : result.error.issues.map((issue) => issue.message);
-    expect(messages).toContain("Number must be less than 100");
-    expect(messages).toContain("catalogDiscountEndMustBeAfterStart");
+    const issues = result.success ? [] : result.error.issues;
+    expect(issues).toHaveLength(2);
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "too_big",
+          origin: "number",
+          path: ["percentage"],
+          maximum: 100,
+          inclusive: false,
+        }),
+        expect.objectContaining({
+          code: "custom",
+          path: ["endsAt"],
+          message: "catalogDiscountEndMustBeAfterStart",
+        }),
+      ]),
+    );
   });
 
   it("keeps remove operations idempotent and store scoped", () => {

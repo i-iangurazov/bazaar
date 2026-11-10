@@ -68,8 +68,8 @@ describe("legal draft publication boundary", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("BAZAAR_LEGAL_PREVIEW", "1");
     for (const document of legalDocumentIds) {
-      await expect(LegalDraftPage({ params: { document } })).rejects.toThrow("NOT_FOUND");
-      await expect(generateMetadata({ params: { document } })).rejects.toThrow("NOT_FOUND");
+      await expect(LegalDraftPage({ params: Promise.resolve({ document }) })).rejects.toThrow("NOT_FOUND");
+      await expect(generateMetadata({ params: Promise.resolve({ document }) })).rejects.toThrow("NOT_FOUND");
     }
     expect(mocks.getLocale).not.toHaveBeenCalled();
   });
@@ -77,11 +77,11 @@ describe("legal draft publication boundary", () => {
   it("blocks local previews by default and rejects unknown documents", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("BAZAAR_LEGAL_PREVIEW", "");
-    await expect(LegalDraftPage({ params: { document: "offer" } })).rejects.toThrow("NOT_FOUND");
+    await expect(LegalDraftPage({ params: Promise.resolve({ document: "offer" }) })).rejects.toThrow("NOT_FOUND");
     vi.stubEnv("BAZAAR_LEGAL_PREVIEW", "1");
     vi.stubEnv("VERCEL", "0");
     vi.stubEnv("VERCEL_ENV", "");
-    await expect(LegalDraftPage({ params: { document: "unknown" } })).rejects.toThrow("NOT_FOUND");
+    await expect(LegalDraftPage({ params: Promise.resolve({ document: "unknown" }) })).rejects.toThrow("NOT_FOUND");
   });
 
   it("renders a locally approved preview with noindex metadata", async () => {
@@ -91,10 +91,10 @@ describe("legal draft publication boundary", () => {
     vi.stubEnv("VERCEL_ENV", "");
     mocks.getLocale.mockResolvedValue("ky");
     for (const [key, value] of Object.entries(syntheticSellerEnvironment)) vi.stubEnv(key, value);
-    const result = await LegalDraftPage({ params: { document: "offer" } });
+    const result = await LegalDraftPage({ params: Promise.resolve({ document: "offer" }) });
     expect(result.props.copy).toBe(legalCopy.kg);
     expect(result.props.seller.taxId).toBe(syntheticSeller.taxId);
-    expect(await generateMetadata({ params: { document: "offer" } })).toMatchObject({
+    expect(await generateMetadata({ params: Promise.resolve({ document: "offer" }) })).toMatchObject({
       title: expect.stringContaining(legalCopy.kg.draft),
       robots: { index: false, follow: false, noarchive: true },
     });
@@ -112,11 +112,11 @@ describe("legal draft publication boundary", () => {
     mocks.host = "bazaar.kg";
     mocks.getLocale.mockResolvedValue("ru");
     for (const document of legalDocumentIds) {
-      const result = await LegalDraftPage({ params: { document } });
+      const result = await LegalDraftPage({ params: Promise.resolve({ document }) });
       expect(result.props.draft).toBe(false);
       expect(result.props.seller.registeredAddress).toBeNull();
       expect(result.props.seller.correspondenceAddress).toContain("тестовый адрес");
-      const metadata = await generateMetadata({ params: { document } });
+      const metadata = await generateMetadata({ params: Promise.resolve({ document }) });
       expect(metadata.title).toBe(`${legalCopy.ru.documents[document].title} · Bazaar`);
     }
   });

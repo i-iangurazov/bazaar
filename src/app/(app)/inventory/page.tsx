@@ -672,7 +672,7 @@ const InventoryPage = () => {
         productId: z.string().min(1, t("productRequired")),
         variantId: z.string().optional().nullable(),
         qtyDelta: z.coerce
-          .number()
+          .number<number>()
           .multipleOf(0.001)
           .refine((value) => value !== 0, t("qtyNonZero")),
         unitSelection: z.string().min(1, t("unitRequired")),
@@ -685,7 +685,7 @@ const InventoryPage = () => {
   const bulkOnHandSchema = useMemo(
     () =>
       z.object({
-        targetOnHand: z.coerce.number().multipleOf(0.001),
+        targetOnHand: z.coerce.number<number>().multipleOf(0.001),
         reason: z.string().trim().min(3, t("reasonRequired")),
       }),
     [t],
@@ -699,7 +699,7 @@ const InventoryPage = () => {
           toStoreId: z.string().min(1, t("storeRequired")),
           productId: z.string().min(1, t("productRequired")),
           variantId: z.string().optional().nullable(),
-          qty: z.coerce.number().multipleOf(0.001).positive(t("qtyPositive")),
+          qty: z.coerce.number<number>().multipleOf(0.001).positive(t("qtyPositive")),
           unitSelection: z.string().min(1, t("unitRequired")),
           note: z.string().optional(),
           expiryDate: z.string().optional(),
@@ -716,7 +716,7 @@ const InventoryPage = () => {
       z
         .object({
           productId: z.string().optional(),
-          minStock: z.coerce.number().multipleOf(0.001).min(0, t("minStockNonNegative")),
+          minStock: z.coerce.number<number>().multipleOf(0.001).min(0, t("minStockNonNegative")),
           applyToAll: z.boolean().default(false),
         })
         .superRefine((values, context) => {
@@ -739,9 +739,9 @@ const InventoryPage = () => {
       z.object({
         template: z.enum(PRICE_TAG_TEMPLATES),
         storeId: z.string().optional(),
-        quantity: z.coerce.number().multipleOf(0.001).min(1, t("printQtyMin")),
+        quantity: z.coerce.number<number>().multipleOf(0.001).min(1, t("printQtyMin")),
         gapMm: z.coerce
-          .number()
+          .number<number>()
           .min(
             PRICE_TAG_ROLL_LIMITS.gapMm.min,
             t("rollGapRange", {
@@ -757,7 +757,7 @@ const InventoryPage = () => {
             }),
           ),
         xOffsetMm: z.coerce
-          .number()
+          .number<number>()
           .min(
             PRICE_TAG_ROLL_LIMITS.offsetMm.min,
             t("rollOffsetRange", {
@@ -773,7 +773,7 @@ const InventoryPage = () => {
             }),
           ),
         yOffsetMm: z.coerce
-          .number()
+          .number<number>()
           .min(
             PRICE_TAG_ROLL_LIMITS.offsetMm.min,
             t("rollOffsetRange", {
@@ -793,7 +793,7 @@ const InventoryPage = () => {
     [t],
   );
 
-  const adjustForm = useForm<z.infer<typeof adjustSchema>>({
+  const adjustForm = useForm<z.input<typeof adjustSchema>, unknown, z.output<typeof adjustSchema>>({
     resolver: zodResolver(adjustSchema),
     defaultValues: {
       productId: "",
@@ -805,7 +805,7 @@ const InventoryPage = () => {
     },
   });
 
-  const bulkOnHandForm = useForm<z.infer<typeof bulkOnHandSchema>>({
+  const bulkOnHandForm = useForm<z.input<typeof bulkOnHandSchema>, unknown, z.output<typeof bulkOnHandSchema>>({
     resolver: zodResolver(bulkOnHandSchema),
     defaultValues: {
       targetOnHand: 0,
@@ -813,7 +813,7 @@ const InventoryPage = () => {
     },
   });
 
-  const transferForm = useForm<z.infer<typeof transferSchema>>({
+  const transferForm = useForm<z.input<typeof transferSchema>, unknown, z.output<typeof transferSchema>>({
     resolver: zodResolver(transferSchema),
     defaultValues: {
       fromStoreId: "",
@@ -827,7 +827,7 @@ const InventoryPage = () => {
     },
   });
 
-  const minStockForm = useForm<z.infer<typeof minStockSchema>>({
+  const minStockForm = useForm<z.input<typeof minStockSchema>, unknown, z.output<typeof minStockSchema>>({
     resolver: zodResolver(minStockSchema),
     defaultValues: {
       productId: "",
@@ -836,7 +836,7 @@ const InventoryPage = () => {
     },
   });
 
-  const printForm = useForm<z.infer<typeof printSchema>>({
+  const printForm = useForm<z.input<typeof printSchema>, unknown, z.output<typeof printSchema>>({
     resolver: zodResolver(printSchema),
     defaultValues: {
       template: ROLL_PRICE_TAG_TEMPLATE,

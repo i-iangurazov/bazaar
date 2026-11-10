@@ -52,7 +52,7 @@ const xml = (script: string, fields: Fields) => {
 describeDb("subscription payments with real database and signed provider protocol", () => {
   let f: Awaited<ReturnType<typeof seedBase>>;
   let caller: ReturnType<typeof createTestCaller>;
-  let transport: ReturnType<typeof vi.fn>;
+  let transport: ReturnType<typeof vi.fn<(url: string, options: RequestInit) => Promise<Response>>>;
   const providerPayments = new Map<string, Fields>();
   const checkout = (plan: "STARTER" | "BUSINESS" | "ENTERPRISE" = "STARTER", key = randomUUID()) =>
     caller.billing.payments.checkout({

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     await assertFeatureEnabled({ organizationId: String(token.organizationId), feature: "priceTags" });
     await assertUserCanAccessStore(prisma, { id: token.sub, organizationId: String(token.organizationId), role: String(token.role), isOrgOwner: Boolean(token.isOrgOwner), isPlatformOwner: Boolean(token.isPlatformOwner) }, input.storeId);
     const store = await prisma.store.findUniqueOrThrow({ where: { id: input.storeId }, select: { name: true, currencyCode: true, currencyRateKgsPerUnit: true } });
-    const locale = normalizeLocale(cookies().get("NEXT_LOCALE")?.value) ?? defaultLocale;
+    const locale = normalizeLocale((await cookies()).get("NEXT_LOCALE")?.value) ?? defaultLocale;
     const messages = (await import(`../../../../../messages/${locale}.json`)).default;
     const warnings: string[] = [];
     const pdf = await buildPriceTagsPdf({ ...input,

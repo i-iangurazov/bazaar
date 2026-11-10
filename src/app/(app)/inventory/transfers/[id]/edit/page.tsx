@@ -3,13 +3,16 @@ import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 
 const getParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
-const TransferEditPage = ({
-  params,
-  searchParams,
+const TransferEditPage = async ({
+  params: paramsPromise,
+  searchParams: searchParamsPromise,
 }: {
-  params: { id: string };
-  searchParams?: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) => {
+  const params = await paramsPromise;
+  const searchParams = await searchParamsPromise;
+
   const documentId = decodeURIComponent(params.id);
   const documentKey = getParam(searchParams?.documentKey) ?? `TRANSFER:TRANSFER:${documentId}`;
   const backHref = resolveSafeReturnTo(getParam(searchParams?.returnTo));

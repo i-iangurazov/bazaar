@@ -103,7 +103,7 @@ export const productVariantInputSchema = z.object({
   imageUrl: z.string().optional().nullable(),
   name: z.string().optional(),
   sku: z.string().optional(),
-  attributes: z.record(z.unknown()).optional(),
+  attributes: z.record(z.string(), z.unknown()).optional(),
   initialOnHand: z.number().multipleOf(0.001).min(0).optional(),
   storePriceKgs: z.number().min(0).optional(),
   retailPriceKgs: z.number().min(0).nullable().optional(),

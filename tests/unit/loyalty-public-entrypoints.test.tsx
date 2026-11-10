@@ -42,14 +42,14 @@ describe("public loyalty server entry recovery", () => {
   });
   it("distinguishes a failed registration read from an unavailable programme", async () => {
     state.target.mockRejectedValue(new Error("database unavailable"));
-    mount(await JoinPage({ params: { programStoreId: "synthetic-store" } }));
+    mount(await JoinPage({ params: Promise.resolve({ programStoreId: "synthetic-store" }) }));
     expect(screen.getByRole("alert")).toBeTruthy();
     expect(screen.queryByText(ru.loyalty.unavailable)).toBeNull();
     expect(screen.queryByText("join-form")).toBeNull();
   });
   it.each([null, { enabled: false }])("keeps missing or disabled programme access closed", async (target) => {
     state.target.mockResolvedValue(target);
-    mount(await JoinPage({ params: { programStoreId: "synthetic-store" } }));
+    mount(await JoinPage({ params: Promise.resolve({ programStoreId: "synthetic-store" }) }));
     expect(screen.getByText(ru.loyalty.unavailable)).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText("join-form")).toBeNull();

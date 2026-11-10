@@ -1,0 +1,1878 @@
+{
+  "baselineCommit": "850d4c2ad4e99cb72008306ca64b7af013d95548",
+  "baseline": {
+    "packagesScanned": 1346,
+    "affectedPackageVersions": 47,
+    "uniqueAdvisories": 128,
+    "packageAdvisoryMatches": 162
+  },
+  "final": {
+    "packagesScanned": 1010,
+    "unhandledAdvisories": 0,
+    "originalAffectedVersionsRemoved": 47,
+    "originalAdvisoryMatchesClosed": 162,
+    "scan": "scan-final.json",
+    "scanner": "Official OSV2.3.0",
+    "configuration": "Two guarded SheetJS0.20.3 range false positives only; no package exclusions."
+  },
+  "packages": [
+    {
+      "name": "@capacitor/android",
+      "baselineVersion": "8.5.0",
+      "finalVersions": [
+        "8.5.1"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-rvm3-566m-v7fv",
+          "summary": "Capacitor Android and iOS: remote content can be loaded at the app origin via the internal HTTP proxy path",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-103922"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/android@8.5.0(@capacitor/core@8.5.0)"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Native WebView proxy navigation. Patch alone in npm is insufficient: sync, rebuild and redistribute native binary; browser/PWA does not bundle Capacitor native code.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "@capacitor/ios",
+      "baselineVersion": "8.5.0",
+      "finalVersions": [
+        "8.5.1"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-rvm3-566m-v7fv",
+          "summary": "Capacitor Android and iOS: remote content can be loaded at the app origin via the internal HTTP proxy path",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-103922"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/ios@8.5.0(@capacitor/core@8.5.0)"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Native WebView proxy navigation. Patch alone in npm is insufficient: sync, rebuild and redistribute native binary; browser/PWA does not bundle Capacitor native code.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "@vitest/mocker",
+      "baselineVersion": "2.1.9",
+      "finalVersions": [
+        "4.1.12"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-82fw-gwwq-j7x9",
+          "summary": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-84373"
+        },
+        {
+          "id": "GHSA-qxg6-89mg-rqv8",
+          "summary": "Vitest: Code injection via unauthenticated manual mock registration",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-112949"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "vitest@2.1.9(@types/node@20.19.29)(jsdom@24.1.3)",
+          "@vitest/mocker@2.1.9(vite@5.4.21(@types/node@20.19.29))"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "@xmldom/xmldom",
+      "baselineVersion": "0.9.10",
+      "finalVersions": [
+        "0.9.12"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-27p8-2357-5qqv",
+          "summary": "xmldom: DocType `name` Injection Bypasses requireWellFormed",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83608"
+        },
+        {
+          "id": "GHSA-3px3-54cx-rmw9",
+          "summary": "xmldom: Creation-time XML Name/QName validation is bypassable via an embedded line terminator, allowing injection on the default serialization path",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83609"
+        },
+        {
+          "id": "GHSA-4w3w-2rp5-g8jm",
+          "summary": "xmldom: Attribute name injection via setAttribute() bypasses requireWellFormed",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83605"
+        },
+        {
+          "id": "GHSA-6gmq-8vp8-gcm6",
+          "summary": "xmldom: XML fragment injection via invalid EntityReference.nodeName during requireWellFormed serialization",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83610"
+        },
+        {
+          "id": "GHSA-6h8r-xr42-gp59",
+          "summary": "xmldom: Parser silently accepts a not-well-formed end tag whose name is followed by a line break and trailing content",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83611"
+        },
+        {
+          "id": "GHSA-6mj3-qw4j-hgrw",
+          "summary": "xmldom: HTML raw-text closing-tag case mismatch causes output amplification",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83612"
+        },
+        {
+          "id": "GHSA-8344-3jmq-59r6",
+          "summary": "xmldom: Quadratic-time attribute deduplication",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83613"
+        },
+        {
+          "id": "GHSA-93r5-fhx6-vmg9",
+          "summary": "xmldom: Quadratic-time parsing via the malformed-input recovery path — `parseElementStartPart` re-scan and `normalize()` adjacent-text merge",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83614"
+        },
+        {
+          "id": "GHSA-965w-775f-mr7g",
+          "summary": "xmldom: Quadratic-memory consumption",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83615"
+        },
+        {
+          "id": "GHSA-c7q8-3ch8-vqpv",
+          "summary": "xmldom: Processing Instruction Target Injection Bypasses requireWellFormed",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83616"
+        },
+        {
+          "id": "GHSA-g53g-w8rj-fmg7",
+          "summary": "xmldom PI grammar regex ReDoS: quadratic backtracking on unterminated processing instructions",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83606"
+        },
+        {
+          "id": "GHSA-vr34-hp96-76pp",
+          "summary": "xmldom: requireWellFormed DocType publicId/systemId validation is bypassable via an embedded line terminator",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83618"
+        },
+        {
+          "id": "GHSA-w2rr-34g9-rvrj",
+          "summary": "xmldom: Element name injection via createElement() bypasses requireWellFormed",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-83607"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "@trapezedev/project@7.1.4(@types/node@20.19.29)(typescript@5.9.3)",
+          "@xmldom/xmldom@0.9.10"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "baseline-browser-mapping",
+      "baselineVersion": "2.9.14",
+      "finalVersions": [
+        "2.11.35"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-w5vr-8v7q-w6rv",
+          "summary": "baseline-browser-mapping process termination on invalid input causes denial of service",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-45819"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "autoprefixer@10.4.23(postcss@8.5.6)",
+          "browserslist@4.28.1",
+          "baseline-browser-mapping@2.9.14"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "brace-expansion",
+      "baselineVersion": "1.1.12",
+      "finalVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3jxr-9vmj-r5cp",
+          "summary": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-13149"
+        },
+        {
+          "id": "GHSA-6j4f-fj2g-mc7p",
+          "summary": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102276"
+        },
+        {
+          "id": "GHSA-f886-m6hf-6m8v",
+          "summary": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33750"
+        },
+        {
+          "id": "GHSA-mh99-v99m-4gvg",
+          "summary": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-14257"
+        },
+        {
+          "id": "GHSA-q2hr-2g5m-vwhr",
+          "summary": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102277"
+        },
+        {
+          "id": "GHSA-qhr7-859c-m2p7",
+          "summary": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102278"
+        },
+        {
+          "id": "GHSA-rgw5-rvv9-x895",
+          "summary": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-69152"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "eslint@8.57.1",
+          "minimatch@3.1.2",
+          "brace-expansion@1.1.12"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "brace-expansion",
+      "baselineVersion": "2.0.2",
+      "finalVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3jxr-9vmj-r5cp",
+          "summary": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-13149"
+        },
+        {
+          "id": "GHSA-6j4f-fj2g-mc7p",
+          "summary": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102276"
+        },
+        {
+          "id": "GHSA-f886-m6hf-6m8v",
+          "summary": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33750"
+        },
+        {
+          "id": "GHSA-mh99-v99m-4gvg",
+          "summary": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-14257"
+        },
+        {
+          "id": "GHSA-q2hr-2g5m-vwhr",
+          "summary": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102277"
+        },
+        {
+          "id": "GHSA-qhr7-859c-m2p7",
+          "summary": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102278"
+        },
+        {
+          "id": "GHSA-rgw5-rvv9-x895",
+          "summary": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-69152"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3)",
+          "@typescript-eslint/typescript-estree@7.18.0(typescript@5.9.3)",
+          "minimatch@9.0.5",
+          "brace-expansion@2.0.2"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "brace-expansion",
+      "baselineVersion": "5.0.9",
+      "finalVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-6j4f-fj2g-mc7p",
+          "summary": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102276"
+        },
+        {
+          "id": "GHSA-q2hr-2g5m-vwhr",
+          "summary": "brace-expansion: Quadratic-time expansion of the `{a},b}` rewrite causes CPU denial of service",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102277"
+        },
+        {
+          "id": "GHSA-qhr7-859c-m2p7",
+          "summary": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-102278"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/cli@8.5.0",
+          "rimraf@6.1.3",
+          "glob@13.0.6",
+          "minimatch@10.2.6",
+          "brace-expansion@5.0.9"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "browserslist",
+      "baselineVersion": "4.28.1",
+      "finalVersions": [
+        "4.29.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-73wf-gq98-2v4g",
+          "summary": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-73088"
+        },
+        {
+          "id": "GHSA-c83g-rgw3-j3cx",
+          "summary": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-73089"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "autoprefixer@10.4.23(postcss@8.5.6)",
+          "browserslist@4.28.1"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "fast-xml-parser",
+      "baselineVersion": "5.3.4",
+      "finalVersions": [
+        "5.11.2"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-8gc5-j5rx-235r",
+          "summary": "fast-xml-parser affected by numeric entity expansion bypassing all entity expansion limits (incomplete fix for CVE-2026-26278)",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33036"
+        },
+        {
+          "id": "GHSA-fj3w-jwp8-x2g3",
+          "summary": "fast-xml-parser has stack overflow in XMLBuilder with preserveOrder",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27942"
+        },
+        {
+          "id": "GHSA-gh4j-gqv2-49f6",
+          "summary": "fast-xml-parser XMLBuilder: XML Comment and CDATA Injection via Unescaped Delimiters",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-41650"
+        },
+        {
+          "id": "GHSA-jmr7-xgp7-cmfj",
+          "summary": "fast-xml-parser affected by DoS through entity expansion in DOCTYPE (no expansion limit)",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-26278"
+        },
+        {
+          "id": "GHSA-jp2q-39xq-3w4g",
+          "summary": "Entity Expansion Limits Bypassed When Set to Zero Due to JavaScript Falsy Evaluation in fast-xml-parser",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33349"
+        },
+        {
+          "id": "GHSA-m7jm-9gc2-mpf2",
+          "summary": "fast-xml-parser has an entity encoding bypass via regex injection in DOCTYPE entity names",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-25896"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "@aws-sdk/client-s3@3.985.0",
+          "@aws-sdk/core@3.973.7",
+          "@aws-sdk/xml-builder@3.972.4",
+          "fast-xml-parser@5.3.4"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Imported/external XML and SDK XML responses: patch all copies, import/S3 contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "flatted",
+      "baselineVersion": "3.3.3",
+      "finalVersions": [
+        "3.4.4"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-25h7-pfq9-p65f",
+          "summary": "flatted vulnerable to unbounded recursion DoS in parse() revive phase",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-32141"
+        },
+        {
+          "id": "GHSA-rf6f-7fwh-wjgh",
+          "summary": "Prototype Pollution via parse() in NodeJS flatted",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33228"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "eslint@8.57.1",
+          "file-entry-cache@6.0.1",
+          "flat-cache@3.2.0",
+          "flatted@3.3.3"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "form-data",
+      "baselineVersion": "4.0.5",
+      "finalVersions": [
+        "4.0.6"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-hmw2-7cc7-3qxx",
+          "summary": "form-data: CRLF injection in form-data via unescaped multipart field names and filenames",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-12143"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "jsdom@24.1.3",
+          "form-data@4.0.5"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "glob",
+      "baselineVersion": "10.3.10",
+      "finalVersions": [
+        "14.0.4",
+        "7.2.3"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3g3m-2fjr-6pw4",
+          "summary": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-118773"
+        },
+        {
+          "id": "GHSA-5j98-mcp5-4vw2",
+          "summary": "glob CLI: Command injection via -c/--cmd executes matches with shell:true",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2025-64756"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "eslint-config-next@14.2.35(eslint@8.57.1)(typescript@5.9.3)",
+          "@next/eslint-plugin-next@14.2.35",
+          "glob@10.3.10"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "glob",
+      "baselineVersion": "10.5.0",
+      "finalVersions": [
+        "14.0.4",
+        "7.2.3"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3g3m-2fjr-6pw4",
+          "summary": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-118773"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@vitest/coverage-v8@2.1.9(vitest@2.1.9(@types/node@20.19.29)(jsdom@24.1.3))",
+          "test-exclude@7.0.1",
+          "glob@10.5.0"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "glob",
+      "baselineVersion": "13.0.6",
+      "finalVersions": [
+        "14.0.4",
+        "7.2.3"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3g3m-2fjr-6pw4",
+          "summary": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-118773"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/cli@8.5.0",
+          "rimraf@6.1.3",
+          "glob@13.0.6"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "glob",
+      "baselineVersion": "9.3.5",
+      "finalVersions": [
+        "14.0.4",
+        "7.2.3"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3g3m-2fjr-6pw4",
+          "summary": "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-118773"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "@capacitor/cli@5.7.8",
+          "rimraf@4.4.1",
+          "glob@9.3.5"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "handlebars",
+      "baselineVersion": "4.7.9",
+      "finalVersions": [],
+      "advisories": [
+        {
+          "id": "GHSA-8r5x-fm3f-whwj",
+          "summary": "Handlebars: JavaScript Injection via AST Type Confusion in compile (bypass of CVE-2026-33937)",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-106446"
+        },
+        {
+          "id": "GHSA-p8wg-vrv2-v86f",
+          "summary": "Handlebars: JavaScript Injection via Own Property Check Bypass",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-106445"
+        },
+        {
+          "id": "GHSA-xw65-4hp5-5hc7",
+          "summary": "Handlebars: JavaScript Injection via Unsafe Inline Embedding of Precompiled Templates",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-106444"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "@trapezedev/project@7.1.4(@types/node@20.19.29)(typescript@5.9.3)",
+          "conventional-changelog@3.1.25",
+          "conventional-changelog-core@4.2.4",
+          "conventional-changelog-writer@5.0.1",
+          "handlebars@4.7.9"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "js-yaml",
+      "baselineVersion": "4.1.1",
+      "finalVersions": [
+        "4.3.2"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-2883-xcg3-v3hh",
+          "summary": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-84375"
+        },
+        {
+          "id": "GHSA-52cp-r559-cp3m",
+          "summary": "js-yaml: YAML merge-key chains can force quadratic CPU consumption",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-59869"
+        },
+        {
+          "id": "GHSA-5p4m-2wfm-xmqj",
+          "summary": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported",
+          "source": "https://osv.dev/vulnerability/GHSA-5p4m-2wfm-xmqj"
+        },
+        {
+          "id": "GHSA-h67p-54hq-rp68",
+          "summary": "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-53550"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "eslint@8.57.1",
+          "js-yaml@4.1.1"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "lodash",
+      "baselineVersion": "4.17.23",
+      "finalVersions": [
+        "4.18.1"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-f23m-r3pf-42rh",
+          "summary": "lodash vulnerable to prototype pollution via array-path bypass in `_.unset`, `_.omit`, and `_.pullAt",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-2950"
+        },
+        {
+          "id": "GHSA-r5fr-rjxr-66jc",
+          "summary": "lodash vulnerable to Code Injection via `_.template` imports key names",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-4800"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "recharts@2.15.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)",
+          "lodash@4.17.23"
+        ],
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "@trapezedev/project@7.1.4(@types/node@20.19.29)(typescript@5.9.3)",
+          "lodash@4.17.23"
+        ]
+      },
+      "scope": [
+        "dependencies",
+        "devDependencies"
+      ],
+      "context": "Reachable through production dependency graph (see exact ownerPaths); individual vulnerable function reachability is not asserted. Upgrade owner/compatible patch and run consumer tests; no exemption for uncertain exploitability.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "minimatch",
+      "baselineVersion": "10.2.6",
+      "finalVersions": [
+        "11.0.1",
+        "11.0.5",
+        "3.1.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-g3hv-75wg-m249",
+          "summary": "minimatch has potential denial of service via globparts amplification",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-118764"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/cli@8.5.0",
+          "rimraf@6.1.3",
+          "glob@13.0.6",
+          "minimatch@10.2.6"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "minimatch",
+      "baselineVersion": "3.0.5",
+      "finalVersions": [
+        "11.0.1",
+        "11.0.5",
+        "3.1.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-23c5-xmqv-rm74",
+          "summary": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27904"
+        },
+        {
+          "id": "GHSA-3ppc-4f35-3m26",
+          "summary": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-26996"
+        },
+        {
+          "id": "GHSA-7r86-cg39-jmmj",
+          "summary": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27903"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "@trapezedev/project@7.1.4(@types/node@20.19.29)(typescript@5.9.3)",
+          "replace@1.2.2",
+          "minimatch@3.0.5"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "minimatch",
+      "baselineVersion": "3.1.2",
+      "finalVersions": [
+        "11.0.1",
+        "11.0.5",
+        "3.1.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-23c5-xmqv-rm74",
+          "summary": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27904"
+        },
+        {
+          "id": "GHSA-3ppc-4f35-3m26",
+          "summary": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-26996"
+        },
+        {
+          "id": "GHSA-7r86-cg39-jmmj",
+          "summary": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27903"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "eslint@8.57.1",
+          "minimatch@3.1.2"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "minimatch",
+      "baselineVersion": "8.0.7",
+      "finalVersions": [
+        "11.0.1",
+        "11.0.5",
+        "3.1.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-g3hv-75wg-m249",
+          "summary": "minimatch has potential denial of service via globparts amplification",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-118764"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "@capacitor/cli@5.7.8",
+          "rimraf@4.4.1",
+          "glob@9.3.5",
+          "minimatch@8.0.7"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "minimatch",
+      "baselineVersion": "9.0.5",
+      "finalVersions": [
+        "11.0.1",
+        "11.0.5",
+        "3.1.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-23c5-xmqv-rm74",
+          "summary": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27904"
+        },
+        {
+          "id": "GHSA-3ppc-4f35-3m26",
+          "summary": "minimatch has a ReDoS via repeated wildcards with non-matching literal in pattern",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-26996"
+        },
+        {
+          "id": "GHSA-7r86-cg39-jmmj",
+          "summary": "minimatch has ReDoS: matchOne() combinatorial backtracking via multiple non-adjacent GLOBSTAR segments",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27903"
+        },
+        {
+          "id": "GHSA-g3hv-75wg-m249",
+          "summary": "minimatch has potential denial of service via globparts amplification",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-118764"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3)",
+          "@typescript-eslint/typescript-estree@7.18.0(typescript@5.9.3)",
+          "minimatch@9.0.5"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "music-metadata",
+      "baselineVersion": "11.12.3",
+      "finalVersions": [
+        "11.16.1"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-53v6-4h7p-p4gj",
+          "summary": "music-metadata: Uncontrolled memory allocation in APEv2 parser",
+          "source": "https://osv.dev/vulnerability/GHSA-53v6-4h7p-p4gj"
+        },
+        {
+          "id": "GHSA-5gfj-9q3v-qfp3",
+          "summary": "music-metadata: EBML parser trusts element lengths, allowing memory exhaustion or process abort",
+          "source": "https://osv.dev/vulnerability/GHSA-5gfj-9q3v-qfp3"
+        },
+        {
+          "id": "GHSA-8j4c-6x6g-rq3j",
+          "summary": "music-metadata: uncatchable process crash parsing a crafted `.dsf` (residual of GHSA-v6c2-xwv6-8xf7)",
+          "source": "https://osv.dev/vulnerability/GHSA-8j4c-6x6g-rq3j"
+        },
+        {
+          "id": "GHSA-f94x-6692-553q",
+          "summary": "music-metadata: MP4 stsd sample-entry size==0 causes a synchronous infinite loop (DoS) — unreleased regression on master",
+          "source": "https://osv.dev/vulnerability/GHSA-f94x-6692-553q"
+        },
+        {
+          "id": "GHSA-jjpr-9cvf-cq55",
+          "summary": "music-metadata: ID3v2 tag size not validated before allocation, causing memory exhaustion DoS",
+          "source": "https://osv.dev/vulnerability/GHSA-jjpr-9cvf-cq55"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "music-metadata@11.12.3"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "User-controlled voice metadata; patch and run bounded audio checks before AI requests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "nanoid",
+      "baselineVersion": "3.3.11",
+      "finalVersions": [
+        "3.3.20"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-28wg-ghj8-5hjv",
+          "summary": "nanoid: non-secure generators can loop indefinitely with negative size",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-67214"
+        },
+        {
+          "id": "GHSA-2v37-7h3g-55p8",
+          "summary": "nanoid: custom generators can loop indefinitely when size is zero",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-67213"
+        },
+        {
+          "id": "GHSA-xwg4-73v4-xw9w",
+          "summary": "nanoid: Integer Overflow or Wraparound",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-73086"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "postcss@8.5.6",
+          "nanoid@3.3.11"
+        ],
+        "dependencies": [
+          "next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)",
+          "postcss@8.4.31",
+          "nanoid@3.3.11"
+        ]
+      },
+      "scope": [
+        "devDependencies",
+        "dependencies"
+      ],
+      "context": "Reachable through production dependency graph (see exact ownerPaths); individual vulnerable function reachability is not asserted. Upgrade owner/compatible patch and run consumer tests; no exemption for uncertain exploitability.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "next",
+      "baselineVersion": "14.2.35",
+      "finalVersions": [
+        "15.5.29"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-2464-fhr4-w9xw",
+          "summary": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-96889"
+        },
+        {
+          "id": "GHSA-2xp9-vwfh-vxw4",
+          "summary": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used",
+          "source": "https://osv.dev/vulnerability/GHSA-2xp9-vwfh-vxw4"
+        },
+        {
+          "id": "GHSA-36qx-fr4f-26g5",
+          "summary": "Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44573"
+        },
+        {
+          "id": "GHSA-3g8h-86w9-wvmq",
+          "summary": "Next.js's Middleware / Proxy redirects can be cache-poisoned",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44572"
+        },
+        {
+          "id": "GHSA-3x4c-7xq6-9pq8",
+          "summary": "Next.js: Unbounded next/image disk cache growth can exhaust storage",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27980"
+        },
+        {
+          "id": "GHSA-4633-3j49-mh5q",
+          "summary": "Next.js: Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences",
+          "source": "https://osv.dev/vulnerability/GHSA-4633-3j49-mh5q"
+        },
+        {
+          "id": "GHSA-4c39-4ccg-62r3",
+          "summary": "Next.js: Unbounded Server Action payload in Edge runtime",
+          "source": "https://osv.dev/vulnerability/GHSA-4c39-4ccg-62r3"
+        },
+        {
+          "id": "GHSA-68g3-v927-f742",
+          "summary": "Next.js: Cache confusion of response bodies for requests with bodies",
+          "source": "https://osv.dev/vulnerability/GHSA-68g3-v927-f742"
+        },
+        {
+          "id": "GHSA-89xv-2m56-2m9x",
+          "summary": "Next.js: Server-Side Request Forgery in Server Actions on custom servers",
+          "source": "https://osv.dev/vulnerability/GHSA-89xv-2m56-2m9x"
+        },
+        {
+          "id": "GHSA-8h8q-6873-q5fj",
+          "summary": "Next.js Vulnerable to Denial of Service with Server Components",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-23870"
+        },
+        {
+          "id": "GHSA-955p-x3mx-jcvp",
+          "summary": "Next.js: Unauthenticated disclosure of internal Server Function endpoints",
+          "source": "https://osv.dev/vulnerability/GHSA-955p-x3mx-jcvp"
+        },
+        {
+          "id": "GHSA-9g9p-9gw9-jx7f",
+          "summary": "Next.js self-hosted applications vulnerable to DoS via Image Optimizer remotePatterns configuration",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2025-59471"
+        },
+        {
+          "id": "GHSA-c4j6-fc7j-m34r",
+          "summary": "Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44578"
+        },
+        {
+          "id": "GHSA-ffhc-5mcf-pf4q",
+          "summary": "Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44581"
+        },
+        {
+          "id": "GHSA-ggv3-7p47-pfv8",
+          "summary": "Next.js: HTTP request smuggling in rewrites",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-29057"
+        },
+        {
+          "id": "GHSA-gx5p-jg67-6x7h",
+          "summary": "Next.js has cross-site scripting in beforeInteractive scripts with untrusted input",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44580"
+        },
+        {
+          "id": "GHSA-h25m-26qc-wcjf",
+          "summary": "Next.js HTTP request deserialization can lead to DoS when using insecure React Server Components",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-23864"
+        },
+        {
+          "id": "GHSA-h64f-5h5j-jqjh",
+          "summary": "Next.js has a Denial of Service in the Image Optimization API",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44577"
+        },
+        {
+          "id": "GHSA-m99w-x7hq-7vfj",
+          "summary": "Next.js: Denial of Service in App Router using Server Actions",
+          "source": "https://osv.dev/vulnerability/GHSA-m99w-x7hq-7vfj"
+        },
+        {
+          "id": "GHSA-p293-qw3h-jr36",
+          "summary": "Next.js: Unauthenticated Remote Code Execution on windows-hosted servers",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-75604"
+        },
+        {
+          "id": "GHSA-p3m5-59mp-jv5r",
+          "summary": "Next.js: Denial of Service in App Router using Server Actions",
+          "source": "https://osv.dev/vulnerability/GHSA-p3m5-59mp-jv5r"
+        },
+        {
+          "id": "GHSA-p9j2-gv94-2wf4",
+          "summary": "Next.js: Server-Side Request Forgery in rewrites via attacker-controlled destination hostname",
+          "source": "https://osv.dev/vulnerability/GHSA-p9j2-gv94-2wf4"
+        },
+        {
+          "id": "GHSA-q4gf-8mx6-v5v3",
+          "summary": "Next.js has a Denial of Service with Server Components",
+          "source": "https://osv.dev/vulnerability/GHSA-q4gf-8mx6-v5v3"
+        },
+        {
+          "id": "GHSA-vfv6-92ff-j949",
+          "summary": "Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44582"
+        },
+        {
+          "id": "GHSA-wfc6-r584-vfw7",
+          "summary": "Next.js vulnerable to cache poisoning in React Server Component responses",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-44576"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Public web request/rendering, image handling and server actions: runtime upgrade and authenticated browser regression required; package presence does not prove each exploit reachable.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "next-auth",
+      "baselineVersion": "4.24.13",
+      "finalVersions": [
+        "4.24.15"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-7rqj-j65f-68wh",
+          "summary": "Auth.js: Email normalizer validates the address before Unicode normalization, allowing a homoglyph @ bypass",
+          "source": "https://osv.dev/vulnerability/GHSA-7rqj-j65f-68wh"
+        },
+        {
+          "id": "GHSA-x445-f3h2-j279",
+          "summary": "Auth.js: OAuth state, nonce, and PKCE check cookies are not bound to the provider that created them",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-73419"
+        },
+        {
+          "id": "GHSA-xmf8-cvqr-rfgj",
+          "summary": "Auth.js: getToken() throws an uncaught exception on malformed Bearer authorization headers",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-73418"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "next-auth@4.24.13(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Authentication/session/OAuth runtime path: patch and test login, impersonation, session revocation and malformed request headers.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "next-intl",
+      "baselineVersion": "3.26.5",
+      "finalVersions": [
+        "4.9.2"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-4c35-wcg5-mm9h",
+          "summary": "next-intl has prototype pollution with `experimental.messages.precompile` via attacker-controlled translation catalog keys",
+          "source": "https://osv.dev/vulnerability/GHSA-4c35-wcg5-mm9h"
+        },
+        {
+          "id": "GHSA-8f24-v5vv-gm5j",
+          "summary": "next-intl has an open redirect vulnerability",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-40299"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "next-intl@3.26.5(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Server/client translations in routed UI: patch and check RU/KG/EN, cookies and request locale isolation.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "picomatch",
+      "baselineVersion": "2.3.1",
+      "finalVersions": [
+        "2.3.2",
+        "4.0.7"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3v7f-55p6-f55p",
+          "summary": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33672"
+        },
+        {
+          "id": "GHSA-c2c7-rcm5-vvqj",
+          "summary": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33671"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "tailwindcss@3.4.19(tsx@4.21.0)",
+          "micromatch@4.0.8",
+          "picomatch@2.3.1"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "picomatch",
+      "baselineVersion": "4.0.3",
+      "finalVersions": [
+        "2.3.2",
+        "4.0.7"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-3v7f-55p6-f55p",
+          "summary": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33672"
+        },
+        {
+          "id": "GHSA-c2c7-rcm5-vvqj",
+          "summary": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-33671"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "eslint-config-next@14.2.35(eslint@8.57.1)(typescript@5.9.3)",
+          "eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1)",
+          "tinyglobby@0.2.15",
+          "picomatch@4.0.3"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "postcss",
+      "baselineVersion": "8.4.31",
+      "finalVersions": [
+        "8.5.32"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-6g55-p6wh-862q",
+          "summary": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "source": "https://osv.dev/vulnerability/GHSA-6g55-p6wh-862q"
+        },
+        {
+          "id": "GHSA-fxqj-rqcc-2cmp",
+          "summary": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "source": "https://osv.dev/vulnerability/GHSA-fxqj-rqcc-2cmp"
+        },
+        {
+          "id": "GHSA-qx2v-qp2m-jg93",
+          "summary": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-41305"
+        },
+        {
+          "id": "GHSA-r28c-9q8g-f849",
+          "summary": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "source": "https://osv.dev/vulnerability/GHSA-r28c-9q8g-f849"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)",
+          "postcss@8.4.31"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Reachable through production dependency graph (see exact ownerPaths); individual vulnerable function reachability is not asserted. Upgrade owner/compatible patch and run consumer tests; no exemption for uncertain exploitability.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "postcss",
+      "baselineVersion": "8.5.6",
+      "finalVersions": [
+        "8.5.32"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-6g55-p6wh-862q",
+          "summary": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+          "source": "https://osv.dev/vulnerability/GHSA-6g55-p6wh-862q"
+        },
+        {
+          "id": "GHSA-fxqj-rqcc-2cmp",
+          "summary": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "source": "https://osv.dev/vulnerability/GHSA-fxqj-rqcc-2cmp"
+        },
+        {
+          "id": "GHSA-qx2v-qp2m-jg93",
+          "summary": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-41305"
+        },
+        {
+          "id": "GHSA-r28c-9q8g-f849",
+          "summary": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "source": "https://osv.dev/vulnerability/GHSA-r28c-9q8g-f849"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "postcss@8.5.6"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "postcss-selector-parser",
+      "baselineVersion": "6.1.2",
+      "finalVersions": [
+        "6.1.6"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-rj75-hqrm-r3gf",
+          "summary": "PostCSS: Quadratic complexity in flat selector parsing allows CPU exhaustion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-104844"
+        },
+        {
+          "id": "GHSA-w9m9-85wc-3x92",
+          "summary": "postcss-selector-parser allows denial of service through uncontrolled AST recursion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-9358"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "tailwindcss@3.4.19(tsx@4.21.0)",
+          "postcss-selector-parser@6.1.2"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "rollup",
+      "baselineVersion": "4.55.1",
+      "finalVersions": [
+        "4.68.2"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-mw96-cpmx-2vgc",
+          "summary": "Rollup 4 has Arbitrary File Write via Path Traversal",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-27606"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "vitest@2.1.9(@types/node@20.19.29)(jsdom@24.1.3)",
+          "vite@5.4.21(@types/node@20.19.29)",
+          "rollup@4.55.1"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "sharp",
+      "baselineVersion": "0.32.6",
+      "finalVersions": [
+        "0.35.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-f88m-g3jw-g9cj",
+          "summary": "sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591",
+          "source": "https://osv.dev/vulnerability/GHSA-f88m-g3jw-g9cj"
+        },
+        {
+          "id": "GHSA-rgj7-g3m4-5g8c",
+          "summary": "sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545",
+          "source": "https://osv.dev/vulnerability/GHSA-rgj7-g3m4-5g8c"
+        },
+        {
+          "id": "GHSA-wq5f-xc86-pv6w",
+          "summary": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+          "source": "https://osv.dev/vulnerability/GHSA-wq5f-xc86-pv6w"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "sharp@0.32.6"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Uploaded/product image processing plus native asset build tool; patch both copies and verify image output, HEIC/conversion error guards and standalone output.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "sharp",
+      "baselineVersion": "0.34.5",
+      "finalVersions": [
+        "0.35.5"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-f88m-g3jw-g9cj",
+          "summary": "sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591",
+          "source": "https://osv.dev/vulnerability/GHSA-f88m-g3jw-g9cj"
+        },
+        {
+          "id": "GHSA-rgj7-g3m4-5g8c",
+          "summary": "sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545",
+          "source": "https://osv.dev/vulnerability/GHSA-rgj7-g3m4-5g8c"
+        },
+        {
+          "id": "GHSA-wq5f-xc86-pv6w",
+          "summary": "sharp : Vulnerability in librsvg dependency CVE-2026-96889",
+          "source": "https://osv.dev/vulnerability/GHSA-wq5f-xc86-pv6w"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "sharp@0.34.5"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Uploaded/product image processing plus native asset build tool; patch both copies and verify image output, HEIC/conversion error guards and standalone output.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "source-map-js",
+      "baselineVersion": "1.2.1",
+      "finalVersions": [
+        "1.2.2"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-68fv-2mgg-jv7q",
+          "summary": "source-map-js allows event-loop denial of service through indexed source-map section offsets",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-93749"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "postcss@8.5.6",
+          "source-map-js@1.2.1"
+        ],
+        "dependencies": [
+          "next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)",
+          "postcss@8.4.31",
+          "source-map-js@1.2.1"
+        ]
+      },
+      "scope": [
+        "devDependencies",
+        "dependencies"
+      ],
+      "context": "Reachable through production dependency graph (see exact ownerPaths); individual vulnerable function reachability is not asserted. Upgrade owner/compatible patch and run consumer tests; no exemption for uncertain exploitability.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "tar",
+      "baselineVersion": "6.2.1",
+      "finalVersions": [
+        "7.5.22"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-23hp-3jrh-7fpw",
+          "summary": "node-tar: Decompression/parse DoS via unlimited input",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-59873"
+        },
+        {
+          "id": "GHSA-34x7-hfp2-rc4v",
+          "summary": "node-tar Vulnerable to Arbitrary File Creation/Overwrite via Hardlink Path Traversal",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-24842"
+        },
+        {
+          "id": "GHSA-83g3-92jg-28cx",
+          "summary": "Arbitrary File Read/Write via Hardlink Target Escape Through Symlink Chain in node-tar Extraction",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-26960"
+        },
+        {
+          "id": "GHSA-8qq5-rm4j-mr97",
+          "summary": "node-tar is Vulnerable to Arbitrary File Overwrite and Symlink Poisoning via Insufficient Path Sanitization",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-23745"
+        },
+        {
+          "id": "GHSA-8x88-c5mf-7j5w",
+          "summary": "node-tar: Negative tar entry size causes infinite loop in archive replace",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-59874"
+        },
+        {
+          "id": "GHSA-9ppj-qmqm-q256",
+          "summary": "node-tar Symlink Path Traversal via Drive-Relative Linkpath",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-31802"
+        },
+        {
+          "id": "GHSA-gvwx-54wh-qm9j",
+          "summary": "node-tar: Uncaught Exception DoS via NUL byte in PAX path/linkpath records",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-59875"
+        },
+        {
+          "id": "GHSA-qffp-2rhf-9h96",
+          "summary": "tar has Hardlink Path Traversal via Drive-Relative Linkpath",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-29786"
+        },
+        {
+          "id": "GHSA-r292-9mhp-454m",
+          "summary": "node-tar: Uncontrolled recursion in mapHas/filesFilter allows uncatchable stack-overflow DoS via crafted long-path tar with member selection",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-73566"
+        },
+        {
+          "id": "GHSA-r6q2-hw4h-h46w",
+          "summary": "Race Condition in node-tar Path Reservations via Unicode Ligature Collisions on macOS APFS",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-23950"
+        },
+        {
+          "id": "GHSA-vmf3-w455-68vh",
+          "summary": "node-tar applies PAX size override to intermediary GNU long-name/long-link headers, causing tar parser interpretation differential (file smuggling)",
+          "source": "https://osv.dev/vulnerability/GHSA-vmf3-w455-68vh"
+        },
+        {
+          "id": "GHSA-w8wr-v893-vjvp",
+          "summary": "node-tar: Process crash via PAX numeric path type confusion",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-59871"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/assets@3.0.5(@types/node@20.19.29)(typescript@5.9.3)",
+          "@capacitor/cli@5.7.8",
+          "tar@6.2.1"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "tinypool",
+      "baselineVersion": "1.1.1",
+      "finalVersions": [],
+      "advisories": [
+        {
+          "id": "GHSA-5gmw-xhrv-c9v3",
+          "summary": "Tinypool: Prototype Pollution gadget in worker options leads to Remote Code Execution",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-104848"
+        },
+        {
+          "id": "GHSA-85c8-ppgw-ccpr",
+          "summary": "Tinypool: Prototype Pollution Gadget to RCE in run() options",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-104849"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "vitest@2.1.9(@types/node@20.19.29)(jsdom@24.1.3)",
+          "tinypool@1.1.1"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "uuid",
+      "baselineVersion": "7.0.3",
+      "finalVersions": [
+        "11.1.1"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-w5hq-g745-h8pq",
+          "summary": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-41907"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "@capacitor/cli@8.5.0",
+          "xcode@3.0.1",
+          "uuid@7.0.3"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "uuid",
+      "baselineVersion": "8.3.2",
+      "finalVersions": [
+        "11.1.1"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-w5hq-g745-h8pq",
+          "summary": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-41907"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "next-auth@4.24.13(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)",
+          "uuid@8.3.2"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Reachable through production dependency graph (see exact ownerPaths); individual vulnerable function reachability is not asserted. Upgrade owner/compatible patch and run consumer tests; no exemption for uncertain exploitability.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "vite",
+      "baselineVersion": "5.4.21",
+      "finalVersions": [
+        "7.3.8"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-4w7w-66w2-5vf9",
+          "summary": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-39365"
+        },
+        {
+          "id": "GHSA-587h-7wmj-h5pm",
+          "summary": "launch-editor: `fs.existsSync()` existence check can be bypassed on Windows",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-112942"
+        },
+        {
+          "id": "GHSA-698v-4r3x-3vcv",
+          "summary": "launch-editor: escapeCmdArgs() omits % escaping on Windows",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-112943"
+        },
+        {
+          "id": "GHSA-9jrq-w75r-8gcw",
+          "summary": "Vite: Cross origin script execution through Vite custom middleware",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-112945"
+        },
+        {
+          "id": "GHSA-fx2h-pf6j-xcff",
+          "summary": "vite: `server.fs.deny` bypass on Windows alternate paths",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-53571"
+        },
+        {
+          "id": "GHSA-r825-w8mm-5pxw",
+          "summary": "launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-112944"
+        },
+        {
+          "id": "GHSA-rq7h-c2jc-7f22",
+          "summary": "Vite: Files outside `server.fs.allow` could be served when project paths match system paths on non-Windows machine",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-112946"
+        },
+        {
+          "id": "GHSA-v6wh-96g9-6wx3",
+          "summary": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+          "source": "https://osv.dev/vulnerability/GHSA-v6wh-96g9-6wx3"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "vitest@2.1.9(@types/node@20.19.29)(jsdom@24.1.3)",
+          "vite@5.4.21(@types/node@20.19.29)"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "vitest",
+      "baselineVersion": "2.1.9",
+      "finalVersions": [
+        "4.1.12"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-5xrq-8626-4rwp",
+          "summary": "When Vitest UI server is listening, arbitrary file can be read and executed",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-47429"
+        },
+        {
+          "id": "GHSA-82fw-gwwq-j7x9",
+          "summary": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-84373"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "devDependencies": [
+          "vitest@2.1.9(@types/node@20.19.29)(jsdom@24.1.3)"
+        ]
+      },
+      "scope": [
+        "devDependencies"
+      ],
+      "context": "Build/test/tooling dependency; no exemption based only on development scope. Update owning dependency or narrow compatible patched resolution, run consuming build/tool contract tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "ws",
+      "baselineVersion": "8.20.0",
+      "finalVersions": [
+        "8.22.2"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-58qx-3vcg-4xpx",
+          "summary": "ws: Uninitialized memory disclosure",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-45736"
+        },
+        {
+          "id": "GHSA-96hv-2xvq-fx4p",
+          "summary": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-48779"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "@vercel/functions@3.10.3(@aws-sdk/credential-provider-web-identity@3.972.5)(ws@8.20.0)",
+          "ws@8.20.0"
+        ],
+        "devDependencies": [
+          "jsdom@24.1.3",
+          "ws@8.20.0"
+        ]
+      },
+      "scope": [
+        "dependencies",
+        "devDependencies"
+      ],
+      "context": "WebSocket transport/runtime or development indirect owner: preserve exact branch API and verify consuming tests.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "zod",
+      "baselineVersion": "3.25.76",
+      "finalVersions": [
+        "4.6.7"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-mrhx-c7xc-m3w5",
+          "summary": "Zod can exhaust memory while validating oversized constrained collections",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2023-54404"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "zod@3.25.76"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Public input validation and Baam tool schemas: major migration must preserve exact parsing contract including zeros, nulls, defaults and bounds.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    },
+    {
+      "name": "zod",
+      "baselineVersion": "4.1.11",
+      "finalVersions": [
+        "4.6.7"
+      ],
+      "advisories": [
+        {
+          "id": "GHSA-mrhx-c7xc-m3w5",
+          "summary": "Zod can exhaust memory while validating oversized constrained collections",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2023-54404"
+        }
+      ],
+      "dependencyOwnerPaths": {
+        "dependencies": [
+          "@vercel/functions@3.10.3(@aws-sdk/credential-provider-web-identity@3.972.5)(ws@8.20.0)",
+          "@vercel/oidc@4.0.3",
+          "@vercel/cli-config@0.3.3",
+          "zod@4.1.11"
+        ]
+      },
+      "scope": [
+        "dependencies"
+      ],
+      "context": "Public input validation and Baam tool schemas: major migration must preserve exact parsing contract including zeros, nulls, defaults and bounds.",
+      "status": "Baseline affected version removed; final official scan has no unhandled match."
+    }
+  ],
+  "previousExceptions": [
+    {
+      "id": "GHSA-2g4f-4pwh-qvx6",
+      "package": "ajv",
+      "finalVersions": [
+        "6.15.0"
+      ],
+      "outcome": "Fixed by owner upgrade; exclusion removed.",
+      "source": "https://api.osv.dev/v1/vulns/GHSA-2g4f-4pwh-qvx6"
+    },
+    {
+      "id": "GHSA-67mh-4wv8-2f99",
+      "package": "esbuild",
+      "finalVersions": [
+        "0.28.2"
+      ],
+      "outcome": "Fixed by owner upgrade; exclusion removed.",
+      "source": "https://api.osv.dev/v1/vulns/GHSA-67mh-4wv8-2f99"
+    },
+    {
+      "id": "GHSA-4r6h-8v6p-xvw6",
+      "package": "xlsx",
+      "finalVersions": [
+        "0.20.3"
+      ],
+      "outcome": "Exact guarded publisher0.20.3 false positive; OSV range unbounded despite advisory fixed boundary.",
+      "source": "https://api.osv.dev/v1/vulns/GHSA-4r6h-8v6p-xvw6"
+    },
+    {
+      "id": "GHSA-5pgg-2g8v-p4x9",
+      "package": "xlsx",
+      "finalVersions": [
+        "0.20.3"
+      ],
+      "outcome": "Exact guarded publisher0.20.3 false positive; OSV range unbounded despite advisory fixed boundary.",
+      "source": "https://api.osv.dev/v1/vulns/GHSA-5pgg-2g8v-p4x9"
+    }
+  ],
+  "controls": {
+    "dependencyPolicyTests": 33,
+    "formatConsumerTests": 4
+  },
+  "note": "This dependency-only audit does not replace type, database, browser, native or production qualification."
+}

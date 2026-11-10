@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = async () => {
   try {
-    const view = await getCardView(cookies().get(LOYALTY_SESSION_COOKIE)?.value ?? "");
+    const view = await getCardView((await cookies()).get(LOYALTY_SESSION_COOKIE)?.value ?? "");
     return Response.json(view, { status: 200, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return Response.json(

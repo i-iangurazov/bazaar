@@ -10,7 +10,7 @@ const directory = join(root, "products/unassigned");
 const image = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const fileName = `${createHash("sha1").update(image).digest("hex")}.jpg`;
 const get = (path: string[]) =>
-  GET(new Request("http://localhost/uploads/imported-products/test"), { params: { path } });
+  GET(new Request("http://localhost/uploads/imported-products/test"), { params: Promise.resolve({ path }) });
 beforeAll(() => mkdir(directory, { recursive: true }));
 afterAll(() => rm(root, { recursive: true, force: true }));
 describe("runtime local product images", () => {

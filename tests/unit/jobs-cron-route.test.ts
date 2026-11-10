@@ -40,7 +40,7 @@ describe("scheduled jobs route", () => {
   it("fails closed before dispatch when the secret is absent", async () => {
     delete process.env.CRON_SECRET;
     const response = await GET(new Request("http://localhost/api/jobs/cron/recovery"), {
-      params: { group: "recovery" },
+      params: Promise.resolve({ group: "recovery" }),
     });
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: "cron_not_configured" });
@@ -49,7 +49,7 @@ describe("scheduled jobs route", () => {
   it("does not reveal valid groups to an unauthorized caller", async () => {
     process.env.CRON_SECRET = "cron-secret-at-least-16";
     const response = await GET(new Request("http://localhost/api/jobs/cron/not-real"), {
-      params: { group: "not-real" },
+      params: Promise.resolve({ group: "not-real" }),
     });
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "unauthorized" });

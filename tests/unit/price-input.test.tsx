@@ -20,12 +20,12 @@ function PriceForm({
   onSave: (amount: number | undefined) => void;
   initialValue?: number;
 }) {
-  const form = useForm<{ price: number | string | undefined }>({
+  const form = useForm<z.input<typeof schema>, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { price: initialValue },
   });
   return (
-    <form onSubmit={form.handleSubmit((values) => onSave(values.price as number | undefined))}>
+    <form onSubmit={form.handleSubmit((values) => onSave(values.price))}>
       <Controller
         name="price"
         control={form.control}

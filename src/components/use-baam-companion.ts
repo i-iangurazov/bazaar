@@ -61,7 +61,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const busyRef = useRef(new Map<string, string>());
-  const createdLocally = useRef<string>();
+  const createdLocally = useRef<string | undefined>(undefined);
   const identityRef = useRef(identity.activeId);
   identityRef.current = identity.activeId;
   const create = trpc.baam.createConversation.useMutation();

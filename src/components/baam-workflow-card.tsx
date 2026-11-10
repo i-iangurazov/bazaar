@@ -469,7 +469,7 @@ function WorkflowCard({ initial, c }: { initial: Workflow; c: BaamController }) 
     recover = trpc.baam.recoverWorkflow.useMutation();
   const ref = useRef({ wf, values, dirty: false }),
     queue = useRef(Promise.resolve()),
-    pending = useRef<Parameters<typeof submit.mutateAsync>[0]>();
+    pending = useRef<Parameters<typeof submit.mutateAsync>[0] | undefined>(undefined);
   const submittingRef = useRef(false);
   const readableRef = useRef(c.readableError);
   readableRef.current = c.readableError;

@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       where: { id: input.storeId },
       select: { name: true, currencyCode: true, currencyRateKgsPerUnit: true },
     });
-    const locale = normalizeLocale(cookies().get("NEXT_LOCALE")?.value) ?? defaultLocale;
+    const locale = normalizeLocale((await cookies()).get("NEXT_LOCALE")?.value) ?? defaultLocale;
     const messages = (await import(`../../../../../messages/${locale}.json`)).default;
     const fitted = await fitPriceTagsPdf({
       ...input,

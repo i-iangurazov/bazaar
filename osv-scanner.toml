@@ -1,20 +1,16 @@
-# Preserve exactly the existing CI exceptions from commit 275ef784fcb467ce639b0a5a5764fdf47f48b604.
-# That change recorded no applicability rationale; this syntax repair does not add
-# exceptions or claim that the advisories are harmless. Review them separately.
-# Official v2.3.0 schema: https://github.com/google/osv-scanner/blob/v2.3.0/docs/configuration.md
-
-[[IgnoredVulns]]
-id = "GHSA-2g4f-4pwh-qvx6"
-reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."
-
-[[IgnoredVulns]]
-id = "GHSA-67mh-4wv8-2f99"
-reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."
+# The old ajv/esbuild exceptions were eliminated by compatible owner updates.
+# These two npm advisory records have unbounded SEMVER ranges despite their own
+# descriptions declaring fixes outside npm (<0.19.3 and <0.20.2 respectively).
+# https://docs.sheetjs.com/docs/getting-started/installation/nodejs/
+# scripts/deployment/dependency-policy.mjs MUST pass before these exclusions can
+# qualify a release: official publisher URL, exact vendored 0.20.3 bytes/SHA512,
+# lockfile integrity, and one scanned xlsx@0.20.3 package with no old second copy.
+# No whole-package exclusion: all other present/future findings remain enabled.
 
 [[IgnoredVulns]]
 id = "GHSA-4r6h-8v6p-xvw6"
-reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."
+reason = "False positive for the official SheetJS 0.20.3 archive: advisory details and last_known_affected_version_range limit the flaw to <0.19.3, but npm SEMVER events are unbounded. https://github.com/advisories/GHSA-4r6h-8v6p-xvw6 . Mandatory dependency-policy.mjs binds this exception to reviewed publisher bytes, SHA512 lock integrity and the complete scanned XLSX inventory."
 
 [[IgnoredVulns]]
 id = "GHSA-5pgg-2g8v-p4x9"
-reason = "Existing CI exception preserved from 275ef784; no applicability rationale was recorded."
+reason = "False positive for the official SheetJS 0.20.3 archive: advisory details and last_known_affected_version_range limit the flaw to <0.20.2, but npm SEMVER events are unbounded. https://github.com/advisories/GHSA-5pgg-2g8v-p4x9 . Mandatory dependency-policy.mjs binds this exception to reviewed publisher bytes, SHA512 lock integrity and the complete scanned XLSX inventory."

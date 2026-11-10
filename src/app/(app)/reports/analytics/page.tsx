@@ -94,7 +94,7 @@ function AnalyticsReportContent() {
   // Grouping, sorting and pagination share the same totals/chart. Retain their
   // layout while refreshing rows, but never reuse results for different filters.
   const dataScope = JSON.stringify({ ...input, view: undefined, sort: undefined, direction: undefined, page: undefined });
-  const resolvedScope = useRef<string>();
+  const resolvedScope = useRef<string | undefined>(undefined);
   const query = trpc.reports.sales.useQuery(input, {
     enabled,
     keepPreviousData: true,

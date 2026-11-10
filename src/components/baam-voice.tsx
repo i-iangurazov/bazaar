@@ -11,7 +11,7 @@ export function useBaamVoice(
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [requesting, setRequesting] = useState(false);
-  const recorder = useRef<Recording>();
+  const recorder = useRef<Recording | undefined>(undefined);
   const generation = useRef(0);
   const acquiring = useRef(false);
   const callback = useRef(onRecorded);

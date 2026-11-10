@@ -159,7 +159,7 @@ const StockCountsPage = () => {
     [],
   );
 
-  const createForm = useForm<z.infer<typeof createSchema>>({
+  const createForm = useForm<z.input<typeof createSchema>, unknown, z.output<typeof createSchema>>({
     resolver: zodResolver(createSchema),
     defaultValues: { notes: "" },
   });

@@ -6,8 +6,8 @@ import { defaultTimeZone } from "@/lib/timezone";
 import { createMessageFallback } from "@/lib/i18nFallback";
 
 export default getRequestConfig(async () => {
-  const cookieLocale = normalizeLocale(cookies().get("NEXT_LOCALE")?.value);
-  const headerLocale = getLocaleFromAcceptLanguage(headers().get("accept-language"));
+  const cookieLocale = normalizeLocale((await cookies()).get("NEXT_LOCALE")?.value);
+  const headerLocale = getLocaleFromAcceptLanguage((await headers()).get("accept-language"));
   const resolvedLocale = cookieLocale ?? headerLocale ?? defaultLocale;
 
   return {

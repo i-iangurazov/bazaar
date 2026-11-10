@@ -98,7 +98,7 @@ const ProfilePage = () => {
         storeId: z.string().min(1, t("business.validation.storeRequired")),
         currencyCode: z.enum(supportedCurrencyCodes),
         currencyRateKgsPerUnit: z.coerce
-          .number()
+          .number<number>()
           .positive(t("business.validation.currencyRateRequired")),
         legalEntityType: z.enum(["IP", "OSOO", "AO", "OTHER", "NONE"]),
         legalName: z
@@ -148,7 +148,7 @@ const ProfilePage = () => {
       ? businessQuery.data
       : undefined;
 
-  const personalForm = useForm<z.infer<typeof personalSchema>>({
+  const personalForm = useForm<z.input<typeof personalSchema>, unknown, z.output<typeof personalSchema>>({
     resolver: zodResolver(personalSchema),
     defaultValues: {
       name: "",
@@ -157,7 +157,7 @@ const ProfilePage = () => {
     },
   });
 
-  const preferencesForm = useForm<z.infer<typeof preferencesSchema>>({
+  const preferencesForm = useForm<z.input<typeof preferencesSchema>, unknown, z.output<typeof preferencesSchema>>({
     resolver: zodResolver(preferencesSchema),
     defaultValues: {
       preferredLocale: "ru",
@@ -165,7 +165,7 @@ const ProfilePage = () => {
     },
   });
 
-  const businessForm = useForm<z.infer<typeof businessSchema>>({
+  const businessForm = useForm<z.input<typeof businessSchema>, unknown, z.output<typeof businessSchema>>({
     resolver: zodResolver(businessSchema),
     defaultValues: {
       retailWholesaleEnabled: false,
@@ -181,7 +181,7 @@ const ProfilePage = () => {
     },
   });
 
-  const productSettingsForm = useForm<z.infer<typeof productSettingsSchema>>({
+  const productSettingsForm = useForm<z.input<typeof productSettingsSchema>, unknown, z.output<typeof productSettingsSchema>>({
     resolver: zodResolver(productSettingsSchema),
     defaultValues: {
       storeId: "",

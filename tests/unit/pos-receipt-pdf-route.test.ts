@@ -117,7 +117,7 @@ describe("pos receipt pdf route", () => {
 
   it("returns application/pdf", async () => {
     const response = await posReceiptPdfGet(new Request("http://localhost"), {
-      params: { id: "sale-1" },
+      params: Promise.resolve({ id: "sale-1" }),
     });
 
     expect(response.status).toBe(200);
@@ -128,7 +128,7 @@ describe("pos receipt pdf route", () => {
 
   it("uses 58mm width and content-based page height", async () => {
     const response = await posReceiptPdfGet(new Request("http://localhost"), {
-      params: { id: "sale-1" },
+      params: Promise.resolve({ id: "sale-1" }),
     });
 
     const pdf = Buffer.from(await response.arrayBuffer()).toString("latin1");
@@ -152,7 +152,7 @@ describe("pos receipt pdf route", () => {
     });
 
     const response = await posReceiptPdfGet(new Request("http://localhost?kind=fiscal"), {
-      params: { id: "sale-1" },
+      params: Promise.resolve({ id: "sale-1" }),
     });
 
     expect(response.status).toBe(409);

@@ -154,9 +154,9 @@ const StoresPage = () => {
         phone: z.string().optional(),
         cloneFromStoreId: z.string().optional(),
         copyInventory: z.boolean(),
-        stockQuantityDelta: z.coerce.number().int().min(-1_000_000).max(1_000_000),
+        stockQuantityDelta: z.coerce.number<number>().int().min(-1_000_000).max(1_000_000),
         priceAdjustmentMode: z.enum(["none", "percentage", "amount"]),
-        priceAdjustmentValue: z.coerce.number().min(-1_000_000).max(1_000_000),
+        priceAdjustmentValue: z.coerce.number<number>().min(-1_000_000).max(1_000_000),
         enableSku: z.boolean(),
         enableBarcode: z.boolean(),
         enableSimilarProductCheck: z.boolean(),
@@ -165,7 +165,7 @@ const StoresPage = () => {
     [t],
   );
 
-  const storeForm = useForm<z.infer<typeof storeSchema>>({
+  const storeForm = useForm<z.input<typeof storeSchema>, unknown, z.output<typeof storeSchema>>({
     resolver: zodResolver(storeSchema),
     defaultValues: {
       name: "",

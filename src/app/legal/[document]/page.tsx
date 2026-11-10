@@ -16,7 +16,7 @@ export const revalidate = 0;
 
 const getDocument = async (id: string) => {
   const publication = legalPublicationState();
-  if (!publication.published && !legalDraftPreviewAllowed(process.env, headers().get("host")))
+  if (!publication.published && !legalDraftPreviewAllowed(process.env, (await headers()).get("host")))
     notFound();
   if (!legalDocumentIds.includes(id as LegalDocumentId)) notFound();
   const locale = normalizeLocale(await getLocale()) ?? defaultLocale;
@@ -24,10 +24,12 @@ const getDocument = async (id: string) => {
 };
 
 export const generateMetadata = async ({
-  params,
+  params: paramsPromise,
 }: {
-  params: { document: string };
+  params: Promise<{ document: string }>;
 }): Promise<Metadata> => {
+  const params = await paramsPromise;
+
   const { documentId, copy, publication } = await getDocument(params.document);
   return {
     title: `${copy.documents[documentId].title} · ${publication.published ? "Bazaar" : copy.draft}`,
@@ -36,7 +38,9 @@ export const generateMetadata = async ({
   };
 };
 
-export default async function LegalDraftPage({ params }: { params: { document: string } }) {
+export default async function LegalDraftPage({ params: paramsPromise }: { params: Promise<{ document: string }> }) {
+  const params = await paramsPromise;
+
   const { documentId, copy, publication } = await getDocument(params.document);
   return (
     <LegalDocument

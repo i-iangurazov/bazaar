@@ -8,6 +8,8 @@ export default defineConfig({
     environment: "node",
     include: ["tests/unit/baam-*.test.{ts,tsx}", "tests/unit/sold-products-export.test.ts", "tests/unit/analytics-reporting.test.ts"],
     setupFiles: [], globalSetup: [], fileParallelism: false,
+    maxWorkers: 1,
+    isolate: true,
     env: { NODE_ENV: "test", RUN_DB_TESTS: "0", SKIP_DB_TESTS: "1" },
   },
 });

@@ -11,10 +11,12 @@ export const generateStaticParams = () =>
   helpCategories.map((category) => ({ category: category.slug }));
 
 export const generateMetadata = async ({
-  params,
+  params: paramsPromise,
 }: {
-  params: { category: string };
+  params: Promise<{ category: string }>;
 }): Promise<Metadata> => {
+  const params = await paramsPromise;
+
   const category = getHelpCategory(params.category);
   if (!category) return {};
   const locale = normalizeLocale(await getLocale()) ?? defaultLocale;
@@ -33,7 +35,9 @@ export const generateMetadata = async ({
   };
 };
 
-const CategoryPage = ({ params }: { params: { category: string } }) => {
+const CategoryPage = async ({ params: paramsPromise }: { params: Promise<{ category: string }> }) => {
+  const params = await paramsPromise;
+
   const category = getHelpCategory(params.category);
   if (!category) notFound();
   return <HelpCategoryPage category={category} />;

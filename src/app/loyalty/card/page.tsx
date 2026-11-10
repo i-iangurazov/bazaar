@@ -9,7 +9,7 @@ import { LOYALTY_SESSION_COOKIE, getCardView } from "@/server/services/loyalty/m
 export const dynamic = "force-dynamic";
 
 const LoyaltyCardPage = async () => {
-  const token = cookies().get(LOYALTY_SESSION_COOKIE)?.value ?? "";
+  const token = (await cookies()).get(LOYALTY_SESSION_COOKIE)?.value ?? "";
   const t = await getTranslations("loyalty");
   let view = null;
   let failed = false;

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 
@@ -9,6 +9,11 @@ import { exportProductImagesData } from "@/server/services/products/read";
 import type { StoreAccessUser } from "@/server/services/storeAccess";
 import { storeZipFile } from "@/lib/imageExportStore";
 import { ImageExportZipWriter } from "@/server/services/imageExportZip";
+import {
+  fetchPublicProductImage,
+  parseProductImageHttpUrl,
+  readLocalProductImage,
+} from "@/server/services/productImageFetch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,48 +63,16 @@ const fetchImageBuffer = async (
   appOrigin: string,
 ): Promise<{ buffer: Buffer; contentType: string } | null> => {
   if (url.startsWith("/uploads/")) {
-    const filePath = join(process.cwd(), "public", url);
-    try {
-      const file = await stat(filePath);
-      if (file.size < 1 || file.size > maxImageBytes) {
-        return null;
-      }
-      const buffer = await readFile(filePath);
+    const local = await readLocalProductImage(url, maxImageBytes);
+    if (local) {
       const ext = url.split("?")[0].match(/\.\w{2,5}$/)?.[0] ?? "";
-      return { buffer, contentType: extToMime[ext] ?? "image/jpeg" };
-    } catch {
-      return null;
+      return { buffer: local.buffer, contentType: extToMime[ext] ?? "image/jpeg" };
     }
   }
-  const absoluteUrl = url.startsWith("http") ? url : `${appOrigin}${url}`;
-  const response = await fetch(absoluteUrl, { signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) return null;
-  const contentLength = Number(response.headers.get("Content-Length"));
-  if (Number.isFinite(contentLength) && contentLength > maxImageBytes) {
-    return null;
-  }
-  if (!response.body) {
-    return null;
-  }
-  const chunks: Buffer[] = [];
-  let byteLength = 0;
-  const reader = response.body.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    byteLength += value.byteLength;
-    if (byteLength > maxImageBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(Buffer.from(value));
-  }
-  const buffer = Buffer.concat(chunks, byteLength);
-  if (!buffer.length) {
-    return null;
-  }
-  const contentType = response.headers.get("Content-Type") ?? "";
-  return { buffer, contentType };
+  const absoluteUrl = parseProductImageHttpUrl(url, new URL(appOrigin));
+  return absoluteUrl
+    ? fetchPublicProductImage(absoluteUrl.toString(), { signal: AbortSignal.timeout(15_000), maxBytes: maxImageBytes })
+    : null;
 };
 
 export type ExportImagesEvent =

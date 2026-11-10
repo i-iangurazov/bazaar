@@ -1511,12 +1511,12 @@ const ProductsPage = () => {
         search: z.string().optional(),
         category: z.string().optional(),
         mode: z.enum(["set", "increasePct", "increaseAbs"]),
-        value: z.coerce.number(),
+        value: z.coerce.number<number>(),
       }),
     [t],
   );
 
-  const bulkForm = useForm<z.infer<typeof bulkSchema>>({
+  const bulkForm = useForm<z.input<typeof bulkSchema>, unknown, z.output<typeof bulkSchema>>({
     resolver: zodResolver(bulkSchema),
     defaultValues: {
       storeId: storeId || "",
@@ -1557,9 +1557,9 @@ const ProductsPage = () => {
       z.object({
         template: z.enum(PRICE_TAG_TEMPLATES),
         storeId: z.string().optional(),
-        quantity: z.coerce.number().int().min(1, t("printQtyMin")),
+        quantity: z.coerce.number<number>().int().min(1, t("printQtyMin")),
         widthMm: z.coerce
-          .number()
+          .number<number>()
           .min(
             PRICE_TAG_ROLL_LIMITS.widthMm.min,
             t("rollWidthRange", {
@@ -1575,7 +1575,7 @@ const ProductsPage = () => {
             }),
           ),
         heightMm: z.coerce
-          .number()
+          .number<number>()
           .min(
             PRICE_TAG_ROLL_LIMITS.heightMm.min,
             t("rollHeightRange", {
@@ -1595,7 +1595,7 @@ const ProductsPage = () => {
     [t],
   );
 
-  const printForm = useForm<z.infer<typeof printSchema>>({
+  const printForm = useForm<z.input<typeof printSchema>, unknown, z.output<typeof printSchema>>({
     resolver: zodResolver(printSchema),
     defaultValues: {
       template: ROLL_PRICE_TAG_TEMPLATE,
@@ -1628,12 +1628,12 @@ const ProductsPage = () => {
     () =>
       z.object({
         storeId: z.string().min(1, tErrors("storeRequired")),
-        priceKgs: z.coerce.number().min(0, t("priceNonNegative")),
+        priceKgs: z.coerce.number<number>().min(0, t("priceNonNegative")),
       }),
     [t, tErrors],
   );
 
-  const bulkStorePriceForm = useForm<z.infer<typeof bulkStorePriceSchema>>({
+  const bulkStorePriceForm = useForm<z.input<typeof bulkStorePriceSchema>, unknown, z.output<typeof bulkStorePriceSchema>>({
     resolver: zodResolver(bulkStorePriceSchema),
     defaultValues: {
       storeId: storeId || "",

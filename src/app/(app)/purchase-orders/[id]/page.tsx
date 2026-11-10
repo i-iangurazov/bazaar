@@ -109,19 +109,20 @@ const PurchaseOrderDetailPage = () => {
 
   const lineSchema = useMemo(() => {
     const optionalCost = z.preprocess(
-      (value) => (value === "" || value === null ? undefined : value),
-      z.coerce.number().min(0, t("unitCostNonNegative")).optional(),
+      (value: number | string | null | undefined) =>
+        value === "" || value === null ? undefined : value,
+      z.coerce.number<number>().min(0, t("unitCostNonNegative")).optional(),
     );
     return z.object({
       productId: z.string().min(1, t("productRequired")),
       variantId: z.string().optional().nullable(),
-      qtyOrdered: z.coerce.number().multipleOf(0.001).positive(t("qtyPositive")),
+      qtyOrdered: z.coerce.number<number>().multipleOf(0.001).positive(t("qtyPositive")),
       unitSelection: z.string().min(1, t("unitRequired")),
       unitCost: optionalCost,
     });
   }, [t]);
 
-  const lineForm = useForm<z.infer<typeof lineSchema>>({
+  const lineForm = useForm<z.input<typeof lineSchema>, unknown, z.output<typeof lineSchema>>({
     resolver: zodResolver(lineSchema),
     defaultValues: {
       productId: "",
@@ -159,10 +160,19 @@ const PurchaseOrderDetailPage = () => {
   );
   const [allowOverReceive, setAllowOverReceive] = useState(false);
   const qtyInputRef = useRef<HTMLInputElement | null>(null);
+  const lineSearchHideRef = useRef<number | null>(null);
+  const clearLineSearchHide = useCallback(() => {
+    if (lineSearchHideRef.current !== null) {
+      window.clearTimeout(lineSearchHideRef.current);
+      lineSearchHideRef.current = null;
+    }
+  }, []);
+  useEffect(() => clearLineSearchHide, [clearLineSearchHide]);
 
   const lineProductId = lineForm.watch("productId");
   const lineUnitSelection = lineForm.watch("unitSelection");
-  const lineQtyOrdered = lineForm.watch("qtyOrdered");
+  const lineQtyOrderedResult = lineSchema.shape.qtyOrdered.safeParse(lineForm.watch("qtyOrdered"));
+  const lineQtyOrdered = lineQtyOrderedResult.success ? lineQtyOrderedResult.data : Number.NaN;
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: lineSearch, storeId: po?.store.id },
     { enabled: Boolean(po?.store.id) && lineDialogOpen && lineSearch.trim().length >= 2 },
@@ -242,6 +252,7 @@ const PurchaseOrderDetailPage = () => {
   );
 
   const closeLineDialog = () => {
+    clearLineSearchHide();
     setLineDialogOpen(false);
     setEditingLine(null);
     lineForm.reset({
@@ -1209,9 +1220,16 @@ const PurchaseOrderDetailPage = () => {
                               lineForm.setValue("unitSelection", "BASE", { shouldValidate: true });
                             }
                           }}
-                          onFocus={() => setShowResults(true)}
+                          onFocus={() => {
+                            clearLineSearchHide();
+                            setShowResults(true);
+                          }}
                           onBlur={() => {
-                            setTimeout(() => setShowResults(false), 150);
+                            clearLineSearchHide();
+                            lineSearchHideRef.current = window.setTimeout(() => {
+                              lineSearchHideRef.current = null;
+                              setShowResults(false);
+                            }, 150);
                           }}
                           placeholder={t("productSearchPlaceholder")}
                           ariaLabel={t("productSearchPlaceholder")}
@@ -1301,7 +1319,8 @@ const PurchaseOrderDetailPage = () => {
                         {...field}
                         ref={qtyInputRef}
                         type="number"
-                        inputMode="numeric"
+                        step="0.001"
+                        inputMode="decimal"
                         placeholder={t("qtyPlaceholder")}
                       />
                     </FormControl>
@@ -1366,6 +1385,7 @@ const PurchaseOrderDetailPage = () => {
                     <FormControl>
                       <Input
                         {...field}
+                        value={field.value ?? ""}
                         type="number"
                         inputMode="decimal"
                         step="0.01"

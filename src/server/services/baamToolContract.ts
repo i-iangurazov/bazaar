@@ -1,5 +1,4 @@
-import type { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { z } from "zod";
 
 type JsonSchema = {
   type?: string | string[];
@@ -11,9 +10,11 @@ type JsonSchema = {
   [key: string]: unknown;
 };
 export function baamToolSchema(schema: z.ZodTypeAny): JsonSchema {
-  const json = zodToJsonSchema(schema, {
-    $refStrategy: "none",
-    effectStrategy: "input",
+  const json = z.toJSONSchema(schema, {
+    target: "draft-7",
+    io: "input",
+    reused: "inline",
+    cycles: "throw",
   }) as JsonSchema;
   delete json.$schema;
   const strict = (node: JsonSchema): JsonSchema => {

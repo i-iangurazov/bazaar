@@ -1,13 +1,16 @@
 import { redirect } from "next/navigation";
 
 type LegacyLocaleRedirectProps = {
-  params: { locale: string; slug?: string[] };
-  searchParams?: Record<string, string | string[] | undefined>;
+  params: Promise<{ locale: string; slug?: string[] }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export const dynamic = "force-dynamic";
 
-const LegacyLocaleRedirectPage = ({ params, searchParams }: LegacyLocaleRedirectProps) => {
+const LegacyLocaleRedirectPage = async ({ params: paramsPromise, searchParams: searchParamsPromise }: LegacyLocaleRedirectProps) => {
+  const params = await paramsPromise;
+  const searchParams = await searchParamsPromise;
+
   const path = params.slug?.join("/") ?? "";
   const query = new URLSearchParams();
   if (searchParams) {

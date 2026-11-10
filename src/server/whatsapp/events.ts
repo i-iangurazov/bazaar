@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-const record = z.record(z.unknown());
+const record = z.record(z.string(), z.unknown());
 const str = (value: unknown, max = 256) => (typeof value === "string" ? value.slice(0, max) : "");
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)

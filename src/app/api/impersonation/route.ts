@@ -12,7 +12,7 @@ const buildResponse = (payload: Record<string, unknown>, status = 200) =>
 
 export const GET = async () => {
   const token = await getServerAuthToken();
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const sessionId = cookieStore.get(COOKIE_NAME)?.value ?? "";
   if (!token || !sessionId) {
     return buildResponse({ active: false }, 200);

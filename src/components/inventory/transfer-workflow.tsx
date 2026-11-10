@@ -323,7 +323,7 @@ export const InventoryTransfersPage = ({
     });
   }, [lineContextQuery.data, isEditMode]);
   const { refetch: refetchLineContext } = lineContextQuery;
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const refreshTransferData = useCallback(() => {
     clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {

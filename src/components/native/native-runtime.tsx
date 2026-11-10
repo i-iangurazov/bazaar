@@ -293,6 +293,7 @@ export const NativeRuntime = () => {
               </Button>
             ) : (
               <Button className="mt-5" asChild>
+                {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- Leave the obsolete client bundle with a full document navigation. */}
                 <a href="/help">{t("contactSupport")}</a>
               </Button>
             )}

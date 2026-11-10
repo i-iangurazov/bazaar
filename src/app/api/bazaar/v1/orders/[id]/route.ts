@@ -5,9 +5,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const errorBody = (message: string) => {
@@ -17,7 +17,9 @@ const errorBody = (message: string) => {
   return { message };
 };
 
-export const GET = async (request: Request, { params }: RouteParams) => {
+export const GET = async (request: Request, { params: paramsPromise }: RouteParams) => {
+  const params = await paramsPromise;
+
   try {
     const auth = await authenticateBazaarApiRequest(request);
     const order = await getBazaarApiOrder({

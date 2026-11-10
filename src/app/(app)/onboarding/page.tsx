@@ -149,12 +149,12 @@ const OnboardingPage = () => {
     () =>
       z.object({
         storeId: z.string().min(1, t("storeRequired")),
-        minStock: z.coerce.number().int().min(0, t("minStockRequired")),
+        minStock: z.coerce.number<number>().int().min(0, t("minStockRequired")),
       }),
     [t],
   );
 
-  const storeForm = useForm<z.infer<typeof storeSchema>>({
+  const storeForm = useForm<z.input<typeof storeSchema>, unknown, z.output<typeof storeSchema>>({
     resolver: zodResolver(storeSchema),
     defaultValues: {
       name: "",
@@ -167,7 +167,7 @@ const OnboardingPage = () => {
     },
   });
 
-  const legalForm = useForm<z.infer<typeof legalSchema>>({
+  const legalForm = useForm<z.input<typeof legalSchema>, unknown, z.output<typeof legalSchema>>({
     resolver: zodResolver(legalSchema),
     defaultValues: {
       storeId: "",
@@ -179,7 +179,7 @@ const OnboardingPage = () => {
     },
   });
 
-  const minStockForm = useForm<z.infer<typeof minStockSchema>>({
+  const minStockForm = useForm<z.input<typeof minStockSchema>, unknown, z.output<typeof minStockSchema>>({
     resolver: zodResolver(minStockSchema),
     defaultValues: {
       storeId: "",

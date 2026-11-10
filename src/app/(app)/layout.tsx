@@ -12,7 +12,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
     redirect("/login");
   }
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const impersonationId = cookieStore.get("impersonation_session")?.value ?? "";
   let role = String(token.role ?? "STAFF");
   let displayName = token.name ?? null;

@@ -33,7 +33,7 @@ export const Modal = ({
   usePortal?: boolean;
   mobileSheet?: boolean;
   animated?: boolean;
-  returnFocusRef?: React.RefObject<HTMLElement>;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }) => {
   const tCommon = useTranslations("common");
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
