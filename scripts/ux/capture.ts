@@ -62,6 +62,7 @@ const report: Observation[] = detailsOnly
   ? JSON.parse(await readFile(`${directory}/report.json`, "utf8")).report
   : [];
 let failure: string | undefined;
+let activeCapture: { role: string; path: string; width: number; page: Page } | undefined;
 async function until(check: () => Promise<boolean>, message: string, timeout = 45_000) {
   const end = Date.now() + timeout;
   while (!(await check())) {
@@ -71,7 +72,8 @@ async function until(check: () => Promise<boolean>, message: string, timeout = 4
 }
 async function settle(page: Page) {
   await page.locator("main").first().waitFor({ timeout: 90_000 });
-  await page.evaluate(() => document.fonts.ready);
+  // Redirects can replace the document while its fonts are loading.
+  await page.waitForFunction(() => document.fonts.status === "loaded", undefined, { timeout: 90_000 });
   if (new URL(page.url()).pathname === "/dashboard")
     await page.locator("[data-dashboard-kpi]").first().waitFor({ timeout: 90_000 });
   if (await page.locator("[data-list-toolbar]").count())
@@ -115,6 +117,7 @@ try {
         errors.push(message.text().slice(0, 500));
     });
     const capture = async (path: string, width: number, suffix = "", fullPage = false) => {
+      activeCapture = { role, path, width, page };
       await page.setViewportSize({ width, height: width < 768 ? 844 : 1000 });
       const startErrors = errors.length;
       await page.goto(base + path, { waitUntil: "domcontentloaded", timeout: 120_000 });
@@ -159,6 +162,7 @@ try {
       console.log(
         `${role} ${path} ${width} ${details.theme}/${details.locale} overflow=${details.dimensions.page - details.dimensions.viewport}`,
       );
+      activeCapture = undefined;
     };
     const paths =
       role === "admin"
@@ -304,7 +308,10 @@ try {
     assert.deepEqual(item.errors, [], item.path);
   }
 } catch (error) {
-  failure = error instanceof Error ? error.stack : String(error);
+  const captureContext = activeCapture
+    ? `Capture: role=${activeCapture.role} path=${activeCapture.path} width=${activeCapture.width} actualUrl=${activeCapture.page.url()}\n`
+    : "";
+  failure = captureContext + (error instanceof Error ? error.stack : String(error));
   console.error(failure);
   process.exitCode = 1;
 } finally {
