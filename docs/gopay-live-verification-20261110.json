@@ -102,5 +102,27 @@
     "Agreed real bank payment on an own organization, one access grant, settlement and refund-procedure verification"
   ],
   "evidenceRoot": ".local/qa/gopay-live-20261110",
-  "evidenceBoundary": "Local and synthetic qualification is not proof of an end-to-end Live bank purchase. Technical deployment and payment activation are separate milestones."
+  "evidenceBoundary": "Local and synthetic qualification is not proof of an end-to-end Live bank purchase. Technical deployment and payment activation are separate milestones.",
+  "cloudQualificationCorrections": {
+    "initialApplicationCommit": "5a5478bd5f1c208fbd22bd0a952153ef7eb4f438",
+    "workerSmoke": "Update synthetic readiness positive control from old FreedomPay settings to fully configured GoPay; retain both production sandbox rejection and non-production acceptance.",
+    "landingSmoke": "Reject visible/focusable native footer selectors while permitting only the complete hidden Radix form-control profile; retain accessible shared combobox and keyboard checks.",
+    "applicationCodeChangedByTheseCorrections": false,
+    "historicalRollbackProviderFixture": "Retained FreedomPay for the explicitly pinned old baseline; it is not a current-provider positive control.",
+    "localResourcePolicy": "No Docker, local database or application rebuild for QA-only corrections; tiny isolated predicate checks and the complete exact-commit cloud CI.",
+    "tinyChecks": {
+      "workerReadinessProbe": {
+        "productionSandboxRejected": true,
+        "nonProductionPositiveControl": true,
+        "externalCalls": 0,
+        "dockerStarted": false
+      },
+      "nativeSelectGuard": {
+        "positiveControls": 2,
+        "negativeControls": 9,
+        "passed": true
+      },
+      "nativeSelectEvidence": "Settled candidate EN390 and reload had zero native selects; the installed Radix source establishes the transient hidden form mirror. The original failing frame was not captured."
+    }
+  }
 }

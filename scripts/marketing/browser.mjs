@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
+import { assertOnlyHiddenNativeSelects, verifyNativeSelectGuard } from "./native-select-guard.mjs";
+
+verifyNativeSelectGuard();
 
 const base = process.env.QA_BASE_URL ?? "http://localhost:3120";
 assert(["http://localhost:3120", "http://localhost:3124", "http://localhost:3137", "https://www.bazaar.kg"].includes(base));
@@ -66,8 +69,33 @@ async function verifyPricingPresentation(page, label) {
   assert((await page.locator('#pricing [data-plan="ENTERPRISE"] [data-store-expansion]').innerText()).includes('15'));
   assert.equal(await page.locator('#pricing [data-subscription-addons] [data-addon]').count(), 2);
   assert.equal(await page.locator('#pricing a[href="/billing#subscription-addons"]').count(), 1);
-  assert.equal(await page.locator('footer select').count(), 0, 'Use the shared Select, not a native browser select');
+  const nativeSelects = await page.locator('footer select').evaluateAll(elements => elements.map(el => {
+    const style = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      tagName: el.tagName,
+      ariaHidden: el.getAttribute('aria-hidden'),
+      tabIndex: el.tabIndex,
+      active: el === document.activeElement,
+      position: style.position,
+      width: style.width,
+      height: style.height,
+      rectWidth: rect.width,
+      rectHeight: rect.height,
+      borderWidth: style.borderWidth,
+      padding: style.padding,
+      margin: style.margin,
+      overflow: style.overflow,
+      clip: style.clip,
+      whiteSpace: style.whiteSpace,
+    };
+  }));
+  assertOnlyHiddenNativeSelects(nativeSelects, label);
   assert.equal(await page.locator('footer [role="combobox"][data-bazaar-field="select"]').count(), 1);
+  const localeTrigger = page.locator('footer').getByRole('combobox');
+  assert.equal(await localeTrigger.count(), 1, 'Exactly one accessible language control');
+  assert(await localeTrigger.isVisible());
+  assert(await localeTrigger.evaluate(el => el.tagName === 'BUTTON' && el.tabIndex === 0), 'Use the shared keyboard-accessible Select trigger');
   const contrast = await page.locator('#analytics h2').evaluate(heading => {
     const luminance = color => {
       const rgb = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255);
