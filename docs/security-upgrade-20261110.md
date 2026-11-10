@@ -291,3 +291,13 @@ Local evidence: `ci-reporting-failure/`, `receiving-handoff-browser-before/`,
 `ci-browser-fixes-unit.json`, and `local-regression-audit.json`.
 
 Primary reference: [Next 15 native history integration](https://nextjs.org/docs/15/app/getting-started/linking-and-navigating#native-history-api).
+
+The next CI exposed two legacy `baam-report-link` unit expectations that still read
+the removed router mock. Those test consumers were initially missed in the focused
+hook run. They now observe real native history while retaining the same exact URLs,
+explicit empty-date rejection, disabled-query assertions and restored store/date
+filters. No application change or assertion relaxation accompanies this correction.
+The complete stabilization unit configuration passes **733/733 tests in 45 files**;
+all direct reporting-hook/page and URL-state consumers pass **62/62 tests in six
+files**. Remaining router mocks were audited and belong to untouched POS/return
+flows. Evidence: `ci-reporting-failure/test-consumer-audit.json` and its JSON reports.

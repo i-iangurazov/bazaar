@@ -268,7 +268,10 @@ describe("all-filtered report export behavior", () => {
     },
   );
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("analytics report URL contract", () => {
   it("builds and round-trips real business dates and a concrete store", () => {
@@ -388,24 +391,30 @@ describe("report scope behavior", () => {
   });
   it("writes manual dates/store selection to the URL and restores them on refresh", () => {
     setUrl(buildAnalyticsReportHref(input));
+    const replaceState = vi.spyOn(window.history, "replaceState");
     const view = render(<AnalyticsPage />);
     fireEvent.change(screen.getByLabelText("analytics.filters.dateTo"), {
       target: { value: "2024-03-02" },
     });
-    expect(mocks.replace).toHaveBeenLastCalledWith(
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      "",
       "/reports/analytics?dateFrom=2024-02-29&dateTo=2024-03-02&storeId=store-a&channel=pos&saleChannel=all&view=products&sort=revenue&direction=desc",
-      { scroll: false },
     );
-    setUrl(mocks.replace.mock.lastCall![0]);
+    expect(mocks.replace).not.toHaveBeenCalled();
+    // Next synchronizes useSearchParams from native history. Rerender the mocked
+    // hook from the actual URL; the browser suite verifies the Next integration.
+    setUrl(window.location.href);
     view.rerender(<AnalyticsPage />);
     fireEvent.change(screen.getByLabelText("analytics.filters.store"), {
       target: { value: "all" },
     });
-    expect(mocks.replace).toHaveBeenLastCalledWith(
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      "",
       "/reports/analytics?dateFrom=2024-02-29&dateTo=2024-03-02&channel=pos&saleChannel=all&view=products&sort=revenue&direction=desc",
-      { scroll: false },
     );
-    setUrl(mocks.replace.mock.lastCall![0]);
+    setUrl(window.location.href);
     view.unmount();
     render(<AnalyticsPage />);
     expect((screen.getByLabelText("analytics.filters.dateTo") as HTMLInputElement).value).toBe(
@@ -423,11 +432,18 @@ describe("report scope behavior", () => {
   });
   it("keeps a cleared manual date explicit and blocks queries until corrected", () => {
     setUrl(buildAnalyticsReportHref(input));
+    const replaceState = vi.spyOn(window.history, "replaceState");
     const view = render(<AnalyticsPage />);
     fireEvent.change(screen.getByLabelText("analytics.filters.dateFrom"), {
       target: { value: "" },
     });
-    setUrl(mocks.replace.mock.lastCall![0]);
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/reports/analytics?dateFrom=&dateTo=2024-03-01&storeId=store-a&channel=pos&saleChannel=all&view=products&sort=revenue&direction=desc",
+    );
+    expect(mocks.replace).not.toHaveBeenCalled();
+    setUrl(window.location.href);
     queries().forEach((query) => query.mockClear());
     view.rerender(<AnalyticsPage />);
     expect(screen.getByRole("alert").textContent).toBe("errors.invalidInput");
