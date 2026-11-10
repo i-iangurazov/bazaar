@@ -19,6 +19,7 @@ import { verifyReceivingSelection } from "./receiving-selection-check";
 import { verifyStoreVisibilityAndTransfer } from "./store-visibility-transfer-check";
 import { verifyPosPhotoAndWholesale } from "./pos-photo-wholesale-check";
 import { verifyStockCountSearch } from "./stock-count-search-check";
+import { dashboardFixtureExpectation } from "./dashboard-fixture";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
@@ -179,17 +180,69 @@ try {
     await formPage.close();
   }
   record("Store and supplier creation shortcuts wait for the session and open focused forms");
+  const fixtureSale = await api(admin, "pos.sales.get", { saleId: f.saleId });
+  assert.ok(fixtureSale, "The seeded POS sale must exist");
+  assert.equal(fixtureSale.status, "COMPLETED");
+  assert.equal(fixtureSale.totalKgs, 217);
+  assert.equal(fixtureSale.storeId, f.storeId);
+  assert.ok(fixtureSale.completedAt, "The seeded POS sale must have a completion time");
+  let dashboardReadStartedAt = new Date();
   const dashboard = await open(admin, `/dashboard?storeId=${f.storeId}`);
-  await dashboard.locator('[data-dashboard-kpi="sales"]').waitFor({ timeout: 90_000 });
-  assert.equal(await dashboard.locator("[data-dashboard-kpi]").count(), 4);
-  const business = await api(admin, "dashboard.bootstrap", {
-    storeId: f.storeId,
-    includeRecentActivity: false,
-    includeRecentMovements: false,
-  });
-  assert.equal(business.summary.business.todaySalesKgs, 217);
-  assert.match(await dashboard.locator('[data-dashboard-kpi="sales"]').innerText(), /217/);
-  assert.match(await dashboard.locator('[data-dashboard-kpi="receipts"]').innerText(), /1/);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const expected = dashboardFixtureExpectation({
+      completedAt: fixtureSale.completedAt,
+      now: dashboardReadStartedAt,
+      saleTotal: fixtureSale.totalKgs,
+    });
+    await dashboard.locator('[data-dashboard-kpi="sales"]').waitFor({ timeout: 90_000 });
+    const business = await api(admin, "dashboard.bootstrap", {
+      storeId: f.storeId,
+      includeRecentActivity: false,
+      includeRecentMovements: false,
+    });
+    const [kpiCount, salesValue, receiptsValue] = await Promise.all([
+      dashboard.locator("[data-dashboard-kpi]").count(),
+      dashboard.locator('[data-dashboard-kpi="sales"] > p').first().innerText(),
+      dashboard.locator('[data-dashboard-kpi="receipts"] > p').first().innerText(),
+    ]);
+    const formatted = await dashboard.evaluate(
+      ({ todaySales, todayReceipts }) => ({
+        sales: new Intl.NumberFormat("ru-RU", {
+          style: "currency",
+          currency: "KGS",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(todaySales),
+        receipts: new Intl.NumberFormat("ru-RU").format(todayReceipts),
+      }),
+      expected,
+    );
+    const readFinished = dashboardFixtureExpectation({
+      completedAt: fixtureSale.completedAt,
+      now: new Date(),
+      saleTotal: fixtureSale.totalKgs,
+    });
+    // Only a real Bishkek midnight during this read permits one fresh snapshot.
+    if (expected.currentBusinessDate !== readFinished.currentBusinessDate) {
+      assert.equal(attempt, 0, "The business date changed again during the dashboard retry");
+      dashboardReadStartedAt = new Date();
+      await dashboard.reload({ waitUntil: "domcontentloaded" });
+      continue;
+    }
+    assert.equal(kpiCount, 4);
+    assert.equal(business.summary.business.todaySalesKgs, expected.todaySales);
+    assert.equal(business.summary.business.receiptsCount, expected.todayReceipts);
+    const saleDay = business.summary.salesSeries.find(
+      (day: { date: string }) => day.date === expected.saleBusinessDate,
+    );
+    assert.ok(saleDay, "The sales series must retain the seeded sale's business date");
+    assert.equal(saleDay.salesKgs, 217);
+    assert.equal(saleDay.receiptsCount, 1);
+    const normalizeWhitespace = (value: string) => value.replace(/\s+/gu, " ").trim();
+    assert.equal(normalizeWhitespace(salesValue), normalizeWhitespace(formatted.sales));
+    assert.equal(normalizeWhitespace(receiptsValue), normalizeWhitespace(formatted.receipts));
+    break;
+  }
   const attention = dashboard
     .locator('a[href*="/products?"][href*="readiness=missingPrice"]')
     .first();
