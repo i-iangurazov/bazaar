@@ -12,9 +12,11 @@ export const getSubscriptionPaymentConfig = (
   const mode: PaymentMode = ["sandbox", "live"].includes(env.BILLING_PAYMENTS_MODE ?? "")
     ? (env.BILLING_PAYMENTS_MODE as PaymentMode)
     : "disabled";
-  const selection = env.BILLING_PAYMENT_PROVIDER?.trim().toLowerCase() || "freedompay";
-  const provider: BillingPaymentProvider =
-    explicitProvider ?? (selection === "gopay" ? "GOPAY" : "FREEDOMPAY");
+  // New Bazaar purchases use GoPay exclusively. A stale/invalid setting must
+  // disable checkout, never silently route a new invoice to the former provider.
+  // Explicit provider selection is reserved for processing persisted history.
+  const selection = env.BILLING_PAYMENT_PROVIDER?.trim().toLowerCase() || "gopay";
+  const provider: BillingPaymentProvider = explicitProvider ?? "GOPAY";
   const apiKey = env.GOPAY_API_KEY?.trim() ?? "";
   const apiSecret = env.GOPAY_API_SECRET?.trim() ?? "";
   const webhookSecret = env.GOPAY_WEBHOOK_SECRET?.trim() ?? "";
@@ -44,7 +46,8 @@ export const getSubscriptionPaymentConfig = (
     ) {
       publicOrigin = origin.origin;
       termsUrl = terms.href;
-      canonicalPublicOrigin = ["bazaar.kg", "www.bazaar.kg"].includes(origin.hostname);
+      canonicalPublicOrigin =
+        !origin.port && ["bazaar.kg", "www.bazaar.kg"].includes(origin.hostname);
     }
   } catch {
     // Configuration errors disable new checkout, never the rest of the product.
@@ -53,7 +56,7 @@ export const getSubscriptionPaymentConfig = (
   const ready = Boolean(
     mode !== "disabled" &&
     env.HARDENING_EXTERNAL_PROVIDER_MODE !== "disabled" &&
-    (explicitProvider || ["gopay", "freedompay"].includes(selection)) &&
+    (explicitProvider || selection === "gopay") &&
     (provider === "GOPAY"
       ? /^[\x21-\x7e]{16,512}$/.test(apiKey) &&
         /^[\x21-\x7e]{16,4096}$/.test(apiSecret) &&

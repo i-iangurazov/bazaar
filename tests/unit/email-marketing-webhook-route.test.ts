@@ -6,9 +6,11 @@ const webhookSideEffects = vi.hoisted(() => ({
   handleResendEmailWebhook: vi.fn(
     async () => ({ processed: true }) as { processed: boolean; reason?: string },
   ),
+  handleSubscriptionPaymentEmailEvent: vi.fn(async () => ({ processed: false })),
 }));
 
 vi.mock("@/server/services/emailMarketing", () => webhookSideEffects);
+vi.mock("@/server/billing/paymentNotifications", () => webhookSideEffects);
 
 import { POST } from "@/app/api/email-marketing/resend-webhook/route";
 
@@ -37,6 +39,8 @@ describe("Resend webhook route", () => {
   beforeEach(() => {
     process.env.RESEND_WEBHOOK_SECRET = secret;
     webhookSideEffects.handleResendEmailWebhook.mockClear();
+    webhookSideEffects.handleSubscriptionPaymentEmailEvent.mockReset();
+    webhookSideEffects.handleSubscriptionPaymentEmailEvent.mockResolvedValue({ processed: false });
   });
 
   afterEach(() => {
@@ -55,6 +59,10 @@ describe("Resend webhook route", () => {
       event: { type: "email.delivered", data: { email_id: "email_123" } },
       webhookEventId: "msg_route_test",
     });
+    expect(webhookSideEffects.handleSubscriptionPaymentEmailEvent).toHaveBeenCalledWith({
+      event: { type: "email.delivered", data: { email_id: "email_123" } },
+      webhookEventId: "msg_route_test",
+    });
   });
 
   it("rejects a signature generated for a different body", async () => {
@@ -63,6 +71,24 @@ describe("Resend webhook route", () => {
     const response = await POST(signedRequest(tamperedBody, { signaturePayload: validBody }));
 
     expect(response.status).toBe(400);
+    expect(webhookSideEffects.handleResendEmailWebhook).not.toHaveBeenCalled();
+    expect(webhookSideEffects.handleSubscriptionPaymentEmailEvent).not.toHaveBeenCalled();
+  });
+
+  it("dispatches a verified subscription confirmation delivery without changing marketing recipients", async () => {
+    webhookSideEffects.handleSubscriptionPaymentEmailEvent.mockResolvedValueOnce({
+      processed: true,
+    });
+    const response = await POST(
+      signedRequest(
+        JSON.stringify({
+          type: "email.delivered",
+          data: { email_id: "subscription-confirmation" },
+        }),
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(webhookSideEffects.handleSubscriptionPaymentEmailEvent).toHaveBeenCalledOnce();
     expect(webhookSideEffects.handleResendEmailWebhook).not.toHaveBeenCalled();
   });
 

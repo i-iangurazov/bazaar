@@ -45,23 +45,42 @@ export function SubscriptionAccessNotice({
     state.access.graceEndsAt &&
     Number.isFinite(new Date(state.access.graceEndsAt).getTime());
   const trialEnd = state.trialEndsAt ? new Date(state.trialEndsAt) : null;
-  const activeTrial = state.trialActive && state.trialOffer && trialEnd &&
-    Number.isFinite(trialEnd.getTime()) && trialEnd.getTime() > Date.now();
+  const activeTrial =
+    state.trialActive &&
+    state.trialOffer &&
+    trialEnd &&
+    Number.isFinite(trialEnd.getTime()) &&
+    trialEnd.getTime() > Date.now();
   if (!grace && !activeTrial && state.access.hasAccess) return null;
   const remaining = activeTrial ? Math.ceil((trialEnd!.getTime() - Date.now()) / 86_400_000) : 0;
+  const expiredTrial =
+    !grace &&
+    !state.access.hasAccess &&
+    state.trialOffer &&
+    trialEnd &&
+    Number.isFinite(trialEnd.getTime()) &&
+    trialEnd.getTime() <= Date.now();
   return (
     <Alert
       variant={grace || (activeTrial && remaining <= 1) ? "warning" : "info"}
       className={className}
-      data-subscription-access-notice={activeTrial ? "trial" : grace ? "grace" : "read-only"}
+      data-subscription-access-notice={
+        activeTrial ? "trial" : grace ? "grace" : expiredTrial ? "trial-expired" : "read-only"
+      }
     >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <AlertTitle>{activeTrial ? trial("remaining", { count: remaining }) : t(grace ? "graceTitle" : "expiredTitle")}</AlertTitle>
+          <AlertTitle>
+            {activeTrial
+              ? trial("remaining", { count: remaining })
+              : t(grace ? "graceTitle" : expiredTrial ? "trialExpiredTitle" : "expiredTitle")}
+          </AlertTitle>
           <AlertDescription>
-            {activeTrial ? trial("deadline", { date: formatDateTime(trialEnd!, locale) }) : grace
-              ? t("graceDescription", { date: formatDateTime(state.access.graceEndsAt!, locale) })
-              : t("expiredDescription")}
+            {activeTrial
+              ? trial("deadline", { date: formatDateTime(trialEnd!, locale) })
+              : grace
+                ? t("graceDescription", { date: formatDateTime(state.access.graceEndsAt!, locale) })
+                : t(expiredTrial ? "trialExpiredDescription" : "expiredDescription")}
           </AlertDescription>
           {activeTrial ? <p className="text-sm text-muted-foreground">{trial("scope")}</p> : null}
           {!canManage ? <p className="text-sm">{t("askOwner")}</p> : null}

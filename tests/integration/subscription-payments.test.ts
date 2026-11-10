@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
 import { handleFreedomPayNotification } from "@/server/billing/paymentWebhook";
+import { handleGoPayNotification } from "@/server/billing/goPayWebhook";
 import {
   resolveSubscriptionPaymentReview,
   reconcileSubscriptionPayments,
@@ -16,9 +17,20 @@ import { appRouter } from "@/server/trpc/routers/_app";
 import { getLogger } from "@/server/logging";
 import { getBillingSummary } from "@/server/services/billing";
 import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
-import { assertTrialActive, assertCapacity, getOrganizationPlan } from "@/server/services/planLimits";
+import {
+  assertTrialActive,
+  assertCapacity,
+  getOrganizationPlan,
+} from "@/server/services/planLimits";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import {
+  goPayProtocolFixture,
+  GOPAY_FIXTURE_API_KEY,
+  GOPAY_FIXTURE_API_SECRET,
+  GOPAY_FIXTURE_WEBHOOK_SECRET,
+  type GoPayFixturePayment,
+} from "../helpers/gopayProtocolFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const secret = "synthetic-subscription-test-secret";
@@ -52,8 +64,11 @@ const xml = (script: string, fields: Fields) => {
 describeDb("subscription payments with real database and signed provider protocol", () => {
   let f: Awaited<ReturnType<typeof seedBase>>;
   let caller: ReturnType<typeof createTestCaller>;
-  let transport: ReturnType<typeof vi.fn<(url: string, options: RequestInit) => Promise<Response>>>;
-  const providerPayments = new Map<string, Fields>();
+  let transport: ReturnType<
+    typeof vi.fn<(input: string | URL | Request, options?: RequestInit) => Promise<Response>>
+  >;
+  let fixture: ReturnType<typeof goPayProtocolFixture>;
+  const historicalPayments = new Map<string, Fields>();
   const checkout = (plan: "STARTER" | "BUSINESS" | "ENTERPRISE" = "STARTER", key = randomUUID()) =>
     caller.billing.payments.checkout({
       expectedAmountMinor: kgsToMinor(getPlanMonthlyPriceKgs(plan, "2026-10")),
@@ -63,8 +78,91 @@ describeDb("subscription payments with real database and signed provider protoco
       acceptedTerms: true,
       locale: "ru",
     });
-  const notify = async (invoiceId: string, changes: Fields = {}, invalidSignature = false) => {
-    const p = providerPayments.get(invoiceId)!;
+  const providerPayment = async (invoiceId: string) => {
+    const invoice = await prisma.subscriptionInvoice.findUniqueOrThrow({
+      where: { id: invoiceId },
+    });
+    expect(invoice.provider).toBe("GOPAY");
+    expect(invoice.providerOrderId).toEqual(expect.any(String));
+    const payment = fixture.payments.get(invoice.providerOrderId!);
+    expect(payment).toBeDefined();
+    return payment!;
+  };
+  const confirmAtProvider = async (invoiceId: string) =>
+    fixture.commit(await providerPayment(invoiceId));
+  type PaymentChanges = Partial<GoPayFixturePayment> & { currency?: string };
+  const deliverCurrent = async (
+    invoiceId: string,
+    changes: PaymentChanges = {},
+    invalidSignature = false,
+  ) => {
+    const payment = await providerPayment(invoiceId);
+    return handleGoPayNotification(
+      fixture.notification(payment, {
+        changes,
+        ...(changes.currency !== undefined
+          ? {
+              rawBody: JSON.stringify({
+                event: `payment.${(changes.status ?? payment.status).toLowerCase()}`,
+                data: { ...payment, ...changes },
+                created_at: new Date().toISOString(),
+              }),
+            }
+          : {}),
+        ...(invalidSignature ? { secret: "synthetic-invalid-webhook-secret" } : {}),
+      }),
+    );
+  };
+  const notify = async (
+    invoiceId: string,
+    changes: PaymentChanges = {},
+    invalidSignature = false,
+  ) => {
+    await confirmAtProvider(invoiceId);
+    return deliverCurrent(invoiceId, changes, invalidSignature);
+  };
+  // These rows represent persisted pre-GoPay obligations. No checkout/provider
+  // initialization is used to manufacture new FreedomPay sales in this suite.
+  const historicalInvoice = async () => {
+    const invoice = await prisma.subscriptionInvoice.create({
+      data: {
+        organizationId: f.org.id,
+        createdById: f.adminUser.id,
+        idempotencyKey: randomUUID(),
+        pendingSlot: f.org.id,
+        plan: "STARTER",
+        amountMinor: 175000,
+        merchantId: "90001",
+        isTest: true,
+        providerPaymentId: String(1000 + historicalPayments.size),
+        status: "PENDING",
+        termsVersion: "historical-v1",
+        termsUrl: "http://localhost:3120/historical-terms",
+        sellerName: "Historical synthetic seller",
+        expiresAt: new Date(Date.now() + 900000),
+        checkoutUrl: "https://api.freedompay.kg/pay.html?historical=1",
+      },
+    });
+    expect(invoice.provider).toBe("FREEDOMPAY");
+    historicalPayments.set(invoice.id, {
+      pg_order_id: invoice.id,
+      pg_payment_id: invoice.providerPaymentId!,
+      pg_amount: "1750.00",
+      pg_merchant_id: "90001",
+      pg_currency: "KGS",
+      pg_testing_mode: "1",
+      pg_payment_status: "success",
+      pg_payment_method: "bankcard",
+      pg_captured: "1",
+    });
+    return invoice;
+  };
+  const notifyHistorical = async (
+    invoiceId: string,
+    changes: Fields = {},
+    invalidSignature = false,
+  ) => {
+    const p = historicalPayments.get(invoiceId)!;
     const fields: Fields = { ...p, pg_result: "1", pg_salt: randomUUID(), ...changes };
     fields.pg_sig = invalidSignature ? "0".repeat(32) : sign("result", fields);
     return handleFreedomPayNotification(
@@ -84,7 +182,13 @@ describeDb("subscription payments with real database and signed provider protoco
   beforeEach(async () => {
     await resetDatabase();
     for (const [key, value] of Object.entries({
+      BILLING_PAYMENT_PROVIDER: "gopay",
       BILLING_PAYMENTS_MODE: "sandbox",
+      GOPAY_API_KEY: GOPAY_FIXTURE_API_KEY,
+      GOPAY_API_SECRET: GOPAY_FIXTURE_API_SECRET,
+      GOPAY_WEBHOOK_SECRET: GOPAY_FIXTURE_WEBHOOK_SECRET,
+      GOPAY_PREVIOUS_API_KEY: "",
+      GOPAY_PREVIOUS_API_SECRET: "",
       FREEDOMPAY_MERCHANT_ID: "90001",
       FREEDOMPAY_SECRET_KEY: secret,
       BILLING_PUBLIC_URL: "http://localhost:3120",
@@ -102,37 +206,19 @@ describeDb("subscription payments with real database and signed provider protoco
       data: { subscriptionBillingMode: "SELF_SERVE", trialEndsAt: end, currentPeriodEndsAt: end },
     });
     caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
-    providerPayments.clear();
-    transport = vi.fn(async (url: string, options: RequestInit) => {
-      expect(new URL(url).origin).toBe("https://api.freedompay.kg");
-      const params = Object.fromEntries(new URLSearchParams(options.body as URLSearchParams));
-      const script = new URL(url).pathname.slice(1);
+    fixture = goPayProtocolFixture();
+    historicalPayments.clear();
+    transport = vi.fn(async (input: string | URL | Request, options?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.origin === "https://api.gopay.kg") return fixture.transport(input, options);
+      expect(url.origin).toBe("https://api.freedompay.kg");
+      const params = Object.fromEntries(new URLSearchParams(options?.body as URLSearchParams));
+      const script = url.pathname.slice(1);
       expect(params.pg_sig).toBe(sign(script, params));
-      if (script === "init_payment.php") {
-        expect(params.pg_currency).toBe("KGS");
-        expect(params.pg_testing_mode).toBe("1");
-        expect(params.pg_request_method).toBe("POST");
-        expect(params.pg_postpone_payment).toBe("0");
-        const payment = {
-          pg_order_id: params.pg_order_id,
-          pg_payment_id: String(1000 + providerPayments.size),
-          pg_amount: params.pg_amount,
-          pg_currency: params.pg_currency,
-          pg_testing_mode: "1",
-          pg_payment_status: "success",
-          pg_captured: "1",
-          pg_payment_method: "bankcard",
-        };
-        providerPayments.set(params.pg_order_id, payment);
-        return xml(script, {
-          pg_status: "ok",
-          pg_payment_id: payment.pg_payment_id,
-          pg_redirect_url: `https://api.freedompay.kg/pay.html?customer=${payment.pg_order_id}&source=qa`,
-        });
-      }
+      expect(script).toBe("get_status3.php");
       const p = params.pg_payment_id
-        ? [...providerPayments.values()].find((p) => p.pg_payment_id === params.pg_payment_id)
-        : providerPayments.get(params.pg_order_id);
+        ? [...historicalPayments.values()].find((p) => p.pg_payment_id === params.pg_payment_id)
+        : historicalPayments.get(params.pg_order_id);
       return xml(script, p ? { ...p, pg_status: "ok" } : { pg_status: "ok", pg_payment_id: "0" });
     });
     vi.stubGlobal("fetch", transport);
@@ -152,6 +238,7 @@ describeDb("subscription payments with real database and signed provider protoco
     expect(invoice).toMatchObject({
       amountMinor: 189050,
       currency: "KGS",
+      provider: "GOPAY",
       status: "PENDING",
       termsVersion: "qa-v1",
       sellerName: "Synthetic seller",
@@ -186,19 +273,30 @@ describeDb("subscription payments with real database and signed provider protoco
     );
     await expect(assertTrialActive(org.id)).resolves.toHaveProperty("id", org.id);
   });
-  it.each<Fields>([
-    { pg_amount: "1" },
-    { pg_currency: "USD" },
-    { pg_testing_mode: "0" },
-    { pg_payment_id: "999999" },
-    { pg_merchant_id: "999999" },
-  ])("rejects signed mismatched payment data %j without granting access", async (changes) => {
+  it.each<{ changes: PaymentChanges; status: number }>([
+    { changes: { amount: "1" }, status: 409 },
+    { changes: { currency: "USD" }, status: 400 },
+    { changes: { testing_mode: false }, status: 409 },
+    { changes: { payment_id: "f".repeat(32) }, status: 409 },
+  ])(
+    "rejects signed mismatched GoPay data $changes without granting access",
+    async ({ changes, status }) => {
+      const invoice = await checkout();
+      expect((await notify(invoice.id, changes)).status).toBe(status);
+      expect(await prisma.subscriptionPeriod.count()).toBe(0);
+      expect(await prisma.subscriptionPaymentEvent.count()).toBe(0);
+    },
+  );
+  it("does not reconcile a payment using a different merchant's API credentials", async () => {
     const invoice = await checkout();
-    expect((await notify(invoice.id, changes)).status).toBe(409);
+    vi.stubEnv("GOPAY_API_KEY", "synthetic-different-merchant-key");
+    transport.mockClear();
+    expect((await notify(invoice.id)).status).toBe(503);
+    expect(transport).not.toHaveBeenCalled();
     expect(await prisma.subscriptionPeriod.count()).toBe(0);
     expect(await prisma.subscriptionPaymentEvent.count()).toBe(0);
   });
-  it("rejects invalid signatures and duplicate parameters before reading or changing invoice state", async () => {
+  it("rejects invalid GoPay signatures and duplicate legacy parameters before changing invoice state", async () => {
     const invoice = await checkout();
     expect((await notify(invoice.id, {}, true)).status).toBe(401);
     const request = new Request("http://localhost", {
@@ -211,15 +309,17 @@ describeDb("subscription payments with real database and signed provider protoco
     expect((await handleFreedomPayNotification(request, "result")).status).toBe(400);
     expect(await prisma.subscriptionPaymentEvent.count()).toBe(0);
   });
-  it("waits for capture rather than granting a period for card authorization", async () => {
-    const invoice = await checkout();
-    expect((await notify(invoice.id, { pg_captured: "0" })).status).toBe(200);
+  it("historical FreedomPay: waits for capture rather than granting access for authorization", async () => {
+    const invoice = await historicalInvoice();
+    expect((await notifyHistorical(invoice.id, { pg_captured: "0" })).status).toBe(200);
     expect(await prisma.subscriptionPeriod.count()).toBe(0);
-    expect((await notify(invoice.id)).status).toBe(200);
+    expect((await notifyHistorical(invoice.id)).status).toBe(200);
     expect(await prisma.subscriptionPeriod.count()).toBe(1);
+    expect(fixture.payments.size).toBe(0);
   });
   it("reconciles a lost callback and does not create a second period when it finally arrives", async () => {
     const invoice = await checkout();
+    await confirmAtProvider(invoice.id);
     await readyToCheck(invoice.id);
     const result = await caller.billing.payments.check({ invoiceId: invoice.id });
     expect(result.status).toBe("PAID");
@@ -237,24 +337,29 @@ describeDb("subscription payments with real database and signed provider protoco
     expect(invoice.status).toBe("CREATING");
     await checkout("STARTER", key);
     expect(transport).toHaveBeenCalledTimes(1);
+    await confirmAtProvider(invoice.id);
     await readyToCheck(invoice.id);
     expect((await caller.billing.payments.check({ invoiceId: invoice.id })).status).toBe("PAID");
-    expect(new URL(transport.mock.calls[1][0]).pathname).toBe("/get_status3.php");
+    expect(new URL(String(transport.mock.calls[1][0])).pathname).toBe("/v1/payments/query");
     expect(await prisma.subscriptionPeriod.count()).toBe(1);
   });
   it("keeps a known failure terminal under an out-of-order pending event, but accepts a late confirmed success", async () => {
     const invoice = await checkout();
-    await notify(invoice.id, { pg_result: "0" });
+    const payment = await providerPayment(invoice.id);
+    payment.status = "FAILED";
+    expect((await deliverCurrent(invoice.id)).status).toBe(200);
     expect(
       (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status,
     ).toBe("FAILED");
-    await notify(invoice.id, { pg_result: "2" });
+    payment.status = "CREATED";
+    expect((await deliverCurrent(invoice.id, { status: "FAILED" })).status).toBe(200);
     expect(
       (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status,
     ).toBe("FAILED");
     await notify(invoice.id);
     expect(await prisma.subscriptionPeriod.count()).toBe(1);
-    await notify(invoice.id, { pg_result: "0" });
+    payment.status = "FAILED";
+    expect((await deliverCurrent(invoice.id)).status).toBe(200);
     expect(
       (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status,
     ).toBe("PAID");
@@ -331,8 +436,12 @@ describeDb("subscription payments with real database and signed provider protoco
     ).toBe("2028-03-31T10:00:00.000Z");
     const scheduled = await checkout("BUSINESS");
     await notify(scheduled.id);
-    expect((await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).plan).toBe("STARTER");
-    const scheduledPeriod = await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { invoiceId: scheduled.id } });
+    expect((await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).plan).toBe(
+      "STARTER",
+    );
+    const scheduledPeriod = await prisma.subscriptionPeriod.findUniqueOrThrow({
+      where: { invoiceId: scheduled.id },
+    });
     expect(scheduledPeriod.startsAt.toISOString()).toBe("2028-03-31T10:00:00.000Z");
     expect(scheduledPeriod.endsAt.toISOString()).toBe("2028-04-30T10:00:00.000Z");
   });
@@ -353,6 +462,7 @@ describeDb("subscription payments with real database and signed provider protoco
   });
   it("recovery job checks pending invoices and applies payment through the same durable path", async () => {
     const invoice = await checkout();
+    await confirmAtProvider(invoice.id);
     await readyToCheck(invoice.id);
     expect(await reconcileSubscriptionPayments()).toMatchObject({
       status: "ok",
@@ -374,10 +484,10 @@ describeDb("subscription payments with real database and signed provider protoco
     expect(await prisma.subscriptionInvoice.count()).toBe(0);
     expect(transport).not.toHaveBeenCalled();
   });
-  it("prechecks amount, current access, signature and payment binding before provider collection", async () => {
-    const invoice = await checkout();
+  it("historical FreedomPay: prechecks amount, merchant, current access, signature and payment binding", async () => {
+    const invoice = await historicalInvoice();
     const check = (changes: Fields = {}) => {
-      const fields = { ...providerPayments.get(invoice.id)!, pg_salt: randomUUID(), ...changes };
+      const fields = { ...historicalPayments.get(invoice.id)!, pg_salt: randomUUID(), ...changes };
       return handleFreedomPayNotification(
         new Request("http://localhost", {
           method: "POST",
@@ -389,12 +499,31 @@ describeDb("subscription payments with real database and signed provider protoco
     expect((await check()).status).toBe(200);
     expect((await check({ pg_amount: "1" })).status).toBe(409);
     expect((await check({ pg_testing_mode: "0" })).status).toBe(409);
+    expect((await check({ pg_merchant_id: "999999" })).status).toBe(409);
     await prisma.organization.update({
       where: { id: f.org.id },
       data: { subscriptionBillingMode: "MANUAL" },
     });
     expect((await check()).status).toBe(409);
     expect(await prisma.subscriptionPeriod.count()).toBe(0);
+  });
+  it("historical FreedomPay: reconciles a preexisting invoice even while new sales are GoPay-only", async () => {
+    const invoice = await historicalInvoice();
+    await readyToCheck(invoice.id);
+    expect((await caller.billing.payments.check({ invoiceId: invoice.id })).status).toBe("PAID");
+    expect(new URL(String(transport.mock.calls[0][0])).href).toBe(
+      "https://api.freedompay.kg/get_status3.php",
+    );
+    expect(await prisma.subscriptionPeriod.count()).toBe(1);
+    expect((await notifyHistorical(invoice.id)).status).toBe(200);
+    expect(await prisma.subscriptionPeriod.count()).toBe(1);
+    expect(fixture.payments.size).toBe(0);
+  });
+  it("never falls back to FreedomPay for new checkout when an obsolete provider setting remains", async () => {
+    vi.stubEnv("BILLING_PAYMENT_PROVIDER", "freedompay");
+    await expect(checkout()).rejects.toHaveProperty("message", "billingPaymentsUnavailable");
+    expect(await prisma.subscriptionInvoice.count()).toBe(0);
+    expect(transport).not.toHaveBeenCalled();
   });
   it("settles a previously created payment when new checkout has been disabled", async () => {
     const invoice = await checkout();
@@ -403,14 +532,14 @@ describeDb("subscription payments with real database and signed provider protoco
     expect(await prisma.subscriptionPeriod.count()).toBe(1);
     await expect(checkout()).rejects.toHaveProperty("message", "billingPaymentsUnavailable");
   });
-  it("retains refund review under old success replays and closes it only with an audited owner decision", async () => {
-    const invoice = await checkout();
-    await notify(invoice.id);
-    await notify(invoice.id, { pg_refund_amount: "1750.00" });
+  it("historical FreedomPay: retains refund review under success replays until an audited owner decision", async () => {
+    const invoice = await historicalInvoice();
+    await notifyHistorical(invoice.id);
+    await notifyHistorical(invoice.id, { pg_refund_amount: "1750.00" });
     expect(
       (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status,
     ).toBe("REVIEW");
-    await notify(invoice.id);
+    await notifyHistorical(invoice.id);
     expect(
       (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status,
     ).toBe("REVIEW");
@@ -434,7 +563,7 @@ describeDb("subscription payments with real database and signed provider protoco
       note: "Refund resolved in provider dashboard; access agreed with customer",
       confirmed: true,
     });
-    await notify(invoice.id);
+    await notifyHistorical(invoice.id);
     expect(
       (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status,
     ).toBe("RESOLVED");
@@ -476,6 +605,7 @@ describeDb("subscription payments with real database and signed provider protoco
   });
   it("claims reconciliation once under concurrency and exposes a provider outage to recovery health", async () => {
     const invoice = await checkout();
+    await confirmAtProvider(invoice.id);
     await readyToCheck(invoice.id);
     transport.mockClear();
     await Promise.all([
@@ -501,7 +631,8 @@ describeDb("subscription payments with real database and signed provider protoco
   });
   it("returns tenant-scoped history with stable pagination", async () => {
     const invoice = await checkout();
-    await notify(invoice.id, { pg_result: "0" });
+    (await providerPayment(invoice.id)).status = "FAILED";
+    expect((await deliverCurrent(invoice.id)).status).toBe(200);
     const snapshot = await prisma.subscriptionInvoice.findUniqueOrThrow({
       where: { id: invoice.id },
     });
@@ -512,6 +643,7 @@ describeDb("subscription payments with real database and signed provider protoco
         id: randomUUID(),
         idempotencyKey: randomUUID(),
         providerPaymentId: null,
+        providerOrderId: randomUUID().replaceAll("-", ""),
         createdAt: new Date(Date.now() + i + 1),
       })),
     });
@@ -614,7 +746,9 @@ describeDb("subscription payments with real database and signed provider protoco
   });
   it("recovers a late payment after an earlier failure even if the final callback was lost", async () => {
     const invoice = await checkout();
-    await notify(invoice.id, { pg_result: "0" });
+    (await providerPayment(invoice.id)).status = "FAILED";
+    expect((await deliverCurrent(invoice.id)).status).toBe(200);
+    await confirmAtProvider(invoice.id);
     await readyToCheck(invoice.id);
     expect(await reconcileSubscriptionPayments()).toMatchObject({
       status: "ok",
@@ -680,38 +814,69 @@ describeDb("subscription payments with real database and signed provider protoco
   });
   const modernContract = async () => {
     // A new single-owner contract; historical fixture users remain as inactive records.
-    await prisma.user.updateMany({ where: { organizationId: f.org.id, id: { not: f.adminUser.id } }, data: { isActive: false } });
-    await prisma.subscriptionContract.create({ data: { organizationId: f.org.id, catalogVersion: "2026-11" } });
-    await prisma.organization.update({ where: { id: f.org.id }, data: { trialEndsAt: null, currentPeriodEndsAt: null } });
+    await prisma.user.updateMany({
+      where: { organizationId: f.org.id, id: { not: f.adminUser.id } },
+      data: { isActive: false },
+    });
+    await prisma.subscriptionContract.create({
+      data: { organizationId: f.org.id, catalogVersion: "2026-11" },
+    });
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: { trialEndsAt: null, currentPeriodEndsAt: null },
+    });
   };
   const purchase = async (
-    plan: "STARTER" | "BUSINESS" | "ENTERPRISE", months: 1 | 6 | 12 = 1,
-    extras = { stores: 0, productPacks: 0, userPacks: 0 }, action: "RENEW" | "CHANGE" = "RENEW",
+    plan: "STARTER" | "BUSINESS" | "ENTERPRISE",
+    months: 1 | 6 | 12 = 1,
+    extras = { stores: 0, productPacks: 0, userPacks: 0 },
+    action: "RENEW" | "CHANGE" = "RENEW",
     idempotencyKey = randomUUID(),
   ) => {
     const quote = await caller.billing.payments.quote({ plan, months, extras, action });
-    const request = { plan, months: quote.months, extras, action, quoteToken: quote.quoteToken,
-      expectedAmountMinor: quote.amountMinor, idempotencyKey, termsVersion: "qa-v1" as const,
-      acceptedTerms: true as const, locale: "ru" as const };
+    const request = {
+      plan,
+      months: quote.months,
+      extras,
+      action,
+      quoteToken: quote.quoteToken,
+      expectedAmountMinor: quote.amountMinor,
+      idempotencyKey,
+      termsVersion: "qa-v1" as const,
+      acceptedTerms: true as const,
+      locale: "ru" as const,
+    };
     return { quote, request, invoice: await caller.billing.payments.checkout(request) };
   };
 
   it.each([
-    ["STARTER", 6, 1140000], ["STARTER", 12, 2040000],
-    ["BUSINESS", 6, 1995000], ["BUSINESS", 12, 3570000],
-    ["ENTERPRISE", 6, 3135000], ["ENTERPRISE", 12, 5610000],
-  ] as const)("v2: charges %s for %s months once and grants the complete term", async (plan, months, expected) => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2027-01-31T10:00:00.000Z"));
-    await modernContract();
-    const result = await purchase(plan, months);
-    expect(result.invoice.amountMinor).toBe(expected);
-    await Promise.all([notify(result.invoice.id), notify(result.invoice.id), notify(result.invoice.id)]);
-    expect(await prisma.subscriptionPeriod.count()).toBe(1);
-    const period = await prisma.subscriptionPeriod.findFirstOrThrow();
-    expect(period.endsAt.toISOString()).toBe(months === 6 ? "2027-07-31T10:00:00.000Z" : "2028-01-31T10:00:00.000Z");
-    expect((await getOrganizationPlan(f.org.id)).plan).toBe(plan);
-  });
+    ["STARTER", 6, 1140000],
+    ["STARTER", 12, 2040000],
+    ["BUSINESS", 6, 1995000],
+    ["BUSINESS", 12, 3570000],
+    ["ENTERPRISE", 6, 3135000],
+    ["ENTERPRISE", 12, 5610000],
+  ] as const)(
+    "v2: charges %s for %s months once and grants the complete term",
+    async (plan, months, expected) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2027-01-31T10:00:00.000Z"));
+      await modernContract();
+      const result = await purchase(plan, months);
+      expect(result.invoice.amountMinor).toBe(expected);
+      await Promise.all([
+        notify(result.invoice.id),
+        notify(result.invoice.id),
+        notify(result.invoice.id),
+      ]);
+      expect(await prisma.subscriptionPeriod.count()).toBe(1);
+      const period = await prisma.subscriptionPeriod.findFirstOrThrow();
+      expect(period.endsAt.toISOString()).toBe(
+        months === 6 ? "2027-07-31T10:00:00.000Z" : "2028-01-31T10:00:00.000Z",
+      );
+      expect((await getOrganizationPlan(f.org.id)).plan).toBe(plan);
+    },
+  );
 
   it("v2: bills extra capacity with the term discount and enforces purchased store capacity", async () => {
     await modernContract();
@@ -721,9 +886,16 @@ describeDb("subscription payments with real database and signed provider protoco
     const summary = await caller.billing.get();
     expect(summary?.limits).toEqual({ maxStores: 2, maxProducts: 6000, maxUsers: 7 });
     await assertCapacity({ organizationId: f.org.id, kind: "stores", add: 1 });
-    await prisma.store.create({ data: { organizationId: f.org.id, name: "Extra store", code: "EXT" } });
-    await expect(assertCapacity({ organizationId: f.org.id, kind: "stores", add: 1 })).rejects.toThrow();
-    expect((await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: result.invoice.id } })).purchaseSnapshot).toMatchObject({ extras: { stores: 1, productPacks: 1, userPacks: 0 } });
+    await prisma.store.create({
+      data: { organizationId: f.org.id, name: "Extra store", code: "EXT" },
+    });
+    await expect(
+      assertCapacity({ organizationId: f.org.id, kind: "stores", add: 1 }),
+    ).rejects.toThrow();
+    expect(
+      (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: result.invoice.id } }))
+        .purchaseSnapshot,
+    ).toMatchObject({ extras: { stores: 1, productPacks: 1, userPacks: 0 } });
   });
 
   it("v2: prorates successive annual upgrades and preserves the original end date and every prior invoice", async () => {
@@ -735,19 +907,35 @@ describeDb("subscription payments with real database and signed provider protoco
     await notify(first.invoice.id);
     const end = new Date("2028-01-01T00:00:00.000Z");
     vi.setSystemTime(new Date(start.getTime() + (end.getTime() - start.getTime()) / 2));
-    const second = await purchase("BUSINESS", 12, { stores: 0, productPacks: 0, userPacks: 0 }, "CHANGE");
+    const second = await purchase(
+      "BUSINESS",
+      12,
+      { stores: 0, productPacks: 0, userPacks: 0 },
+      "CHANGE",
+    );
     expect(second.quote.creditMinor).toBe(1020000);
     expect(second.invoice.amountMinor).toBe(765000);
     await notify(second.invoice.id);
     expect((await getOrganizationPlan(f.org.id)).plan).toBe("BUSINESS");
-    vi.setSystemTime(new Date(start.getTime() + (end.getTime() - start.getTime()) * 3 / 4));
-    const third = await purchase("ENTERPRISE", 12, { stores: 0, productPacks: 0, userPacks: 0 }, "CHANGE");
+    vi.setSystemTime(new Date(start.getTime() + ((end.getTime() - start.getTime()) * 3) / 4));
+    const third = await purchase(
+      "ENTERPRISE",
+      12,
+      { stores: 0, productPacks: 0, userPacks: 0 },
+      "CHANGE",
+    );
     expect(third.quote.creditMinor).toBe(892500);
     expect(third.invoice.amountMinor).toBe(510000);
     await notify(third.invoice.id);
     expect((await getOrganizationPlan(f.org.id)).plan).toBe("ENTERPRISE");
-    expect((await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } })).currentPeriodEndsAt).toEqual(end);
-    expect((await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: first.invoice.id } })).amountMinor).toBe(2040000);
+    expect(
+      (await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } }))
+        .currentPeriodEndsAt,
+    ).toEqual(end);
+    expect(
+      (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: first.invoice.id } }))
+        .amountMinor,
+    ).toBe(2040000);
     expect(await prisma.subscriptionPeriod.count()).toBe(3);
   });
 
@@ -758,7 +946,9 @@ describeDb("subscription payments with real database and signed provider protoco
     const first = await purchase("ENTERPRISE", 1);
     await notify(first.invoice.id);
     vi.setSystemTime(new Date("2027-01-10T00:00:00.000Z"));
-    await expect(caller.billing.payments.quote({ plan: "STARTER", action: "CHANGE" })).rejects.toThrow("billingDowngradeNextPeriod");
+    await expect(
+      caller.billing.payments.quote({ plan: "STARTER", action: "CHANGE" }),
+    ).rejects.toThrow("billingDowngradeNextPeriod");
     const second = await purchase("STARTER", 1);
     await notify(second.invoice.id);
     expect((await getOrganizationPlan(f.org.id)).plan).toBe("ENTERPRISE");
@@ -773,13 +963,22 @@ describeDb("subscription payments with real database and signed provider protoco
   it("v2: rejects altered amounts and stale/foreign quotes before contacting the provider", async () => {
     await modernContract();
     const quote = await caller.billing.payments.quote({ plan: "STARTER", months: 12 });
-    const request = { plan: "STARTER" as const, months: 12 as const, quoteToken: quote.quoteToken,
-      expectedAmountMinor: 1, termsVersion: "qa-v1", acceptedTerms: true as const, locale: "ru" as const,
-      idempotencyKey: randomUUID() };
+    const request = {
+      plan: "STARTER" as const,
+      months: 12 as const,
+      quoteToken: quote.quoteToken,
+      expectedAmountMinor: 1,
+      termsVersion: "qa-v1",
+      acceptedTerms: true as const,
+      locale: "ru" as const,
+      idempotencyKey: randomUUID(),
+    };
     await expect(caller.billing.payments.checkout(request)).rejects.toThrow("billingPriceChanged");
     const bad = quote.quoteToken.split(".");
     bad[0] = Buffer.from(JSON.stringify({ ...quote, amountMinor: 1 })).toString("base64url");
-    await expect(caller.billing.payments.checkout({ ...request, quoteToken: bad.join(".") })).rejects.toThrow("billingQuoteChanged");
+    await expect(
+      caller.billing.payments.checkout({ ...request, quoteToken: bad.join(".") }),
+    ).rejects.toThrow("billingQuoteChanged");
     expect(transport).not.toHaveBeenCalled();
     expect(await prisma.subscriptionInvoice.count()).toBe(0);
   });
@@ -788,43 +987,92 @@ describeDb("subscription payments with real database and signed provider protoco
     await modernContract();
     const result = await purchase("BUSINESS", 12, { stores: 1, productPacks: 0, userPacks: 0 });
     expect((await caller.billing.payments.checkout(result.request)).id).toBe(result.invoice.id);
-    await expect(caller.billing.payments.checkout({ ...result.request, extras: { stores: 2, productPacks: 0, userPacks: 0 } })).rejects.toThrow("idempotencyConflict");
+    await expect(
+      caller.billing.payments.checkout({
+        ...result.request,
+        extras: { stores: 2, productPacks: 0, userPacks: 0 },
+      }),
+    ).rejects.toThrow("idempotencyConflict");
     expect(transport).toHaveBeenCalledTimes(1);
-    await expect(prisma.subscriptionInvoice.update({ where: { id: result.invoice.id }, data: { purchaseSnapshot: { amountMinor: 1 } } })).rejects.toThrow();
+    await expect(
+      prisma.subscriptionInvoice.update({
+        where: { id: result.invoice.id },
+        data: { purchaseSnapshot: { amountMinor: 1 } },
+      }),
+    ).rejects.toThrow();
   });
 
   it("preserves all five lifetime grants by identity, after renaming, without charging or altering their plans", async () => {
     for (const id of LIFETIME_ORGANIZATION_IDS) {
-      const organization = await prisma.organization.create({ data: {
-        id, name: `Renamed ${id}`, plan: "ENTERPRISE", subscriptionStatus: "ACTIVE",
-        subscriptionBillingMode: "MANUAL", trialEndsAt: new Date(0), currentPeriodEndsAt: new Date(0),
-        subscriptionContract: { create: { catalogVersion: "2026-10", lifetimeAccess: true } },
-      } });
-      const user = await prisma.user.create({ data: { organizationId: id, name: "Lifetime admin", email: `${id}@example.invalid`, passwordHash: "hash", role: "ADMIN", isOrgOwner: true, emailVerifiedAt: new Date() } });
+      const organization = await prisma.organization.create({
+        data: {
+          id,
+          name: `Renamed ${id}`,
+          plan: "ENTERPRISE",
+          subscriptionStatus: "ACTIVE",
+          subscriptionBillingMode: "MANUAL",
+          trialEndsAt: new Date(0),
+          currentPeriodEndsAt: new Date(0),
+          subscriptionContract: { create: { catalogVersion: "2026-10", lifetimeAccess: true } },
+        },
+      });
+      const user = await prisma.user.create({
+        data: {
+          organizationId: id,
+          name: "Lifetime admin",
+          email: `${id}@example.invalid`,
+          passwordHash: "hash",
+          role: "ADMIN",
+          isOrgOwner: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
       const customer = createTestCaller({ ...user, organizationId: id });
       expect((await getOrganizationPlan(id)).lifetimeAccess).toBe(true);
       await assertTrialActive(id);
       const state = await customer.billing.payments.get();
       expect(state.canPurchase).toBe(false);
       expect((await customer.billing.get())?.monthlyPriceKgs).toBe(0);
-      await expect(customer.billing.payments.quote({ plan: "STARTER", months: 12 })).rejects.toThrow("billingLifetimeProtected");
-      await expect(prisma.organization.update({ where: { id }, data: { subscriptionBillingMode: "SELF_SERVE" } })).rejects.toThrow();
-      await expect(prisma.subscriptionContract.update({ where: { organizationId: id }, data: { lifetimeAccess: false } })).rejects.toThrow();
+      await expect(
+        customer.billing.payments.quote({ plan: "STARTER", months: 12 }),
+      ).rejects.toThrow("billingLifetimeProtected");
+      await expect(
+        prisma.organization.update({
+          where: { id },
+          data: { subscriptionBillingMode: "SELF_SERVE" },
+        }),
+      ).rejects.toThrow();
+      await expect(
+        prisma.subscriptionContract.update({
+          where: { organizationId: id },
+          data: { lifetimeAccess: false },
+        }),
+      ).rejects.toThrow();
       expect(await prisma.organization.findUniqueOrThrow({ where: { id } })).toEqual(organization);
     }
-    const namesake = await prisma.organization.create({ data: { name: "Avant", subscriptionContract: { create: { catalogVersion: "2026-11" } } } });
+    const namesake = await prisma.organization.create({
+      data: { name: "Avant", subscriptionContract: { create: { catalogVersion: "2026-11" } } },
+    });
     expect((await getOrganizationPlan(namesake.id)).lifetimeAccess).toBe(false);
     expect(transport).not.toHaveBeenCalled();
   });
 
   it("legacy terms retain their old prices and capacities while new registrations use the new catalog", async () => {
-    await prisma.subscriptionContract.create({ data: { organizationId: f.org.id, catalogVersion: "2026-10" } });
+    await prisma.subscriptionContract.create({
+      data: { organizationId: f.org.id, catalogVersion: "2026-10" },
+    });
     await prisma.organization.update({ where: { id: f.org.id }, data: { plan: "ENTERPRISE" } });
     const state = await caller.billing.get();
     expect(state?.monthlyPriceKgs).toBe(8750);
     expect(state?.limits.maxUsers).toBe(20);
     expect(state?.billingCatalogVersion).toBe("2026-10");
-    const modern = await prisma.organization.create({ data: { name: "New customer", plan: "ENTERPRISE", subscriptionContract: { create: { catalogVersion: "2026-11" } } } });
+    const modern = await prisma.organization.create({
+      data: {
+        name: "New customer",
+        plan: "ENTERPRISE",
+        subscriptionContract: { create: { catalogVersion: "2026-11" } },
+      },
+    });
     const summary = await getBillingSummary({ organizationId: modern.id });
     expect(summary?.monthlyPriceKgs).toBe(5500);
     expect(summary?.limits.maxUsers).toBe(15);
@@ -834,14 +1082,23 @@ describeDb("subscription payments with real database and signed provider protoco
     await modernContract();
     const result = await purchase("STARTER", 6);
     const now = new Date();
-    await expect(prisma.subscriptionPeriod.create({ data: {
-      invoiceId: result.invoice.id, organizationId: f.org.id, plan: "STARTER",
-      startsAt: now, endsAt: new Date(now.getTime() + 30 * 86400000),
-    } })).rejects.toThrow();
+    await expect(
+      prisma.subscriptionPeriod.create({
+        data: {
+          invoiceId: result.invoice.id,
+          organizationId: f.org.id,
+          plan: "STARTER",
+          startsAt: now,
+          endsAt: new Date(now.getTime() + 30 * 86400000),
+        },
+      }),
+    ).rejects.toThrow();
     expect(await prisma.subscriptionPeriod.count()).toBe(0);
     await notify(result.invoice.id);
     expect(await prisma.subscriptionPeriod.count()).toBe(1);
-    expect((await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: result.invoice.id } })).status).toBe("PAID");
+    expect(
+      (await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: result.invoice.id } }))
+        .status,
+    ).toBe("PAID");
   });
-
 });

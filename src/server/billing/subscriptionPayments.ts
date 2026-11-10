@@ -23,11 +23,15 @@ import {
   type SubscriptionMonths,
   type SubscriptionExtras,
 } from "@/lib/billing/subscriptionPricing";
-import { getOrganizationPlan } from "@/server/services/planLimits";
+import { getOrganizationPlan, resolveOrganizationAccessState } from "@/server/services/planLimits";
 import { calculateSubscriptionQuote } from "./subscriptionQuotes";
 import { readPurchaseSnapshot, verifyPurchaseQuote } from "./purchaseSnapshot";
 import { LIFETIME_ORGANIZATION_IDS } from "./lifetimeOrganizations";
-import { assertSubscriptionSelectionReady } from "./subscriptionPreparation";
+import { queueSubscriptionPaymentNotifications } from "./paymentNotifications";
+import {
+  assertScheduledSubscriptionCompatibility,
+  assertSubscriptionSelectionReady,
+} from "./subscriptionPreparation";
 
 const nowPlus = (milliseconds: number) => new Date(Date.now() + milliseconds);
 const lockOrganization = async (tx: Prisma.TransactionClient, organizationId: string) => {
@@ -63,7 +67,8 @@ export const presentInvoice = (
 
 export const getSubscriptionPaymentState = async (organizationId: string) => {
   const config = getSubscriptionPaymentConfig();
-  const [organization, pending, lastPeriod] = await Promise.all([
+  const now = new Date();
+  const [organization, pending, lastPeriod, nextPeriod] = await Promise.all([
     getOrganizationPlan(organizationId),
     prisma.subscriptionInvoice.findFirst({
       where: { organizationId, OR: [{ pendingSlot: organizationId }, { status: "REVIEW" }] },
@@ -71,7 +76,12 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
       include: { period: true },
     }),
     prisma.subscriptionPeriod.findFirst({ where: { organizationId }, orderBy: { endsAt: "desc" } }),
+    prisma.subscriptionPeriod.findFirst({
+      where: { organizationId, startsAt: { gt: now } },
+      orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+    }),
   ]);
+  const nextPurchase = readPurchaseSnapshot(nextPeriod?.purchaseSnapshot);
   return {
     provider: config.provider,
     available: config.ready,
@@ -86,6 +96,18 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
     currentExtras: organization.subscriptionExtras,
     currentMonths: organization.activePurchase?.months ?? 1,
     canChange: Boolean(organization.activeSubscriptionPeriod),
+    scheduledSubscription: nextPeriod
+      ? {
+          plan: nextPeriod.plan,
+          startsAt: nextPeriod.startsAt,
+          endsAt: nextPeriod.endsAt,
+          months: nextPurchase?.months ?? 1,
+          extras: nextPurchase?.extras ?? EMPTY_SUBSCRIPTION_EXTRAS,
+          entitlements:
+            nextPurchase?.entitlements ??
+            contractPlan(organization.contractTerms, nextPeriod.plan, nextPurchase?.extras),
+        }
+      : null,
     paidUntil: organization.currentPeriodEndsAt,
     accountPaused: organization.subscriptionStatus === "CANCELED",
     canPurchase:
@@ -207,6 +229,13 @@ export const createSubscriptionCheckout = async (input: {
       contractPlan(effective.contractTerms, input.plan, selection.extras),
       tx,
     );
+    if (snapshot.kind === "UPGRADE")
+      await assertScheduledSubscriptionCompatibility(
+        effective,
+        snapshot.entitlements ??
+          contractPlan(effective.contractTerms, input.plan, selection.extras),
+        tx,
+      );
     if (
       snapshot.plan !== input.plan ||
       snapshot.months !== selection.months ||
@@ -427,9 +456,18 @@ export const applySubscriptionReceipt = async (input: {
       const now = new Date();
       const purchase = readPurchaseSnapshot(invoice.purchaseSnapshot);
       const effective = await getOrganizationPlan(org.id, tx);
-      if (purchase?.entitlements) {
+      if (purchase?.entitlements || purchase?.kind === "UPGRADE") {
         try {
-          await assertSubscriptionSelectionReady(effective, purchase.entitlements, tx);
+          if (purchase.entitlements)
+            await assertSubscriptionSelectionReady(effective, purchase.entitlements, tx);
+          if (purchase.kind === "UPGRADE")
+            await assertScheduledSubscriptionCompatibility(
+              effective,
+              purchase.entitlements ??
+                contractPlan(effective.contractTerms, purchase.plan, purchase.extras),
+              tx,
+              now,
+            );
         } catch (error) {
           if (!(error instanceof AppError)) throw error;
           return tx.subscriptionInvoice.update({
@@ -520,8 +558,14 @@ export const applySubscriptionReceipt = async (input: {
         data: {
           plan: startsAt <= now || !hasPriorPeriod ? invoice.plan : org.plan,
           subscriptionStatus: "ACTIVE",
-          currentPeriodEndsAt: endsAt,
-          billingAnchorDay: anchorDay,
+          // A current-period upgrade never consumes or rewrites an already
+          // prepaid future term. Keep its final paid boundary and renewal day.
+          currentPeriodEndsAt:
+            purchase?.kind === "UPGRADE"
+              ? new Date(Math.max(org.currentPeriodEndsAt?.getTime() ?? 0, endsAt.getTime()))
+              : endsAt,
+          billingAnchorDay:
+            purchase?.kind === "UPGRADE" ? (org.billingAnchorDay ?? anchorDay) : anchorDay,
         },
       });
       await writeAuditLog(tx, {
@@ -540,10 +584,19 @@ export const applySubscriptionReceipt = async (input: {
         },
         requestId: `payment:${invoice.id}`,
       });
-      return tx.subscriptionInvoice.update({
+      const paidInvoice = await tx.subscriptionInvoice.update({
         where: { id: invoice.id },
         data: { ...update, status: "PAID", paidAt: now, pendingSlot: null, lastIssue: null },
       });
+      await queueSubscriptionPaymentNotifications(tx, {
+        organization: org,
+        invoice: paidInvoice,
+        startsAt,
+        endsAt,
+        hadAccess: resolveOrganizationAccessState(effective, now).hasAccess,
+        now,
+      });
+      return paidInvoice;
     }
     if (invoice.status === "REVIEW" || ["FAILED", "EXPIRED"].includes(invoice.status))
       return invoice;
@@ -720,6 +773,14 @@ export const verifyInvoiceCanBePaid = async (invoiceId: string, fields: SignedFi
         contractPlan(effective.contractTerms, invoice.plan, purchase?.extras),
       tx,
     );
+    if (purchase?.kind === "UPGRADE")
+      await assertScheduledSubscriptionCompatibility(
+        effective,
+        purchase.entitlements ??
+          contractPlan(effective.contractTerms, invoice.plan, purchase.extras),
+        tx,
+        now,
+      );
     // The provider has not collected yet. This check deliberately changes no
     // invoice/access state; settlement repeats these checks after confirmation.
   });

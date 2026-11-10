@@ -801,13 +801,35 @@
       "credit": "Credit from the previous payment: {amount}.",
       "total": "Total due in one payment: {amount}",
       "discount": "Term discount: {percent}%.",
-      "oneTimePayment": "The full amount of one KGS payment is shown. Renewals start after existing access; if confirmation is delayed, exact dates appear in history.",
+      "oneTimePayment": "One KGS payment for the selected term. No automatic debits or required card linking. The final paid period is saved in history.",
       "renewDates": "Service period: {start} — {end}.",
       "upgradeDates": "The change applies to the current period until {end}; its end date stays unchanged.",
       "extraStoreCount": "Additional stores: {count}",
       "starterOneStore": "Starter includes one store. Choose Business or Enterprise for a store network.",
       "legacyExtras": "The add-ons above belong to the new plans. Your organization retains its previous terms; they do not change automatically. Contact support to adjust your agreed limits.",
-      "configureExtrasHint": "Choose a plan, term and add-ons in the form below. To increase the limits of an active paid subscription, choose “Upgrade current subscription”. You will see the total before paying."
+      "configureExtrasHint": "Choose a plan, term and add-ons in the form below. To increase the limits of an active paid subscription, choose “Upgrade current subscription”. You will see the total before paying.",
+      "configuration": "Selected subscription",
+      "fullPrice": "Before the term discount: {amount}",
+      "savings": "You save {amount} ({percent}%)",
+      "serviceValue": "Value of the new terms for the remaining period: {amount}",
+      "termReference": "The full selected configuration for {months} months costs {amount}. You pay only for the change to the remaining period now.",
+      "limitsSummary": "Stores: {stores} · Products: {products} · Users: {users}",
+      "featuresTitle": "Selected plan features",
+      "monthlyQuotas": "AI operations and other monthly allowances reset every month, including when you pay for six or twelve months.",
+      "timingAfterTrial": "Your paid period starts after the trial. You keep all remaining free days.",
+      "timingNextPeriod": "The new period starts after all previously paid periods. The terms of each paid period are preserved.",
+      "timingImmediate": "Access starts after payment is confirmed. Previously paid days are preserved.",
+      "scheduledReduction": "The lower plan or limits apply only to the new period. Previously paid periods keep their terms; no data is deleted.",
+      "returnChecking": "Checking your payment…",
+      "returnHint": "Returning from your banking app does not confirm payment. We will check automatically; you do not need to pay again.",
+      "paymentFailed": "Payment was not completed. If no money was taken, you can create a new invoice. If money was taken, check this payment first.",
+      "paymentExpired": "This invoice expired. If no money was taken, create a new invoice. If money was taken, check this payment and do not pay again.",
+      "refreshQuote": "Refresh quote",
+      "scheduledTitle": "Your next period is already paid",
+      "scheduledDescription": "{plan}: {start} — {end}. Current terms apply until it starts.",
+      "choosePlan": "Select for payment",
+      "openCheckout": "Choose a term and pay",
+      "checkOnReturn": "Checked automatically when you return to this page or your connection recovers."
     },
     "featureRequiresPlan": "This feature requires a different plan.",
     "featureUpgradeHint": "Compare plans and choose what fits your business. Your products and history are preserved.",
@@ -824,7 +846,11 @@
       "ai": "Baam and AI content",
       "images": "AI images",
       "marketingEmails": "Marketing recipient sends",
-      "externalApi": "External API"
+      "externalApi": "External API",
+      "trialDescription": "These allowances cover the entire trial. After you switch to a paid subscription, monthly quotas reset each month.",
+      "notIncluded": "Not included in your plan",
+      "periodEnded": "After renewal",
+      "viewPlans": "Compare plans"
     },
     "marketplace": {
       "included": "One live channel is included per organization: M-Market, Bakai Store API or O!Market. Up to 24 exchange starts per day, including at most one full catalogue upload. Partner limits also apply.",
@@ -838,7 +864,9 @@
       "expiredTitle": "View-only access",
       "expiredDescription": "Your access period has ended. History is preserved; available viewing and data exports remain accessible. Renew to resume creating and changing records.",
       "renew": "Renew subscription",
-      "askOwner": "Ask your organization administrator to renew."
+      "askOwner": "Ask your organization administrator to renew.",
+      "trialExpiredTitle": "Your trial has ended",
+      "trialExpiredDescription": "Your data and history are preserved. Viewing and available exports remain; choose and pay for a subscription to start new operations."
     },
     "trial": {
       "offer": "{days} days free — no card or automatic charges.",
@@ -7054,65 +7082,37 @@
       "gettingStarted": {
         "title": "Getting started",
         "summary": "Summary",
-        "body": [
-          "Getting started body",
-          "Getting started body",
-          "Getting started body"
-        ]
+        "body": ["Getting started body", "Getting started body", "Getting started body"]
       },
       "importProducts": {
         "title": "Import products",
         "summary": "Summary",
-        "body": [
-          "Import products body",
-          "Import products body",
-          "Import products body"
-        ]
+        "body": ["Import products body", "Import products body", "Import products body"]
       },
       "barcodeWorkflow": {
         "title": "Barcode workflow",
         "summary": "Summary",
-        "body": [
-          "Barcode workflow body",
-          "Barcode workflow body",
-          "Barcode workflow body"
-        ]
+        "body": ["Barcode workflow body", "Barcode workflow body", "Barcode workflow body"]
       },
       "inventoryFlows": {
         "title": "Inventory flows",
         "summary": "Summary",
-        "body": [
-          "Inventory flows body",
-          "Inventory flows body",
-          "Inventory flows body"
-        ]
+        "body": ["Inventory flows body", "Inventory flows body", "Inventory flows body"]
       },
       "stockCounts": {
         "title": "Stock counts",
         "summary": "Summary",
-        "body": [
-          "Stock counts body",
-          "Stock counts body",
-          "Stock counts body"
-        ]
+        "body": ["Stock counts body", "Stock counts body", "Stock counts body"]
       },
       "purchaseOrders": {
         "title": "Purchase orders",
         "summary": "Summary",
-        "body": [
-          "Purchase orders body",
-          "Purchase orders body",
-          "Purchase orders body"
-        ]
+        "body": ["Purchase orders body", "Purchase orders body", "Purchase orders body"]
       },
       "storePrices": {
         "title": "Store prices",
         "summary": "Summary",
-        "body": [
-          "Store prices body",
-          "Store prices body",
-          "Store prices body"
-        ]
+        "body": ["Store prices body", "Store prices body", "Store prices body"]
       },
       "mMarketIntegration": {
         "title": "M market integration",
@@ -7141,29 +7141,17 @@
       "priceTags": {
         "title": "Price tags",
         "summary": "Summary",
-        "body": [
-          "Price tags body",
-          "Price tags body",
-          "Price tags body"
-        ]
+        "body": ["Price tags body", "Price tags body", "Price tags body"]
       },
       "reorder": {
         "title": "Reorder",
         "summary": "Summary",
-        "body": [
-          "Reorder body",
-          "Reorder body",
-          "Reorder body"
-        ]
+        "body": ["Reorder body", "Reorder body", "Reorder body"]
       },
       "troubleshooting": {
         "title": "Troubleshooting",
         "summary": "Summary",
-        "body": [
-          "Troubleshooting body",
-          "Troubleshooting body",
-          "Troubleshooting body"
-        ]
+        "body": ["Troubleshooting body", "Troubleshooting body", "Troubleshooting body"]
       }
     }
   },
@@ -7173,27 +7161,15 @@
     "sections": {
       "v14": {
         "title": "V14",
-        "items": [
-          "Items",
-          "Items",
-          "Items"
-        ]
+        "items": ["Items", "Items", "Items"]
       },
       "v15": {
         "title": "V15",
-        "items": [
-          "Items",
-          "Items",
-          "Items"
-        ]
+        "items": ["Items", "Items", "Items"]
       },
       "v16": {
         "title": "V16",
-        "items": [
-          "Items",
-          "Items",
-          "Items"
-        ]
+        "items": ["Items", "Items", "Items"]
       }
     }
   },
@@ -7368,35 +7344,22 @@
       "kkmModes": {
         "title": "KKM modes",
         "summary": "Summary",
-        "body": [
-          "KKM modes body",
-          "KKM modes body",
-          "KKM modes body"
-        ]
+        "body": ["KKM modes body", "KKM modes body", "KKM modes body"]
       },
       "exports": {
         "title": "Exports",
         "summary": "Summary",
-        "body": [
-          "Exports body",
-          "Exports body"
-        ]
+        "body": ["Exports body", "Exports body"]
       },
       "ettnMarking": {
         "title": "ETTN marking",
         "summary": "Summary",
-        "body": [
-          "ETTN marking body",
-          "ETTN marking body"
-        ]
+        "body": ["ETTN marking body", "ETTN marking body"]
       },
       "periodClose": {
         "title": "Period close",
         "summary": "Summary",
-        "body": [
-          "Period close body",
-          "Period close body"
-        ]
+        "body": ["Period close body", "Period close body"]
       }
     }
   },

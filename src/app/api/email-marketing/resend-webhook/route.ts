@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { handleResendEmailWebhook } from "@/server/services/emailMarketing";
+import { handleSubscriptionPaymentEmailEvent } from "@/server/billing/paymentNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +69,12 @@ export const POST = async (request: Request) => {
   } catch {
     return new Response("invalid_payload", { status: 400 });
   }
+
+  const notification = await handleSubscriptionPaymentEmailEvent({
+    event,
+    webhookEventId: request.headers.get("svix-id"),
+  });
+  if (notification.processed) return Response.json(notification);
 
   const result = await handleResendEmailWebhook({
     event: (event && typeof event === "object" ? event : {}) as Parameters<

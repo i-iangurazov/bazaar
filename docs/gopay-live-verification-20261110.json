@@ -1,0 +1,106 @@
+{
+  "date": "2026-11-10",
+  "baselineSha": "479cf4736487f822686c26b6660b6cfec8cddd10",
+  "scope": "GoPay-only new Bazaar service purchases, subscription lifecycle, billing UI, durable payment notices and draft legal content",
+  "qualification": {
+    "fullIsolatedRegression": {
+      "files": 499,
+      "passed": 4503,
+      "failed": 0,
+      "skipped": 3,
+      "skippedReason": "Three dedicated connection-pooling harness scenarios run in the separate CI infrastructure; no payment scenario skipped."
+    },
+    "finalCopyAndPageRegression": {
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck": "passed",
+    "lint": "passed",
+    "translationValidation": "passed",
+    "productionBuild": "passed after final source changes",
+    "deploymentPolicyTests": {
+      "passed": 54,
+      "failed": 0
+    },
+    "visual": {
+      "initialStates": 77,
+      "finalRecheckStates": 12,
+      "locales": [
+        "ru",
+        "kg",
+        "en"
+      ],
+      "viewports": [
+        1440,
+        390
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "unresolvedFindings": [],
+      "realProviderCalls": 0,
+      "bankLinksOpened": 0,
+      "realPayments": 0,
+      "syntheticOutageInvoicesAfterDoubleClick": 1
+    }
+  },
+  "manualExternalChecks": {
+    "goPayLiveReadOnlyApi": {
+      "accepted": true,
+      "bankApps": 12,
+      "paymentCreated": false
+    },
+    "separateSyntheticMailDelivery": {
+      "from": "no-reply@bazaar.kg",
+      "to": "support@bazaar.kg",
+      "deliveryConfirmed": true,
+      "productionBusinessDataUsed": false
+    },
+    "existingProductionWebhookBeforeRelease": {
+      "validSignatureHttp": 200,
+      "invalidSignatureHttp": 401,
+      "event": "test.ping",
+      "paymentCreated": false
+    }
+  },
+  "productionConfiguration": {
+    "liveKeysStagedInSensitiveServerSettings": true,
+    "settlementBank": "Bakai",
+    "settlementCurrency": "KGS",
+    "homeAddressTransferredOrPublished": false,
+    "billingMode": "disabled",
+    "legalPublicationApproval": false
+  },
+  "preserved": {
+    "protectedOrganizations": [
+      "mpo.kg",
+      "roksosh",
+      "skladondemand",
+      "Avant",
+      "Catwalk"
+    ],
+    "beforeSnapshotLifetimeCount": 5,
+    "beforeSnapshotInvoiceCount": 0,
+    "beforeSnapshotPeriodCount": 0,
+    "existingContractsRepriced": false,
+    "operationalLayoutsChanged": false,
+    "customerPosMethodsChanged": false
+  },
+  "migration": {
+    "name": "20261110180000_subscription_payment_notifications",
+    "sha256": "732f343376ae3803db8fa354e4fa369f014b8c5d17c32f4c78d999d8f3aa153c",
+    "kind": "Additive outbox table, constraints, indexes and immutable-content trigger; no existing business-record rewrite",
+    "rollback": "Keep additive schema and financial records when reverting application code."
+  },
+  "remainingReleaseConditions": [
+    "Exact-commit cloud CI and actual production alias verification",
+    "After-release protected-organization comparison and signed webhook recheck",
+    "Written GoPay confirmation of public-address requirements, refunds, extra fees/disputes and fiscal receipts",
+    "Publish approved legal documents without residential address",
+    "Agreed real bank payment on an own organization, one access grant, settlement and refund-procedure verification"
+  ],
+  "evidenceRoot": ".local/qa/gopay-live-20261110",
+  "evidenceBoundary": "Local and synthetic qualification is not proof of an end-to-end Live bank purchase. Technical deployment and payment activation are separate milestones."
+}

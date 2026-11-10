@@ -15,6 +15,7 @@ export const scheduledJobGroups = {
     "product-image-studio-process",
   ],
   email: [
+    "subscription-payment-notifications",
     "subscription-reminders",
     "email-campaign-send",
     "email-campaign-reconcile",

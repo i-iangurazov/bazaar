@@ -19,6 +19,8 @@ export async function handleGoPayNotification(request: Request): Promise<Respons
     );
   const secret = process.env.GOPAY_WEBHOOK_SECRET?.trim();
   if (!secret || process.env.HARDENING_EXTERNAL_PROVIDER_MODE === "disabled") return respond(503);
+  let stage: "authentication" | "lookup" | "provider" | "application" = "authentication";
+  let eventName: string | undefined;
   try {
     const event = parseGoPayWebhook(
       await readGoPayBody(request),
@@ -28,6 +30,7 @@ export async function handleGoPayNotification(request: Request): Promise<Respons
       },
       secret,
     );
+    eventName = event.event;
     if (event.ignored) {
       getLogger().info(
         { provider: "GOPAY", event: event.event, outcome: "acknowledged" },
@@ -36,6 +39,7 @@ export async function handleGoPayNotification(request: Request): Promise<Respons
       return respond(200);
     }
     // Immutable order identity routes independently of the currently selected provider.
+    stage = "lookup";
     const subscription = await prisma.subscriptionInvoice.findUnique({
       where: { providerOrderId: event.payment.orderId },
     });
@@ -71,6 +75,7 @@ export async function handleGoPayNotification(request: Request): Promise<Respons
     )
       return respond(409);
     // A signed webhook is a notification to reconcile, not proof of final payment.
+    stage = "provider";
     const payment = await getGoPayStatus(
       {
         orderId: invoice.providerOrderId!,
@@ -80,16 +85,29 @@ export async function handleGoPayNotification(request: Request): Promise<Respons
       getGoPayCredentials(invoice.merchantId),
     );
     const receipt = goPayReceipt(invoice, payment);
+    stage = "application";
     if (subscription)
       await applySubscriptionReceipt({ invoiceId: invoice.id, receipt, source: "CALLBACK" });
     else await applyWhatsAppReceipt({ invoiceId: invoice.id, receipt, source: "CALLBACK" });
+    getLogger().info(
+      { provider: "GOPAY", event: event.event, isTest: invoice.isTest, outcome: "reconciled" },
+      "payment webhook",
+    );
     return respond(200);
   } catch (error) {
-    // Temporary transport/database failures must be retried by the provider.
-    return respond(
-      error instanceof AppError && error.message !== "billingProviderUnavailable"
-        ? error.status
-        : 503,
+    // A provider read can fail after authenticating a perfectly valid delivery.
+    // Distinguish an upstream outage from a malformed incoming request. GoPay
+    // retries every non-2xx response; neither path acknowledges a payment.
+    const status =
+      stage === "provider" ||
+      !(error instanceof AppError) ||
+      error.message === "billingProviderUnavailable"
+        ? 503
+        : error.status;
+    getLogger().warn(
+      { provider: "GOPAY", event: eventName, stage, status, outcome: "not_acknowledged" },
+      "payment webhook",
     );
+    return respond(status);
   }
 }

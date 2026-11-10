@@ -1,7 +1,7 @@
 import { loadSellerDetails } from "@/server/legal/seller";
 import { sellerFields, type SellerDetails } from "@/content/legal/types";
 
-export const LEGAL_TERMS_VERSION = "2026-11-07-v1";
+export const LEGAL_TERMS_VERSION = "2026-11-10-v1";
 type Environment = Record<string, string | undefined>;
 
 // A real correspondence address may replace the private residential address

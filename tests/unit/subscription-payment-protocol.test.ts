@@ -14,6 +14,12 @@ import {
 import { extendSubscriptionMonth, kgsToMinor, minorToKgs } from "@/server/billing/paymentMath";
 import { resolveOrganizationAccessState } from "@/server/services/planLimits";
 import { syntheticSellerEnvironment, syntheticSeller } from "../helpers/legalSeller";
+import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import {
+  GOPAY_FIXTURE_API_KEY,
+  GOPAY_FIXTURE_API_SECRET,
+  GOPAY_FIXTURE_WEBHOOK_SECRET,
+} from "../helpers/gopayProtocolFixture";
 
 describe("subscription payment protocol and money", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -139,7 +145,11 @@ describe("subscription payment protocol and money", () => {
 
 describe("merchant activation gates", () => {
   const env = {
+    BILLING_PAYMENT_PROVIDER: "gopay",
     BILLING_PAYMENTS_MODE: "sandbox",
+    GOPAY_API_KEY: GOPAY_FIXTURE_API_KEY,
+    GOPAY_API_SECRET: GOPAY_FIXTURE_API_SECRET,
+    GOPAY_WEBHOOK_SECRET: GOPAY_FIXTURE_WEBHOOK_SECRET,
     FREEDOMPAY_MERCHANT_ID: "12345",
     FREEDOMPAY_SECRET_KEY: "synthetic-test-secret",
     BILLING_PUBLIC_URL: "https://bazaar.example",
@@ -161,10 +171,10 @@ describe("merchant activation gates", () => {
         BILLING_LIVE_ACTIVATION_CONFIRMED: "1",
         BILLING_PUBLIC_URL: "https://bazaar.kg",
         BILLING_TERMS_URL: "https://bazaar.kg/legal/offer",
-        BILLING_TERMS_VERSION: "2026-11-07-v1",
+        BILLING_TERMS_VERSION: LEGAL_TERMS_VERSION,
         BILLING_SELLER_NAME: syntheticSeller.legalName!,
         ...syntheticSellerEnvironment,
-        BILLING_LEGAL_RELEASE_APPROVED: "2026-11-07-v1",
+        BILLING_LEGAL_RELEASE_APPROVED: LEGAL_TERMS_VERSION,
         BILLING_SUPPORT_EMAIL_VERIFIED: "1",
         BILLING_PUBLIC_CONTACT_ADDRESS:
           "Кыргызстан, г. Бишкек, синтетический тестовый адрес для корреспонденции 1",

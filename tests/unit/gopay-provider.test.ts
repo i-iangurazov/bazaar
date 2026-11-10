@@ -7,6 +7,8 @@ import {
   getGoPayStatus,
   GOPAY_BODY_LIMIT,
   GOPAY_MAX_AMOUNT_MINOR,
+  GOPAY_ACKNOWLEDGED_EVENTS,
+  GOPAY_PAYMENT_EVENT_STATUSES,
   initializeGoPay,
   parseGoPayWebhook,
   readGoPayBody,
@@ -395,6 +397,7 @@ describe("GoPay typed webhook authentication and receipt validation", () => {
     { data: data({ status: "FAILED" }) },
     { data: data({ status: "CREATED" }) },
     { data: data({ amount: "1750.001" }) },
+    { data: data({ amount: "0.00" }) },
     { data: data({ amount: 1750 }) },
     { data: data({ testing_mode: "false" }) },
     { data: data({ testing_mode: null }) },
@@ -428,21 +431,75 @@ describe("GoPay typed webhook authentication and receipt validation", () => {
     });
   });
 
-  it.each([
-    "test.ping",
-    "invoice.paid",
-    "subscription.activated",
-    "static_qr.state_changed",
-    "payment.future_status",
-  ])("authenticates but ignores unrelated event %s", (name) => {
-    const signed = signedWebhook({ event: name, data: { arbitrary: true } });
-    expect(parseGoPayWebhook(signed.rawBody, signed.headers, webhookSecret)).toEqual({
-      event: name,
-      ignored: true,
+  it.each([...GOPAY_ACKNOWLEDGED_EVENTS, "payment.future_status"])(
+    "authenticates but ignores unrelated event %s",
+    (name) => {
+      const signed = signedWebhook({ event: name, data: { arbitrary: true } });
+      expect(parseGoPayWebhook(signed.rawBody, signed.headers, webhookSecret)).toEqual({
+        event: name,
+        ignored: true,
+      });
+      expect(() => parseGoPayWebhook(signed.rawBody, signed.headers, "wrong-secret")).toThrow(
+        "billingInvalidSignature",
+      );
+    },
+  );
+
+  it("defines only the four payment transitions as access-reconciliation events", () => {
+    expect(GOPAY_PAYMENT_EVENT_STATUSES).toEqual({
+      "payment.committed": "COMMITTED",
+      "payment.failed": "FAILED",
+      "payment.expired": "EXPIRED",
+      "payment.cancelled": "CANCELLED",
     });
-    expect(() => parseGoPayWebhook(signed.rawBody, signed.headers, "wrong-secret")).toThrow(
+    expect(GOPAY_ACKNOWLEDGED_EVENTS).toEqual(
+      expect.arrayContaining([
+        "receipt.sent",
+        "static_qr.state_changed",
+        "subscription.activated",
+        "subscription.paused",
+        "subscription.suspended",
+        "subscription.cancelled",
+        "subscription.completed",
+        "invoice.created",
+        "invoice.paid",
+        "test.ping",
+      ]),
+    );
+  });
+
+  it("retains raw UTF-8 bytes including BOM for authentication instead of silently normalizing them", async () => {
+    const raw = '\uFEFF{"event":"test.ping"}';
+    const decoded = await readGoPayBody(new Response(raw));
+    expect(decoded).toBe(raw);
+    const signed = signedWebhook({ event: "test.ping" });
+    expect(() => parseGoPayWebhook(decoded, signed.headers, webhookSecret)).toThrow(
       "billingInvalidSignature",
     );
+  });
+
+  it("authenticates a raw body split across a multibyte UTF-8 character", async () => {
+    const raw = JSON.stringify({ event: "test.ping", data: { text: "Кыргызча" } });
+    const bytes = new TextEncoder().encode(raw);
+    const split = bytes.findIndex((value) => value >= 0xc0) + 1;
+    const body = new ReadableStream<Uint8Array<ArrayBuffer>>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, split));
+        controller.enqueue(bytes.slice(split));
+        controller.close();
+      },
+    });
+    const decoded = await readGoPayBody({ headers: new Headers(), body });
+    const nonce = "split-unicode-delivery";
+    const signature = createHmac("sha512", webhookSecret)
+      .update(`${nonce}\n${raw}\n`, "utf8")
+      .digest("hex")
+      .toUpperCase();
+    expect(decoded).toBe(raw);
+    expect(parseGoPayWebhook(decoded, { nonce, signature }, webhookSecret)).toEqual({
+      event: "test.ping",
+      ignored: true,
+    });
   });
 
   it("rejects invalid UTF-8 rather than changing the bytes covered by a signature", async () => {

@@ -9,6 +9,27 @@ const API = "https://api.gopay.kg";
 export const GOPAY_BODY_LIMIT = 65_536;
 export const GOPAY_MAX_AMOUNT_MINOR = 99_999_999;
 
+// These four notifications reconcile Bazaar's own immutable payment orders.
+// GoPay's separate invoicing/subscription/fiscal products do not grant access.
+export const GOPAY_PAYMENT_EVENT_STATUSES = Object.freeze({
+  "payment.committed": "COMMITTED",
+  "payment.failed": "FAILED",
+  "payment.expired": "EXPIRED",
+  "payment.cancelled": "CANCELLED",
+} as const);
+export const GOPAY_ACKNOWLEDGED_EVENTS = [
+  "receipt.sent",
+  "static_qr.state_changed",
+  "subscription.activated",
+  "subscription.paused",
+  "subscription.suspended",
+  "subscription.cancelled",
+  "subscription.completed",
+  "invoice.created",
+  "invoice.paid",
+  "test.ping",
+] as const;
+
 export type GoPayCredentials = { apiKey: string; apiSecret: string };
 export type GoPayStatus = "CREATED" | "COMMITTED" | "FAILED" | "EXPIRED" | "CANCELLED";
 export type GoPayReceipt = {
@@ -19,11 +40,7 @@ export type GoPayReceipt = {
   isTest: boolean;
 };
 export type GoPayPayment = GoPayReceipt & { checkoutUrl: string };
-export type GoPayPaymentEvent =
-  | "payment.committed"
-  | "payment.failed"
-  | "payment.expired"
-  | "payment.cancelled";
+export type GoPayPaymentEvent = keyof typeof GOPAY_PAYMENT_EVENT_STATUSES;
 export type GoPayWebhook =
   | { event: GoPayPaymentEvent; payment: GoPayReceipt; createdAt: string; ignored?: never }
   | { event: string; ignored: true; payment?: never; createdAt?: never };
@@ -96,7 +113,7 @@ export const readGoPayBody = async (source: Pick<Request, "headers" | "body">): 
       chunks.push(chunk.value);
     }
     // Reject invalid UTF-8 instead of changing bytes before signature validation.
-    return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(chunks));
   } catch (error) {
     if (error instanceof AppError) throw error;
     return invalidResponse();
@@ -132,6 +149,7 @@ const parseReceipt = (value: unknown): GoPayReceipt => {
     return invalidResponse();
   }
   if (
+    amountMinor <= 0 ||
     amountMinor > GOPAY_MAX_AMOUNT_MINOR ||
     typeof data.status !== "string" ||
     !statuses.has(data.status) ||
@@ -320,13 +338,6 @@ export const cancelGoPayPayment = async (
   return payment;
 };
 
-const eventStatuses: Record<GoPayPaymentEvent, GoPayStatus> = {
-  "payment.committed": "COMMITTED",
-  "payment.failed": "FAILED",
-  "payment.expired": "EXPIRED",
-  "payment.cancelled": "CANCELLED",
-};
-
 export const parseGoPayWebhook = (
   rawBody: string,
   headers: { nonce: string | null; signature: string | null },
@@ -340,12 +351,12 @@ export const parseGoPayWebhook = (
     return invalidResponse();
   // Shared webhook endpoints can receive test.ping and other documented event
   // families. Authenticate and acknowledge them without changing any access.
-  if (!Object.hasOwn(eventStatuses, envelope.event))
+  if (!Object.hasOwn(GOPAY_PAYMENT_EVENT_STATUSES, envelope.event))
     return { event: envelope.event, ignored: true };
   const event = envelope.event as GoPayPaymentEvent;
   const payment = parseReceipt(envelope.data);
   if (
-    payment.status !== eventStatuses[event] ||
+    payment.status !== GOPAY_PAYMENT_EVENT_STATUSES[event] ||
     typeof envelope.created_at !== "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(envelope.created_at) ||
     !Number.isFinite(Date.parse(envelope.created_at))

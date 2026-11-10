@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ru from "../../messages/ru.json";
 import kg from "../../messages/kg.json";
@@ -15,14 +16,22 @@ vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
 vi.mock("next-intl", async (importOriginal) => {
   const { createTranslator } = await importOriginal<typeof import("next-intl")>();
   return {
-  useLocale: () => state.locale,
-  useTranslations: (namespace: string) => {
-    if (!["billing.accessNotice", "billing.trial"].includes(namespace)) throw new Error(namespace);
-    const copy = namespace === "billing.trial" ? { ru, kg, en }[state.locale].billing.trial
-      : { ru, kg, en }[state.locale].billing.accessNotice;
-    return createTranslator({ locale: state.locale, messages: { section: copy }, namespace: "section" });
-  },
-}; });
+    useLocale: () => state.locale,
+    useTranslations: (namespace: string) => {
+      if (!["billing.accessNotice", "billing.trial"].includes(namespace))
+        throw new Error(namespace);
+      const copy =
+        namespace === "billing.trial"
+          ? { ru, kg, en }[state.locale].billing.trial
+          : { ru, kg, en }[state.locale].billing.accessNotice;
+      return createTranslator({
+        locale: state.locale,
+        messages: { section: copy },
+        namespace: "section",
+      });
+    },
+  };
+});
 vi.mock("@/lib/trpc", () => ({ trpc: { billing: { features: { useQuery: state.query } } } }));
 import {
   SubscriptionAccessBanner,
@@ -36,7 +45,11 @@ const modern = {
   subscriptionStatus: "ACTIVE",
   access: { inGrace: true, hasAccess: true, graceEndsAt },
 };
-const renderNotice = (value = modern, canManage = true, showBillingLink = true) => {
+const renderNotice = (
+  value: ComponentProps<typeof SubscriptionAccessNotice>["state"] = modern,
+  canManage = true,
+  showBillingLink = true,
+) => {
   const root = document.createElement("div");
   root.innerHTML = renderToStaticMarkup(
     <SubscriptionAccessNotice
@@ -53,20 +66,51 @@ beforeEach(() => {
   state.query.mockReset();
 });
 describe("non-blocking subscription grace and viewing notices", () => {
-  it.each(["ru", "kg", "en"] as const)("explains the current trial and exact end in %s", (locale) => {
-    state.locale = locale;
-    const value = {
-      ...modern, trialActive: true,
-      trialEndsAt: new Date(Date.now() + 6 * 86_400_000),
-      trialOffer: { days: 7, previewPlan: "BUSINESS" },
-      access: { ...modern.access, inGrace: false, hasAccess: true },
-    };
-    const root = renderNotice(value);
-    expect(root.querySelector('[data-subscription-access-notice="trial"]')).not.toBeNull();
-    expect(root.textContent).toContain(formatDateTime(value.trialEndsAt, locale));
-    expect(root.textContent).not.toMatch(/undefined|\{count|\{date/);
-    expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
-  });
+  it.each(["ru", "kg", "en"] as const)(
+    "distinguishes an unpaid expired trial from a paid grace period in %s",
+    (locale) => {
+      state.locale = locale;
+      const value = {
+        ...modern,
+        trialActive: false,
+        trialEndsAt: new Date(Date.now() - 86_400_000),
+        trialOffer: { days: 7, previewPlan: "ENTERPRISE" },
+        access: { inGrace: false, hasAccess: false, graceEndsAt: null },
+      };
+      const root = renderNotice(value);
+      expect(
+        root.querySelector('[data-subscription-access-notice="trial-expired"]'),
+      ).not.toBeNull();
+      expect(root.textContent).toContain(
+        { ru, kg, en }[locale].billing.accessNotice.trialExpiredTitle,
+      );
+      expect(root.textContent).toContain(
+        { ru, kg, en }[locale].billing.accessNotice.trialExpiredDescription,
+      );
+      expect(root.textContent).not.toContain(
+        { ru, kg, en }[locale].billing.accessNotice.graceTitle,
+      );
+      expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
+    },
+  );
+  it.each(["ru", "kg", "en"] as const)(
+    "explains the current trial and exact end in %s",
+    (locale) => {
+      state.locale = locale;
+      const value = {
+        ...modern,
+        trialActive: true,
+        trialEndsAt: new Date(Date.now() + 6 * 86_400_000),
+        trialOffer: { days: 7, previewPlan: "BUSINESS" },
+        access: { ...modern.access, inGrace: false, hasAccess: true },
+      };
+      const root = renderNotice(value);
+      expect(root.querySelector('[data-subscription-access-notice="trial"]')).not.toBeNull();
+      expect(root.textContent).toContain(formatDateTime(value.trialEndsAt, locale));
+      expect(root.textContent).not.toMatch(/undefined|\{count|\{date/);
+      expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
+    },
+  );
   it.each(["ru", "kg", "en"] as const)(
     "renders a concrete grace deadline and billing link in %s",
     (locale) => {

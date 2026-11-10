@@ -615,6 +615,7 @@ model Organization {
   subscriptionPeriods           SubscriptionPeriod[]
   subscriptionContract          SubscriptionContract?
   subscriptionReminders         SubscriptionReminder[]
+  subscriptionPaymentNotifications SubscriptionPaymentNotification[]
   subscriptionUsageBuckets      SubscriptionUsageBucket[]
   subscriptionUsageReservations SubscriptionUsageReservation[]
   initialProductImportSession   InitialProductImportSession?
@@ -721,6 +722,7 @@ model SubscriptionInvoice {
   organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   events            SubscriptionPaymentEvent[]
   period            SubscriptionPeriod?
+  notifications     SubscriptionPaymentNotification[]
 
   @@unique([organizationId, idempotencyKey])
   @@unique([id, organizationId])
@@ -788,6 +790,44 @@ model SubscriptionReminder {
   owner             User         @relation(fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([organizationId, ownerId, source, accessEndsAt, kind], map: "SubscriptionReminder_org_owner_phase_key")
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseExpiresAt])
+}
+
+model SubscriptionPaymentNotification {
+  id                  String       @id @default(cuid())
+  organizationId      String
+  invoiceId           String
+  ownerId             String
+  kind                String       @db.VarChar(24)
+  operationKey        String       @unique @db.VarChar(191)
+  recipientEmail      String
+  recipientLocale     String       @db.VarChar(8)
+  senderEmail         String
+  subject             String
+  text                String       @db.Text
+  html                String       @db.Text
+  status              String       @default("QUEUED") @db.VarChar(16)
+  attemptCount        Int          @default(0)
+  firstAttemptAt      DateTime?
+  lastAttemptAt       DateTime?
+  nextAttemptAt       DateTime     @default(now())
+  leaseToken          String?      @db.VarChar(64)
+  leaseExpiresAt      DateTime?
+  providerMessageId   String?      @unique
+  acceptedAt          DateTime?
+  deliveryStatus      String       @default("QUEUED") @db.VarChar(16)
+  deliveryEventAt     DateTime?
+  deliveryEventKey    String?      @db.VarChar(256)
+  deliveredAt         DateTime?
+  lastIssue           String?      @db.VarChar(128)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  invoice             SubscriptionInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: NoAction, map: "SubscriptionPaymentNotification_invoice_org_fkey")
+  owner               User         @relation(fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([invoiceId, ownerId])
   @@index([status, nextAttemptAt])
   @@index([status, leaseExpiresAt])
 }
@@ -872,6 +912,7 @@ model User {
   mobileDevices                 MobileDevice[]
   initialProductImportSessions  InitialProductImportSession[]
   subscriptionReminders         SubscriptionReminder[]
+  subscriptionPaymentNotifications SubscriptionPaymentNotification[]
 
   @@index([organizationId, isActive])
 }

@@ -28,6 +28,7 @@ import {
 import { whatsappSearch } from "@/server/whatsapp/catalog";
 import { applyWhatsAppPayment, createWhatsAppCheckout } from "@/server/whatsapp/payments";
 import { handleFreedomPayNotification } from "@/server/billing/paymentWebhook";
+import { handleGoPayNotification } from "@/server/billing/goPayWebhook";
 import { signFreedomPay } from "@/server/billing/freedomPay";
 import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
 import * as transport from "@/server/whatsapp/gupshup";
@@ -35,6 +36,12 @@ import * as assistant from "@/server/whatsapp/assistant";
 import * as quota from "@/server/whatsapp/quota";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import {
+  GOPAY_FIXTURE_API_KEY,
+  GOPAY_FIXTURE_API_SECRET,
+  GOPAY_FIXTURE_WEBHOOK_SECRET,
+  goPayProtocolFixture,
+} from "../helpers/gopayProtocolFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const secret = "synthetic-whatsapp-payment-secret",
@@ -85,7 +92,9 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
         configVersion: connection.configVersion,
       },
     });
-  const invoice = () =>
+  // Persisted historical pack invoices exercise legacy capture/refund and
+  // reservation accounting; new purchases below use only GoPay's wire protocol.
+  const historicalInvoice = () =>
     prisma.whatsAppInvoice.create({
       data: {
         id: `wa_${randomUUID().replaceAll("-", "")}`,
@@ -94,6 +103,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
         idempotencyKey: randomUUID(),
         quantity: 1,
         amountMinor: 349000,
+        provider: "FREEDOMPAY",
         offerVersion: WHATSAPP_OFFER_VERSION,
         merchantId: "90001",
         isTest: true,
@@ -137,6 +147,10 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
       WHATSAPP_PUBLIC_URL: "https://bazaar.kg",
       HARDENING_EXTERNAL_PROVIDER_MODE: "sandbox",
       BILLING_PAYMENTS_MODE: "sandbox",
+      BILLING_PAYMENT_PROVIDER: "gopay",
+      GOPAY_API_KEY: GOPAY_FIXTURE_API_KEY,
+      GOPAY_API_SECRET: GOPAY_FIXTURE_API_SECRET,
+      GOPAY_WEBHOOK_SECRET: GOPAY_FIXTURE_WEBHOOK_SECRET,
       FREEDOMPAY_MERCHANT_ID: "90001",
       FREEDOMPAY_SECRET_KEY: secret,
       BILLING_PUBLIC_URL: "http://localhost:3120",
@@ -284,7 +298,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     });
   });
   it("spends included credits first and then non-expired paid lots", async () => {
-    const bill = await invoice();
+    const bill = await historicalInvoice();
     await applyWhatsAppPayment({ invoiceId: bill.id, fields: fields(bill.id), source: "CALLBACK" });
     const m1 = await outgoing();
     const use1 = await reserveWhatsAppUnit(f.org.id, m1.id);
@@ -841,34 +855,30 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     ).toMatchObject({ mode: "AI" });
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
-  it("creates a real signed checkout once and preserves a fast paid callback", async () => {
+  it("creates a signed GoPay checkout once and preserves a fast verified paid callback", async () => {
+    vi.stubEnv("BILLING_PUBLIC_URL", "https://bazaar.kg");
     await prisma.whatsAppWorkerState.create({
       data: { id: "worker", state: "READY", dailyPeriod: whatsappPeriod().key },
     });
-    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
-      expect(url).toBe("https://api.freedompay.kg/init_payment.php");
-      const p = Object.fromEntries(new URLSearchParams(init.body as URLSearchParams));
-      expect(p.pg_currency).toBe("KGS");
-      expect(p.pg_amount).toBe("3490.00");
-      expect(p.pg_description).toContain("1000");
-      expect(p.pg_success_url).toContain("/operations/integrations/whatsapp-ai?invoice=wa_");
-      await applyWhatsAppPayment({
-        invoiceId: p.pg_order_id,
-        fields: fields(p.pg_order_id),
-        source: "CALLBACK",
-      });
-      const response = {
-        pg_status: "ok",
-        pg_payment_id: "12345",
-        pg_redirect_url: "https://api.freedompay.kg/pay",
-        pg_salt: "fixture",
-      };
-      const signed = { ...response, pg_sig: signFreedomPay("init_payment.php", response, secret) };
-      return new Response(
-        `<response>${Object.entries(signed)
-          .map(([k, v]) => `<${k}>${v}</${k}>`)
-          .join("")}</response>`,
-      );
+    const fixture = goPayProtocolFixture();
+    const checkoutBodies: Record<string, string>[] = [];
+    const callbackStatuses: number[] = [];
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const response = await fixture.transport(input, init);
+      if (url.pathname === "/v1/payments") {
+        const body = JSON.parse(String(init?.body)) as Record<string, string>;
+        checkoutBodies.push(body);
+        const invoice = await prisma.whatsAppInvoice.findUniqueOrThrow({
+          where: { providerOrderId: body.order_id },
+        });
+        expect(invoice).toMatchObject({ provider: "GOPAY", currency: "KGS", isTest: true });
+        const payment = fixture.payments.get(body.order_id)!;
+        callbackStatuses.push(
+          (await handleGoPayNotification(fixture.notification(fixture.commit(payment)))).status,
+        );
+      }
+      return response;
     });
     vi.stubGlobal("fetch", fetcher);
     const input = {
@@ -882,13 +892,24 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     };
     const first = await createWhatsAppCheckout(actor(), f.store.id, input, "test");
     const second = await createWhatsAppCheckout(actor(), f.store.id, input, "test");
+    expect(checkoutBodies).toHaveLength(1);
+    expect(checkoutBodies[0]).toMatchObject({
+      amount: "3490.00",
+      success_url: `https://bazaar.kg/operations/integrations/whatsapp-ai?storeId=${encodeURIComponent(f.store.id)}`,
+    });
+    expect(checkoutBodies[0].description).toContain("1000");
+    expect(checkoutBodies[0]).not.toHaveProperty("buyer");
+    expect(callbackStatuses).toEqual([200]);
     expect(first.status).toBe("PAID");
     expect(second.id).toBe(first.id);
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    // Initialization plus the callback's authoritative status read; the retry
+    // creates neither another payment nor another credit lot.
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fixture.payments.size).toBe(1);
     expect(await prisma.whatsAppCreditLot.count()).toBe(1);
   });
-  it("grants one paid pack under concurrent valid callbacks and leaves subscriptions untouched", async () => {
-    const bill = await invoice(),
+  it("historical FreedomPay: grants one pack under concurrent callbacks and leaves subscriptions untouched", async () => {
+    const bill = await historicalInvoice(),
       before = await prisma.organization.findUnique({ where: { id: f.org.id } });
     await Promise.all(
       [1, 2, 3].map(() =>
@@ -900,8 +921,8 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     expect(await prisma.organization.findUnique({ where: { id: f.org.id } })).toEqual(before);
     expect(await prisma.subscriptionPeriod.count()).toBe(0);
   });
-  it("routes a signed pack callback through the existing FreedomPay endpoint", async () => {
-    const bill = await invoice();
+  it("historical FreedomPay: routes a signed existing pack through the retained endpoint", async () => {
+    const bill = await historicalInvoice();
     const response = await handleFreedomPayNotification(
       new Request("http://localhost/api/billing/freedompay/result", {
         method: "POST",
@@ -917,8 +938,8 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     ["pg_amount", "34.90"],
     ["pg_testing_mode", "0"],
     ["pg_merchant_id", "90002"],
-  ])("rejects a signed but mismatched payment %s=%s", async (key, value) => {
-    const bill = await invoice();
+  ])("historical FreedomPay: rejects a signed mismatched payment %s=%s", async (key, value) => {
+    const bill = await historicalInvoice();
     await expect(
       applyWhatsAppPayment({
         invoiceId: bill.id,
@@ -928,8 +949,8 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     ).rejects.toThrow("billingPaymentMismatch");
     expect(await prisma.whatsAppCreditLot.count()).toBe(0);
   });
-  it("does not grant an uncaptured authorization and revokes unused credit after a refund", async () => {
-    const bill = await invoice();
+  it("historical FreedomPay: waits for capture and revokes unused credit after refund", async () => {
+    const bill = await historicalInvoice();
     await applyWhatsAppPayment({
       invoiceId: bill.id,
       fields: fields(bill.id, { pg_captured: "0" }),
@@ -950,7 +971,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     });
   });
   it("cancels a prepared paid reservation after refund without releasing an older uncertain send", async () => {
-    const bill = await invoice();
+    const bill = await historicalInvoice();
     await applyWhatsAppPayment({ invoiceId: bill.id, fields: fields(bill.id), source: "CALLBACK" });
     await prisma.whatsAppMonth.create({
       data: { organizationId: f.org.id, period: whatsappPeriod().key, includedUsed: 1000 },
@@ -1001,7 +1022,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     expect((await whatsappQuota(f.org.id)).paidRemaining).toBe(0);
   });
   it("rechecks a paid reservation when refund commits between reservation and the send claim", async () => {
-    const bill = await invoice();
+    const bill = await historicalInvoice();
     await applyWhatsAppPayment({ invoiceId: bill.id, fields: fields(bill.id), source: "CALLBACK" });
     await prisma.whatsAppMonth.create({
       data: { organizationId: f.org.id, period: whatsappPeriod().key, includedUsed: 1000 },
@@ -1034,7 +1055,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
   it.each([false, true])(
     "keeps a refunded in-flight reservation and accounts duplicate late delivery once (unknown=%s)",
     async (unknown) => {
-      const bill = await invoice();
+      const bill = await historicalInvoice();
       await applyWhatsAppPayment({
         invoiceId: bill.id,
         fields: fields(bill.id),

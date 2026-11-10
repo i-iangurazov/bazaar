@@ -21,8 +21,10 @@ const live = {
   ...approved,
   BILLING_PAYMENTS_MODE: "live",
   BILLING_LIVE_ACTIVATION_CONFIRMED: "1",
-  FREEDOMPAY_MERCHANT_ID: "12345",
-  FREEDOMPAY_SECRET_KEY: "synthetic-test-only-merchant-secret",
+  BILLING_PAYMENT_PROVIDER: "gopay",
+  GOPAY_API_KEY: "synthetic-test-only-gopay-api-key",
+  GOPAY_API_SECRET: "synthetic-test-only-gopay-api-secret",
+  GOPAY_WEBHOOK_SECRET: "synthetic-test-only-gopay-webhook-secret",
   BILLING_PUBLIC_URL: "https://bazaar.kg",
   BILLING_TERMS_URL: "https://bazaar.kg/legal/offer",
   BILLING_TERMS_VERSION: LEGAL_TERMS_VERSION,
@@ -144,7 +146,9 @@ describe("deliberate legal publication and residential-address privacy", () => {
         ).toContain(approved.BILLING_PUBLIC_CONTACT_ADDRESS);
         if (documentId === "payment") {
           expect(root.textContent).toContain(copy.paymentSystemsNotice);
-          expect(root.querySelector('img[alt="Visa"], img[alt="Mastercard"], img[alt="Элкарт"]')).toBeNull();
+          expect(
+            root.querySelector('img[alt="Visa"], img[alt="Mastercard"], img[alt="Элкарт"]'),
+          ).toBeNull();
         }
         if (documentId === "requisites") {
           expect(root.textContent).toContain("GoPay");
@@ -182,7 +186,8 @@ describe("live checkout must bind to the real published offer", () => {
     },
     { VERCEL_ENV: "preview" },
     { VERCEL_ENV: "development" },
-    { FREEDOMPAY_SECRET_KEY: "short" },
+    { GOPAY_API_SECRET: "short" },
+    { GOPAY_WEBHOOK_SECRET: "" },
     { HARDENING_EXTERNAL_PROVIDER_MODE: "disabled" },
   ])("keeps live checkout disabled for incomplete or mismatched release %j", (change) => {
     expect(getSubscriptionPaymentConfig({ ...live, ...change }).ready).toBe(false);

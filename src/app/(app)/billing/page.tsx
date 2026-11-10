@@ -47,6 +47,7 @@ const BillingPage = () => {
   const isForbidden = status === "authenticated" && !isAdmin;
   const [requestedPlan, setRequestedPlan] = useState<PlanTier | null>(null);
   const [requestMessage, setRequestMessage] = useState("");
+  const [checkoutPlan, setCheckoutPlan] = useState<PlanCode | null>(null);
 
   const billingQuery = trpc.billing.get.useQuery(undefined, {
     enabled: isAdmin,
@@ -153,9 +154,11 @@ const BillingPage = () => {
               <CardTitle>{t("planTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={planBadgeVariant[billingQuery.data.planTier]}>
-                  {billingQuery.data.trialOffer ? t("plans.trial") : t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
+                  {billingQuery.data.trialOffer
+                    ? t("plans.trial")
+                    : t(`plans.${billingQuery.data.planTier.toLowerCase()}.name`)}
                 </Badge>
                 <Badge
                   variant={billingQuery.data.subscriptionStatus === "ACTIVE" ? "muted" : "danger"}
@@ -188,6 +191,30 @@ const BillingPage = () => {
                 <p className="text-sm text-success">{t("subscriptionActive")}</p>
               ) : null}
               {billingQuery.data.trialOffer ? <p>{t("trial.scope")}</p> : null}
+              <details className="pt-2" data-current-subscription-features>
+                <summary className="cursor-pointer font-medium text-foreground">
+                  {t("includesTitle")}
+                </summary>
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {featureOrder
+                    .filter((feature) => billingQuery.data?.featureFlags[feature])
+                    .map((feature) => (
+                      <li key={feature} className="flex items-start gap-2">
+                        <CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+                        <span>{t(`features.${feature}`)}</span>
+                      </li>
+                    ))}
+                </ul>
+              </details>
+              {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
+              !billingQuery.data.lifetimeAccess &&
+              billingQuery.data.subscriptionStatus !== "CANCELED" ? (
+                <div className="pt-2">
+                  <Button asChild>
+                    <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
+                  </Button>
+                </div>
+              ) : null}
               {pendingRequest ? (
                 <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-foreground">
                   <p className="font-semibold">{t("pendingRequestTitle")}</p>
@@ -202,10 +229,14 @@ const BillingPage = () => {
             </CardContent>
           </Card>
 
-          <SubscriptionPayments onUpdated={() => void billingQuery.refetch()} />
-          <SubscriptionUsage />
+          <SubscriptionPayments
+            onUpdated={() => void billingQuery.refetch()}
+            selectedPlan={checkoutPlan}
+            onPlanSelected={setCheckoutPlan}
+          />
+          <SubscriptionUsage trial={Boolean(billingQuery.data.trialOffer)} />
 
-          <Card className="lg:col-span-2" id="plans">
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>{t("usageTitle")}</CardTitle>
             </CardHeader>
@@ -230,15 +261,17 @@ const BillingPage = () => {
               </p>
               <div>
                 <p>
-                  {billingQuery.data.trialOffer ? t("trial.free") : t("planPricePrimary", {
-                    amount: formatNumber(billingQuery.data.monthlyPriceKgs),
-                  })}
+                  {billingQuery.data.trialOffer
+                    ? t("trial.free")
+                    : t("planPricePrimary", {
+                        amount: formatNumber(billingQuery.data.monthlyPriceKgs),
+                      })}
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2">
+          <Card className="scroll-mt-24 lg:col-span-2" id="plans">
             <CardHeader>
               <CardTitle>{t("plansCatalogTitle")}</CardTitle>
             </CardHeader>
@@ -248,11 +281,16 @@ const BillingPage = () => {
                 const isCurrent = tier === currentPlan;
                 const canRequestUpgrade =
                   billingQuery.data?.subscriptionBillingMode === "MANUAL" &&
-                  !billingQuery.data?.lifetimeAccess && Boolean(currentPlan) &&
+                  !billingQuery.data?.lifetimeAccess &&
+                  Boolean(currentPlan) &&
                   getPlanRank(tier) > getPlanRank(currentPlan as PlanTier);
                 const hasPendingRequest = Boolean(pendingRequest);
                 const requestedThisPlan =
                   pendingRequest && pendingRequest.requestedPlan === planItem.plan;
+                const canSelectPayment =
+                  billingQuery.data?.subscriptionBillingMode === "SELF_SERVE" &&
+                  !billingQuery.data.lifetimeAccess &&
+                  billingQuery.data.subscriptionStatus !== "CANCELED";
 
                 return (
                   <Card key={planItem.planTier} className="h-full border">
@@ -286,7 +324,9 @@ const BillingPage = () => {
                         {billingQuery.data?.billingCatalogVersion === CURRENT_CATALOG_VERSION ? (
                           <p className="text-xs text-primary" data-store-expansion>
                             {ADDITIONAL_STORE_CAPS[tier] > 0
-                              ? t("publicPricing.expandStores", { count: planItem.limits.maxStores + ADDITIONAL_STORE_CAPS[tier] })
+                              ? t("publicPricing.expandStores", {
+                                  count: planItem.limits.maxStores + ADDITIONAL_STORE_CAPS[tier],
+                                })
                               : t("publicPricing.singleStore")}
                           </p>
                         ) : null}
@@ -328,7 +368,19 @@ const BillingPage = () => {
                           })}
                         </ul>
                       </div>
-                      {!isCurrent ? (
+                      {canSelectPayment ? (
+                        <Button
+                          asChild
+                          variant={isCurrent ? "secondary" : "default"}
+                          className="w-full"
+                        >
+                          <a href="#subscription-checkout" onClick={() => setCheckoutPlan(tier)}>
+                            {t("payments.choosePlan")}
+                          </a>
+                        </Button>
+                      ) : !isCurrent &&
+                        billingQuery.data?.subscriptionBillingMode === "MANUAL" &&
+                        !billingQuery.data.lifetimeAccess ? (
                         <Button
                           type="button"
                           className="w-full"
@@ -379,10 +431,14 @@ const BillingPage = () => {
                       );
                     })}
                   </TableRow>
-                  {billingQuery.data.billingCatalogVersion === CURRENT_CATALOG_VERSION ? <TableRow>
-                    <TableCell>{t("publicPricing.maxStores")}</TableCell>
-                    {planOrder.map(plan => <TableCell key={plan}>{1 + ADDITIONAL_STORE_CAPS[plan]}</TableCell>)}
-                  </TableRow> : null}
+                  {billingQuery.data.billingCatalogVersion === CURRENT_CATALOG_VERSION ? (
+                    <TableRow>
+                      <TableCell>{t("publicPricing.maxStores")}</TableCell>
+                      {planOrder.map((plan) => (
+                        <TableCell key={plan}>{1 + ADDITIONAL_STORE_CAPS[plan]}</TableCell>
+                      ))}
+                    </TableRow>
+                  ) : null}
                   <TableRow>
                     <TableCell>{t("comparison.rows.products")}</TableCell>
                     {planOrder.map((plan) => {
@@ -440,25 +496,46 @@ const BillingPage = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-billing-upgrade-cta>
             <CardHeader>
               <CardTitle>{t("ctaTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>{t("ctaHint")}</p>
+              <p>
+                {billingQuery.data.lifetimeAccess
+                  ? t("payments.lifetimeAccess")
+                  : billingQuery.data.subscriptionBillingMode === "SELF_SERVE"
+                    ? t(
+                        billingQuery.data.subscriptionStatus === "CANCELED"
+                          ? "payments.accountPaused"
+                          : "payments.configureExtrasHint",
+                      )
+                    : t("ctaHint")}
+              </p>
               <div className="flex flex-wrap gap-2">
                 <Button asChild type="button" variant="secondary">
                   <a href={t("ctaWhatsappLink")} target="_blank" rel="noreferrer">
                     {t("ctaWhatsapp")}
                   </a>
                 </Button>
-                <Button
-                  type="button"
-                  disabled={!currentPlan || currentPlan === "ENTERPRISE" || Boolean(pendingRequest)}
-                  onClick={() => setRequestedPlan("ENTERPRISE")}
-                >
-                  {t("requestUpgrade")}
-                </Button>
+                {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
+                !billingQuery.data.lifetimeAccess &&
+                billingQuery.data.subscriptionStatus !== "CANCELED" ? (
+                  <Button asChild>
+                    <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
+                  </Button>
+                ) : billingQuery.data.subscriptionBillingMode === "MANUAL" &&
+                  !billingQuery.data.lifetimeAccess ? (
+                  <Button
+                    type="button"
+                    disabled={
+                      !currentPlan || currentPlan === "ENTERPRISE" || Boolean(pendingRequest)
+                    }
+                    onClick={() => setRequestedPlan("ENTERPRISE")}
+                  >
+                    {t("requestUpgrade")}
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </Card>

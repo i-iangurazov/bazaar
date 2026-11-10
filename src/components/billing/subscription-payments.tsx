@@ -11,11 +11,23 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ADDITIONAL_STORE_CAPS, CURRENT_CATALOG_VERSION, EMPTY_SUBSCRIPTION_EXTRAS, type SubscriptionExtras, type SubscriptionMonths } from "@/lib/billing/subscriptionPricing";
+import { IconButton } from "@/components/ui/icon-button";
+import { RestoreIcon } from "@/components/icons";
+import {
+  ADDITIONAL_STORE_CAPS,
+  CURRENT_CATALOG_VERSION,
+  EMPTY_SUBSCRIPTION_EXTRAS,
+  type SubscriptionExtras,
+  type SubscriptionMonths,
+} from "@/lib/billing/subscriptionPricing";
 import { QueryErrorState } from "@/components/query-error-state";
 import { SubscriptionPreparationNotice } from "@/components/billing/subscription-preparation-notice";
 import { TrialPreparation } from "@/components/billing/trial-preparation";
 import { SubscriptionAddons } from "@/components/billing/subscription-addons";
+import {
+  SubscriptionQuoteSummary,
+  type SubscriptionQuote,
+} from "@/components/billing/subscription-quote-summary";
 import {
   Select,
   SelectContent,
@@ -24,7 +36,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
+export function SubscriptionPayments({
+  onUpdated,
+  selectedPlan,
+  onPlanSelected,
+}: {
+  onUpdated: () => void;
+  selectedPlan?: PlanCode | null;
+  onPlanSelected?: (plan: PlanCode) => void;
+}) {
   const t = useTranslations("billing.payments");
   const billing = useTranslations("billing");
   const plans = useTranslations("billing.plans");
@@ -56,11 +76,16 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
     sellerName: string;
     provider: "GOPAY" | "FREEDOMPAY";
     isTest: boolean;
+    quote: SubscriptionQuote;
   } | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [notice, setNotice] = useState("");
+  const [staleConsent, setStaleConsent] = useState(false);
   const requestKey = useRef("");
   const returnChecked = useRef(false);
+  const checkoutInFlight = useRef(false);
+  const checking = useRef(false);
+  const checkSource = useRef<"manual" | "return" | "poll">("manual");
   const refresh = () => {
     void settings.refetch();
     void history.refetch();
@@ -68,6 +93,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
   };
   const checkout = trpc.billing.payments.checkout.useMutation({
     onSuccess: (invoice) => {
+      checkoutInFlight.current = false;
       requestKey.current = "";
       setConfirmOpen(false);
       setAccepted(false);
@@ -75,16 +101,36 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
       refresh();
       if (invoice.status === "PENDING" && invoice.checkoutUrl)
         window.location.assign(invoice.checkoutUrl);
-      else setNotice(t(invoice.status === "FAILED" ? "creationFailed" : "pendingHint"));
+      else
+        setNotice(
+          t(
+            invoice.status === "PAID"
+              ? invoice.isTest
+                ? "testConfirmed"
+                : "confirmed"
+              : invoice.status === "FAILED"
+                ? "creationFailed"
+                : "pendingHint",
+          ),
+        );
     },
     onError: (error) => {
+      checkoutInFlight.current = false;
+      setStaleConsent(error.message === "billingQuoteChanged");
       setNotice(translateError(errors, error));
       refresh();
     },
   });
   const check = trpc.billing.payments.check.useMutation({
     onSuccess: (invoice) => {
+      checking.current = false;
       refresh();
+      if (
+        checkSource.current === "poll" &&
+        !invoice.syncDelayed &&
+        ["CREATING", "PENDING"].includes(invoice.status)
+      )
+        return;
       setNotice(
         t(
           invoice.syncDelayed
@@ -95,16 +141,31 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 : "confirmed"
               : invoice.status === "REVIEW"
                 ? "reviewHint"
-                : "checked",
+                : invoice.status === "FAILED"
+                  ? "paymentFailed"
+                  : invoice.status === "EXPIRED"
+                    ? "paymentExpired"
+                    : invoice.status === "CREATING"
+                      ? "creatingHint"
+                      : invoice.status === "PENDING"
+                        ? "pendingHint"
+                        : "checked",
         ),
       );
     },
-    onError: (error) => setNotice(translateError(errors, error)),
+    onError: (error) => {
+      checking.current = false;
+      setNotice(translateError(errors, error));
+    },
   });
-  const checkRef = useRef(check.mutate);
-  const checking = useRef(check.isLoading);
-  checkRef.current = check.mutate;
-  checking.current = check.isLoading;
+  const checkInvoice = (invoiceId: string, source: "manual" | "return" | "poll") => {
+    if (checking.current) return;
+    checking.current = true;
+    checkSource.current = source;
+    check.mutate({ invoiceId });
+  };
+  const checkRef = useRef(checkInvoice);
+  checkRef.current = checkInvoice;
   const pending = settings.data?.pendingInvoice;
   const pendingId = pending?.id;
   const pendingStatus = pending?.status;
@@ -112,18 +173,41 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
     if (!settings.data || returnChecked.current) return;
     const id = new URL(window.location.href).searchParams.get("invoice");
     returnChecked.current = true;
-    if (id && /^[a-zA-Z0-9_-]{1,50}$/.test(id)) checkRef.current({ invoiceId: id });
-  }, [settings.data]);
+    if (id && /^[a-zA-Z0-9_-]{1,50}$/.test(id)) {
+      setNotice(t("returnHint"));
+      checkRef.current(id, "return");
+    }
+  }, [settings.data, t]);
+  useEffect(() => {
+    if (!pendingId) return;
+    setConfirmOpen(false);
+    setAccepted(false);
+  }, [pendingId]);
   useEffect(() => {
     if (!pendingId || !["CREATING", "PENDING"].includes(pendingStatus ?? "")) return;
-    const timer = window.setInterval(() => {
-      if (!document.hidden && !checking.current) checkRef.current({ invoiceId: pendingId });
-    }, 20_000);
-    return () => window.clearInterval(timer);
+    const resume = () => {
+      if (!document.hidden) checkRef.current(pendingId, "poll");
+    };
+    const timer = window.setInterval(resume, 20_000);
+    window.addEventListener("online", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("online", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("pageshow", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
   }, [pendingId, pendingStatus]);
-  const plan = selected ?? toPlanCode(settings.data?.currentPlan ?? "STARTER");
-  const selectedExtras = extras ?? settings.data?.currentExtras ?? EMPTY_SUBSCRIPTION_EXTRAS;
-  const selectedMonths = action === "CHANGE" ? settings.data?.currentMonths ?? 1 : months;
+  const plan = selectedPlan ?? selected ?? toPlanCode(settings.data?.currentPlan ?? "STARTER");
+  const configuredExtras = extras ?? settings.data?.currentExtras ?? EMPTY_SUBSCRIPTION_EXTRAS;
+  const selectedExtras = {
+    ...configuredExtras,
+    stores: Math.min(configuredExtras.stores, ADDITIONAL_STORE_CAPS[plan]),
+  };
+  const selectedMonths = action === "CHANGE" ? (settings.data?.currentMonths ?? 1) : months;
   const quote = trpc.billing.payments.quote.useQuery(
     { plan, months: selectedMonths, extras: selectedExtras, action },
     { enabled: Boolean(settings.data?.canPurchase), retry: false, staleTime: 30_000 },
@@ -131,13 +215,14 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
   const amount = quote.data?.amountMinor ?? 0;
   const money = (minor: number) => formatCurrencyKGS(minor / 100, locale);
   const name = (code: string) => plans(`${toPlanCode(code).toLowerCase()}.name`);
-  const providerName = (provider: string | undefined) => provider === "GOPAY" ? "GoPay" : "FreedomPay";
+  const providerName = (provider: string | undefined) =>
+    provider === "GOPAY" ? "GoPay" : "FreedomPay";
   const invoiceStatus = (status: string, isTest: boolean) =>
     t(isTest && status === "PAID" ? "testPaid" : `statuses.${status}`);
   const records = history.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <Card data-subscription-payments>
+    <Card data-subscription-payments id="subscription-checkout" className="scroll-mt-24">
       <CardHeader>
         <CardTitle>{t("title")}</CardTitle>
       </CardHeader>
@@ -159,7 +244,9 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
               </p>
             ) : null}
             {settings.data.lifetimeAccess || settings.data.billingMode === "MANUAL" ? (
-              <p className="text-sm text-muted-foreground">{t(settings.data.lifetimeAccess ? "lifetimeAccess" : "manualAccess")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t(settings.data.lifetimeAccess ? "lifetimeAccess" : "manualAccess")}
+              </p>
             ) : settings.data.accountPaused ? (
               <p className="text-sm text-muted-foreground">{t("accountPaused")}</p>
             ) : !settings.data.available ? (
@@ -170,13 +257,39 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 {t("legacyExtras")}
               </p>
             ) : null}
+            {settings.data.scheduledSubscription ? (
+              <div
+                className="space-y-2 rounded-md border border-input p-4"
+                data-scheduled-subscription
+              >
+                <h3 className="text-sm font-semibold">{t("scheduledTitle")}</h3>
+                <p className="text-sm">
+                  {t("scheduledDescription", {
+                    plan: name(settings.data.scheduledSubscription.plan),
+                    start: formatDateTime(settings.data.scheduledSubscription.startsAt, locale),
+                    end: formatDateTime(settings.data.scheduledSubscription.endsAt, locale),
+                  })}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t("limitsSummary", {
+                    stores: settings.data.scheduledSubscription.entitlements.limits.maxStores,
+                    products: settings.data.scheduledSubscription.entitlements.limits.maxProducts,
+                    users: settings.data.scheduledSubscription.entitlements.limits.maxActiveUsers,
+                  })}
+                </p>
+              </div>
+            ) : null}
             <SubscriptionAddons t={billing} locale={locale} />
             {!settings.data.canPurchase && !settings.data.lifetimeAccess && !pending ? (
               <Button asChild variant="secondary">
-                <a href="https://wa.me/996709911300" target="_blank" rel="noreferrer">{t("support")}</a>
+                <a href="https://wa.me/996709911300" target="_blank" rel="noreferrer">
+                  {t("support")}
+                </a>
               </Button>
             ) : null}
-            {settings.data.canPurchase ? <p className="text-sm text-muted-foreground">{t("configureExtrasHint")}</p> : null}
+            {settings.data.canPurchase ? (
+              <p className="text-sm text-muted-foreground">{t("configureExtrasHint")}</p>
+            ) : null}
             {pending ? (
               <div className="space-y-3 rounded-md border border-input p-4" data-pending-invoice>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -193,14 +306,44 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 <p className="text-xs text-muted-foreground">
                   {t("providerDescription", { provider: providerName(pending.provider) })}
                 </p>
+                {pending.purchase ? (
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <p>{t(`term${pending.purchase.months}`)}</p>
+                    <p>
+                      {t("renewDates", {
+                        start: formatDateTime(pending.purchase.startsAt, locale),
+                        end: formatDateTime(pending.purchase.endsAt, locale),
+                      })}
+                    </p>
+                    <p>
+                      {t("extrasSummary", {
+                        stores: pending.purchase.extras.stores,
+                        products: pending.purchase.extras.productPacks * 1000,
+                        users:
+                          pending.purchase.catalogVersion === CURRENT_CATALOG_VERSION
+                            ? pending.purchase.extras.productPacks * 2
+                            : pending.purchase.extras.userPacks * 5,
+                      })}
+                    </p>
+                  </div>
+                ) : null}
                 <p className="text-sm text-muted-foreground">
-                  {t(pending.status === "REVIEW" ? "reviewHint"
-                    : pending.status === "CREATING" ? "creatingHint"
-                      : pending.checkoutUrl ? "pendingHint" : "linkUnavailable")}
+                  {t(
+                    pending.status === "REVIEW"
+                      ? "reviewHint"
+                      : pending.status === "CREATING"
+                        ? "creatingHint"
+                        : pending.checkoutUrl
+                          ? "pendingHint"
+                          : "linkUnavailable",
+                  )}
                 </p>
-                {pending.checkoutUrl ? <p className="text-xs text-muted-foreground">
-                  {t("expiresAt", { date: formatDateTime(pending.expiresAt, locale) })}
-                </p> : null}
+                <p className="text-xs text-muted-foreground">{t("checkOnReturn")}</p>
+                {pending.checkoutUrl ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t("expiresAt", { date: formatDateTime(pending.expiresAt, locale) })}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   {pending.checkoutUrl ? (
                     <Button asChild>
@@ -210,7 +353,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                   <Button
                     variant="secondary"
                     disabled={check.isLoading}
-                    onClick={() => check.mutate({ invoiceId: pending.id })}
+                    onClick={() => checkRef.current(pending.id, "manual")}
                   >
                     {check.isLoading ? common("loading") : t("check")}
                   </Button>
@@ -225,12 +368,24 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
               </div>
             ) : settings.data.canPurchase ? (
               <div className="space-y-3" data-checkout-form>
-                <p className="text-sm text-muted-foreground">{t("description", { provider: providerName(settings.data.provider) })}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("description", { provider: providerName(settings.data.provider) })}
+                </p>
                 {settings.data.canChange ? (
                   <div className="max-w-sm space-y-2">
-                    <label htmlFor="subscription-action" className="block text-sm font-medium">{t("purchaseAction")}</label>
-                    <Select value={action} onValueChange={(value) => { setAction(value as "RENEW" | "CHANGE"); requestKey.current = ""; }}>
-                      <SelectTrigger id="subscription-action"><SelectValue /></SelectTrigger>
+                    <label htmlFor="subscription-action" className="block text-sm font-medium">
+                      {t("purchaseAction")}
+                    </label>
+                    <Select
+                      value={action}
+                      onValueChange={(value) => {
+                        setAction(value as "RENEW" | "CHANGE");
+                        requestKey.current = "";
+                      }}
+                    >
+                      <SelectTrigger id="subscription-action">
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="RENEW">{t("renewAction")}</SelectItem>
                         <SelectItem value="CHANGE">{t("changeAction")}</SelectItem>
@@ -247,8 +402,14 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                       value={plan}
                       onValueChange={(value) => {
                         setSelected(value as PlanCode);
-                        setExtras({ ...selectedExtras, stores: Math.min(selectedExtras.stores,
-                          ADDITIONAL_STORE_CAPS[value as PlanCode]) });
+                        onPlanSelected?.(value as PlanCode);
+                        setExtras({
+                          ...selectedExtras,
+                          stores: Math.min(
+                            selectedExtras.stores,
+                            ADDITIONAL_STORE_CAPS[value as PlanCode],
+                          ),
+                        });
                         requestKey.current = "";
                       }}
                     >
@@ -257,10 +418,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                       </SelectTrigger>
                       <SelectContent>
                         {settings.data.catalog.map((item) => (
-                          <SelectItem
-                            key={item.plan}
-                            value={item.plan}
-                          >
+                          <SelectItem key={item.plan} value={item.plan}>
                             {name(item.plan)}
                           </SelectItem>
                         ))}
@@ -291,55 +449,138 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                         sellerName: settings.data.sellerName,
                         provider: settings.data.provider,
                         isTest: settings.data.mode === "sandbox",
+                        quote: quote.data,
                       });
                       setNotice("");
+                      setStaleConsent(false);
                       setAccepted(false);
                       setConfirmOpen(true);
                     }}
                   >
-                    {quote.isFetching ? common("loading") : quote.data
-                      ? t("pay", { amount: money(amount) }) : billing("trial.choose")}
+                    {quote.isFetching
+                      ? common("loading")
+                      : quote.data
+                        ? t("pay", { amount: money(amount) })
+                        : billing("trial.choose")}
                   </Button>
                 </div>
                 <div className="space-y-2 sm:max-w-xs">
-                  <label htmlFor="subscription-months" className="block text-sm font-medium">{t("term")}</label>
-                  <Select value={String(selectedMonths)} disabled={action === "CHANGE"} onValueChange={(value) => { setMonths(Number(value) as SubscriptionMonths); requestKey.current = ""; }}>
-                    <SelectTrigger id="subscription-months"><SelectValue /></SelectTrigger>
-                    <SelectContent>{([1, 6, 12] as const).map((term) => <SelectItem key={term} value={String(term)}>{t(`term${term}`)}</SelectItem>)}</SelectContent>
+                  <label htmlFor="subscription-months" className="block text-sm font-medium">
+                    {t("term")}
+                  </label>
+                  <Select
+                    value={String(selectedMonths)}
+                    disabled={action === "CHANGE"}
+                    onValueChange={(value) => {
+                      setMonths(Number(value) as SubscriptionMonths);
+                      requestKey.current = "";
+                    }}
+                  >
+                    <SelectTrigger id="subscription-months">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {([1, 6, 12] as const).map((term) => (
+                        <SelectItem key={term} value={String(term)}>
+                          {t(`term${term}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </div>
-                {settings.data.catalogVersion === CURRENT_CATALOG_VERSION ? <fieldset className="space-y-3">
-                  <legend className="text-sm font-medium">{t("extrasTitle")}</legend>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label htmlFor="subscription-extra-stores" className="block text-sm">{t("extrastores")}</label>
-                      {ADDITIONAL_STORE_CAPS[plan] > 0 ? <Select value={String(selectedExtras.stores)}
-                        onValueChange={(value) => { setExtras({ ...selectedExtras, stores: Number(value) }); requestKey.current = ""; }}>
-                        <SelectTrigger id="subscription-extra-stores"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Array.from({ length: ADDITIONAL_STORE_CAPS[plan] + 1 }, (_, count) =>
-                          <SelectItem key={count} value={String(count)}>{t("extraStoreCount", { count })}</SelectItem>)}</SelectContent>
-                      </Select> : <p className="text-sm text-muted-foreground">{t("starterOneStore")}</p>}
+                {settings.data.catalogVersion === CURRENT_CATALOG_VERSION ? (
+                  <fieldset className="space-y-3">
+                    <legend className="text-sm font-medium">{t("extrasTitle")}</legend>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label htmlFor="subscription-extra-stores" className="block text-sm">
+                          {t("extrastores")}
+                        </label>
+                        {ADDITIONAL_STORE_CAPS[plan] > 0 ? (
+                          <Select
+                            value={String(selectedExtras.stores)}
+                            onValueChange={(value) => {
+                              setExtras({ ...selectedExtras, stores: Number(value) });
+                              requestKey.current = "";
+                            }}
+                          >
+                            <SelectTrigger id="subscription-extra-stores">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from(
+                                { length: ADDITIONAL_STORE_CAPS[plan] + 1 },
+                                (_, count) => (
+                                  <SelectItem key={count} value={String(count)}>
+                                    {t("extraStoreCount", { count })}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">{t("starterOneStore")}</p>
+                        )}
+                      </div>
+                      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-input p-3">
+                        <Checkbox
+                          checked={selectedExtras.productPacks === 1}
+                          onCheckedChange={(checked) => {
+                            setExtras({
+                              ...selectedExtras,
+                              productPacks: checked === true ? 1 : 0,
+                            });
+                            requestKey.current = "";
+                          }}
+                        />
+                        <span className="text-sm">{t("extraproductPacks")}</span>
+                      </label>
                     </div>
-                    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-input p-3">
-                      <Checkbox checked={selectedExtras.productPacks === 1}
-                        onCheckedChange={(checked) => { setExtras({ ...selectedExtras, productPacks: checked === true ? 1 : 0 }); requestKey.current = ""; }} />
-                      <span className="text-sm">{t("extraproductPacks")}</span>
-                    </label>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{t("extrasHint")}</p>
-                </fieldset> : null}
-                {quote.isError ? quote.error.message === "billingDowngradeNeedsPreparation"
-                  ? <div className="space-y-3"><SubscriptionPreparationNotice modules={quote.error.data?.details?.modules} trial={settings.data.trialPreview} />
-                    {settings.data.trialPreview ? <TrialPreparation plan={plan} onPrepared={() => {
-                      requestKey.current = ""; setConsent(null); setAccepted(false); void quote.refetch(); refresh();
-                    }} /> : null}</div>
-                  : <QueryErrorState error={quote.error} onRetry={() => void quote.refetch()} /> : quote.data ? (
-                  <div className="space-y-2 rounded-md border border-input p-4" aria-live="polite" data-subscription-quote>
-                    <p className="font-semibold">{t("total", { amount: money(quote.data.amountMinor) })}</p>
-                    <p className="text-sm text-muted-foreground">{t(quote.data.kind === "UPGRADE" ? "upgradeDates" : "renewDates", { start: formatDateTime(quote.data.startsAt, locale), end: formatDateTime(quote.data.endsAt, locale) })}</p>
-                    {quote.data.kind === "UPGRADE" ? <p className="text-sm">{t("credit", { amount: money(quote.data.creditMinor) })}</p> : <p className="text-sm">{t("discount", { percent: quote.data.discountBps / 100 })}</p>}
-                    <p className="text-xs text-muted-foreground">{t("oneTimePayment")}</p>
-                  </div>
+                    <p className="text-xs text-muted-foreground">{t("extrasHint")}</p>
+                  </fieldset>
+                ) : null}
+                {quote.isFetching ? (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    {common("loading")}
+                  </p>
+                ) : quote.isError ? (
+                  quote.error.message === "billingDowngradeNeedsPreparation" ? (
+                    <div className="space-y-3">
+                      <SubscriptionPreparationNotice
+                        modules={quote.error.data?.details?.modules}
+                        trial={settings.data.trialPreview}
+                      />
+                      {settings.data.trialPreview ? (
+                        <TrialPreparation
+                          plan={plan}
+                          onPrepared={() => {
+                            requestKey.current = "";
+                            setConsent(null);
+                            setAccepted(false);
+                            void quote.refetch();
+                            refresh();
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <QueryErrorState error={quote.error} onRetry={() => void quote.refetch()} />
+                      {quote.error.message === "billingDowngradeNextPeriod" ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setAction("RENEW");
+                            requestKey.current = "";
+                          }}
+                        >
+                          {t("renewAction")}
+                        </Button>
+                      ) : null}
+                    </div>
+                  )
+                ) : quote.data ? (
+                  <SubscriptionQuoteSummary quote={quote.data} />
                 ) : null}
                 <p className="text-xs text-muted-foreground">{t("planChangeHint")}</p>
               </div>
@@ -349,7 +590,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
               role={notice ? "status" : undefined}
               className="text-sm text-muted-foreground"
             >
-              {notice}
+              {check.isLoading && checkSource.current === "return" ? t("returnChecking") : notice}
             </p>
             <section className="space-y-3" aria-label={t("history")}>
               <h3 className="text-sm font-semibold">{t("history")}</h3>
@@ -371,7 +612,9 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                             {name(invoice.plan)} · {money(invoice.amountMinor)}
                           </span>
                           <span className="flex flex-wrap items-center gap-2">
-                            {invoice.isTest ? <Badge variant="warning">{t("testInvoice")}</Badge> : null}
+                            {invoice.isTest ? (
+                              <Badge variant="warning">{t("testInvoice")}</Badge>
+                            ) : null}
                             <Badge
                               variant={
                                 invoice.status === "PAID"
@@ -417,10 +660,21 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                             <dt>{t("term")}</dt>
                             <dd>{t(`term${invoice.purchase?.months ?? 1}`)}</dd>
                           </div>
-                          {invoice.purchase ? <div>
-                            <dt>{t("extrasTitle")}</dt>
-                            <dd>{t("extrasSummary", { stores: invoice.purchase.extras.stores, products: invoice.purchase.extras.productPacks * 1000, users: invoice.purchase.catalogVersion === CURRENT_CATALOG_VERSION ? invoice.purchase.extras.productPacks * 2 : invoice.purchase.extras.userPacks * 5 })}</dd>
-                          </div> : null}
+                          {invoice.purchase ? (
+                            <div>
+                              <dt>{t("extrasTitle")}</dt>
+                              <dd>
+                                {t("extrasSummary", {
+                                  stores: invoice.purchase.extras.stores,
+                                  products: invoice.purchase.extras.productPacks * 1000,
+                                  users:
+                                    invoice.purchase.catalogVersion === CURRENT_CATALOG_VERSION
+                                      ? invoice.purchase.extras.productPacks * 2
+                                      : invoice.purchase.extras.userPacks * 5,
+                                })}
+                              </dd>
+                            </div>
+                          ) : null}
                           <div>
                             <dt>{t("seller")}</dt>
                             <dd>{invoice.sellerName}</dd>
@@ -439,6 +693,19 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                             </dd>
                           </div>
                         </dl>
+                        {!["PAID", "RESOLVED"].includes(invoice.status) &&
+                        invoice.id !== pendingId ? (
+                          <div className="mt-3 flex justify-end">
+                            <IconButton
+                              icon={RestoreIcon}
+                              label={t("check")}
+                              variant="secondary"
+                              disabled={check.isLoading}
+                              loading={check.isLoading}
+                              onClick={() => checkRef.current(invoice.id, "manual")}
+                            />
+                          </div>
+                        ) : null}
                       </details>
                     </li>
                   ))}
@@ -467,7 +734,15 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 className="space-y-4"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  if (!accepted || !consent || checkout.isLoading) return;
+                  if (
+                    !accepted ||
+                    !consent ||
+                    staleConsent ||
+                    checkout.isLoading ||
+                    checkoutInFlight.current
+                  )
+                    return;
+                  checkoutInFlight.current = true;
                   checkout.mutate({
                     expectedAmountMinor: consent.amount,
                     expectedProvider: consent.provider,
@@ -484,7 +759,10 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                 }}
               >
                 {consent?.isTest ? (
-                  <p role="status" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                  <p
+                    role="status"
+                    className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
+                  >
                     {t("sandbox", { provider: providerName(consent.provider) })}
                   </p>
                 ) : null}
@@ -494,12 +772,17 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                     amount: money(consent?.amount ?? amount),
                   })}
                 </p>
-                <p className="text-sm">{t(`term${consent?.months ?? selectedMonths}`)}</p>
-                <p className="text-sm">{t("extrasSummary", { stores: consent?.extras.stores ?? 0, products: (consent?.extras.productPacks ?? 0) * 1000, users: settings.data?.catalogVersion === CURRENT_CATALOG_VERSION ? (consent?.extras.productPacks ?? 0) * 2 : (consent?.extras.userPacks ?? 0) * 5 })}</p>
-                {consent ? <p className="text-sm">{t(consent.action === "CHANGE" ? "upgradeDates" : "renewDates", { start: formatDateTime(consent.startsAt, locale), end: formatDateTime(consent.endsAt, locale) })}</p> : null}
-                {consent?.creditMinor ? <p className="text-sm">{t("credit", { amount: money(consent.creditMinor) })}</p> : null}
-                <p className="text-xs text-muted-foreground">{t("providerDescription", { provider: providerName(consent?.provider ?? settings.data?.provider) })}</p>
-                <p className="text-sm text-muted-foreground">{t(consent?.isTest ? "testPaymentPolicy" : "renewalPolicy")}</p>
+                {consent ? (
+                  <SubscriptionQuoteSummary quote={consent.quote} className="border-0 p-0" />
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  {t("providerDescription", {
+                    provider: providerName(consent?.provider ?? settings.data?.provider),
+                  })}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {t(consent?.isTest ? "testPaymentPolicy" : "renewalPolicy")}
+                </p>
                 <p className="text-xs text-muted-foreground">{consent?.sellerName}</p>
                 <div className="flex items-start gap-3">
                   <Checkbox
@@ -525,6 +808,23 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                     {notice}
                   </p>
                 ) : null}
+                {staleConsent ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      requestKey.current = "";
+                      setConsent(null);
+                      setAccepted(false);
+                      setConfirmOpen(false);
+                      setStaleConsent(false);
+                      void quote.refetch();
+                      refresh();
+                    }}
+                  >
+                    {t("refreshQuote")}
+                  </Button>
+                ) : null}
                 <ModalFooter>
                   <Button
                     type="button"
@@ -534,7 +834,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
                   >
                     {common("cancel")}
                   </Button>
-                  <Button type="submit" disabled={!accepted || checkout.isLoading}>
+                  <Button type="submit" disabled={!accepted || staleConsent || checkout.isLoading}>
                     {checkout.isLoading ? common("loading") : t("goToPayment")}
                   </Button>
                 </ModalFooter>

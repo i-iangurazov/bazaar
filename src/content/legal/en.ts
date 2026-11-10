@@ -5,12 +5,12 @@ export const enLegal: LegalCopy = {
   navigation: "Bazaar documents",
   contents: "On this page",
   draft: "Draft · local preview only",
-  published: "Version dated 7 November 2026",
+  published: "Version dated 10 November 2026",
   paymentSystemsTitle: "Payment methods",
   paymentSystemsNotice:
     "Available payment methods and restrictions are shown on the provider page opened from your Bazaar invoice. Owning a card or bank app does not guarantee support for a particular method.",
   draftNotice:
-    "Draft for review. Seller details were verified; the public address and support mailbox still need confirmation. This is unpublished and is not an effective offer. Viewing this page does not enable payments.",
+    "Draft for review. Entrepreneur and Bakai KGS account details are prepared, and the support mailbox is verified. Public address, refund and receipt requirements are being clarified with GoPay. This is unpublished and is not an effective offer. Viewing this page does not enable payments.",
   missing: "To be completed from the entrepreneur's documents",
   sellerTitle: "Service provider details",
   sellerIntro:
@@ -148,16 +148,16 @@ export const enLegal: LegalCopy = {
           title: "4. Review and timing",
           paragraphs: [
             "The provider reviews the request within 10 business days of receipt: checks the invoice, provider status and access supplied, and communicates the result and justification of the amount. Following a refund decision, the provider submits the operation to the payment provider within 3 business days. Any shorter statutory review or refund deadline takes precedence. Requests for further information do not automatically extend mandatory deadlines.",
-            "The time for funds to reach the account after a refund is processed depends on the payment provider and card-issuing bank. The provider supplies confirmation once the refund is processed. If funds do not arrive, contact your bank with that confirmation and inform the provider.",
+            "The time for funds to reach the account after a refund is processed depends on the payment provider and the payer's bank. The provider supplies confirmation once the refund is processed. If funds do not arrive, contact your bank with that confirmation and inform the provider.",
           ],
         },
         {
           id: "method",
           title: "5. How refunds are made",
           paragraphs: [
-            "Card payments are refunded through the payment provider against the original transaction to the same payment instrument. Refunds are not sent to an arbitrary third-party card. If the original instrument is unavailable, the process is agreed with the provider and bank after verifying the recipient.",
+            "Refunds reference the original transaction and require verification of the payer and recipient. The available process is agreed with GoPay and the bank for that payment. Funds are not sent to an arbitrary third party. If the original account is unavailable, the process is agreed with the provider and bank after verifying the recipient.",
             "A partial refund is processed if the amount is justified and the provider supports it for that transaction. Full or partial repayment is determined by the request's circumstances and applicable law. Receiving a request does not mean repayment has already occurred; processing is confirmed separately.",
-            "The effect of a refund on its corresponding paid period is agreed and recorded separately. Transaction history and other periods must not be changed without grounds. The Bazaar account has no automatic self-service refund button: the service provider handles the request.",
+            "The effect of a refund on its corresponding paid period is agreed and recorded separately. Transaction history and other periods must not be changed without grounds. The Bazaar account has no automatic self-service refund button: the service provider handles the request. Cancelling an unpaid invoice stops awaiting payment and does not refund money.",
           ],
         },
         {
@@ -179,7 +179,7 @@ export const enLegal: LegalCopy = {
           title: "Who provides Bazaar",
           paragraphs: [
             "The individual entrepreneur identified below provides access to the software. Bazaar is the software brand; the named entrepreneur is the contracting party and payment recipient.",
-            "A GoPay integration is prepared for new payments; real payments require merchant activation. Previously created FreedomPay invoices retain their original provider. The payment provider is identified on the invoice and does not replace the seller's details. The stores of Bazaar users are also not the sellers of the Bazaar subscription.",
+            "All new online purchases of Bazaar services use GoPay in Kyrgyz som (KGS). Previously created FreedomPay invoices remain in the history with their original provider. The payment provider is identified on the invoice and does not replace the seller's details. The stores of Bazaar users are also not the sellers of the Bazaar subscription.",
           ],
         },
         {
@@ -210,7 +210,7 @@ export const enLegal: LegalCopy = {
           title: "2. How to pay",
           paragraphs: [
             "Open the organisation's subscription section using an account authorised to manage the subscription. Select an available plan, check the amount and review the offer and refund rules. Accept the offer and continue to payment.",
-            "Bazaar creates an invoice and redirects you to the payment page of the provider identified on it. Choose an available method, enter required payment details on the provider's page and confirm using the bank's method. Support for a specific card, payment network and currency depends on the merchant setup and bank.",
+            "Bazaar creates a KGS invoice and opens GoPay. On a computer, scan the displayed QR code with a supported banking app; on a phone, select an available banking app on GoPay. Check the recipient and amount in your bank before confirming. GoPay and the bank determine app availability. You do not need to link a card to Bazaar.",
             "Payment links expire; the account shows the deadline. If a link expires, first check the original invoice status. Contact support about an incomplete or disputed operation before creating another payment.",
           ],
         },
@@ -234,7 +234,7 @@ export const enLegal: LegalCopy = {
           id: "security",
           title: "5. Security and refunds",
           paragraphs: [
-            "Use bazaar.kg and the payment provider page opened from the invoice in your account. Enter card details and bank codes at the payment provider. Do not disclose them to support staff or send them in messages.",
+            "Use bazaar.kg and the GoPay page opened from the invoice in your account. Confirm payment in your own banking app. Do not disclose passwords, PINs or one-time bank codes to support staff or send them in messages.",
             "For mistaken payment, access not provided or service cancellation, follow the refund rules and contact the service provider. A refund follows verification of the original transaction; receiving the request is not the same as the bank crediting the money.",
           ],
         },

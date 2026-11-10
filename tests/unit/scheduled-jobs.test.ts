@@ -28,6 +28,19 @@ describe("scheduled job recovery", () => {
     expect(isScheduledJobGroup("recovery")).toBe(true);
     expect(isScheduledJobGroup("arbitrary-provider-job")).toBe(false);
     expect(scheduledJobGroups.email).toContain("subscription-reminders");
+    expect(scheduledJobGroups.email).toContain("subscription-payment-notifications");
+  });
+
+  it("reports unconfirmed subscription notification submission as a failed cron job", async () => {
+    const summary = await runScheduledJobGroup("email", {
+      ensureRegistered: async () => {},
+      runner: async (job) =>
+        job === "subscription-payment-notifications"
+          ? { job, status: "skipped", details: { reason: "failed", accepted: 0 } }
+          : { job, status: "ok" },
+    });
+    expect(summary.failedJobs).toEqual(["subscription-payment-notifications"]);
+    expect(summary.failed).toBe(1);
   });
 
   it("runs a group once and reports failed job identities without raw errors", async () => {

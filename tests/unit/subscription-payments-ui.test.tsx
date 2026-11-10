@@ -3,6 +3,7 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SubscriptionPayments } from "@/components/billing/subscription-payments";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 type InvoiceFixture = {
   id: string;
@@ -41,16 +42,22 @@ const mocks = vi.hoisted(() => ({
     termsVersion: "qa-v1",
     termsUrl: "https://example.invalid/terms/v1",
     pendingInvoice: null as InvoiceFixture | null,
+    scheduledSubscription: null,
+    canChange: false,
+    currentMonths: 1,
+    currentExtras: { stores: 0, productPacks: 0, userPacks: 0 },
   },
+  quoteOverrides: {} as Record<string, unknown>,
+  quoteFetching: false,
   records: [] as InvoiceFixture[],
   mutate: vi.fn(),
   checkMutate: vi.fn(),
   refetch: vi.fn(),
   success: null as
-    | null
-    | ((invoice: { status: string; checkoutUrl: null; syncDelayed: boolean }) => void),
+    null | ((invoice: { status: string; checkoutUrl: null; syncDelayed: boolean }) => void),
   error: null as null | ((error: { message: string }) => void),
-  checkSuccess: null as null | ((invoice: { status: string; isTest: boolean; syncDelayed: boolean }) => void),
+  checkSuccess: null as
+    null | ((invoice: { status: string; isTest: boolean; syncDelayed: boolean }) => void),
 }));
 vi.mock("next-intl", () => ({
   useLocale: () => "ru",
@@ -74,14 +81,41 @@ vi.mock("@/lib/trpc", () => ({
           }),
         },
         quote: {
-          useQuery: (input: { plan: string; months: number; extras: { stores: number; productPacks: number; userPacks: number }; action: string }) => ({
+          useQuery: (input: {
+            plan: string;
+            months: number;
+            extras: { stores: number; productPacks: number; userPacks: number };
+            action: string;
+          }) => ({
             data: {
-              plan: input.plan, months: input.months, extras: input.extras,
+              plan: input.plan,
+              months: input.months,
+              extras: input.extras,
               amountMinor: mocks.data.catalog.find((p) => p.plan === input.plan)?.amountMinor ?? 0,
               quoteToken: `quote:${input.plan}:${mocks.data.catalog[0].amountMinor}:${input.months}:${JSON.stringify(input.extras)}`,
-              startsAt: "2027-01-01T00:00:00.000Z", endsAt: "2027-02-01T00:00:00.000Z",
-              creditMinor: 0, discountBps: 0, kind: input.action === "CHANGE" ? "UPGRADE" : "RENEWAL",
-            }, isFetching: false, isError: false, refetch: mocks.refetch,
+              startsAt: "2027-01-01T00:00:00.000Z",
+              endsAt: "2027-02-01T00:00:00.000Z",
+              creditMinor: 0,
+              discountBps: 0,
+              kind: input.action === "CHANGE" ? "UPGRADE" : "RENEWAL",
+              catalogVersion: mocks.data.catalogVersion,
+              entitlements: {
+                limits: { maxStores: 1, maxProducts: 1000, maxActiveUsers: 2 },
+                features: { pos: true, customerOrders: true, analytics: false },
+              },
+              fullAmountMinor:
+                mocks.data.catalog.find((p) => p.plan === input.plan)?.amountMinor ?? 0,
+              termAmountMinor:
+                mocks.data.catalog.find((p) => p.plan === input.plan)?.amountMinor ?? 0,
+              savingsMinor: 0,
+              serviceValueMinor: 175000,
+              effectiveTiming: "IMMEDIATE",
+              scheduledReduction: false,
+              ...mocks.quoteOverrides,
+            },
+            isFetching: mocks.quoteFetching,
+            isError: false,
+            refetch: mocks.refetch,
           }),
         },
         invoices: {
@@ -103,10 +137,12 @@ vi.mock("@/lib/trpc", () => ({
             return { mutate: mocks.mutate, isLoading: false };
           },
         },
-        check: { useMutation: (options: { onSuccess: typeof mocks.checkSuccess }) => {
-          mocks.checkSuccess = options.onSuccess;
-          return { mutate: mocks.checkMutate, isLoading: false };
-        } },
+        check: {
+          useMutation: (options: { onSuccess: typeof mocks.checkSuccess }) => {
+            mocks.checkSuccess = options.onSuccess;
+            return { mutate: mocks.checkMutate, isLoading: false };
+          },
+        },
       },
     },
   },
@@ -114,14 +150,30 @@ vi.mock("@/lib/trpc", () => ({
 const open = () => fireEvent.click(screen.getByRole("button", { name: /^billing.payments.pay / }));
 const submit = () => fireEvent.submit(screen.getByRole("dialog").querySelector("form")!);
 const invoice = (overrides: Partial<InvoiceFixture> = {}): InvoiceFixture => ({
-  id: "invoice-fixture", provider: "GOPAY", isTest: false, plan: "STARTER", amountMinor: 200000,
-  currency: "KGS", status: "PENDING", createdAt: "2026-11-09T00:00:00.000Z", paidAt: null,
-  expiresAt: "2029-11-09T00:00:00.000Z", checkoutUrl: "https://example.invalid/checkout",
-  syncDelayed: false, period: null, purchase: null, sellerName: "Synthetic seller",
-  termsVersion: "qa-v1", termsUrl: "https://example.invalid/terms/v1", ...overrides,
+  id: "invoice-fixture",
+  provider: "GOPAY",
+  isTest: false,
+  plan: "STARTER",
+  amountMinor: 200000,
+  currency: "KGS",
+  status: "PENDING",
+  createdAt: "2026-11-09T00:00:00.000Z",
+  paidAt: null,
+  expiresAt: "2029-11-09T00:00:00.000Z",
+  checkoutUrl: "https://example.invalid/checkout",
+  syncDelayed: false,
+  period: null,
+  purchase: null,
+  sellerName: "Synthetic seller",
+  termsVersion: "qa-v1",
+  termsUrl: "https://example.invalid/terms/v1",
+  ...overrides,
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, "", "/billing");
+  mocks.quoteOverrides = {};
+  mocks.quoteFetching = false;
   mocks.records = [];
   vi.stubGlobal(
     "ResizeObserver",
@@ -140,9 +192,14 @@ beforeEach(() => {
     lifetimeAccess: false,
     canPurchase: true,
     pendingInvoice: null,
+    scheduledSubscription: null,
+    canChange: false,
+    currentMonths: 1,
+    currentExtras: { stores: 0, productPacks: 0, userPacks: 0 },
     catalogVersion: "2026-10",
     termsVersion: "qa-v1",
     catalog: [{ plan: "STARTER", amountMinor: 175000 }],
+    currentPlan: "STARTER",
   });
 });
 afterEach(() => {
@@ -151,6 +208,89 @@ afterEach(() => {
 });
 
 describe("subscription payment consent and recovery", () => {
+  it("prevents a double submit before the mutation's loading state has rendered", () => {
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    open();
+    fireEvent.click(screen.getByRole("checkbox"));
+    submit();
+    submit();
+    expect(mocks.mutate).toHaveBeenCalledTimes(1);
+  });
+  it("checks a bank return without treating the return URL as proof of payment", () => {
+    window.history.replaceState({}, "", "/billing?invoice=invoice-from-bank");
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    expect(mocks.checkMutate).toHaveBeenCalledWith({ invoiceId: "invoice-from-bank" });
+    expect(screen.getByText("billing.payments.returnHint")).toBeTruthy();
+    expect(screen.queryByText("billing.payments.confirmed")).toBeNull();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    act(() => mocks.checkSuccess?.({ status: "PAID", isTest: false, syncDelayed: false }));
+    expect(screen.getByText("billing.payments.confirmed")).toBeTruthy();
+  });
+  it("resumes reconciliation on restored connection and removes listeners when the invoice settles", () => {
+    Object.assign(mocks.data, { pendingInvoice: invoice(), canPurchase: false });
+    const mounted = render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    fireEvent(window, new Event("online"));
+    fireEvent(window, new Event("focus"));
+    expect(mocks.checkMutate).toHaveBeenCalledTimes(1);
+    act(() => mocks.checkSuccess?.({ status: "PENDING", isTest: false, syncDelayed: false }));
+    fireEvent(window, new Event("focus"));
+    expect(mocks.checkMutate).toHaveBeenCalledTimes(2);
+    Object.assign(mocks.data, { pendingInvoice: null });
+    mounted.rerender(<SubscriptionPayments onUpdated={vi.fn()} />);
+    fireEvent(window, new Event("online"));
+    expect(mocks.checkMutate).toHaveBeenCalledTimes(2);
+  });
+  it("closes the uncertain checkout dialog when the server recovers its existing pending invoice", () => {
+    const mounted = render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    open();
+    fireEvent.click(screen.getByRole("checkbox"));
+    submit();
+    act(() => mocks.error?.({ message: "billingProviderUnavailable" }));
+    Object.assign(mocks.data, { pendingInvoice: invoice(), canPurchase: false });
+    mounted.rerender(<SubscriptionPayments onUpdated={vi.fn()} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("link", { name: "billing.payments.continue" })).toBeTruthy();
+    expect(mocks.mutate).toHaveBeenCalledTimes(1);
+  });
+  it("requires a refreshed quote and new consent after the server rejects stale terms", () => {
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    open();
+    fireEvent.click(screen.getByRole("checkbox"));
+    submit();
+    const first = mocks.mutate.mock.calls[0][0];
+    act(() => mocks.error?.({ message: "billingQuoteChanged" }));
+    submit();
+    expect(mocks.mutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "billing.payments.refreshQuote" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    open();
+    expect(
+      (screen.getByRole("button", { name: "billing.payments.goToPayment" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox"));
+    submit();
+    expect(mocks.mutate.mock.calls[1][0].idempotencyKey).not.toBe(first.idempotencyKey);
+  });
+  it.each(["FAILED", "EXPIRED"])(
+    "lets a customer recheck a historical %s invoice if money arrived late",
+    (status) => {
+      mocks.records = [invoice({ status, checkoutUrl: null })];
+      render(
+        <TooltipProvider>
+          <SubscriptionPayments onUpdated={vi.fn()} />
+        </TooltipProvider>,
+      );
+      const record = within(
+        document.querySelector('[data-subscription-invoice="invoice-fixture"]') as HTMLElement,
+      );
+      const button = record.getByRole("button", { name: "billing.payments.check" });
+      expect(button.textContent).toBe("");
+      fireEvent.click(button);
+      expect(mocks.checkMutate).toHaveBeenCalledWith({ invoiceId: "invoice-fixture" });
+      expect(mocks.mutate).not.toHaveBeenCalled();
+    },
+  );
   it("identifies the GoPay test checkout and freezes the provider and mode with consent", () => {
     const view = render(<SubscriptionPayments onUpdated={vi.fn()} />);
     expect(screen.getByText('billing.payments.sandbox {"provider":"GoPay"}')).toBeTruthy();
@@ -160,7 +300,9 @@ describe("subscription payment consent and recovery", () => {
     view.rerender(<SubscriptionPayments onUpdated={vi.fn()} />);
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByText('billing.payments.sandbox {"provider":"GoPay"}')).toBeTruthy();
-    expect(dialog.getByText('billing.payments.providerDescription {"provider":"GoPay"}')).toBeTruthy();
+    expect(
+      dialog.getByText('billing.payments.providerDescription {"provider":"GoPay"}'),
+    ).toBeTruthy();
     expect(dialog.getByText("billing.payments.testPaymentPolicy")).toBeTruthy();
     expect(dialog.queryByText("billing.payments.renewalPolicy")).toBeNull();
   });
@@ -171,9 +313,12 @@ describe("subscription payment consent and recovery", () => {
     });
     render(<SubscriptionPayments onUpdated={vi.fn()} />);
     const pending = document.querySelector("[data-pending-invoice]") as HTMLElement;
-    expect(within(pending).getByText('billing.payments.providerDescription {"provider":"FreedomPay"}')).toBeTruthy();
-    expect(screen.getByRole("link", { name: "billing.payments.continue" }).getAttribute("href"))
-      .toBe("https://example.invalid/checkout");
+    expect(
+      within(pending).getByText('billing.payments.providerDescription {"provider":"FreedomPay"}'),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "billing.payments.continue" }).getAttribute("href"),
+    ).toBe("https://example.invalid/checkout");
     expect(document.querySelector("[data-checkout-form]")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "billing.payments.check" }));
     expect(mocks.checkMutate).toHaveBeenCalledWith({ invoiceId: "invoice-fixture" });
@@ -184,8 +329,12 @@ describe("subscription payment consent and recovery", () => {
       invoice({ id: "live-freedompay", provider: "FREEDOMPAY", status: "PAID", checkoutUrl: null }),
     ];
     render(<SubscriptionPayments onUpdated={vi.fn()} />);
-    const testRow = within(document.querySelector('[data-subscription-invoice="test-gopay"]') as HTMLElement);
-    const liveRow = within(document.querySelector('[data-subscription-invoice="live-freedompay"]') as HTMLElement);
+    const testRow = within(
+      document.querySelector('[data-subscription-invoice="test-gopay"]') as HTMLElement,
+    );
+    const liveRow = within(
+      document.querySelector('[data-subscription-invoice="live-freedompay"]') as HTMLElement,
+    );
     expect(testRow.getByText("GoPay")).toBeTruthy();
     expect(testRow.getByText("billing.payments.testInvoice")).toBeTruthy();
     expect(testRow.getByText("billing.payments.testPaid")).toBeTruthy();
@@ -210,15 +359,22 @@ describe("subscription payment consent and recovery", () => {
     ["CREATING", "creatingHint"],
     ["PENDING", "linkUnavailable"],
     ["REVIEW", "reviewHint"],
-  ])("explains %s without offering a missing payment link or claiming its expiry", (status, hint) => {
-    Object.assign(mocks.data, { canPurchase: false, pendingInvoice: invoice({ status, checkoutUrl: null }) });
-    render(<SubscriptionPayments onUpdated={vi.fn()} />);
-    expect(screen.getByText(`billing.payments.${hint}`)).toBeTruthy();
-    expect(screen.queryByText(/^billing.payments.expiresAt/)).toBeNull();
-    expect(screen.queryByRole("link", { name: "billing.payments.continue" })).toBeNull();
-    expect(screen.getByRole("button", { name: "billing.payments.check" })).toBeTruthy();
-    if (status === "REVIEW") expect(screen.getByRole("link", { name: "billing.payments.support" })).toBeTruthy();
-  });
+  ])(
+    "explains %s without offering a missing payment link or claiming its expiry",
+    (status, hint) => {
+      Object.assign(mocks.data, {
+        canPurchase: false,
+        pendingInvoice: invoice({ status, checkoutUrl: null }),
+      });
+      render(<SubscriptionPayments onUpdated={vi.fn()} />);
+      expect(screen.getByText(`billing.payments.${hint}`)).toBeTruthy();
+      expect(screen.queryByText(/^billing.payments.expiresAt/)).toBeNull();
+      expect(screen.queryByRole("link", { name: "billing.payments.continue" })).toBeNull();
+      expect(screen.getByRole("button", { name: "billing.payments.check" })).toBeTruthy();
+      if (status === "REVIEW")
+        expect(screen.getByRole("link", { name: "billing.payments.support" })).toBeTruthy();
+    },
+  );
   it("offers only the reserve pack on Starter and discloses its two additional users", () => {
     Object.assign(mocks.data, { catalogVersion: "2026-11" });
     render(<SubscriptionPayments onUpdated={vi.fn()} />);
@@ -226,8 +382,9 @@ describe("subscription payment consent and recovery", () => {
     expect(document.getElementById("subscription-extra-stores")).toBeNull();
     fireEvent.click(screen.getByRole("checkbox", { name: /billing.payments.extraproductPacks/ }));
     open();
-    expect(screen.getByText(/^billing.payments.extrasSummary/).textContent)
-      .toContain('"products":1000,"users":2');
+    expect(
+      within(screen.getByRole("dialog")).getByText(/^billing.payments.extrasSummary/).textContent,
+    ).toContain('"products":1000,"users":2');
   });
   it("requires consent and freezes the quoted amount and terms through background updates and failed retries", () => {
     const view = render(<SubscriptionPayments onUpdated={vi.fn()} />);

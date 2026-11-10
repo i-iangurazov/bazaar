@@ -47,15 +47,29 @@ afterEach(() => {
 });
 
 describe("GoPay merchant configuration and historical credential isolation", () => {
-  it("keeps checkout disabled and FreedomPay backwards compatible when no new provider is selected", () => {
+  it("defaults new purchases to GoPay while keeping an unconfigured checkout disabled", () => {
     expect(getSubscriptionPaymentConfig({})).toMatchObject({
-      provider: "FREEDOMPAY",
+      provider: "GOPAY",
       mode: "disabled",
       ready: false,
     });
     expect(
       getSubscriptionPaymentConfig({ ...sandbox, BILLING_PAYMENT_PROVIDER: "" }),
-    ).toMatchObject({ provider: "FREEDOMPAY", ready: false });
+    ).toMatchObject({ provider: "GOPAY", ready: true });
+    expect(
+      getSubscriptionPaymentConfig({ ...sandbox, BILLING_PAYMENT_PROVIDER: undefined }),
+    ).toMatchObject({ provider: "GOPAY", ready: true });
+  });
+
+  it("never creates a new FreedomPay checkout from an obsolete provider setting", () => {
+    expect(
+      getSubscriptionPaymentConfig({
+        ...sandbox,
+        BILLING_PAYMENT_PROVIDER: "freedompay",
+        FREEDOMPAY_MERCHANT_ID: "90001",
+        FREEDOMPAY_SECRET_KEY: "synthetic-freedom-secret",
+      }),
+    ).toMatchObject({ provider: "GOPAY", ready: false });
   });
 
   it("enables an isolated GoPay sandbox without FreedomPay credentials or external requests", () => {
@@ -165,6 +179,16 @@ describe("GoPay merchant configuration and historical credential isolation", () 
         "FREEDOMPAY",
       ),
     ).toMatchObject({ provider: "FREEDOMPAY", merchantId: "90001", ready: true });
+  });
+
+  it("rejects a noncanonical production port even with an otherwise consistent offer URL", () => {
+    expect(
+      getSubscriptionPaymentConfig({
+        ...live,
+        BILLING_PUBLIC_URL: "https://bazaar.kg:8443",
+        BILLING_TERMS_URL: "https://bazaar.kg:8443/legal/offer",
+      }).ready,
+    ).toBe(false);
   });
 
   it("stores a stable merchant fingerprint rather than the secret API key", () => {
