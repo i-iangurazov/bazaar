@@ -740,210 +740,182 @@ const buildReceivingMovementNote = (input: {
     .filter(Boolean)
     .join(" • ");
 
+/** The caller owns the transaction and its idempotency claim. No external effects run here. */
+export const postStockReceivingTx = async (
+  tx: Prisma.TransactionClient,
+  input: StockReceivingInput,
+): Promise<StockReceivingResult> => {
+  if (!input.lines.length) throw new AppError("receivingLinesRequired", "BAD_REQUEST", 400);
+  const receivingId = randomUUID();
+  const movementNote = buildReceivingMovementNote(input);
+  const store = await tx.store.findFirst({
+    where: { id: input.storeId, organizationId: input.organizationId },
+    select: { id: true },
+  });
+  if (!store) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
+
+  const normalizedLines = input.lines.map((line) => ({
+    productId: line.productId,
+    variantId: line.variantId ?? null,
+    variantKey: resolveVariantKey(line.variantId),
+    quantity: line.quantity,
+    unitCost: line.unitCost,
+  }));
+  const lineKeys = new Set<string>();
+  for (const line of normalizedLines) {
+    const key = `${line.productId}:${line.variantKey}`;
+    if (lineKeys.has(key)) {
+      throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
+    }
+    lineKeys.add(key);
+    if (!isValidQuantity(line.quantity) || line.quantity <= 0) {
+      throw new AppError("invalidReceivingQuantity", "BAD_REQUEST", 400);
+    }
+    if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
+      throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+    }
+  }
+
+  const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
+  const products = await tx.product.findMany({
+    where: {
+      id: { in: productIds },
+      organizationId: input.organizationId,
+      isDeleted: false,
+      ...inventoryProductAccessWhere(input.storeId),
+    },
+    select: { id: true },
+  });
+  if (products.length !== productIds.length) {
+    throw new AppError("invalidProducts", "FORBIDDEN", 403);
+  }
+
+  const variantIds = Array.from(
+    new Set(normalizedLines.map((line) => line.variantId).filter(Boolean) as string[]),
+  );
+  if (variantIds.length) {
+    const variants = await tx.productVariant.findMany({
+      where: {
+        id: { in: variantIds },
+        isActive: true,
+        product: { organizationId: input.organizationId, isDeleted: false },
+      },
+      select: { id: true, productId: true },
+    });
+    const variantProductMap = new Map(
+      variants.map((variant) => [variant.id, variant.productId]),
+    );
+    for (const line of normalizedLines) {
+      if (line.variantId && variantProductMap.get(line.variantId) !== line.productId) {
+        throw new AppError("variantMismatch", "BAD_REQUEST", 400);
+      }
+    }
+    if (variants.length !== variantIds.length) {
+      throw new AppError("variantNotFound", "NOT_FOUND", 404);
+    }
+  }
+
+  const lineResults: StockReceivingResult["lines"] = [];
+  for (const [index, line] of normalizedLines.entries()) {
+    const before = await tx.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: input.storeId,
+          productId: line.productId,
+          variantKey: line.variantKey,
+        },
+      },
+    });
+
+    const { snapshot, movementId } = await applyStockMovement(tx, {
+      storeId: input.storeId,
+      productId: line.productId,
+      variantId: line.variantId,
+      qtyDelta: line.quantity,
+      type: StockMovementType.RECEIVE,
+      referenceType: "STOCK_RECEIVING",
+      referenceId: receivingId,
+      linePosition: index + 1,
+      unitCostKgs: line.unitCost,
+      lineTotalKgs: line.quantity * line.unitCost,
+      note: movementNote,
+      actorId: input.actorId,
+      organizationId: input.organizationId,
+      movementDate: input.date ?? null,
+      allowNegativeStock: true,
+    });
+
+    await updateProductCost(tx, {
+      organizationId: input.organizationId,
+      productId: line.productId,
+      variantId: line.variantId,
+      qtyReceived: line.quantity,
+      unitCost: line.unitCost,
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "INVENTORY_RECEIVE",
+      entity: "InventorySnapshot",
+      entityId: snapshot.id,
+      before: before ? toJson(before) : null,
+      after: toJson(snapshot),
+      requestId: input.requestId,
+    });
+
+    lineResults.push({
+      productId: line.productId,
+      variantId: line.variantId,
+      quantity: line.quantity,
+      unitCost: line.unitCost,
+      snapshotId: snapshot.id,
+      onHand: snapshot.onHand,
+      movementId,
+    });
+  }
+
+  return {
+    receivingId,
+    storeId: input.storeId,
+    lineCount: lineResults.length,
+    totalQuantity: lineResults.reduce((sum, line) => roundQuantity(sum + line.quantity), 0),
+    totalCostKgs: lineResults.reduce((sum, line) => sum + line.quantity * line.unitCost, 0),
+    lines: lineResults,
+  };
+};
+
+/** Publish only after the inventory/price transaction has committed. */
+export const publishStockReceivingResult = async (
+  input: Pick<StockReceivingInput, "storeId" | "requestId">,
+  result: StockReceivingResult,
+) => {
+  for (const line of result.lines) {
+    eventBus.publish({
+      type: "inventory.updated",
+      payload: { storeId: input.storeId, productId: line.productId, variantId: line.variantId },
+    });
+  }
+  await Promise.all(result.lines.map((line) => maybeEmitLowStock({
+    storeId: input.storeId, productId: line.productId, variantId: line.variantId,
+    onHand: line.onHand, requestId: input.requestId,
+  })));
+};
+
 export const postStockReceiving = async (
   input: StockReceivingInput,
 ): Promise<StockReceivingResult> => {
   const logger = getLogger(input.requestId);
-  if (!input.lines.length) {
-    throw new AppError("receivingLinesRequired", "BAD_REQUEST", 400);
-  }
-
-  const receivingId = randomUUID();
-  const movementNote = buildReceivingMovementNote(input);
-  const changedItems: Array<{
-    storeId: string;
-    productId: string;
-    variantId: string | null;
-    onHand: number;
-  }> = [];
-
-  const result = await prisma.$transaction(async (tx) => {
-    const { result: receipt } = await withIdempotency(
-      tx,
-      {
-        key: input.idempotencyKey,
-        route: "inventory.stockReceiving",
-        userId: input.actorId,
-      },
-      async () => {
-        const store = await tx.store.findFirst({
-          where: { id: input.storeId, organizationId: input.organizationId },
-          select: { id: true },
-        });
-        if (!store) {
-          throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
-        }
-
-        const normalizedLines = input.lines.map((line) => ({
-          productId: line.productId,
-          variantId: line.variantId ?? null,
-          variantKey: resolveVariantKey(line.variantId),
-          quantity: line.quantity,
-          unitCost: line.unitCost,
-        }));
-        const lineKeys = new Set<string>();
-        for (const line of normalizedLines) {
-          const key = `${line.productId}:${line.variantKey}`;
-          if (lineKeys.has(key)) {
-            throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
-          }
-          lineKeys.add(key);
-          if (!isValidQuantity(line.quantity) || line.quantity <= 0) {
-            throw new AppError("invalidReceivingQuantity", "BAD_REQUEST", 400);
-          }
-          if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
-            throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
-          }
-        }
-
-        const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
-        const products = await tx.product.findMany({
-          where: {
-            id: { in: productIds },
-            organizationId: input.organizationId,
-            isDeleted: false,
-            ...inventoryProductAccessWhere(input.storeId),
-          },
-          select: { id: true },
-        });
-        if (products.length !== productIds.length) {
-          throw new AppError("invalidProducts", "FORBIDDEN", 403);
-        }
-
-        const variantIds = Array.from(
-          new Set(normalizedLines.map((line) => line.variantId).filter(Boolean) as string[]),
-        );
-        if (variantIds.length) {
-          const variants = await tx.productVariant.findMany({
-            where: {
-              id: { in: variantIds },
-              isActive: true,
-              product: { organizationId: input.organizationId, isDeleted: false },
-            },
-            select: { id: true, productId: true },
-          });
-          const variantProductMap = new Map(
-            variants.map((variant) => [variant.id, variant.productId]),
-          );
-          for (const line of normalizedLines) {
-            if (line.variantId && variantProductMap.get(line.variantId) !== line.productId) {
-              throw new AppError("variantMismatch", "BAD_REQUEST", 400);
-            }
-          }
-          if (variants.length !== variantIds.length) {
-            throw new AppError("variantNotFound", "NOT_FOUND", 404);
-          }
-        }
-
-        const lineResults: StockReceivingResult["lines"] = [];
-        for (const [index, line] of normalizedLines.entries()) {
-          const before = await tx.inventorySnapshot.findUnique({
-            where: {
-              storeId_productId_variantKey: {
-                storeId: input.storeId,
-                productId: line.productId,
-                variantKey: line.variantKey,
-              },
-            },
-          });
-
-          const { snapshot, movementId } = await applyStockMovement(tx, {
-            storeId: input.storeId,
-            productId: line.productId,
-            variantId: line.variantId,
-            qtyDelta: line.quantity,
-            type: StockMovementType.RECEIVE,
-            referenceType: "STOCK_RECEIVING",
-            referenceId: receivingId,
-            linePosition: index + 1,
-            unitCostKgs: line.unitCost,
-            lineTotalKgs: line.quantity * line.unitCost,
-            note: movementNote,
-            actorId: input.actorId,
-            organizationId: input.organizationId,
-            movementDate: input.date ?? null,
-            allowNegativeStock: true,
-          });
-
-          await updateProductCost(tx, {
-            organizationId: input.organizationId,
-            productId: line.productId,
-            variantId: line.variantId,
-            qtyReceived: line.quantity,
-            unitCost: line.unitCost,
-          });
-
-          await writeAuditLog(tx, {
-            organizationId: input.organizationId,
-            actorId: input.actorId,
-            action: "INVENTORY_RECEIVE",
-            entity: "InventorySnapshot",
-            entityId: snapshot.id,
-            before: before ? toJson(before) : null,
-            after: toJson(snapshot),
-            requestId: input.requestId,
-          });
-
-          changedItems.push({
-            storeId: input.storeId,
-            productId: line.productId,
-            variantId: line.variantId,
-            onHand: snapshot.onHand,
-          });
-          lineResults.push({
-            productId: line.productId,
-            variantId: line.variantId,
-            quantity: line.quantity,
-            unitCost: line.unitCost,
-            snapshotId: snapshot.id,
-            onHand: snapshot.onHand,
-            movementId,
-          });
-        }
-
-        return {
-          receivingId,
-          storeId: input.storeId,
-          lineCount: lineResults.length,
-          totalQuantity: lineResults.reduce((sum, line) => roundQuantity(sum + line.quantity), 0),
-          totalCostKgs: lineResults.reduce((sum, line) => sum + line.quantity * line.unitCost, 0),
-          lines: lineResults,
-        };
-      },
-    );
-
-    return receipt as StockReceivingResult;
-  });
-
-  changedItems.forEach((item) => {
-    eventBus.publish({
-      type: "inventory.updated",
-      payload: { storeId: item.storeId, productId: item.productId, variantId: item.variantId },
-    });
-  });
-
-  await Promise.all(
-    changedItems.map((item) =>
-      maybeEmitLowStock({
-        storeId: item.storeId,
-        productId: item.productId,
-        variantId: item.variantId,
-        onHand: item.onHand,
-        requestId: input.requestId,
-      }),
-    ),
-  );
-
-  logger.info(
-    {
-      storeId: input.storeId,
-      receivingId: result.receivingId,
-      lineCount: result.lineCount,
-      totalQuantity: result.totalQuantity,
-    },
-    "stock receiving posted",
-  );
-
+  const { result, replayed } = await prisma.$transaction((tx) => withIdempotency(
+    tx,
+    { key: input.idempotencyKey, route: "inventory.stockReceiving", userId: input.actorId },
+    () => postStockReceivingTx(tx, input),
+  ));
+  if (!replayed) await publishStockReceivingResult(input, result);
+  logger.info({ storeId: input.storeId, receivingId: result.receivingId,
+    lineCount: result.lineCount, totalQuantity: result.totalQuantity }, "stock receiving posted");
   return result;
 };
 

@@ -196,7 +196,12 @@ export type JobDefinition = {
 const cleanupIdempotencyKeys = async (): Promise<JobResult> => {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const result = await prisma.idempotencyKey.deleteMany({
-    where: { createdAt: { lt: cutoff } },
+    where: {
+      createdAt: { lt: cutoff },
+      // These are durable receiving decisions, not an expiring response cache.
+      // Losing POSTED or CANCELED would let a pending browser retry become a new attempt.
+      route: { not: "inventory.stockReceivingReviewed" },
+    },
   });
   return {
     job: "cleanup-idempotency-keys",

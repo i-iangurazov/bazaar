@@ -17,6 +17,7 @@ import { PageLoading } from "@/components/page-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/price-input";
 import { SearchInput } from "@/components/search-input";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Label } from "@/components/ui/label";
@@ -41,8 +42,19 @@ import {
   StatusDangerIcon,
   StatusSuccessIcon,
 } from "@/components/icons";
-import { formatStoreMoney } from "@/lib/currencyDisplay";
-import { formatNumber } from "@/lib/i18nFormat";
+import { formatCurrencyKGS, formatNumber } from "@/lib/i18nFormat";
+import { resolveCurrency } from "@/lib/currencyDisplay";
+import { convertToKgs } from "@/lib/currency";
+import { parsePriceInput } from "@/lib/priceInput";
+import { ReceivingCommerceLine } from "./receiving-commerce-line";
+import { isCurrentReceivingAttempt, type OwnedReceivingAttempt, type ReceivingAttemptOwner } from "./receiving-attempt-identity";
+import { SubscriptionFeatureLock } from "@/components/billing/subscription-feature-lock";
+import {
+  stockReceivingCommerceSchema,
+  type ReceivingCommercePreview,
+  type ReviewedStockReceiving,
+  type StockReceivingCommerce,
+} from "@/lib/stockReceivingCommerce";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { cn } from "@/lib/utils";
@@ -50,6 +62,9 @@ import {
   consumeReceivingDraft,
   removeReceivingDraft,
   writeReceivingDraft,
+  readReceivingPendingState,
+  writeReceivingPending,
+  removeReceivingPending,
   type ReceivingDraftFocus,
   type ReceivingDraftIdentity,
   type ReceivingDraftLine,
@@ -57,7 +72,7 @@ import {
 
 type ReceivingLine = ReceivingDraftLine;
 
-type ReceivingInputField = "quantity" | "unitCost";
+type ReceivingInputField = "quantity" | "unitCost" | "salePrice";
 type ReceivingInputViewport = "desktop" | "mobile";
 type ReceivingInputFocusOptions = { selectContents?: boolean; preventScroll?: boolean };
 
@@ -146,13 +161,35 @@ export const InventoryReceivingPage = ({
   );
   const editableDocument = editableDocumentQuery.data ?? null;
   const [storeId, setStoreId] = useState("");
-  const [dateTime, setDateTime] = useState(() => toDateTimeLocalValue(new Date()));
+  const initialReceivingDateRef = useRef(new Date());
+  const [dateTime, setDateTime] = useState(() => toDateTimeLocalValue(initialReceivingDateRef.current));
+  const [exactDateIso, setExactDateIso] = useState<string | null>(() => initialReceivingDateRef.current.toISOString());
   const [supplierName, setSupplierName] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<ReceivingLine[]>([]);
   const [restoredDraftKey, setRestoredDraftKey] = useState("");
+  const [pendingReceiving, setPendingReceiving] = useState<ReviewedStockReceiving | null>(null);
+  const [completedReceivingId, setCompletedReceivingId] = useState<string | null>(null);
+  const [postingError, setPostingError] = useState("");
+  const [recoveringStoredOperation, setRecoveringStoredOperation] = useState(false);
+  const [pendingCurrency, setPendingCurrency] = useState<ReturnType<typeof resolveCurrency> | null>(null);
+  const pendingReceivingRef = useRef<ReviewedStockReceiving | null>(null);
+  const pendingReceivingOwnerRef = useRef<ReceivingAttemptOwner | null>(null);
+  const settledReceivingAttemptRef = useRef<OwnedReceivingAttempt | null>(null);
+  const invalidPendingStorageRef = useRef(false);
+  const restoredPendingIdentityRef = useRef("");
+  const lastSaleCurrencyRef = useRef<{ storeId: string; code: string; rate: number } | null>(null);
+  const editOperationRef = useRef<{ signature: string; key: string } | null>(null);
+  const [previewRevision, setPreviewRevision] = useState(0);
+  const [previewState, setPreviewState] = useState<{
+    storeId: string;
+    signature: string;
+    data?: ReceivingCommercePreview;
+    error?: string;
+    checking: boolean;
+  }>({ storeId: "", signature: "", checking: false });
   const receivingInputRefs = useRef(new Map<string, HTMLInputElement>());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchResultsRef = useRef<HTMLDivElement>(null);
@@ -173,6 +210,8 @@ export const InventoryReceivingPage = ({
     session.user.organizationId === draftOwner.organizationId
       ? draftOwner
       : null;
+  const authenticatedDraftOwnerRef = useRef(authenticatedDraftOwner);
+  authenticatedDraftOwnerRef.current = authenticatedDraftOwner;
 
   const clearReceivingDraft = useCallback(() => {
     const keys = new Set([returningDraftKey, activeDraftKeyRef.current].filter(Boolean));
@@ -181,6 +220,9 @@ export const InventoryReceivingPage = ({
   }, [returningDraftKey]);
 
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
+  const moneyCurrency = resolveCurrency(selectedStore);
+  const pendingLocked = Boolean(pendingReceiving || recoveringStoredOperation || completedReceivingId);
+  const entryCurrency = pendingLocked && pendingCurrency ? pendingCurrency : moneyCurrency;
   const presentation = useInventoryLinePresentation(
     { storeId, productIds: lines.map((line) => line.productId), documentKey: editDocumentKey },
     Boolean(canManageStock && storeId && lines.length),
@@ -195,12 +237,23 @@ export const InventoryReceivingPage = ({
     }, 150);
   }, [refetchPresentation, trpcUtils]);
   useEffect(() => () => clearTimeout(productDetailsRefreshTimer.current), []);
-  useSse({ "products.updated": refreshProductDetails });
+  useSse({
+    "products.updated": () => {
+      refreshProductDetails();
+      if (!pendingReceivingRef.current) setPreviewRevision(current => current + 1);
+    },
+    "inventory.updated": payload => {
+      const item = payload && typeof payload === "object" ? payload as { storeId?: string; productId?: string } : null;
+      if (!pendingReceivingRef.current && item?.storeId === storeId &&
+          lines.some(line => line.productId === item.productId))
+        setPreviewRevision(current => current + 1);
+    },
+  });
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
   const formatMoney = useCallback(
-    (value: number) => formatStoreMoney(value, locale, selectedStore),
-    [locale, selectedStore],
+    (value: number) => formatCurrencyKGS(value, locale),
+    [locale],
   );
 
   const debouncedSearch = useDebouncedValue(search.trim());
@@ -220,7 +273,77 @@ export const InventoryReceivingPage = ({
   type SearchResult = NonNullable<typeof searchQuery.data>[number];
 
   useEffect(() => {
-    if (!storeId && !isEditMode && stores.length) {
+    if (isEditMode || !authenticatedDraftOwner || storesQuery.isLoading || !stores.length) return;
+    const identity = `${authenticatedDraftOwner.organizationId}:${authenticatedDraftOwner.userId}`;
+    if (restoredPendingIdentityRef.current === identity) return;
+    if (restoredPendingIdentityRef.current) {
+      storeRefreshSequenceRef.current += 1;
+      pendingReceivingRef.current = null;
+      pendingReceivingOwnerRef.current = null;
+      settledReceivingAttemptRef.current = null;
+      invalidPendingStorageRef.current = false;
+      setPendingReceiving(null);
+      setRecoveringStoredOperation(false);
+      setCompletedReceivingId(null);
+      setPendingCurrency(null);
+      setPostingError("");
+      setLines([]);
+      setStoreId("");
+      const now = new Date();
+      setDateTime(toDateTimeLocalValue(now));
+      setExactDateIso(now.toISOString());
+      setSupplierName("");
+      setReferenceNumber("");
+      setNote("");
+      setSearch("");
+      setPreviewState({ storeId: "", signature: "", checking: false });
+    }
+    restoredPendingIdentityRef.current = identity;
+    for (const store of stores) {
+      const identity = { ...authenticatedDraftOwner, storeId: store.id };
+      const stored = readReceivingPendingState(identity);
+      if (stored.status !== "PENDING") {
+        if (stored.status !== "EMPTY") {
+          invalidPendingStorageRef.current = true;
+          setStoreId(store.id);
+          setRecoveringStoredOperation(true);
+          setPostingError(t(stored.status === "UNAVAILABLE" ? "receivingRecovery.storageUnavailable" : "receivingRecovery.corrupt"));
+          break;
+        }
+        continue;
+      }
+      const pending = stored.pending;
+      pendingReceivingRef.current = pending.request;
+      pendingReceivingOwnerRef.current = authenticatedDraftOwner;
+      settledReceivingAttemptRef.current = null;
+      setPendingReceiving(pending.request);
+      setPendingCurrency(resolveCurrency(pending.draft));
+      setStoreId(pending.draft.storeId);
+      setDateTime(pending.draft.dateTime);
+      setExactDateIso(pending.draft.exactDateIso ?? pending.request.receiving.date ?? null);
+      setSupplierName(pending.draft.supplierName);
+      setReferenceNumber(pending.draft.referenceNumber);
+      setNote(pending.draft.note);
+      setSearch(pending.draft.search);
+      setLines(pending.draft.lines);
+      setPostingError(t("receivingRecovery.uncertain"));
+      break;
+    }
+  }, [authenticatedDraftOwner, isEditMode, stores, storesQuery.isLoading, t]);
+
+  useEffect(() => {
+    if (!selectedStore || isEditMode || pendingLocked) return;
+    const previous = lastSaleCurrencyRef.current;
+    lastSaleCurrencyRef.current = { storeId, code: moneyCurrency.currencyCode, rate: moneyCurrency.currencyRateKgsPerUnit };
+    if (previous?.storeId === storeId && previous.code !== moneyCurrency.currencyCode) {
+      setLines(current => current.map(line => ({ ...line, salePriceInput: "" })));
+      setPreviewState({ storeId: "", signature: "", checking: false });
+      setPostingError(tErrors("receivingReviewStale"));
+    }
+  }, [isEditMode, moneyCurrency.currencyCode, moneyCurrency.currencyRateKgsPerUnit, pendingLocked, selectedStore, storeId, tErrors]);
+
+  useEffect(() => {
+    if (!storeId && !isEditMode && stores.length && !pendingReceivingRef.current && !invalidPendingStorageRef.current) {
       const requestedStore = stores.find((store) => store.id === returningStoreId);
       setStoreId(returningStoreId ? (requestedStore?.id ?? "") : stores[0].id);
     }
@@ -261,7 +384,8 @@ export const InventoryReceivingPage = ({
     if (
       !returningDraftKey ||
       returnSource !== receivingReturnSource ||
-      restoredDraftKey === returningDraftKey
+      restoredDraftKey === returningDraftKey ||
+      pendingReceivingRef.current || invalidPendingStorageRef.current
     ) {
       return;
     }
@@ -288,10 +412,18 @@ export const InventoryReceivingPage = ({
 
     setStoreId(draft.storeId);
     setDateTime(draft.dateTime || toDateTimeLocalValue(new Date()));
+    setExactDateIso(draft.exactDateIso ?? null);
     setSupplierName(draft.supplierName);
     setReferenceNumber(draft.referenceNumber);
     setNote(draft.note);
-    setLines(draft.lines);
+    const draftCurrencyChanged = draft.currencyCode &&
+      draft.currencyCode !== resolveCurrency(stores.find(store => store.id === draft.storeId)).currencyCode;
+    if (draftCurrencyChanged) {
+      setLines(draft.lines.map(line => ({ ...line, salePriceInput: "" })));
+      setPostingError(tErrors("receivingReviewStale"));
+    } else {
+      setLines(draft.lines);
+    }
     setSearch(draft.search);
     pendingRestoreViewRef.current = {
       pageScrollY: draft.pageScrollY,
@@ -309,17 +441,20 @@ export const InventoryReceivingPage = ({
     sessionStatus,
     stores,
     storesQuery.isLoading,
+    tErrors,
     trpcUtils.inventory.searchProducts,
   ]);
 
   const handleStoreChange = (nextStoreId: string) => {
-    if (nextStoreId === storeId) {
+    if (nextStoreId === storeId || pendingReceivingRef.current) {
       return;
     }
     const linesToRefresh = lines;
     const refreshSequence = storeRefreshSequenceRef.current + 1;
     storeRefreshSequenceRef.current = refreshSequence;
     setStoreId(nextStoreId);
+    setLines(current => current.map(line => ({ ...line, salePriceInput: "" })));
+    setPreviewState({ storeId: "", signature: "", checking: false });
     setSearch("");
     if (!linesToRefresh.length) {
       return;
@@ -480,6 +615,7 @@ export const InventoryReceivingPage = ({
 
   const addSearchResult = useCallback(
     (result: SearchResult, mode: "manual" | "scan", options?: { selectQuantity?: boolean }) => {
+      if (pendingReceivingRef.current) return;
       const key = lineKey(result.product.id, result.snapshot.variantId);
       setLines((current) => {
         const existing = current.find((line) => line.key === key);
@@ -545,6 +681,7 @@ export const InventoryReceivingPage = ({
       return;
     }
     handledCreatedProductRef.current = handledKey;
+    const refreshSequence = storeRefreshSequenceRef.current;
 
     const addReturnedProduct = async () => {
       try {
@@ -554,10 +691,11 @@ export const InventoryReceivingPage = ({
           limit: 100,
         });
         const result = results.find((item) => item.product.id === createdProductId) ?? results[0];
-        if (result) {
+        if (result && storeRefreshSequenceRef.current === refreshSequence) {
           addSearchResult(result, "manual", { selectQuantity: true });
         }
       } catch (error) {
+        if (storeRefreshSequenceRef.current !== refreshSequence) return;
         toast({
           variant: "error",
           description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
@@ -580,7 +718,7 @@ export const InventoryReceivingPage = ({
   ]);
 
   const handleSearchSubmit = async () => {
-    if (!storeId || !search.trim()) {
+    if (!storeId || !search.trim() || pendingReceivingRef.current) {
       return;
     }
     try {
@@ -610,6 +748,7 @@ export const InventoryReceivingPage = ({
   };
 
   const createReceivingReturnParams = () => {
+    if (pendingReceivingRef.current || invalidPendingStorageRef.current) return null;
     if (!storeId) {
       toast({ variant: "error", description: t("receivingValidationNoStore") });
       return null;
@@ -626,11 +765,14 @@ export const InventoryReceivingPage = ({
       {
         storeId,
         dateTime,
+        ...(exactDateIso ? { exactDateIso } : {}),
         supplierName,
         referenceNumber,
         note,
         search,
         lines,
+        currencyCode: moneyCurrency.currencyCode,
+        currencyRateKgsPerUnit: moneyCurrency.currencyRateKgsPerUnit,
         pageScrollY: window.scrollY,
         searchResultsScrollTop: searchResultsRef.current?.scrollTop ?? 0,
         focusedElement: lastFocusedElementRef.current,
@@ -721,10 +863,12 @@ export const InventoryReceivingPage = ({
   };
 
   const updateLine = (key: string, patch: Partial<ReceivingLine>) => {
+    if (pendingReceivingRef.current) return;
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
   };
 
   const removeLine = (key: string) => {
+    if (pendingReceivingRef.current) return;
     setLines((current) => current.filter((line) => line.key !== key));
   };
 
@@ -732,20 +876,25 @@ export const InventoryReceivingPage = ({
     () =>
       lines.map((line) => {
         const quantity = parseDecimalInput(line.quantityInput);
-        const unitCost = parseDecimalInput(line.unitCostInput);
+        const unitCost = parsePriceInput(line.unitCostInput);
+        const salePrice = line.salePriceInput?.trim() ? parsePriceInput(line.salePriceInput) : undefined;
         const quantityValid = isValidQuantity(quantity) && quantity > 0;
-        const unitCostValid = Number.isFinite(unitCost) && unitCost >= 0;
+        const unitCostValid = unitCost !== null && unitCost >= 0;
+        const salePriceValid = salePrice === undefined || (salePrice !== null && salePrice >= 0);
         return {
           key: line.key,
           quantity,
           unitCost,
+          salePriceKgs: salePrice === undefined || salePrice === null ? undefined :
+            Number(convertToKgs(salePrice, entryCurrency.currencyRateKgsPerUnit, entryCurrency.currencyCode).toFixed(2)),
           quantityValid,
           unitCostValid,
-          lineTotal: quantityValid && unitCostValid ? quantity * unitCost : 0,
+          salePriceValid,
+          lineTotal: quantityValid && unitCostValid ? quantity * unitCost! : 0,
           newStock: quantityValid ? line.currentStock + quantity : line.currentStock,
         };
       }),
-    [lines],
+    [lines, entryCurrency.currencyCode, entryCurrency.currencyRateKgsPerUnit],
   );
 
   const metricByKey = useMemo(
@@ -754,6 +903,7 @@ export const InventoryReceivingPage = ({
   );
   const invalidQuantity = lineMetrics.some((metric) => !metric.quantityValid);
   const invalidUnitCost = lineMetrics.some((metric) => !metric.unitCostValid);
+  const invalidSalePrice = !isEditMode && lineMetrics.some((metric) => !metric.salePriceValid);
   const summary = useMemo(
     () => ({
       products: lines.length,
@@ -765,7 +915,7 @@ export const InventoryReceivingPage = ({
     }),
     [lineMetrics, lines.length],
   );
-  const validationMessage = !storeId
+  const baseValidationMessage = !storeId
     ? t("receivingValidationNoStore")
     : !lines.length
       ? t("receivingValidationNoProducts")
@@ -773,14 +923,107 @@ export const InventoryReceivingPage = ({
         ? t("receivingValidationInvalidQuantity")
         : invalidUnitCost
           ? t("receivingValidationInvalidUnitCost")
-          : "";
+          : invalidSalePrice
+            ? t("receivingPricing.invalidSale")
+            : "";
 
-  const postMutation = trpc.inventory.postStockReceiving.useMutation({
-    onSuccess: async (result) => {
-      await trpcUtils.inventory.list.invalidate();
-      await trpcUtils.inventory.searchProducts.invalidate();
-      await trpcUtils.inventory.productMovements.invalidate();
-      await trpcUtils.inventory.productMovementDocument.invalidate();
+  const commerceInput = useMemo<StockReceivingCommerce | null>(() => {
+    if (isEditMode || baseValidationMessage) return null;
+    const date = exactDateIso ? new Date(exactDateIso) : dateTime ? new Date(dateTime) : null;
+    const parsed = stockReceivingCommerceSchema.safeParse({
+      storeId,
+      date: date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined,
+      supplierName: supplierName.trim() || undefined,
+      referenceNumber: referenceNumber.trim() || undefined,
+      note: note.trim() || undefined,
+      lines: lines.map(line => {
+        const metric = metricByKey.get(line.key)!;
+        return { productId: line.productId, variantId: line.variantId, quantity: metric.quantity,
+          unitCost: metric.unitCost, ...(metric.salePriceKgs !== undefined ? { salePriceKgs: metric.salePriceKgs } : {}) };
+      }),
+    });
+    return parsed.success ? parsed.data : null;
+  }, [baseValidationMessage, dateTime, exactDateIso, isEditMode, lines, metricByKey, note, referenceNumber, storeId, supplierName]);
+  const commerceSignature = commerceInput ? JSON.stringify(commerceInput) : "";
+  const { mutateAsync: fetchCommercePreview } = trpc.inventory.previewStockReceiving.useMutation();
+  useEffect(() => {
+    if (!commerceSignature || isEditMode || pendingReceivingRef.current || invalidPendingStorageRef.current) return;
+    let active = true;
+    setPreviewState(current => ({ ...current, checking: true, error: undefined }));
+    const timer = window.setTimeout(() => {
+      void fetchCommercePreview(JSON.parse(commerceSignature) as StockReceivingCommerce).then(data => {
+        if (!active) return;
+        if (data.currencyCode !== moneyCurrency.currencyCode ||
+            data.currencyRateKgsPerUnit !== moneyCurrency.currencyRateKgsPerUnit) {
+          setPreviewState(current => ({ ...current, checking: false, signature: commerceSignature,
+            error: tErrors("receivingReviewStale") }));
+          void trpcUtils.stores.list.invalidate();
+          return;
+        }
+        setPreviewState({ storeId, signature: commerceSignature, data, checking: false });
+      }).catch(error => {
+        if (active) setPreviewState(current => ({ ...current, signature: commerceSignature,
+          error: translateError(tErrors, error as Parameters<typeof translateError>[1]), checking: false }));
+      });
+    }, 350);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [commerceSignature, fetchCommercePreview, isEditMode, moneyCurrency.currencyCode,
+    moneyCurrency.currencyRateKgsPerUnit, pendingReceiving, previewRevision, storeId, tErrors, trpcUtils]);
+  const commercePreview = previewState.signature === commerceSignature && !previewState.error &&
+    !previewState.checking ? previewState.data : undefined;
+  const commerceContext = previewState.storeId === storeId ? previewState.data : undefined;
+  useEffect(() => {
+    if (!commercePreview || pendingReceivingRef.current) return;
+    const remaining = new Date(commercePreview.expiresAt).getTime() - Date.now();
+    const timer = window.setTimeout(() => setPreviewRevision(current => current + 1), Math.max(0, remaining));
+    return () => window.clearTimeout(timer);
+  }, [commercePreview]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "hidden" && !pendingReceivingRef.current)
+        setPreviewRevision(current => current + 1);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, []);
+  const validationMessage = baseValidationMessage || (!isEditMode && !pendingLocked && !commerceInput
+    ? tErrors("invalidInput") : !isEditMode && !pendingLocked && !commercePreview
+      ? previewState.error || t("receivingPricing.checking") : "");
+
+  const matchesPendingAttempt = (request: ReviewedStockReceiving) => isCurrentReceivingAttempt(
+    request,
+    pendingReceivingRef.current && pendingReceivingOwnerRef.current
+      ? { request: pendingReceivingRef.current, owner: pendingReceivingOwnerRef.current } : null,
+    authenticatedDraftOwnerRef.current,
+  );
+  const matchesSettledAttempt = (request: ReviewedStockReceiving) => isCurrentReceivingAttempt(
+    request, settledReceivingAttemptRef.current, authenticatedDraftOwnerRef.current,
+  );
+  const clearPendingOperation = (request: ReviewedStockReceiving) => {
+    if (!matchesPendingAttempt(request)) return false;
+    const pending = pendingReceivingRef.current;
+    const owner = pendingReceivingOwnerRef.current;
+    if (!pending || !owner) return false;
+    removeReceivingPending({ ...owner, storeId: pending.receiving.storeId }, pending.idempotencyKey);
+    settledReceivingAttemptRef.current = { request: pending, owner };
+    pendingReceivingRef.current = null;
+    pendingReceivingOwnerRef.current = null;
+    setPendingReceiving(null);
+    setRecoveringStoredOperation(false);
+    setPendingCurrency(null);
+    return true;
+  };
+  const finishPostedReceiving = async (result: { receivingId: string }, request: ReviewedStockReceiving) => {
+      if (!clearPendingOperation(request)) return;
+      setCompletedReceivingId(result.receivingId);
+      setPostingError("");
+      await Promise.allSettled([
+        trpcUtils.inventory.list.invalidate(), trpcUtils.inventory.searchProducts.invalidate(),
+        trpcUtils.inventory.productMovements.invalidate(), trpcUtils.inventory.productMovementDocument.invalidate(),
+        trpcUtils.products.invalidate(), trpcUtils.storePrices.invalidate(), trpcUtils.priceBooks.invalidate(),
+      ]);
+      if (!matchesSettledAttempt(request)) return;
       clearReceivingDraft();
       toast({ variant: "success", description: t("receivingSuccess") });
       router.push(
@@ -788,12 +1031,41 @@ export const InventoryReceivingPage = ({
           `STOCK_RECEIVING:STOCK_RECEIVING:${result.receivingId}`,
         )}`,
       );
-    },
-    onError: (error) => {
+  };
+  const postMutation = trpc.inventory.postReviewedStockReceiving.useMutation({
+    onSuccess: finishPostedReceiving,
+    onError: (error, request) => {
+      if (!matchesPendingAttempt(request)) return;
+      const unknown = !error.data || error.data.code === "INTERNAL_SERVER_ERROR" ||
+        error.message === "requestInProgress";
+      if (!unknown) {
+        clearPendingOperation(request);
+        setPreviewState(current => ({ ...current, signature: "", data: undefined }));
+        setPreviewRevision(current => current + 1);
+      }
+      const message = unknown ? t("receivingRecovery.uncertain") :
+        translateError(tErrors, error) || t("receivingPostFailed");
+      setPostingError(message);
       toast({
         variant: "error",
-        description: translateError(tErrors, error) || t("receivingPostFailed"),
+        description: message,
       });
+    },
+  });
+  const reconcileMutation = trpc.inventory.reconcileStockReceivingAttempt.useMutation({
+    onSuccess: async (result, request) => {
+      if (!matchesPendingAttempt(request)) return;
+      if (result.status === "POSTED" && result.result) return finishPostedReceiving(result.result, request);
+      if (!clearPendingOperation(request)) return;
+      setPostingError("");
+      setPreviewState(current => ({ ...current, signature: "", data: undefined }));
+      setPreviewRevision(current => current + 1);
+      await trpcUtils.inventory.searchProducts.invalidate();
+      if (!matchesSettledAttempt(request)) return;
+      toast({ variant: "success", description: t("receivingRecovery.notPosted") });
+    },
+    onError: (error, request) => {
+      if (matchesPendingAttempt(request)) setPostingError(translateError(tErrors, error));
     },
   });
   const editMutation = trpc.inventory.editProductMovementDocument.useMutation({
@@ -819,13 +1091,12 @@ export const InventoryReceivingPage = ({
   });
 
   const handlePost = () => {
-    if (validationMessage || postMutation.isLoading || editMutation.isLoading) {
+    if (pendingLocked || pendingReceivingRef.current || completedReceivingId || validationMessage || postMutation.isLoading || editMutation.isLoading) {
       if (validationMessage) {
         toast({ variant: "error", description: validationMessage });
       }
       return;
     }
-    const parsedDate = dateTime ? new Date(dateTime) : null;
     const normalizedLines = lines.map((line) => {
       const metric = metricByKey.get(line.key);
       return {
@@ -837,7 +1108,7 @@ export const InventoryReceivingPage = ({
     });
 
     if (isEditMode && editDocumentKey) {
-      editMutation.mutate({
+      const change = {
         documentKey: editDocumentKey,
         sourceStoreId: storeId,
         notes: note.trim() || undefined,
@@ -848,27 +1119,45 @@ export const InventoryReceivingPage = ({
           quantity: line.quantity,
           unitCostKgs: line.unitCost,
         })),
-        idempotencyKey: crypto.randomUUID(),
-      });
+      };
+      const signature = JSON.stringify(change);
+      if (editOperationRef.current?.signature !== signature)
+        editOperationRef.current = { signature, key: crypto.randomUUID() };
+      editMutation.mutate({ ...change, idempotencyKey: editOperationRef.current!.key });
       return;
     }
 
-    postMutation.mutate({
-      storeId,
-      date:
-        parsedDate && Number.isFinite(parsedDate.getTime()) ? parsedDate.toISOString() : undefined,
-      supplierName: supplierName.trim() || undefined,
-      referenceNumber: referenceNumber.trim() || undefined,
-      note: note.trim() || undefined,
-      lines: normalizedLines,
-      idempotencyKey: crypto.randomUUID(),
+    if (!commerceInput || !commercePreview || !authenticatedDraftOwner) return;
+    if (Date.parse(commercePreview.expiresAt) <= Date.now()) {
+      setPreviewRevision(current => current + 1);
+      setPostingError(tErrors("receivingReviewStale"));
+      return;
+    }
+    const request: ReviewedStockReceiving = {
+      receiving: commerceInput, token: commercePreview.token, idempotencyKey: crypto.randomUUID(),
+    };
+    const saved = writeReceivingPending({ ...authenticatedDraftOwner, storeId }, {
+      request, draft: { storeId, dateTime, supplierName, referenceNumber, note, search, lines,
+        ...(commerceInput.date ? { exactDateIso: commerceInput.date } : {}),
+        currencyCode: moneyCurrency.currencyCode, currencyRateKgsPerUnit: moneyCurrency.currencyRateKgsPerUnit },
     });
+    if (!saved) {
+      setPostingError(t("receivingRecovery.storageUnavailable"));
+      return;
+    }
+    pendingReceivingRef.current = request;
+    pendingReceivingOwnerRef.current = authenticatedDraftOwner;
+    settledReceivingAttemptRef.current = null;
+    setPendingCurrency(moneyCurrency);
+    setPendingReceiving(request);
+    setPostingError("");
+    postMutation.mutate(request);
   };
 
   const pageTitle = isEditMode ? t("receivingEditTitle") : t("stockReceiving");
   const pageSubtitle = isEditMode ? t("receivingEditSubtitle") : t("stockReceivingSubtitle");
   const backHref = isEditMode ? editBackHref : "/inventory";
-  const saving = postMutation.isLoading || editMutation.isLoading;
+  const saving = postMutation.isLoading || editMutation.isLoading || reconcileMutation.isLoading;
   const submitLabel = isEditMode ? t("saveChanges") : t("receivingPost");
   const submitShortLabel = isEditMode ? t("saveChangesShort") : t("receivingPostShort");
 
@@ -956,6 +1245,25 @@ export const InventoryReceivingPage = ({
         actionClassName="hidden md:flex"
       />
 
+      {postingError ? (
+        <div role="alert" className="mb-4 space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
+          <p>{postingError}</p>
+          {pendingReceiving ? <Button type="button" variant="secondary" disabled={saving}
+            onClick={() => reconcileMutation.mutate(pendingReceiving)}>
+            {reconcileMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+            {t("receivingRecovery.check")}
+          </Button> : null}
+          {recoveringStoredOperation && !pendingReceiving ? <Button type="button" variant="secondary"
+            onClick={() => window.location.reload()}>{tCommon("tryAgain")}</Button> : null}
+        </div>
+      ) : null}
+      {completedReceivingId ? <div role="status" className="mb-4 rounded-lg border border-success/40 bg-success/10 p-4 text-sm">
+        <p>{t("receivingSuccess")}</p>
+        <Button asChild variant="secondary" className="mt-2"><Link href={`/inventory/movements/${encodeURIComponent(`STOCK_RECEIVING:STOCK_RECEIVING:${completedReceivingId}`)}`}>
+          {t("receivingRecovery.openDocument")}
+        </Link></Button>
+      </div> : null}
+      <fieldset disabled={pendingLocked} className="min-w-0">
       <div className="space-y-6">
         <section className="bazaar-doc-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -991,7 +1299,7 @@ export const InventoryReceivingPage = ({
                 id="receiving-date"
                 type="datetime-local"
                 value={dateTime}
-                onChange={(event) => setDateTime(event.target.value)}
+                onChange={(event) => { setExactDateIso(null); setDateTime(event.target.value); }}
               />
             </div>
             <details className="rounded-lg border border-border/65 bg-muted/25 p-3 lg:hidden">
@@ -1194,6 +1502,22 @@ export const InventoryReceivingPage = ({
                 {validationMessage || t("receivingValidationReady")}
               </Badge>
             </div>
+            {!isEditMode && lines.length ? (
+              <div className="mb-4 space-y-3 text-xs leading-5 text-muted-foreground">
+                <p>{t("receivingPricing.explanation", { store: selectedStore?.name ?? "" })}</p>
+                {previewState.error && previewState.signature === commerceSignature ? (
+                  <div className="space-y-2" role="alert"><p className="text-danger">{previewState.error}</p>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setPreviewRevision(current => current + 1)}>{tCommon("tryAgain")}</Button>
+                  </div>
+                ) : null}
+                {commerceContext?.pricingAllowed === false ? <SubscriptionFeatureLock feature="storePrices" compact
+                  canManage={session?.user?.role === "ADMIN"} /> : null}
+                {lines.some(line => line.salePriceInput?.trim()) ? <Button type="button" size="sm" variant="ghost"
+                  onClick={() => setLines(current => current.map(line => ({ ...line, salePriceInput: "" })))}>
+                  {t("receivingPricing.keepAllPrices")}
+                </Button> : null}
+              </div>
+            ) : null}
 
             {lines.length ? (
               <div className="space-y-3">
@@ -1201,7 +1525,7 @@ export const InventoryReceivingPage = ({
                 <div className="hidden px-3 text-[11px] font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem] md:gap-2">
                   <span>{tCommon("product")}</span>
                   <span>{t("receiveQty")}</span>
-                  <span>{t("unitCost")}</span>
+                  <span>{t("receivingPricing.purchaseCost")}</span>
                   <span>{t("receivingLineTotal")}</span>
                   <span>{t("receivingNewStock")}</span>
                   <span />
@@ -1277,9 +1601,9 @@ export const InventoryReceivingPage = ({
                       </div>
                       <div className="space-y-1 md:space-y-0">
                         <Label className="block text-[11px] leading-4 md:hidden">
-                          {t("unitCost")}
+                          {t("receivingPricing.purchaseCost")}
                         </Label>
-                        <Input
+                        <PriceInput
                           ref={(node) => {
                             setReceivingInputRef(line.key, "unitCost", "desktop", node);
                           }}
@@ -1297,8 +1621,6 @@ export const InventoryReceivingPage = ({
                           onKeyDown={(event) =>
                             handleReceivingInputKeyDown(event, line.key, "unitCost", "desktop")
                           }
-                          type="number"
-                          inputMode="decimal"
                           min={0}
                           step="0.01"
                           data-receiving-input="unitCost"
@@ -1331,6 +1653,16 @@ export const InventoryReceivingPage = ({
                       >
                         <DeleteIcon className="h-4 w-4" aria-hidden />
                       </Button>
+                      {!isEditMode ? <ReceivingCommerceLine lineKey={line.key}
+                        context={commerceContext?.lines.find(item => item.productId === line.productId && item.variantId === line.variantId)}
+                        valuation={commercePreview?.lines.find(item => item.productId === line.productId && item.variantId === line.variantId)?.valuation}
+                        currencyCode={entryCurrency.currencyCode} currencyRateKgsPerUnit={entryCurrency.currencyRateKgsPerUnit}
+                        saleInput={line.salePriceInput ?? ""} onSaleChange={value => updateLine(line.key, { salePriceInput: value })}
+                        onSaleFocus={() => { lastFocusedElementRef.current = { target: "lineInput", key: line.key, field: "salePrice" }; }}
+                        onSaleKeyDown={event => handleReceivingInputKeyDown(event, line.key, "salePrice", "desktop")}
+                        inputRef={node => setReceivingInputRef(line.key, "salePrice", "desktop", node)}
+                        pricingAllowed={commerceContext?.pricingAllowed ?? false} loading={Boolean(commerceInput && !pendingLocked && !commercePreview && !previewState.error)}
+                        disabled={pendingLocked || saving} /> : null}
                     </div>
                   );
                 })}
@@ -1352,7 +1684,9 @@ export const InventoryReceivingPage = ({
               </h3>
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="secondary">
-                  <Link href={backHref} onClick={clearReceivingDraft}>
+                  <Link href={backHref} aria-disabled={pendingLocked} onClick={event => {
+                    if (pendingLocked) event.preventDefault(); else clearReceivingDraft();
+                  }}>
                     {tCommon("cancel")}
                   </Link>
                 </Button>
@@ -1360,7 +1694,7 @@ export const InventoryReceivingPage = ({
                   type="button"
                   data-baam-obstacle="action"
                   onClick={handlePost}
-                  disabled={saving || Boolean(validationMessage)}
+                  disabled={saving || pendingLocked || Boolean(validationMessage)}
                 >
                   {saving ? (
                     <Spinner className="h-4 w-4" />
@@ -1413,6 +1747,7 @@ export const InventoryReceivingPage = ({
           </div>
         </section>
       </div>
+      </fieldset>
       <div className="bazaar-doc-mobile-actions bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:hidden">
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -1433,7 +1768,9 @@ export const InventoryReceivingPage = ({
           </div>
           <div className="grid grid-cols-[0.8fr_1.2fr] gap-2">
             <Button asChild variant="secondary" className="min-h-11">
-              <Link href={backHref} onClick={clearReceivingDraft}>
+              <Link href={backHref} aria-disabled={pendingLocked} onClick={event => {
+                if (pendingLocked) event.preventDefault(); else clearReceivingDraft();
+              }}>
                 {tCommon("cancel")}
               </Link>
             </Button>
@@ -1442,7 +1779,7 @@ export const InventoryReceivingPage = ({
               className="min-h-11"
               data-baam-obstacle="action"
               onClick={handlePost}
-              disabled={saving || Boolean(validationMessage)}
+              disabled={saving || pendingLocked || Boolean(validationMessage)}
             >
               {saving ? (
                 <Spinner className="h-4 w-4" />

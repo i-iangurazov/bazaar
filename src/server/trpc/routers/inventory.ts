@@ -66,6 +66,12 @@ import { AppError } from "@/server/services/errors";
 import { getProductStockCandidates } from "@/server/services/productStockIdentity";
 import { reconcileTransferAttempt } from "@/server/services/transferRecovery";
 import { getInventoryProductPresentation } from "@/server/services/inventoryProductPresentation";
+import { stockReceivingCommerceSchema, reviewedStockReceivingSchema } from "@/lib/stockReceivingCommerce";
+import {
+  previewStockReceiving,
+  postReviewedStockReceiving,
+  reconcileStockReceivingAttempt,
+} from "@/server/services/stockReceivingCommerce";
 
 const inventoryStockFilterSchema = z.enum([
   "all",
@@ -1432,6 +1438,39 @@ export const inventoryRouter = router({
       } catch (error) {
         throw toTRPCError(error);
       }
+    }),
+
+  previewStockReceiving: managerReadProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-receiving-review" }))
+    .input(stockReceivingCommerceSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await previewStockReceiving({ organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id, receiving: input });
+      } catch (error) { throw toTRPCError(error); }
+    }),
+
+  postReviewedStockReceiving: managerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-receiving-reviewed-post" }))
+    .input(reviewedStockReceivingSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await postReviewedStockReceiving({ ...input, organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id, requestId: ctx.requestId });
+      } catch (error) { throw toTRPCError(error); }
+    }),
+
+  // Recovery may only read a committed receipt or close its operation key;
+  // it cannot post inventory/prices and remains usable after subscription expiry.
+  reconcileStockReceivingAttempt: managerReadProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-receiving-recovery" }))
+    .input(reviewedStockReceivingSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        if (ctx.impersonator) throw new AppError("forbidden", "FORBIDDEN", 403);
+        return await reconcileStockReceivingAttempt({ ...input, organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id, requestId: ctx.requestId });
+      } catch (error) { throw toTRPCError(error); }
     }),
 
   postStockReceiving: managerProcedure

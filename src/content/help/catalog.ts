@@ -519,17 +519,33 @@ export const helpGuides: HelpGuide[] = [
           "Enter quantity and cost",
         ),
         t(
-          "Себестоимость — цена одной единицы у поставщика.",
-          "Өздүк нарк — жеткирүүчүдөн бир даананын баасы.",
-          "Unit cost is the supplier price for one unit.",
+          "Закупка · KGS — фактическая стоимость одной базовой единицы новой поставки в сомах.",
+          "Сатып алуу · KGS — жаңы жеткирүүдөгү бир негизги бирдиктин сом менен чыныгы наркы.",
+          "Purchase · KGS is the actual cost of one base unit in the new delivery, in soms.",
+        ),
+      ),
+      step(
+        t("Проверьте себестоимость остатка", "Калдыктын өздүк наркын текшериңиз", "Review the remaining-stock cost"),
+        t(
+          "В строке показаны расчётная себестоимость остатка выбранного магазина сейчас и после приёмки. Оценка использует подтверждённую историю движений. Если данных не хватает, показана причина; приёмку можно продолжить. Это справочный расчёт для выбора цены. Себестоимость карточки обновляется при проведении по прежнему правилу организации; себестоимость прошлых продаж сохраняется.",
+          "Сапта тандалган дүкөндүн калдыгынын азыркы жана кабыл алуудан кийинки эсептик өздүк наркы көрсөтүлөт. Эсеп ырасталган кыймылдарга таянат. Маалымат жетишсиз болсо, себеби көрсөтүлөт; кабыл алууну улантса болот. Бул баа тандоо үчүн маалымдама. Карточканын өздүк наркы документ өткөрүлгөндө уюмдун мурдагы эрежеси менен жаңыртылат; мурдагы сатуулардын өздүк наркы сакталат.",
+          "Each line shows the selected store's calculated stock cost now and after receiving. The estimate uses confirmed stock movements. If data is insufficient, the reason is shown and receiving remains available. This is a pricing reference. Posting updates the product-card cost under the organization's existing rule; historical sale costs are preserved.",
+        ),
+      ),
+      step(
+        t("При необходимости задайте цену продажи", "Керек болсо сатуу баасын коюңуз", "Optionally set a selling price"),
+        t(
+          "Введите новую цену в валюте магазина. Пустое поле сохраняет текущую цену; 0 задаёт нулевую цену. Изменение применяется только при проведении к выбранному магазину и варианту товара. Скидки и оптовая цена сохраняются. Если цена была общей, новая становится индивидуальной для этого магазина. Доступ зависит от прав и тарифа.",
+          "Жаңы бааны дүкөндүн валютасында киргизиңиз. Бош талаа учурдагы бааны сактайт; 0 нөлдүк бааны коёт. Өзгөртүү документ өткөрүлгөндө гана тандалган дүкөнгө жана товар вариантына колдонулат. Арзандатуулар жана дүң баа сакталат. Жалпы баа болсо, жаңысы ушул дүкөн үчүн жеке баа болот. Мүмкүнчүлүк укуктарга жана тарифке жараша болот.",
+          "Enter a new price in the store's currency. Blank keeps the current price; 0 sets a zero price. The change applies only when posting, for this store and variant. Discounts and wholesale prices remain. An inherited shared price becomes an individual store price. Access depends on your permissions and plan.",
         ),
       ),
       step(
         t("Проведите документ", "Документти өткөрүңүз", "Post the document"),
         t(
-          "Проверьте итог и нажмите «Провести». Остаток изменится сразу.",
-          "Жыйынтыкты текшерип, «Өткөрүү» баскычын басыңыз. Калдык дароо өзгөрөт.",
-          "Review the total and select Post. Stock updates immediately.",
+          "Проверьте итог и нажмите «Провести». Остаток и выбранные новые цены сохранятся вместе. При потере связи нажмите «Проверить проведение» и дождитесь результата, прежде чем повторять операцию.",
+          "Жыйынтыкты текшерип, «Өткөрүү» баскычын басыңыз. Калдык жана тандалган жаңы баалар чогуу сакталат. Байланыш үзүлсө, операцияны кайталоодон мурун «Өткөрүүнү текшерүү» баскычын басып, жыйынтыкты күтүңүз.",
+          "Review the total and select Post. Stock and any new prices save together. If the connection is lost, select Check posting and wait for the result before repeating the operation.",
         ),
       ),
     ],

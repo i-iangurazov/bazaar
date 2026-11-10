@@ -104,6 +104,7 @@ const contextualHelpSummaries: Record<string, ContextualHelpSummary> = {
         "Санын жана өздүк наркын көрсөтүңүз",
         "Enter quantity and cost",
       ),
+      t("Проверьте расчёт и при необходимости цену продажи", "Эсепти жана керек болсо сатуу баасын текшериңиз", "Review the cost estimate and optional selling price"),
       t("Нажмите «Провести»", "«Өткөрүү» баскычын басыңыз", "Select Post"),
     ],
   },

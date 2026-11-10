@@ -101,7 +101,9 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
   const secondSignatureLabel =
     document.documentType === "WRITE_OFF" || isAdjustment ? labels.checkedBy : labels.receivedBy;
   const hasReason = Boolean(document.reason?.trim());
-  const hasComment = Boolean((document.comment || document.description)?.trim());
+  // Description can be an automatic product preview (or a write-off reason),
+  // whereas comment is the text actually entered for the document.
+  const hasComment = Boolean(document.comment?.trim());
 
   return (
     <section className="movement-print-sheet" aria-label={labels.title}>
@@ -489,7 +491,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         {hasComment ? (
           <div className="movement-print-meta-item movement-print-comment">
             <dt className="movement-print-meta-label">{labels.comment}</dt>
-            <dd>{document.comment || document.description}</dd>
+            <dd>{document.comment}</dd>
           </div>
         ) : null}
       </dl>

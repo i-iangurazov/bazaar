@@ -4049,6 +4049,43 @@
         "sourceMissing": "Source price not set",
         "disabled": "Wholesale prices disabled"
       }
+    },
+    "receivingPricing": {
+      "purchaseCost": "Purchase · KGS",
+      "costTitle": "Estimated cost of stock on hand",
+      "before": "Current",
+      "after": "After receipt",
+      "saleLabel": "New selling price · {currency}{unit}",
+      "keepPrice": "Keep current price",
+      "currentSale": "Current: {price}",
+      "discountsKept": "Discounts are preserved",
+      "sharedWarning": "This store will use an individual price. The shared price list stays unchanged.",
+      "unknown": "Unavailable",
+      "noStock": "No stock",
+      "checking": "Checking…",
+      "invalidSale": "Enter a price of 0 or more, with up to two decimal places.",
+      "explanation": "This reference valuation of stock in “{store}” helps set a selling price. It is separate from product-card cost, which receipts update under existing rules. Past sales are not recalculated.",
+      "keepAllPrices": "Keep all selling prices",
+      "reasons": {
+        "UNVALUED_STOCK": "The history contains stock without a purchase cost.",
+        "NEGATIVE_STOCK": "The history contains negative stock, so a reliable estimate is unavailable.",
+        "SNAPSHOT_MISMATCH": "Movement history and current stock disagree. Review is required.",
+        "HISTORY_LIMIT": "This estimate needs an additional history review.",
+        "MISSING_TRANSFER": "Transfer cost information is incomplete.",
+        "MISSING_RETURN": "The returned stock has incomplete cost information.",
+        "AMBIGUOUS_CORRECTION": "Historical corrections cannot be valued reliably.",
+        "BACKDATED": "Movement ordering at the selected time does not allow a reliable valuation.",
+        "INVALID_HISTORY": "There is not enough verified information to calculate this estimate.",
+        "NO_STOCK": "This store has no stock of this item yet."
+      }
+    },
+    "receivingRecovery": {
+      "uncertain": "The posting result could not be confirmed. Do not create another receipt; check this attempt first.",
+      "check": "Check posting status",
+      "notPosted": "The receipt was not posted. Review the estimate and post it again.",
+      "storageUnavailable": "Recovery information could not be saved or read. Allow browser storage and reload this page.",
+      "corrupt": "Saved posting information is damaged. Contact support and check the movement journal before receiving this stock again.",
+      "openDocument": "Open document"
     }
   },
   "products": {
@@ -6056,7 +6093,9 @@
       "imageStudio": "AI image studio",
       "initialImport": "Initial import",
       "rawDataExport": "Export your data"
-    }
+    },
+    "receivingReviewStale": "Stock, prices or settings have changed. Review the refreshed estimate before posting.",
+    "receivingAttemptCanceled": "This posting attempt is closed. Refresh the estimate and post the receipt again."
   },
   "adminJobs": {
     "title": "Admin jobs",
