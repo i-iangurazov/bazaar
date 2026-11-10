@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, type ComponentType } from "react";
+import React, { useCallback, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
 
 import { MoreIcon } from "@/components/icons";
@@ -31,12 +31,36 @@ type RowActionsProps = {
   maxInline?: number;
   moreLabel: string;
   className?: string;
+  moreTriggerRef?: React.Ref<HTMLButtonElement>;
 };
 
-export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: RowActionsProps) => {
+export const RowActions = ({
+  actions,
+  maxInline = 2,
+  moreLabel,
+  className,
+  moreTriggerRef,
+}: RowActionsProps) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const pendingActionRef = useRef<(() => void) | null>(null);
+  const setMenuTriggerRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      menuTriggerRef.current = node;
+      if (typeof moreTriggerRef === "function") {
+        const cleanup = moreTriggerRef(node);
+        if (typeof cleanup === "function") {
+          return () => {
+            if (menuTriggerRef.current === node) menuTriggerRef.current = null;
+            cleanup();
+          };
+        }
+      } else if (moreTriggerRef) {
+        moreTriggerRef.current = node;
+      }
+    },
+    [moreTriggerRef],
+  );
 
   const runAfterMenuClose = (action?: () => void) => {
     if (!action) return;
@@ -133,7 +157,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <Button
-                  ref={menuTriggerRef}
+                  ref={setMenuTriggerRef}
                   type="button"
                   variant="ghost"
                   size="icon"

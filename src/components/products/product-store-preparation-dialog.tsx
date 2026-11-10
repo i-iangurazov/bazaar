@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -42,6 +42,7 @@ export function ProductStorePreparationDialog(props: {
   addToAssortment?: boolean;
   useExisting?: boolean;
   onPrepared?: (storeIds: string[]) => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const t = useTranslations("productPreparation"),
     common = useTranslations("common"),
@@ -235,6 +236,7 @@ export function ProductStorePreparationDialog(props: {
   return (
     <Modal
       open={props.open}
+      returnFocusRef={props.returnFocusRef}
       onOpenChange={(open) => {
         if (!busy) props.onOpenChange(open);
       }}

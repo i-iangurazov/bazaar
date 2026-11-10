@@ -29,6 +29,7 @@ import {
 } from "@/components/product-description-generation-progress";
 import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";
 import { ProductDeletionDialog } from "@/components/products/product-deletion-dialog";
+import { ProductStorePreparationDialog } from "@/components/products/product-store-preparation-dialog";
 import { useQuickProductDuplicate } from "@/components/products/use-quick-product-duplicate";
 import { CatalogDiscountDialog } from "@/components/products/catalog-discount-dialog";
 import { SavedTableViews } from "@/components/saved-table-views";
@@ -154,6 +155,7 @@ type ProductSortKey =
 
 type ProductSortDirection = "asc" | "desc";
 type ProductReadinessBadgeVariant = "muted" | "warning" | "danger";
+type ProductActionSurface = "table" | "grid" | "mobile";
 
 const CATEGORY_IN_USE_DETAILS_PREFIX = "categoryInUseDetails:";
 
@@ -427,6 +429,45 @@ const ProductsPage = () => {
     id: string;
     name: string;
   } | null>(null);
+  const [storePreparationTarget, setStorePreparationTarget] = useState<{
+    id: string;
+    name: string;
+    sku: string;
+    sourceStoreId?: string;
+  } | null>(null);
+  const productMoreTriggersRef = useRef(
+    new Map<string, Map<ProductActionSurface, HTMLButtonElement>>(),
+  );
+  const storePreparationFocusProductIdRef = useRef<string | null>(null);
+  const storePreparationReturnFocusRef = useRef<HTMLElement | null>(null);
+  const refreshStorePreparationReturnFocus = useCallback(() => {
+    const productId = storePreparationFocusProductIdRef.current;
+    const triggers = productId ? productMoreTriggersRef.current.get(productId) : undefined;
+    storePreparationReturnFocusRef.current =
+      [...(triggers?.values() ?? [])].find(
+        (node) => node.isConnected && node.getClientRects().length > 0,
+      ) ?? null;
+  }, []);
+  const getProductMoreTriggerRef = useCallback(
+    (productId: string, surface: ProductActionSurface) => {
+      let registeredNode: HTMLButtonElement | null = null;
+      return (node: HTMLButtonElement | null) => {
+        const triggers = productMoreTriggersRef.current.get(productId);
+        if (node) {
+          const next = triggers ?? new Map<ProductActionSurface, HTMLButtonElement>();
+          next.set(surface, node);
+          productMoreTriggersRef.current.set(productId, next);
+        } else if (triggers?.get(surface) === registeredNode) {
+          triggers.delete(surface);
+          if (!triggers.size) productMoreTriggersRef.current.delete(productId);
+        }
+        registeredNode = node;
+        refreshStorePreparationReturnFocus();
+      };
+    },
+    [refreshStorePreparationReturnFocus],
+  );
+  useEffect(refreshStorePreparationReturnFocus);
   const quickDuplicate = useQuickProductDuplicate();
   const inlineEditingEnabled = true;
 
@@ -2527,6 +2568,24 @@ const ProductsPage = () => {
                 setDuplicateTarget({ id: product.id, name: product.name });
               },
             },
+            {
+              key: "prepare-in-stores",
+              label: t("prepareInStores"),
+              icon: CopyIcon,
+              disabled: inlineProductMutation.isLoading || inlineStorePriceMutation.isLoading,
+              onSelect: () => {
+                if (inlineProductMutation.isLoading || inlineStorePriceMutation.isLoading) return;
+                // Keep the identity through closing, when refreshed rows can remount again.
+                storePreparationFocusProductIdRef.current = product.id;
+                refreshStorePreparationReturnFocus();
+                setStorePreparationTarget({
+                  id: product.id,
+                  name: product.name,
+                  sku: product.sku,
+                  sourceStoreId: selectedStore?.id,
+                });
+              },
+            },
             ...(storeId
               ? [
                   {
@@ -2580,7 +2639,11 @@ const ProductsPage = () => {
       persistProductsReturnState,
       duplicateProduct,
       duplicatingProduct,
+      inlineProductMutation.isLoading,
+      inlineStorePriceMutation.isLoading,
+      refreshStorePreparationReturnFocus,
       restoreProduct,
+      selectedStore?.id,
       storeId,
       t,
       tCommon,
@@ -2978,6 +3041,7 @@ const ProductsPage = () => {
           actions={getProductActions(row.original)}
           maxInline={1}
           moreLabel={tCommon("tooltips.moreActions")}
+          moreTriggerRef={getProductMoreTriggerRef(row.original.id, "table")}
           className="justify-end"
         />
       ),
@@ -2999,6 +3063,7 @@ const ProductsPage = () => {
     getProductReadiness,
     getProductReadinessSummary,
     getProductActions,
+    getProductMoreTriggerRef,
     getProductPreviewUrl,
     getStoreInfo,
     hasProductImage,
@@ -4410,6 +4475,7 @@ const ProductsPage = () => {
                                 actions={actions}
                                 maxInline={2}
                                 moreLabel={tCommon("tooltips.moreActions")}
+                                moreTriggerRef={getProductMoreTriggerRef(product.id, "grid")}
                                 className="shrink-0"
                               />
                             </div>
@@ -4542,6 +4608,7 @@ const ProductsPage = () => {
                         actions={mobileActions}
                         maxInline={1}
                         moreLabel={tCommon("tooltips.moreActions")}
+                        moreTriggerRef={getProductMoreTriggerRef(product.id, "mobile")}
                         className="shrink-0"
                       />
                       </div>
@@ -4722,6 +4789,7 @@ const ProductsPage = () => {
                         actions={mobileActions}
                         maxInline={1}
                         moreLabel={tCommon("tooltips.moreActions")}
+                        moreTriggerRef={getProductMoreTriggerRef(product.id, "mobile")}
                         className="shrink-0"
                       />
                     </div>
@@ -6264,6 +6332,23 @@ const ProductsPage = () => {
         productName={duplicateTarget?.name ?? ""}
         storeId={storeId}
       />
+      {storePreparationTarget ? (
+        <ProductStorePreparationDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              refreshStorePreparationReturnFocus();
+              setStorePreparationTarget(null);
+            }
+          }}
+          returnFocusRef={storePreparationReturnFocusRef}
+          addToAssortment
+          productId={storePreparationTarget.id}
+          productName={storePreparationTarget.name}
+          productSku={storePreparationTarget.sku}
+          sourceStoreId={storePreparationTarget.sourceStoreId}
+        />
+      ) : null}
       {deleteTarget ? (
         <ProductDeletionDialog
           open
