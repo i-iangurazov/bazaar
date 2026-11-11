@@ -43,6 +43,17 @@ export function prepareIOSBuildConfig(input: unknown, env: BuildEnvironment): IO
   config.bazaarAllowedDistribution = channel === "staging-testflight" ? "testflight-internal"
     : channel === "production" ? "app-store" : "development";
   config.loggingBehavior = "none";
+  // Only the derived iOS bundle owns the readiness-driven UIKit cover. Keep
+  // Android's shared launch timing and every unrelated plugin setting intact.
+  config.backgroundColor = "#ffffff";
+  config.plugins = {
+    ...config.plugins,
+    SplashScreen: {
+      ...config.plugins?.SplashScreen,
+      launchShowDuration: 0,
+      backgroundColor: "#ffffff",
+    },
+  };
   config.ios = {
     ...config.ios,
     appendUserAgent: ` BazaarNativeIOS/${version} (${channel})`,

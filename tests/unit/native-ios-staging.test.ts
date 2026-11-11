@@ -7,10 +7,12 @@ import { IOS_PRODUCTION_URL, IOS_STAGING_URL, prepareIOSBuildConfig } from "../.
 import { assertIOSArchiveChannel, iosExportOptions, iosReleaseChannel, iosReleasePlan } from "../../scripts/mobile/ios-release-channel";
 
 const baseConfig = () => ({
-  appId: "kg.bazaar.app", appName: "Bazaar", webDir: "mobile-shell", loggingBehavior: "none",
+  appId: "kg.bazaar.app", appName: "Bazaar", webDir: "mobile-shell", loggingBehavior: "none", backgroundColor: "#071326",
   server: { url: IOS_PRODUCTION_URL, cleartext: false, allowNavigation: ["www.bazaar.kg"], errorPath: "native-offline.html" },
   ios: { webContentsDebuggingEnabled: false, handleApplicationNotifications: true },
-  plugins: { Keyboard: { resize: "body" }, PushNotifications: { presentationOptions: ["badge", "sound", "alert"] } },
+  plugins: { Keyboard: { resize: "body" }, PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
+    SplashScreen: { launchShowDuration: 900, backgroundColor: "#071326", launchAutoHide: true,
+      launchFadeOutDuration: 220, showSpinner: false, androidScaleType: "CENTER_CROP" } },
   packageClassList: ["AppPlugin", "FilesystemPlugin", "CapacitorBarcodeScannerPlugin"],
 });
 const buildEnv = (staging = true) => ({
@@ -52,11 +54,17 @@ describe("fixed iOS staging release channel", () => {
     expect(staging.appId).toBe("kg.bazaar.app");
     expect(staging.server).toMatchObject({ url: IOS_STAGING_URL, allowNavigation: [new URL(IOS_STAGING_URL).hostname], cleartext: false, errorPath: "native-offline.html" });
     expect(staging.ios).toMatchObject({ webContentsDebuggingEnabled: false, loggingBehavior: "none", handleApplicationNotifications: true });
-    expect(staging.plugins).toEqual(source.plugins);
+    expect(staging.plugins).toEqual({ ...source.plugins, SplashScreen: {
+      ...source.plugins.SplashScreen, launchShowDuration: 0, backgroundColor: "#ffffff",
+    } });
+    expect(staging.backgroundColor).toBe("#ffffff");
+    expect(source.plugins.SplashScreen.launchShowDuration).toBe(900);
     expect(staging).toMatchObject({ packageClassList: source.packageClassList, bazaarBuildChannel: "staging-testflight", bazaarAllowedDistribution: "testflight-internal" });
     const production = prepareIOSBuildConfig(source, buildEnv(false));
     expect(production.server?.url).toBe(IOS_PRODUCTION_URL);
     expect(production.bazaarBuildChannel).toBe("production");
+    expect(production.plugins?.SplashScreen).toMatchObject({ launchShowDuration: 0, backgroundColor: "#ffffff" });
+    expect(source).toEqual(before);
   });
 
   it.each([
@@ -87,6 +95,8 @@ describe("fixed iOS staging release channel", () => {
     const config = prepareIOSBuildConfig(source, { ...buildEnv(false), CONFIGURATION: "Debug", BAZAAR_NATIVE_CHANNEL: "development", SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG" });
     expect(config.server?.url).toBe(source.server.url);
     expect(config.bazaarAllowedDistribution).toBe("development");
+    expect(config.plugins?.SplashScreen).toMatchObject({ launchShowDuration: 0, backgroundColor: "#ffffff" });
+    expect(source.plugins.SplashScreen.launchShowDuration).toBe(900);
     expect(() => assertIOSArchiveChannel(archiveInfo(), config, "staging-testflight", identity)).toThrow();
   });
 
@@ -131,6 +141,9 @@ describe("fixed iOS staging release channel", () => {
       const bundled = JSON.parse(await readFile(path.join(root, "derived/App.app/capacitor.config.json"), "utf8"));
       expect(bundled.server.url).toBe(IOS_STAGING_URL);
       expect(bundled.bazaarBuildChannel).toBe("staging-testflight");
+      expect(bundled.backgroundColor).toBe("#ffffff");
+      expect(bundled.plugins.SplashScreen).toEqual({ ...baseConfig().plugins.SplashScreen,
+        launchShowDuration: 0, backgroundColor: "#ffffff" });
       expect(await readFile(sourceFile, "utf8")).toBe(source);
     } finally { await rm(root, { recursive: true, force: true }); }
   });

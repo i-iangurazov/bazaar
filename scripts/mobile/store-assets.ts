@@ -5,9 +5,9 @@ import sharp from "sharp";
 const directory = path.resolve("docs/mobile/store/assets");
 await mkdir(directory, { recursive: true });
 const icon = "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png";
-await sharp(icon).flatten({ background: "#071326" }).removeAlpha().png()
+await sharp(icon).flatten({ background: "#ffffff" }).removeAlpha().png()
   .toFile(path.join(directory, "app-store-icon-1024.png"));
-await sharp(icon).resize(512, 512).flatten({ background: "#071326" }).removeAlpha().png()
+await sharp(icon).resize(512, 512).flatten({ background: "#ffffff" }).removeAlpha().png()
   .toFile(path.join(directory, "google-play-icon-512.png"));
 const copy = JSON.parse(await readFile("docs/mobile/store/listing.json", "utf8"));
 const titles = {
