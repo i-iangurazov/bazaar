@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { useState, type ComponentProps } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,9 +14,10 @@ vi.mock("@/lib/native/platform", () => ({ isIOS: () => native.ios }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/baam", useSearchParams: () => new URLSearchParams(native.search) }));
 vi.mock("next/link", () => ({ default: ({ href, replace, prefetch: _prefetch, ...props }: ComponentProps<"a"> & { href: string; replace?: boolean; prefetch?: boolean }) =>
   <a {...props} href={href} data-replaces-route={replace ? "true" : undefined} /> }));
-vi.mock("@/components/baam-assistant", () => ({ BaamAssistant: function Assistant({ nativeViewport }: { nativeViewport?: boolean }) {
+vi.mock("@/components/baam-assistant", () => ({ BaamAssistant: function Assistant({ nativeViewport, workspaceHeader }: { nativeViewport?: boolean; workspaceHeader?: ReactNode }) {
   const [draft, setDraft] = useState("");
   return <div data-testid="existing-baam-assistant" data-native-viewport={nativeViewport ? "true" : "false"}>
+    {workspaceHeader}
     Existing history/composer surface
     <input aria-label="Workspace draft" value={draft} onChange={(event) => setDraft(event.target.value)} />
   </div>;
@@ -114,5 +115,32 @@ describe("native BAAM workspace navigation", () => {
     });
     expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("");
     expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).toBe("");
+  });
+
+  it("moves real title/back navigation into short native content without replacing the focused draft", async () => {
+    let height = 500;
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute("data-baam-workspace") ? height : 0;
+    });
+    render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
+    const assistant = screen.getByTestId("existing-baam-assistant");
+    const draft = screen.getByRole("textbox", { name: "Workspace draft" });
+    const normalBack = screen.getByRole("link", { name: en.common.back });
+    expect(assistant.contains(normalBack)).toBe(false);
+    fireEvent.change(draft, { target: { value: "Keep the landscape draft" } });
+    draft.focus();
+    await act(async () => { height = 120; fireEvent.resize(window); });
+    const compactBack = screen.getByRole("link", { name: en.common.back });
+    expect(assistant.contains(compactBack)).toBe(true);
+    expect(assistant.contains(screen.getByRole("heading", { level: 1, name: en.baam.title }))).toBe(true);
+    expect(compactBack.getAttribute("href")).toBe("/dashboard");
+    expect(screen.getByRole("textbox", { name: "Workspace draft" })).toBe(draft);
+    expect(document.activeElement).toBe(draft);
+    expect((draft as HTMLInputElement).value).toBe("Keep the landscape draft");
+    await act(async () => { height = 500; fireEvent.resize(window); });
+    expect(assistant.contains(screen.getByRole("link", { name: en.common.back }))).toBe(false);
+    expect(screen.getByRole("textbox", { name: "Workspace draft" })).toBe(draft);
+    expect(document.activeElement).toBe(draft);
+    expect((draft as HTMLInputElement).value).toBe("Keep the landscape draft");
   });
 });

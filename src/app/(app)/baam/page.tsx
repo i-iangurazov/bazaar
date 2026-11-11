@@ -20,6 +20,7 @@ export default function BaamPage() {
   const locale = useLocale();
   const search = useSearchParams();
   const [nativeIOS, setNativeIOS] = useState(false);
+  const [shortViewport, setShortViewport] = useState(false);
   const workspace = useRef<HTMLDivElement>(null);
   useEffect(() => setNativeIOS(isIOS()), []);
   useEffect(() => {
@@ -32,6 +33,10 @@ export default function BaamPage() {
       element.style.setProperty("--baam-workspace-top", `${top}px`);
       element.style.setProperty("--baam-workspace-bottom", navHeight > 0 ? `${navHeight + 8}px`
         : root.dataset.nativeKeyboard === "visible" ? "8px" : "max(8px, env(safe-area-inset-bottom))");
+      // Read the fitted workspace, not orientation or the unresized screen.
+      // Keep the composer and navigation usable when keyboard leaves little room.
+      const height = element.clientHeight;
+      setShortViewport(height > 0 && height < 320);
     };
     measure();
     window.addEventListener("resize", measure, { passive: true });
@@ -54,16 +59,22 @@ export default function BaamPage() {
       element.style.removeProperty("--baam-workspace-bottom");
     };
   }, [nativeIOS]);
-  return <div ref={workspace} className={cn("mx-auto min-w-0 max-w-4xl", nativeIOS ? styles.workspace : "space-y-5")} data-testid="baam-page" data-baam-workspace tabIndex={-1}>
-    <PageHeader title={t("title")} subtitle={baamCopy(locale, "subtitle")} actionClassName={nativeIOS ? "w-auto" : undefined} action={nativeIOS ? (
-      <Button asChild variant="secondary" size="icon" aria-label={common("back")} title={common("back")}>
+  const back = nativeIOS ? (
+      <Button asChild variant="secondary" size="icon" className={shortViewport ? "h-11 w-11 shrink-0" : undefined} aria-label={common("back")} title={common("back")}>
         <Link href={baamWorkspaceReturnHref(search.get("returnTo"))} replace prefetch={false}>
           <BackIcon aria-hidden />
         </Link>
       </Button>
-    ) : undefined} />
+  ) : undefined;
+  const compact = nativeIOS && shortViewport;
+  const workspaceHeader = compact ? <header data-baam-short-header className="flex min-h-11 shrink-0 items-center justify-between gap-3 px-3">
+    <h1 className="text-base font-semibold text-foreground">{t("title")}</h1>
+    {back}
+  </header> : undefined;
+  return <div ref={workspace} className={cn("mx-auto min-w-0 max-w-4xl", nativeIOS ? styles.workspace : "space-y-5")} data-testid="baam-page" data-baam-workspace data-baam-short-viewport={compact ? "true" : undefined} tabIndex={-1}>
+    {!compact ? <PageHeader title={t("title")} subtitle={baamCopy(locale, "subtitle")} actionClassName={nativeIOS ? "w-auto" : undefined} action={back} /> : null}
     <div className={cn("overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm", nativeIOS && styles.surface)}>
-      <BaamAssistant nativeViewport={nativeIOS} />
+      <BaamAssistant nativeViewport={nativeIOS} compactViewport={compact} workspaceHeader={workspaceHeader} />
     </div>
   </div>;
 }

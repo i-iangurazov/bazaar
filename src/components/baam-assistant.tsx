@@ -65,11 +65,15 @@ export function BaamAssistantProvider({ children }: { children: ReactNode }) {
     </CompanionContext.Provider>
   );
 }
-export function BaamAssistant({ compact = false, nativeViewport = false }: { compact?: boolean; nativeViewport?: boolean }) {
+export function BaamAssistant({ compact = false, nativeViewport = false, compactViewport = false, workspaceHeader }: {
+  compact?: boolean; nativeViewport?: boolean; compactViewport?: boolean; workspaceHeader?: ReactNode;
+}) {
   const { identity, loading } = useContext(CompanionContext);
   const locale = useLocale();
   if (!identity && loading)
     return (
+      <div className={workspaceHeader ? "h-full min-h-0 overflow-y-auto" : "contents"}>
+      {workspaceHeader}
       <div
         data-baam-session-loading
         role="status"
@@ -78,12 +82,16 @@ export function BaamAssistant({ compact = false, nativeViewport = false }: { com
       >
         {baamCopy(locale, "loading")}
       </div>
+      </div>
     );
   if (!identity)
     return (
+      <div className={workspaceHeader ? "h-full min-h-0 overflow-y-auto" : "contents"}>
+      {workspaceHeader}
       <p className="p-6 text-sm" role="alert">
         {baamCopy(locale, "forbidden")}
       </p>
+      </div>
     );
   return (
     <BaamCompanionPanel
@@ -91,6 +99,8 @@ export function BaamAssistant({ compact = false, nativeViewport = false }: { com
       identity={identity}
       compact={compact}
       nativeViewport={nativeViewport}
+      compactViewport={compactViewport}
+      workspaceHeader={workspaceHeader}
     />
   );
 }

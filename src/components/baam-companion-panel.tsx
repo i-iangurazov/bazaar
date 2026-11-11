@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ProductMovementIcon as ClockCounterClockwise,
   EditIcon as PencilSimple,
@@ -94,10 +94,14 @@ export function BaamCompanionPanel({
   identity,
   compact,
   nativeViewport = false,
+  compactViewport = false,
+  workspaceHeader,
 }: {
   identity: BaamIdentity;
   compact: boolean;
   nativeViewport?: boolean;
+  compactViewport?: boolean;
+  workspaceHeader?: ReactNode;
 }) {
   const c = useBaamCompanion(identity);
   return (
@@ -121,6 +125,7 @@ export function BaamCompanionPanel({
           if (c.nearBottom.current) c.setUnread(false);
         } : undefined}
       >
+      {workspaceHeader}
       <div data-baam-toolbar className="flex shrink-0 items-center gap-2 border-b border-border/70 px-4 py-2.5">
         <Button
           size="sm"
@@ -181,6 +186,9 @@ export function BaamCompanionPanel({
       <p className="border-b border-border/60 px-4 py-2 text-xs text-muted-foreground" role="status">
         {c.t(c.capabilities.data?.configured ? "ready" : "localMode")}
       </p>
+      {compactViewport ? <p data-baam-voice-hint className="shrink-0 border-b border-border/60 px-4 py-2 text-[10px] leading-4 text-muted-foreground">
+        {c.t("voiceSupport")}
+      </p> : null}
       {c.showHistory ? (
         <History c={c} />
       ) : (
@@ -261,7 +269,7 @@ export function BaamCompanionPanel({
         </>
       )}
       </div>
-      {!c.showHistory ? <div data-baam-composer className={nativeViewport ? "min-h-0 shrink-0 overflow-y-auto" : "contents"}><BaamComposer c={c} /></div> : null}
+      {!c.showHistory ? <div data-baam-composer className={nativeViewport ? "min-h-0 shrink-0 overflow-y-auto" : "contents"}><BaamComposer c={c} inlineControls={compactViewport} /></div> : null}
     </section>
   );
 }

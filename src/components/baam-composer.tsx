@@ -15,7 +15,7 @@ import { AiPrivacyConsent } from "./ai-privacy-consent";
 
 const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
-export function BaamComposer({ c }: { c: BaamController }) {
+export function BaamComposer({ c, inlineControls = false }: { c: BaamController; inlineControls?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const editingForm = c.workflows?.some(
     (w) =>
@@ -24,7 +24,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
   );
   return (
     <AiPrivacyConsent>
-    <div className="shrink-0 border-t border-border/70 bg-card p-3 sm:p-4">
+    <div data-baam-composer-content className="shrink-0 border-t border-border/70 bg-card p-3 sm:p-4">
       {c.notice ? (
         <p className="mb-2 text-xs text-muted-foreground" role="status">
           {c.notice}
@@ -135,6 +135,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
         </div>
       ) : (
         <form
+          data-baam-compose-form
           onSubmit={(e) => {
             e.preventDefault();
             void c.ask();
@@ -147,7 +148,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             aria-label={c.t("placeholder")}
             placeholder={c.t("placeholder")}
             value={c.question}
-            rows={editingForm ? 1 : 2}
+            rows={inlineControls || editingForm ? 1 : 2}
             maxLength={6000}
             onChange={(e) => c.setQuestion(e.target.value)}
             onKeyDown={(e) => {
@@ -158,7 +159,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             }}
             className={`block max-h-36 ${editingForm ? "min-h-8" : "min-h-14"} w-full resize-none border-0 bg-transparent px-2 py-1 text-base leading-6 shadow-none outline-none focus:ring-0 sm:text-sm`}
           />
-          <div className="flex items-center gap-1">
+          <div data-baam-compose-tools className="flex items-center gap-1">
             <input
               ref={fileRef}
               type="file"
@@ -221,9 +222,9 @@ export function BaamComposer({ c }: { c: BaamController }) {
           </div>
         </form>
       )}
-      <p className="mt-2 text-center text-[10px] leading-4 text-muted-foreground">
+      {!inlineControls ? <p className="mt-2 text-center text-[10px] leading-4 text-muted-foreground">
         {c.t("voiceSupport")}
-      </p>
+      </p> : null}
     </div>
     </AiPrivacyConsent>
   );

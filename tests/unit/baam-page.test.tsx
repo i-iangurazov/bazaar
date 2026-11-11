@@ -106,9 +106,10 @@ const entry = (
   parts: [],
   createdAt: new Date(),
 });
-const shell = (open = true, nativeViewport = false) => (
+const shell = (open = true, nativeViewport = false, compactViewport = false) => (
   <NextIntlClientProvider locale="en" messages={{ errors: messages.errors }}>
-    <BaamAssistantProvider>{open ? <BaamAssistant nativeViewport={nativeViewport} /> : null}</BaamAssistantProvider>
+    <BaamAssistantProvider>{open ? <BaamAssistant nativeViewport={nativeViewport} compactViewport={compactViewport}
+      workspaceHeader={compactViewport ? <a href="/inventory">Return to inventory</a> : undefined} /> : null}</BaamAssistantProvider>
   </NextIntlClientProvider>
 );
 const input = () =>
@@ -225,14 +226,14 @@ describe("BAAM persistent companion workspace", () => {
     );
     expect(mocks.create).not.toHaveBeenCalled();
   });
-  it("preserves a failed request and retries with the SAME ID after closing the drawer", async () => {
+  it.each([false, true])("preserves a failed request and retries with the SAME ID after reopening (short native viewport: %s)", async (compactViewport) => {
     mocks.send.mockRejectedValueOnce(new Error("network"));
-    const view = render(shell());
+    const view = render(shell(true, compactViewport, compactViewport));
     submit();
     await waitFor(() => expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy());
     const request = mocks.send.mock.calls[0][0];
-    view.rerender(shell(false));
-    view.rerender(shell());
+    view.rerender(shell(false, compactViewport, compactViewport));
+    view.rerender(shell(true, compactViewport, compactViewport));
     fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
     await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2));
     expect(mocks.send.mock.calls[1][0]).toEqual(request);
@@ -449,6 +450,33 @@ describe("BAAM persistent companion workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to conversation" }));
     expect(input().value).toBe("Draft above the keyboard");
     expect(document.activeElement).toBe(input());
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("keeps compact native navigation and voice auto-send explanation in the scrolling content", () => {
+    const view = render(shell(true, true, true));
+    const scrollport = document.querySelector('[data-baam-scrollport="workspace"]')!;
+    const composer = document.querySelector("[data-baam-composer]")!;
+    const draft = input();
+    expect(scrollport.contains(screen.getByRole("link", { name: "Return to inventory" }))).toBe(true);
+    expect(scrollport.textContent).toContain("sent automatically after recording");
+    expect(composer.textContent).not.toContain("sent automatically after recording");
+    const form = draft.closest("form")!;
+    expect(form.contains(screen.getByRole("button", { name: "Send message" }))).toBe(true);
+    expect(form.contains(screen.getByRole("button", { name: "Record a voice message" }))).toBe(true);
+    expect(draft.rows).toBe(1);
+    fireEvent.change(draft, { target: { value: "Still the same draft" } });
+    view.rerender(shell(true, true, false));
+    expect(input()).toBe(draft);
+    expect(draft.value).toBe("Still the same draft");
+    expect(draft.rows).toBe(2);
+    expect(document.activeElement).toBe(draft);
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("retains short native return navigation while the session is still loading", () => {
+    mocks.session.mockReturnValue({ status: "loading", data: null });
+    render(shell(true, true, true));
+    expect(screen.getByRole("link", { name: "Return to inventory" }).getAttribute("href")).toBe("/inventory");
+    expect(screen.getByRole("status").textContent).toBe("Loading…");
     expect(mocks.send).not.toHaveBeenCalled();
   });
   it("preserves Shift+Enter and IME composition and sends plain Enter once", async () => {

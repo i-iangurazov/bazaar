@@ -104,6 +104,10 @@ native hiding and the real web prompt callback), followed by typecheck, lint and
 translation validation. Those UI-only tests explicitly disabled DB execution;
 actual native visibility still needs its new Preview deployment.
 
+The later `fca36cf7` native pass reached the bottom of More with the language
+switcher and sign-out control visible. The browser-install card was absent,
+confirming the native hiding change in the actual app.
+
 The account-deletion check exposed another real defect: a tall default size-md
 dialog can still put its title/close under the notch. It was dismissed without
 entering confirmation or deleting the account. The additional native centered
@@ -141,6 +145,36 @@ hide recovery and full-screen/bottom-sheet bounds. Typecheck, lint and RU/KG/EN
 translation validation passed. These UI-only suites explicitly disabled database
 execution. The matching cloud production build and actual software-keyboard
 recheck are still required before claiming these keyboard defects resolved.
+
+That build subsequently passed: immutable `fca36cf7362ad73529d7fb15fb74f902205c7c4c`,
+deployment `dpl_42AMZwhmLpVQP3LzqvH6BAqRzGWL`, compiled in 39.7 seconds and
+generated all 133 static pages. Its dedicated Preview alias was verified, then
+the actual app was fully restarted. In portrait with the hardware keyboard
+disconnected, Baam's real iOS keyboard left the focused input, Send and voice
+notice visible. A synthetic `Q` survived rotation and was cleared without sending.
+The account-deletion title/close and focused confirmation field also remained
+above the real software keyboard; no password, valid confirmation, ownership
+transfer or deletion was submitted. This does not establish an actual touch
+scroll to Cancel while that keyboard remains open.
+
+The same actual Baam check exposed a landscape failure: the desktop-width shell
+and non-scrolling page header left only a clipped composer strip. A subsequent
+bounded change uses the measured short workspace height to move title/Back into
+the native scrollport and put the existing 44px input/actions in a compact row.
+The voice notice remains in the scrollable content. Five focused suites passed
+106 checks, including focused draft preservation across short/normal mode,
+history, failed-request retry and voice/consent behavior. Its cloud build and
+actual landscape recheck remain pending.
+
+The report hub showed the synthetic sale's 120.50 KGS revenue and 80.00 KGS cost.
+Today correctly changed to zero after the Bishkek business-date boundary. Both
+native date calendars independently opened the correct month/selected date and
+closed without changing the period. Their gray field surfaces still exceed the
+intended spacing; this is recorded separately from correct filtering behavior.
+The current-stock report rendered three synthetic products and its CSV opened
+the real system Share sheet (772 bytes). Cancelling returned to the report. A
+source audit separately found that this cancellation also takes the browser
+fallback-download branch; no second visible download prompt was observed.
 
 Read-only public signup-mode requests returned `open` on `www.bazaar.kg` and
 `invite_only` on this Preview. A missing open-signup link in this TestFlight
