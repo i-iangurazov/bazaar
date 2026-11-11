@@ -65,11 +65,13 @@ export const registerMobileDevice = async (
   const now = new Date();
 
   return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${input.userId} FOR UPDATE`;
     const principal = await tx.user.findFirst({
       where: {
         id: input.userId,
         organizationId: input.organizationId,
         isActive: true,
+        deletedAt: null,
       },
       select: { id: true },
     });

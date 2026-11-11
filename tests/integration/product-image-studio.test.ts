@@ -16,7 +16,8 @@ import {
   saveGeneratedImageToProduct,
 } from "@/server/services/productImageStudio";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 import { createTestCaller } from "../helpers/context";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;

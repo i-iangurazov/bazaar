@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/server/services/aiPrivacy", () => ({ assertAiConsent: vi.fn().mockResolvedValue(undefined) }));
 
 const LONG_RU_DESCRIPTION =
   "Аккуратное описание товара для каталога: видна упаковка, читается формат изделия, заметны основные визуальные детали и назначение. Текст подходит для карточки и уверенно превышает минимальную длину.";

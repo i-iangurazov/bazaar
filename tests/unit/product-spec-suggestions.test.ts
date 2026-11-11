@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/server/services/aiPrivacy", () => ({ assertAiConsent: vi.fn().mockResolvedValue(undefined) }));
 
 const { mockDownloadRemoteImage, mockNormalizeProductImageUrl } = vi.hoisted(() => ({
   mockDownloadRemoteImage: vi.fn(),

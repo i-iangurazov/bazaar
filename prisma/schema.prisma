@@ -505,6 +505,10 @@ enum MobilePlatform {
 }
 
 model Organization {
+  appleBillingAccount      AppleBillingAccount?
+  applePurchaseIntents     ApplePurchaseIntent[]
+  appleTransactions        AppleTransaction[]
+  appleSubscriptionChains  AppleSubscriptionChain[]
   whatsappConnections      WhatsAppConnection[]
   whatsappMonths           WhatsAppMonth[]
   whatsappCreditLots       WhatsAppCreditLot[]
@@ -747,15 +751,19 @@ model SubscriptionPaymentEvent {
 model SubscriptionPeriod {
   id               String              @id @default(cuid())
   organizationId   String
-  invoiceId        String              @unique
+  invoiceId        String?             @unique
+  appleTransactionId String?           @unique
+  revokedAt        DateTime?
   plan             OrganizationPlan
   startsAt         DateTime
   endsAt           DateTime
   purchaseSnapshot Json?
   createdAt        DateTime            @default(now())
   organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  invoice          SubscriptionInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  invoice          SubscriptionInvoice? @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  appleTransaction AppleTransaction? @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
+  @@unique([appleTransactionId, organizationId])
   @@unique([invoiceId, organizationId])
   @@index([organizationId, endsAt])
 }
@@ -843,6 +851,10 @@ model User {
   jobTitle          String?
   passwordHash      String
   sessionVersion    Int               @default(0)
+  deletedAt         DateTime?
+  aiConsentVersion  String?
+  aiConsentGrantedAt DateTime?
+  aiConsentRevokedAt DateTime?
   role              Role
   isOrgOwner        Boolean           @default(false)
   preferredLocale   String            @default("ru")
@@ -1240,19 +1252,22 @@ model WhatsAppMonth {
 model WhatsAppCreditLot {
   id                    String   @id @default(cuid())
   organizationId        String
-  invoiceId             String   @unique
+  invoiceId             String?  @unique
+  appleTransactionId    String?  @unique
   total                 Int
   used                  Int      @default(0)
   reserved              Int      @default(0)
   revoked               Boolean  @default(false)
-  expiresAt             DateTime
+  expiresAt             DateTime?
   createdAt             DateTime @default(now())
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  invoice               WhatsAppInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  invoice               WhatsAppInvoice? @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  appleTransaction      AppleTransaction? @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict)
   uses                  WhatsAppCreditUse[]
 
   @@unique([id, organizationId])
   @@unique([invoiceId, organizationId])
+  @@unique([appleTransactionId, organizationId])
   @@index([organizationId, revoked, expiresAt, createdAt])
 }
 
@@ -4362,4 +4377,156 @@ model InitialProductImportChunk {
   batch       ImportBatch                 @relation(fields: [batchId], references: [id])
 
   @@unique([sessionId, chunkIndex])
+}
+
+
+// App Store money is recorded in Apple's signed currency and thousandths of a
+// currency unit. It is never represented by a synthetic KGS gateway invoice.
+model AppleBillingAccount {
+  organizationId String @id
+  appAccountToken String @unique @db.Uuid
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model ApplePurchaseIntent {
+  id String @id @default(cuid())
+  organizationId String
+  createdById String
+  idempotencyKey String
+  pendingSlot String? @unique
+  scope String
+  action String @default("RENEW")
+  offerKey String
+  productId String
+  productType String
+  environment String
+  appAccountToken String @db.Uuid
+  offerSnapshot Json
+  purchaseSnapshot Json?
+  storeId String?
+  termsVersion String
+  termsUrl String
+  status String @default("PENDING")
+  expiresAt DateTime
+  authorizedAt DateTime?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transactions AppleTransaction[]
+  chains AppleSubscriptionChain[]
+  @@unique([organizationId, idempotencyKey])
+  @@unique([id, organizationId])
+  @@index([status, expiresAt])
+}
+
+model AppleSubscriptionChain {
+  id String @id @default(cuid())
+  organizationId String
+  originalTransactionId String
+  environment String
+  appAccountToken String @db.Uuid
+  initialIntentId String
+  productId String
+  pendingProductId String?
+  pendingChangeOffer Json?
+  autoRenewEnabled Boolean?
+  expiresAt DateTime?
+  graceExpiresAt DateTime?
+  revokedAt DateTime?
+  lastSignedAt DateTime
+  lastCheckedAt DateTime?
+  nextCheckAt DateTime @default(now())
+  processingToken String?
+  processingUntil DateTime?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  initialIntent ApplePurchaseIntent @relation(fields: [initialIntentId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  @@unique([environment, originalTransactionId])
+  @@unique([id, organizationId])
+  @@index([nextCheckAt, processingUntil])
+  @@index([organizationId, expiresAt])
+}
+
+model AppleTransaction {
+  id String @id @default(cuid())
+  organizationId String
+  intentId String?
+  transactionId String
+  originalTransactionId String
+  environment String
+  appAccountToken String @db.Uuid
+  productId String
+  productType String
+  quantity Int @default(1)
+  purchaseDate DateTime
+  expiresDate DateTime?
+  // Signed price uses milliunits, not minor units (USD 1.00 is 1000).
+  priceMillis BigInt?
+  currency String?
+  storefront String?
+  ownershipType String?
+  offerSnapshot Json
+  signedTransactionInfo String @db.Text
+  lastSignedAt DateTime
+  revocationDate DateTime?
+  supersededAt DateTime?
+  status String @default("REVIEW")
+  lastIssue String?
+  nextCheckAt DateTime @default(now())
+  processingToken String?
+  processingUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  intent ApplePurchaseIntent? @relation(fields: [intentId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  observations AppleTransactionObservation[]
+  subscriptionPeriod SubscriptionPeriod?
+  whatsappCreditLot WhatsAppCreditLot?
+  @@unique([environment, transactionId])
+  @@unique([id, organizationId])
+  @@index([organizationId, purchaseDate])
+  @@index([status, nextCheckAt])
+}
+
+model AppleTransactionObservation {
+  digest String @id
+  transactionId String
+  source String
+  signedPayload String @db.Text
+  createdAt DateTime @default(now())
+  transaction AppleTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+}
+
+model AppleServerNotification {
+  id String @id
+  environment String
+  notificationType String
+  subtype String?
+  signedPayload String @db.Text
+  signedAt DateTime
+  status String @default("PENDING")
+  nextAttemptAt DateTime @default(now())
+  attemptCount Int @default(0)
+  processingToken String?
+  processingUntil DateTime?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, nextAttemptAt])
+}
+
+
+model AccountErasureAsset {
+  id String @id @default(cuid())
+  organizationId String
+  url String @unique @db.Text
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastErrorCode String?
+  createdAt DateTime @default(now())
+  @@index([nextAttemptAt])
 }

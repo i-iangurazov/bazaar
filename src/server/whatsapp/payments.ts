@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { appleWebPurchaseBlock, assertNoApplePurchaseConflict } from "@/server/billing/appleConcurrency";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
@@ -76,11 +77,13 @@ export async function whatsAppPaymentState(actor: WhatsAppActor) {
     take: 20,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
+  const appleBlock = await appleWebPurchaseBlock(prisma, actor.organizationId, new Date(), "WHATSAPP_PACK");
   return {
+    purchaseBlockedReason: appleBlock.reason,
     ready:
       canCreateBillingCheckout(actor.organizationId) &&
       config.salesReady &&
-      config.paymentsApproved,
+      config.paymentsApproved && !appleBlock.reason,
     mode: payment.mode,
     provider: payment.provider,
     termsVersion: payment.termsVersion,
@@ -115,6 +118,7 @@ export async function createWhatsAppCheckout(
   if (input.expectedAmountMinor !== amount || input.termsVersion !== config.termsVersion)
     throw new AppError("billingPaymentMismatch", "CONFLICT", 409);
   const result = await whatsappOrganizationLock(actor.organizationId, async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${actor.organizationId} FOR UPDATE`;
     const existing = await tx.whatsAppInvoice.findUnique({
       where: {
         organizationId_idempotencyKey: {
@@ -133,6 +137,7 @@ export async function createWhatsAppCheckout(
         throw new AppError("billingPaymentMismatch", "CONFLICT", 409);
       return { invoice: existing, created: false };
     }
+    await assertNoApplePurchaseConflict(tx, actor.organizationId, "WHATSAPP_PACK");
     if (!canCreateBillingCheckout(actor.organizationId))
       throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
     const pending = await tx.whatsAppInvoice.findFirst({

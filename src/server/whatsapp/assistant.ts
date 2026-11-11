@@ -10,6 +10,8 @@ import {
 } from "./catalog";
 import { renderWhatsAppAnswer, whatsappAnswerSchema } from "./answer";
 import { recordWhatsAppEstimate } from "./quota";
+import { assertAiConsent } from "@/server/services/aiPrivacy";
+import { AI_PRIVACY_CONSENT_VERSION } from "@/lib/aiPrivacy";
 
 const outputSchema = {
   type: "object",
@@ -244,6 +246,17 @@ VERIFIED RECENT / IDENTIFIER OFFERS (refreshed now): ${JSON.stringify([...offers
     outputUsed = 0,
     callsUsed = 0;
   for (let round = 0; round < 3; round++) {
+    // The organization owner's explicit processor consent supplements the
+    // existing WhatsApp privacy launch approval; neither replaces the merchant's
+    // duty to inform its customers about automated processing.
+    const authorizer = await prisma.user.findFirst({
+      where: { organizationId: input.organizationId, isOrgOwner: true,
+        isActive: true, deletedAt: null, aiConsentVersion: AI_PRIVACY_CONSENT_VERSION,
+        aiConsentGrantedAt: { not: null }, aiConsentRevokedAt: null },
+      select: { id: true },
+    });
+    if (!authorizer) throw new AppError("aiConsentRequired", "FORBIDDEN", 403);
+    await assertAiConsent({ userId: authorizer.id, organizationId: input.organizationId });
     const textSize = Buffer.byteLength(
       instructions +
         JSON.stringify(messages, (key, value) => (key === "image_url" ? "[image]" : value)),

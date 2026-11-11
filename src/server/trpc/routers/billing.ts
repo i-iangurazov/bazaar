@@ -11,11 +11,13 @@ import {
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { subscriptionPaymentsRouter } from "./subscriptionPayments";
+import { appleBillingRouter } from "./appleBilling";
 import { getSubscriptionUsage } from "@/server/billing/subscriptionUsage";
 import { toTRPCError } from "@/server/trpc/errors";
 
 export const billingRouter = router({
   payments: subscriptionPaymentsRouter,
+  apple: appleBillingRouter,
   usage: adminProcedure.query(async ({ ctx }) => {
     try { return await getSubscriptionUsage(ctx.user.organizationId); }
     catch (error) { throw toTRPCError(error); }

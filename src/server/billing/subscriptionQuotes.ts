@@ -99,6 +99,7 @@ async function calculateSubscriptionQuoteDetails(
   )
     throw new AppError("billingDowngradeNextPeriod", "CONFLICT", 409);
   await assertScheduledSubscriptionCompatibility(org, selectedTerms, db, now);
+  if (!period.invoiceId) throw new AppError("appleSubscriptionManagedByApple", "CONFLICT", 409);
   const invoice = await db.subscriptionInvoice.findUniqueOrThrow({
     where: { id: period.invoiceId },
   });

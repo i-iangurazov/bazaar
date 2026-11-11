@@ -1,0 +1,3 @@
+# Synthetic StoreKit signature fixtures
+
+These certificates and the public test signing key were generated locally for Bazaar regression tests. They have Apple extension OIDs solely to exercise the official SDK certificate-chain verifier. They are not Apple certificates, cannot verify against production Apple roots, and cannot purchase or grant access in the running application. The test verifier explicitly trusts only this test root with online OCSP disabled. Production verification always uses official Apple roots with online checks enabled. No provider credentials or customer records are present.

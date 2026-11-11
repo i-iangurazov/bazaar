@@ -23,7 +23,8 @@ import type {
   WorkflowOperation,
   WorkflowPresentation,
 } from "@/lib/baam/workflows";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 const context = (u: User) => ({
   prisma,
   user: {

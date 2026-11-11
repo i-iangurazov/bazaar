@@ -11,7 +11,7 @@ const localeSchema = z.enum(locales);
 export const usersRouter = router({
   list: adminProcedure.query(async ({ ctx }) => {
     return ctx.prisma.user.findMany({
-      where: { organizationId: ctx.user.organizationId },
+      where: { organizationId: ctx.user.organizationId, deletedAt: null },
       select: {
         id: true,
         email: true,
@@ -99,7 +99,7 @@ export const usersRouter = router({
   setTransferPermission: adminProcedure.input(z.object({userId:z.string(),enabled:z.boolean()})).mutation(async ({ctx,input}) => {
     try {
       return await ctx.prisma.$transaction(async tx => {
-        const before = await tx.user.findFirst({ where: { id: input.userId, organizationId: ctx.user.organizationId }, select: { canTransferStock: true } });
+        const before = await tx.user.findFirst({ where: { id: input.userId, organizationId: ctx.user.organizationId, deletedAt: null }, select: { canTransferStock: true } });
         if (!before) throw new AppError("userNotFound", "NOT_FOUND", 404);
         await tx.user.update({ where: { id: input.userId }, data: { canTransferStock: input.enabled } });
         await writeAuditLog(tx, { organizationId: ctx.user.organizationId, actorId: ctx.user.id, requestId: ctx.requestId, action: "USER_TRANSFER_PERMISSION", entity: "User", entityId: input.userId, before, after: { canTransferStock: input.enabled } });

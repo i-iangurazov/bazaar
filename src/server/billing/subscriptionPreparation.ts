@@ -52,7 +52,7 @@ export async function assertScheduledSubscriptionCompatibility(
   now = new Date(),
 ) {
   const scheduled = await db.subscriptionPeriod.findMany({
-    where: { organizationId: org.id, startsAt: { gt: now } },
+    where: { organizationId: org.id, revokedAt: null, startsAt: { gt: now } },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     select: { plan: true, startsAt: true, endsAt: true, purchaseSnapshot: true },
   });

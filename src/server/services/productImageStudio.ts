@@ -23,6 +23,7 @@ import { keepBackgroundTaskAlive } from "@/server/jobs/background";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { aiOutputText, fetchAiResponse, resolveTextAiConfig } from "@/server/services/aiProvider";
+import { assertAiConsent, withAiPrivacyIdentity } from "./aiPrivacy";
 import {
   downloadRemoteImage,
   isManagedProductImageUrl,
@@ -668,6 +669,7 @@ export const callOpenAiImageEnhancement = async (input: {
     let response: Response;
     let responseBody: OpenAiImageResponseBody | null = null;
     try {
+      await assertAiConsent();
       assertExternalProviderCallAllowed("openai");
       response = await fetch(OPENAI_IMAGE_EDITS_URL, {
         method: "POST",
@@ -1046,6 +1048,7 @@ export const createProductImageStudioJob = async (input: {
   highQuality?: boolean;
 }) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imageStudio" });
+  await assertAiConsent({ userId: input.actorId, organizationId: input.organizationId });
   const presets: ProductImageStudioPresetInput = {
     backgroundMode: input.backgroundMode,
     outputFormat: input.outputFormat,
@@ -1478,7 +1481,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
       organizationId: running.organizationId,
       sourceImageUrl: running.sourceImageUrl,
     });
-    const providerResult = await withAiOperationBudget({ organizationId: running.organizationId, kind: "image", enabled: usageLease !== null }, () => callOpenAiImageEnhancement({
+    const providerResult = await withAiPrivacyIdentity({ userId: running.createdById, organizationId: running.organizationId }, () => withAiOperationBudget({ organizationId: running.organizationId, kind: "image", enabled: usageLease !== null }, () => callOpenAiImageEnhancement({
       organizationId: usageLease ? running.organizationId : undefined,
       jobId: running.id,
       sourceImage,
@@ -1503,7 +1506,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
         tighterCrop: running.tighterCrop,
         brighterPresentation: running.brighterPresentation,
       },
-    }));
+    })));
     const stillOwned = await prisma.productImageStudioJob.findFirst({
       where: {
         id: running.id,

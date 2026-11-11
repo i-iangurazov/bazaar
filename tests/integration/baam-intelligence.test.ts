@@ -9,7 +9,8 @@ import { createBaamConversation } from "@/server/services/baamConversations";
 import { sendBaamMessage } from "@/server/services/baamCompanion";
 import { getSalesAnalyticsOverview } from "@/server/services/salesAnalytics";
 import { executeBaamProductPlan } from "@/server/services/baamProducts";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 
 const context = (user: User) => ({
   prisma,

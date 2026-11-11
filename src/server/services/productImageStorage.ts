@@ -1,15 +1,22 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { extname, join } from "node:path";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { isProductionRuntime } from "@/server/config/runtime";
+import { assertExternalProviderCallAllowed, isProductionRuntime } from "@/server/config/runtime";
+import {
+  deleteManagedBlob,
+  getBlobStoreBaseUrl,
+  getBlobStoreId,
+  getBlobStoragePath,
+  putManagedBlob,
+} from "./vercelBlobStorage";
 
 const localImageRootDir = join(process.cwd(), "public", "uploads", "imported-products");
 
@@ -109,7 +116,7 @@ const maxRemoteImageRedirects = 3;
 const remoteImageRedirectStatuses = new Set([301, 302, 303, 307, 308]);
 const remoteHostAllowCache = new Map<string, boolean>();
 
-type ImageStorageProvider = "local" | "r2";
+type ImageStorageProvider = "local" | "r2" | "vercel-blob";
 
 type R2Config = {
   accountId: string;
@@ -125,6 +132,7 @@ const resolveRequestedProvider = (): ImageStorageProvider => {
   if (value === "r2") {
     return "r2";
   }
+  if (value === "vercel-blob") return "vercel-blob";
   return "local";
 };
 
@@ -168,6 +176,10 @@ let uploadWarningShown = false;
 
 const resolveStorageProvider = (): { provider: ImageStorageProvider; config: R2Config | null } => {
   const requestedProvider = resolveRequestedProvider();
+  if (requestedProvider === "vercel-blob") {
+    getBlobStoreId("images");
+    return { provider: "vercel-blob", config: null };
+  }
   if (requestedProvider === "local") {
     return { provider: "local", config: null };
   }
@@ -565,6 +577,18 @@ const uploadBufferToStorage = async (input: {
   const fileName = `${hash}.${extension}`;
   const storage = resolveStorageProvider();
 
+  if (storage.provider === "vercel-blob") {
+    return {
+      url: await putManagedBlob({
+        purpose: "images",
+        pathname: getObjectKey(input.organizationId, fileName, input.productId),
+        body: prepared.buffer,
+        contentType: prepared.contentType,
+      }),
+      managed: true,
+    };
+  }
+
   if (storage.provider === "r2" && storage.config) {
     const objectKey = getObjectKey(input.organizationId, fileName, input.productId);
     const client = getR2Client(storage.config);
@@ -876,6 +900,9 @@ const getManagedUrlPrefixes = () => {
   if (config?.publicBaseUrl) {
     prefixes.push(config.publicBaseUrl.replace(/\/+$/, ""));
   }
+  if (resolveRequestedProvider() === "vercel-blob") {
+    prefixes.push(`${getBlobStoreBaseUrl("images")}/retails/`);
+  }
   return prefixes;
 };
 
@@ -1098,6 +1125,10 @@ export const createProductImageDirectUploadTarget = async (input: {
 };
 
 export const assertProductImageStorageConfigured = () => {
+  if (resolveRequestedProvider() === "vercel-blob") {
+    getBlobStoreId("images");
+    return;
+  }
   if (resolveRequestedProvider() !== "r2") {
     return;
   }
@@ -1108,4 +1139,38 @@ export const assertProductImageStorageConfigured = () => {
   }
 
   throw new Error(`Missing required R2 environment variables: ${missing.join(", ")}`);
+};
+
+// Accept only a managed image in this organization. Never follow or delete an
+// arbitrary supplied URL. Missing objects are an idempotent successful erasure.
+export const deleteManagedAccountAsset = async (organizationId: string, url: string) => {
+  const orgPath = normalizeOrgPath(organizationId);
+  const localPrefix = `/uploads/imported-products/${orgPath}/products/`;
+  const safeTail = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\.(?:png|jpe?g|webp|avif|heic|heif|gif|tiff?)$/;
+  if (url.startsWith(localPrefix)) {
+    const tail = url.slice(localPrefix.length);
+    if (!safeTail.test(tail)) throw new Error("accountAssetInvalid");
+    await rm(join(localImageRootDir, orgPath, "products", tail), { force: true });
+    return;
+  }
+  if (resolveRequestedProvider() === "vercel-blob" && url.startsWith(`${getBlobStoreBaseUrl("images")}/`)) {
+    const path = getBlobStoragePath("images", url);
+    const prefix = `retails/${orgPath}/products/`;
+    if (!path.startsWith(prefix) || !safeTail.test(path.slice(prefix.length))) {
+      throw new Error("accountAssetInvalid");
+    }
+    await deleteManagedBlob("images", path);
+    return;
+  }
+  const { config } = resolveR2Config();
+  if (!config) throw new Error("accountAssetStorageUnavailable");
+  const base = config.publicBaseUrl.replace(/\/$/, "");
+  const r2Prefix = `${base}/retails/${orgPath}/products/`;
+  if (!url.startsWith(r2Prefix) || !safeTail.test(url.slice(r2Prefix.length)))
+    throw new Error("accountAssetInvalid");
+  assertExternalProviderCallAllowed("r2");
+  await getR2Client(config).send(new DeleteObjectCommand({
+    Bucket: config.bucketName,
+    Key: `retails/${orgPath}/products/${url.slice(r2Prefix.length)}`,
+  }), { abortSignal: AbortSignal.timeout(15_000) });
 };

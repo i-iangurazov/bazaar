@@ -153,7 +153,7 @@ describe("subscription quote lifecycle and prepaid compatibility", () => {
     expect(quote.amountMinor).toBe(765_000);
     expect(mocks.scheduled).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { organizationId: "org", startsAt: { gt: now } },
+        where: { organizationId: "org", revokedAt: null, startsAt: { gt: now } },
       }),
     );
   });

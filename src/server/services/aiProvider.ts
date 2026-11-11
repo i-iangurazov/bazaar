@@ -1,6 +1,7 @@
 import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { reserveAiCallBudget } from "@/server/billing/aiOperationBudget";
 import { AppError } from "./errors";
+import { assertAiConsent } from "./aiPrivacy";
 
 export type TextAiConfig = {
   provider: "deepseek" | "openai";
@@ -60,6 +61,8 @@ export async function fetchAiResponse(
   signal: AbortSignal,
   options?: { reasoningEffort?: "none" | "low" },
 ) {
+  // Read consent again for each attempt, including a queued job's retry.
+  await assertAiConsent();
   assertExternalProviderCallAllowed(config.provider);
   const budget = reserveAiCallBudget(aiResponseBody(config, body, options));
   if (budget.active && config.provider !== "deepseek")

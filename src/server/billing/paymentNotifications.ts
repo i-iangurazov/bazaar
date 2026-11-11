@@ -22,6 +22,7 @@ const ownerWhere = (organizationId: string, id?: string) => ({
   role: "ADMIN" as const,
   isOrgOwner: true,
   isActive: true,
+  deletedAt: null,
   emailVerifiedAt: { not: null },
 });
 
@@ -198,6 +199,11 @@ export async function processSubscriptionPaymentNotifications(now = new Date()) 
         failed++;
         continue;
       }
+      const stillPermitted = await prisma.subscriptionPaymentNotification.findFirst({
+        where: { id: row.id, leaseToken, status: "PROCESSING", owner: { isActive: true, deletedAt: null } },
+        select: { id: true },
+      });
+      if (!stillPermitted) { canceled++; continue; }
       const result = await sendTransactionalEmail({
         to: row.recipientEmail,
         from: row.senderEmail,

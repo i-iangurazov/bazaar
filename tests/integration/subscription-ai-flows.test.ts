@@ -5,7 +5,8 @@ import { prisma } from "@/server/db/prisma";
 import { createProductImageStudioJob, getProductImageStudioJob, runProductImageStudioJob } from "@/server/services/productImageStudio";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
 import { getSubscriptionUsage, reserveSubscriptionUsage, settleSubscriptionUsage } from "@/server/billing/subscriptionUsage";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 
 (shouldRunDbTests ? describe : describe.skip)("subscription image studio service and provider boundaries", () => {
   beforeEach(resetDatabase);

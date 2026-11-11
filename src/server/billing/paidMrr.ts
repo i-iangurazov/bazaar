@@ -23,7 +23,7 @@ type Period = {
     providerPaymentId: string | null;
     amountMinor: number;
     events: { state: string; source: string }[];
-  };
+  } | null;
 };
 
 // A normalized, verified paid subscription value, not cash received this month,
@@ -52,6 +52,7 @@ export function summarizeConfirmedPaidMrr(
     const invoice = period.invoice;
     if (
       !org ||
+      !invoice ||
       org.subscriptionStatus !== "ACTIVE" ||
       org.subscriptionContract?.lifetimeAccess ||
       LIFETIME_ORGANIZATION_IDS.has(org.id) ||
@@ -96,7 +97,7 @@ export async function getConfirmedPaidMrr(
   now = new Date(),
 ) {
   const periods = await db.subscriptionPeriod.findMany({
-    where: { startsAt: { lte: now }, endsAt: { gt: now } },
+    where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gt: now } },
     select: {
       id: true,
       organizationId: true,

@@ -2,12 +2,13 @@ import { createHash } from "node:crypto";
 import { createContext } from "@/server/trpc/trpc";
 import { ownBaamConversation } from "@/server/services/baamConversations";
 import { transcribeBaamAudio } from "@/server/services/baamAudio";
-import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
 import { resolveProductPhotoSourceMimeType } from "@/lib/productImageUpload";
 import { prepareProductStudioSource } from "@/server/services/productImageSourceUpload";
 import { createRateLimiter } from "@/server/middleware/rateLimiter";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
+import { assertAiConsent } from "@/server/services/aiPrivacy";
+import { baamAttachmentHref, encryptBaamMedia, readBaamAttachmentBytes } from "@/server/services/baamPrivateMedia";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,13 +21,13 @@ export async function GET(request: Request) {
     if (!id) throw new AppError("baamAttachmentNotFound", "NOT_FOUND", 404);
     const attachment = await prisma.baamAttachment.findUnique({ where: { id } });
     if (!attachment) throw new AppError("baamAttachmentNotFound", "NOT_FOUND", 404);
-    await ownBaamConversation(ctx, attachment.conversationId);
-    const target = new URL(attachment.url, request.url);
-    if (!["http:", "https:"].includes(target.protocol))
+    const { scope } = await ownBaamConversation(ctx, attachment.conversationId);
+    if (!/^image\/(?:jpeg|png|webp|avif|heic|heif|gif|tiff|bmp)$/.test(attachment.mimeType))
       throw new AppError("imageInvalidType", "BAD_REQUEST", 400);
-    return new Response(null, {
-      status: 307,
-      headers: { Location: target.href, "Cache-Control": "private, no-store" },
+    const buffer = await readBaamAttachmentBytes(attachment, scope.organizationId);
+    return new Response(new Uint8Array(buffer), {
+      headers: { "Content-Type": attachment.mimeType, "Cache-Control": "private, no-store, max-age=0",
+        "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" },
     });
   } catch (error) {
     return Response.json(
@@ -44,6 +45,8 @@ export async function POST(request: Request) {
       return Response.json({ message: "baamMediaTooLarge" }, { status: 413 });
     const ctx = await createContext({ req: request, resHeaders: new Headers() });
     if (!ctx.user) throw new AppError("unauthorized", "UNAUTHORIZED", 401);
+    await assertAiConsent({ userId: ctx.user.id, organizationId: ctx.user.organizationId,
+      impersonating: Boolean(ctx.impersonator) });
     await limiter.consume(ctx.user.id);
     // Bound chunked uploads too; Content-Length is not trustworthy or mandatory.
     const reader = request.body?.getReader();
@@ -108,27 +111,25 @@ export async function POST(request: Request) {
     const existing = await prisma.baamAttachment.findUnique({
       where: { conversationId_contentHash: { conversationId, contentHash } },
     });
-    if (existing) return Response.json(existing);
+    if (existing) return Response.json({ id: existing.id, name: existing.name, mimeType: existing.mimeType,
+      url: baamAttachmentHref(existing.id) });
     const prepared = await prepareProductStudioSource(file);
-    const uploaded = await uploadProductImageBuffer({
-      organizationId: access.scope.organizationId,
-      buffer: prepared.buffer,
-      contentType: prepared.contentType,
-      sourceFileName: file.name,
+    const envelope = encryptBaamMedia(prepared.buffer, { organizationId: access.scope.organizationId,
+      conversationId, mimeType: prepared.contentType });
+    const attachment = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "BaamConversation" WHERE id = ${conversationId} FOR UPDATE`;
+        const current = await tx.baamConversation.findFirst({
+          where: { id: conversationId, userId: ctx.user!.id, deletedAt: null }, select: { id: true },
+        });
+        if (!current) throw new AppError("baamConversationNotFound", "NOT_FOUND", 404);
+        return tx.baamAttachment.upsert({
+          where: { conversationId_contentHash: { conversationId, contentHash } }, update: {},
+          create: { contentHash, conversationId, url: envelope,
+            name: file.name.slice(0, 180), mimeType: prepared.contentType },
+        });
     });
-    await ownBaamConversation(ctx, conversationId);
-    const attachment = await prisma.baamAttachment.upsert({
-      where: { conversationId_contentHash: { conversationId, contentHash } },
-      update: {},
-      create: {
-        contentHash,
-        conversationId,
-        url: uploaded.url,
-        name: file.name.slice(0, 180),
-        mimeType: prepared.contentType,
-      },
-    });
-    return Response.json(attachment);
+    return Response.json({ id: attachment.id, name: attachment.name, mimeType: attachment.mimeType,
+      url: baamAttachmentHref(attachment.id) });
   } catch (error) {
     const message =
       error instanceof AppError

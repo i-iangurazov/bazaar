@@ -81,11 +81,12 @@ const revalidateUserClaims = async (token: JWT | null) => {
       emailVerifiedAt: true,
       sessionVersion: true,
       isActive: true,
+      deletedAt: true,
       preferredLocale: true,
       themePreference: true,
     },
   });
-  if (!user || !user.isActive || !user.organizationId ||
+  if (!user || !user.isActive || user.deletedAt || !user.organizationId ||
       (isEmailVerificationRequired() && !user.emailVerifiedAt) ||
       !Number.isSafeInteger(token.sessionVersion) || token.sessionVersion !== user.sessionVersion) {
     return null;

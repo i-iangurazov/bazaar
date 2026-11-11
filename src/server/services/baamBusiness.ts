@@ -15,6 +15,7 @@ import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
 import { baamText, type BaamActionSummary, type BaamActionResult } from "@/lib/baam/companion";
 import { baamAccess, type BaamAccess } from "./baamConversations";
 import { AppError } from "./errors";
+import { adoptBaamProductPhoto, baamProductPhotoReference } from "./baamPrivateMedia";
 
 export const businessCaller = (ctx: Context) => ({
   products: productsRouter.createCaller(ctx),
@@ -259,6 +260,7 @@ defineAction({
     const attachment = input.attachmentId
       ? await prisma.baamAttachment.findFirst({
           where: { id: input.attachmentId, conversationId: c.conversationId },
+          select: { id: true, name: true },
         })
       : null;
     if (input.imageChoice === "attached_photo" && !attachment)
@@ -275,7 +277,7 @@ defineAction({
           ? Object.fromEntries(v.attributes.map((a) => [a.key, a.value]))
           : undefined,
       })),
-      ...(imageChoice === "attached_photo" && attachment ? { photoUrl: attachment.url } : {}),
+      ...(imageChoice === "attached_photo" && attachment ? { photoUrl: baamProductPhotoReference(attachment.id) } : {}),
     };
     const summary = {
       title: title(c, "Создать товар", "Create product", "Товар түзүү"),
@@ -302,8 +304,8 @@ defineAction({
     return { input: { data, summary }, summary, storeIds: store ? [store.id] : [] };
   },
   async execute(c, p) {
-    const created = await c.step("create", ["PRODUCT_CREATE"], (api, key) =>
-      api.products.create({ ...p.data, idempotencyKey: key }),
+    const created = await c.step("create", ["PRODUCT_CREATE"], async (api, key) =>
+      api.products.create({ ...p.data, photoUrl: await adoptBaamProductPhoto(c.ctx, p.data.photoUrl), idempotencyKey: key }),
     );
     const productId = resultId(created);
     return {
@@ -403,6 +405,7 @@ defineAction({
     const attachment = input.attachmentId
       ? await prisma.baamAttachment.findFirst({
           where: { id: input.attachmentId, conversationId: c.conversationId },
+          select: { id: true, name: true },
         })
       : null;
     if (input.photo === "attach" && !attachment)
@@ -429,7 +432,7 @@ defineAction({
       barcodes: input.barcodes ?? product.barcodes.map((b) => b.value),
       photoUrl:
         input.photo === "attach"
-          ? attachment!.url
+          ? baamProductPhotoReference(attachment!.id)
           : input.photo === "keep"
             ? (product.photoUrl ?? undefined)
             : undefined,
@@ -437,7 +440,7 @@ defineAction({
         input.photo === "remove"
           ? []
           : input.photo === "attach"
-            ? [{ url: attachment!.url }, ...product.images.map((i) => ({ id: i.id, url: i.url }))]
+            ? [{ url: baamProductPhotoReference(attachment!.id) }, ...product.images.map((i) => ({ id: i.id, url: i.url }))]
             : product.images.map((i) => ({ id: i.id, url: i.url })),
       variants: input.addVariants
         ? [
@@ -484,7 +487,14 @@ defineAction({
     };
   },
   async execute(c, p) {
-    await c.step("update", ["PRODUCT_UPDATE"], (api) => api.products.update(p.data));
+    await c.step("update", ["PRODUCT_UPDATE"], async (api) => {
+      const photoUrl = await adoptBaamProductPhoto(c.ctx, p.data.photoUrl, p.data.productId);
+      const images = await Promise.all(p.data.images.map(async (image) => ({ ...image,
+        url: image.url === p.data.photoUrl && photoUrl ? photoUrl
+          : await adoptBaamProductPhoto(c.ctx, image.url, p.data.productId) ?? image.url,
+      })));
+      return api.products.update({ ...p.data, photoUrl, images });
+    });
     return result(p.summary, p.data.productId);
   },
 });

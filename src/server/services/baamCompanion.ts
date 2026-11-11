@@ -45,6 +45,7 @@ import {
   type UsageLease,
 } from "@/server/billing/subscriptionUsage";
 import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
+import { assertAiConsent, withAiPrivacyIdentity } from "./aiPrivacy";
 export { baamToolSchema, baamOptionalValues } from "./baamToolContract";
 const controllers = new Map<string, AbortController>();
 export const abortBaamGeneration = (conversationId: string) =>
@@ -68,10 +69,13 @@ export async function baamCompanionCapabilities(ctx: Context) {
 
 export async function sendBaamMessage(ctx: Context, input: BaamSend) {
   if (!ctx.user) throw new AppError("unauthorized", "UNAUTHORIZED", 401);
-  return withAiOperationBudget(
-    { organizationId: ctx.user.organizationId, operationKey: input.clientRequestId },
+  const identity = { userId: ctx.user.id, organizationId: ctx.user.organizationId,
+    impersonating: Boolean(ctx.impersonator) };
+  await assertAiConsent(identity);
+  return withAiPrivacyIdentity(identity, () => withAiOperationBudget(
+    { organizationId: identity.organizationId, operationKey: input.clientRequestId },
     () => sendBudgetedBaamMessage(ctx, input),
-  );
+  ));
 }
 async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
   const started = performance.now();

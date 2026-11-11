@@ -27,7 +27,8 @@ import {
   startSubscriptionUsage,
   settleSubscriptionUsage,
 } from "@/server/billing/subscriptionUsage";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 
 function wav() {
   const b = Buffer.alloc(32044);

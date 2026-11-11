@@ -68,6 +68,10 @@ export const createInvite = async (input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
+    const creator = await tx.user.findUnique({ where: { id: input.createdById } });
+    if (!creator || creator.deletedAt || !creator.isActive || creator.organizationId !== input.organizationId)
+      throw new AppError("forbidden", "FORBIDDEN", 403);
     const rawToken = createRawToken();
     const tokenHash = hashToken(rawToken);
     const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -176,6 +180,11 @@ export const acceptInvite = async (input: {
     if (!invite || invite.acceptedAt || invite.expiresAt <= new Date()) {
       throw new AppError("inviteInvalid", "NOT_FOUND", 404);
     }
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${invite.organizationId} FOR UPDATE`;
+    // Account erasure revokes pending invitations issued by that person. Read
+    // again after taking the same organization lock used by deletion.
+    if (!await tx.inviteToken.findUnique({ where: { id: invite.id } }))
+      throw new AppError("inviteInvalid", "NOT_FOUND", 404);
     const acceptedAt = new Date();
     const claimed = await tx.inviteToken.updateMany({
       where: { id: invite.id, acceptedAt: null, expiresAt: { gt: acceptedAt } },
@@ -188,7 +197,7 @@ export const acceptInvite = async (input: {
     const existingUser = await tx.user.findUnique({ where: { email: invite.email } });
     let user;
     if (existingUser) {
-      if (!existingUser.isActive) {
+      if (!existingUser.isActive || existingUser.deletedAt) {
         throw new AppError("userInactive", "FORBIDDEN", 403);
       }
       const passwordMatches = await bcrypt.compare(input.password, existingUser.passwordHash);

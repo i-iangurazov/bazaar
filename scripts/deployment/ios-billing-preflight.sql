@@ -1,0 +1,439 @@
+-- Read-only audit for the exact reviewed iOS migrations 139/140.
+-- No customer identifiers, financial values, signed payloads, URLs or secrets are emitted.
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SET LOCAL statement_timeout = '25s';
+SET LOCAL lock_timeout = '2s';
+SET LOCAL idle_in_transaction_session_timeout = '30s';
+SET LOCAL TIME ZONE 'UTC';
+SET LOCAL search_path = pg_catalog, public;
+DO $audit$
+DECLARE
+  checks JSONB := '[]'::jsonb; spec JSONB; requirement JSONB; parts TEXT[];
+  missing BOOLEAN; affected BIGINT; state TEXT; stage TEXT; report JSONB;
+  base_missing INTEGER := 0; present139 INTEGER := 0; present140 INTEGER := 0;
+  expected139 INTEGER := 14; expected140 INTEGER := 3;
+  applied139 BIGINT := 0; applied140 BIGINT := 0; unfinished BIGINT := 0; bad_checksum BIGINT := 0;
+  structural_issues INTEGER := 0; relation_name TEXT; column_name TEXT;
+BEGIN
+  IF current_setting('transaction_read_only') <> 'on' THEN RAISE EXCEPTION 'Read-only transaction is required'; END IF;
+  FOREACH relation_name IN ARRAY ARRAY['Organization','User','SubscriptionContract','SubscriptionInvoice','SubscriptionPeriod','WhatsAppInvoice','WhatsAppCreditLot'] LOOP
+    IF to_regclass(format('public.%I',relation_name)) IS NULL THEN base_missing := base_missing + 1; END IF;
+  END LOOP;
+  FOREACH relation_name IN ARRAY ARRAY['AppleBillingAccount','ApplePurchaseIntent','AppleSubscriptionChain','AppleTransaction','AppleTransactionObservation','AppleServerNotification','AccountErasureAsset'] LOOP
+    IF to_regclass(format('public.%I',relation_name)) IS NOT NULL THEN present139 := present139 + 1; END IF;
+  END LOOP;
+  FOR spec IN SELECT value FROM jsonb_array_elements('[{"table":"User","columns":["deletedAt","aiConsentVersion","aiConsentGrantedAt","aiConsentRevokedAt"]},{"table":"SubscriptionPeriod","columns":["appleTransactionId","revokedAt"]},{"table":"WhatsAppCreditLot","columns":["appleTransactionId"]}]'::jsonb) LOOP
+    FOR column_name IN SELECT jsonb_array_elements_text(spec->'columns') LOOP
+      IF EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass(format('public.%I',spec->>'table')) AND attname=column_name AND NOT attisdropped) THEN present139 := present139 + 1; END IF;
+    END LOOP;
+  END LOOP;
+  FOR spec IN SELECT value FROM jsonb_array_elements('[{"table":"AppleTransaction","columns":["supersededAt"]},{"table":"AppleSubscriptionChain","columns":["pendingProductId","pendingChangeOffer"]}]'::jsonb) LOOP
+    FOR column_name IN SELECT jsonb_array_elements_text(spec->'columns') LOOP
+      IF EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass(format('public.%I',spec->>'table')) AND attname=column_name AND NOT attisdropped) THEN present140 := present140 + 1; END IF;
+    END LOOP;
+  END LOOP;
+  stage := CASE WHEN base_missing > 0 THEN 'UNBASELINED' WHEN present139=0 AND present140=0 THEN 'PRE_139' WHEN present139=expected139 AND present140=0 THEN 'POST_139' WHEN present139=expected139 AND present140=expected140 THEN 'POST_140' ELSE 'PARTIAL' END;
+  checks := checks || jsonb_build_array(jsonb_build_object('name','baseline_required_tables_missing','severity','blocker','count',base_missing,'skipped',false));
+  IF to_regclass('public._prisma_migrations') IS NOT NULL THEN
+    EXECUTE $history$SELECT count(*) FILTER(WHERE migration_name='20261111120000_ios_apple_billing_privacy' AND finished_at IS NOT NULL),
+      count(*) FILTER(WHERE migration_name='20261111130000_apple_lifecycle_recovery' AND finished_at IS NOT NULL),
+      count(*) FILTER(WHERE finished_at IS NULL),
+      count(*) FILTER(WHERE finished_at IS NOT NULL AND ((migration_name='20261111120000_ios_apple_billing_privacy' AND checksum<>'734e62c89a76aaedb153eb0b8029021f7713074b4526ca5501dac9abd41e2f38') OR (migration_name='20261111130000_apple_lifecycle_recovery' AND checksum<>'4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10')))
+      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO applied139,applied140,unfinished,bad_checksum;
+  ELSE structural_issues := structural_issues + 1;
+  END IF;
+  IF applied139>1 OR applied140>1 OR (applied140>0 AND applied139=0) THEN structural_issues := structural_issues + 1; END IF;
+  IF (applied139=0 AND present139>0) OR (applied139>0 AND present139<>expected139) OR
+     (applied140=0 AND present140>0) OR (applied140>0 AND present140<>expected140) OR stage='PARTIAL' THEN structural_issues := structural_issues + 1; END IF;
+  checks := checks || jsonb_build_array(
+    jsonb_build_object('name','pair_applied_migrations','severity','info','count',applied139+applied140,'skipped',false),
+    jsonb_build_object('name','unfinished_migrations','severity','blocker','count',unfinished,'skipped',false),
+    jsonb_build_object('name','pair_checksum_mismatches','severity','blocker','count',bad_checksum,'skipped',false),
+    jsonb_build_object('name','pair_schema_history_inconsistent','severity','blocker','count',structural_issues,'skipped',false));
+  FOR spec IN SELECT value FROM jsonb_array_elements($checks$
+[
+  {
+    "name": "organizations_total",
+    "severity": "info",
+    "requires": [
+      "Organization"
+    ],
+    "sql": "SELECT count(*) FROM public.\"Organization\""
+  },
+  {
+    "name": "users_total",
+    "severity": "info",
+    "requires": [
+      "User"
+    ],
+    "sql": "SELECT count(*) FROM public.\"User\""
+  },
+  {
+    "name": "legacy_contracts_total",
+    "severity": "info",
+    "requires": [
+      "SubscriptionContract"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionContract\" WHERE \"catalogVersion\" = '2026-10' "
+  },
+  {
+    "name": "current_contracts_total",
+    "severity": "info",
+    "requires": [
+      "SubscriptionContract"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionContract\" WHERE \"catalogVersion\" = '2026-11' "
+  },
+  {
+    "name": "manual_organizations_preserved",
+    "severity": "info",
+    "requires": [
+      "Organization"
+    ],
+    "sql": "SELECT count(*) FROM public.\"Organization\" WHERE \"subscriptionBillingMode\"='MANUAL'"
+  },
+  {
+    "name": "lifetime_contracts_preserved",
+    "severity": "info",
+    "requires": [
+      "SubscriptionContract"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionContract\" WHERE \"lifetimeAccess\""
+  },
+  {
+    "name": "future_web_periods_preserved",
+    "severity": "info",
+    "requires": [
+      "SubscriptionPeriod"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" WHERE \"invoiceId\" IS NOT NULL AND \"startsAt\">CURRENT_TIMESTAMP"
+  },
+  {
+    "name": "required_139_constraints_missing_or_unvalidated",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('SubscriptionPeriod','SubscriptionPeriod_appleTransactionId_organizationId_fkey'),('WhatsAppCreditLot','WhatsAppCreditLot_appleTransactionId_organizationId_fkey'),('AppleBillingAccount','AppleBillingAccount_organizationId_fkey'),('ApplePurchaseIntent','ApplePurchaseIntent_organizationId_fkey'),('AppleSubscriptionChain','AppleSubscriptionChain_organizationId_fkey'),('AppleSubscriptionChain','AppleSubscriptionChain_initialIntentId_organizationId_fkey'),('AppleTransaction','AppleTransaction_organizationId_fkey'),('AppleTransaction','AppleTransaction_intentId_organizationId_fkey'),('AppleTransactionObservation','AppleTransactionObservation_transactionId_fkey'),('ApplePurchaseIntent','ApplePurchaseIntent_values_check'),('AppleSubscriptionChain','AppleSubscriptionChain_environment_check'),('AppleTransaction','AppleTransaction_values_check'),('SubscriptionPeriod','SubscriptionPeriod_source_check'),('WhatsAppCreditLot','WhatsAppCreditLot_source_check')) AS expected(table_name,constraint_name) WHERE NOT EXISTS(SELECT 1 FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid JOIN pg_namespace n ON n.oid=r.relnamespace WHERE n.nspname='public' AND r.relname=expected.table_name AND c.conname=expected.constraint_name AND c.convalidated)"
+  },
+  {
+    "name": "required_140_constraints_missing_or_unvalidated",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction.supersededAt",
+      "AppleSubscriptionChain.pendingChangeOffer"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleTransaction','AppleTransaction_superseded_check'),('AppleSubscriptionChain','AppleSubscriptionChain_pending_offer_check')) AS expected(table_name,constraint_name) WHERE NOT EXISTS(SELECT 1 FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid JOIN pg_namespace n ON n.oid=r.relnamespace WHERE n.nspname='public' AND r.relname=expected.table_name AND c.conname=expected.constraint_name AND c.convalidated)"
+  },
+  {
+    "name": "required_apple_unique_indexes_missing_or_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleBillingAccount','AppleBillingAccount_appAccountToken_key'),('ApplePurchaseIntent','ApplePurchaseIntent_pendingSlot_key'),('ApplePurchaseIntent','ApplePurchaseIntent_organizationId_idempotencyKey_key'),('ApplePurchaseIntent','ApplePurchaseIntent_id_organizationId_key'),('AppleSubscriptionChain','AppleSubscriptionChain_environment_originalTransactionId_key'),('AppleSubscriptionChain','AppleSubscriptionChain_id_organizationId_key'),('AppleTransaction','AppleTransaction_environment_transactionId_key'),('AppleTransaction','AppleTransaction_id_organizationId_key'),('AccountErasureAsset','AccountErasureAsset_url_key')) AS expected(table_name,index_name) WHERE NOT EXISTS(SELECT 1 FROM pg_index i JOIN pg_class r ON r.oid=i.indrelid JOIN pg_class x ON x.oid=i.indexrelid JOIN pg_namespace n ON n.oid=r.relnamespace WHERE n.nspname='public' AND r.relname=expected.table_name AND x.relname=expected.index_name AND i.indisunique AND i.indisvalid AND i.indisready)"
+  },
+  {
+    "name": "legacy_invoices_without_purchase_snapshot",
+    "severity": "info",
+    "requires": [
+      "SubscriptionInvoice.purchaseSnapshot"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionInvoice\" WHERE \"purchaseSnapshot\" IS NULL"
+  },
+  {
+    "name": "web_invoice_money_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionInvoice"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionInvoice\" WHERE \"amountMinor\" <= 0 OR currency <> 'KGS' "
+  },
+  {
+    "name": "current_contract_historical_invoices_without_snapshot",
+    "severity": "warning",
+    "requires": [
+      "SubscriptionInvoice.purchaseSnapshot",
+      "SubscriptionContract"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionInvoice\" i JOIN public.\"SubscriptionContract\" c ON c.\"organizationId\"=i.\"organizationId\" WHERE c.\"catalogVersion\"='2026-11' AND i.\"purchaseSnapshot\" IS NULL"
+  },
+  {
+    "name": "invoice_snapshot_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionInvoice.purchaseSnapshot"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionInvoice\" i WHERE i.\"purchaseSnapshot\" IS NOT NULL AND (jsonb_typeof(i.\"purchaseSnapshot\") IS DISTINCT FROM 'object' OR i.\"purchaseSnapshot\"->>'organizationId' IS DISTINCT FROM i.\"organizationId\" OR i.\"purchaseSnapshot\"->>'plan' IS DISTINCT FROM i.plan::text OR (i.\"purchaseSnapshot\"->>'amountMinor')::bigint IS DISTINCT FROM i.\"amountMinor\")"
+  },
+  {
+    "name": "subscription_period_dates_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" WHERE \"endsAt\" <= \"startsAt\""
+  },
+  {
+    "name": "subscription_invoice_tenant_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod",
+      "SubscriptionInvoice"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p LEFT JOIN public.\"SubscriptionInvoice\" i ON i.id=p.\"invoiceId\" WHERE p.\"invoiceId\" IS NOT NULL AND (i.id IS NULL OR i.\"organizationId\" IS DISTINCT FROM p.\"organizationId\")"
+  },
+  {
+    "name": "web_period_purchase_snapshot_differs",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.purchaseSnapshot",
+      "SubscriptionInvoice.purchaseSnapshot"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"SubscriptionInvoice\" i ON i.id=p.\"invoiceId\" WHERE i.\"purchaseSnapshot\" IS NOT NULL AND EXISTS(SELECT 1 FROM unnest(ARRAY['plan','months','extras','amountMinor','monthlyMinor','discountBps','fullAmountMinor','serviceValueMinor','creditMinor','catalogVersion','organizationId','entitlements']) AS f(key) WHERE p.\"purchaseSnapshot\"->f.key IS DISTINCT FROM i.\"purchaseSnapshot\"->f.key)"
+  },
+  {
+    "name": "whatsapp_invoice_tenant_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "WhatsAppCreditLot",
+      "WhatsAppInvoice"
+    ],
+    "sql": "SELECT count(*) FROM public.\"WhatsAppCreditLot\" l LEFT JOIN public.\"WhatsAppInvoice\" i ON i.id=l.\"invoiceId\" WHERE l.\"invoiceId\" IS NOT NULL AND (i.id IS NULL OR i.\"organizationId\" IS DISTINCT FROM l.\"organizationId\")"
+  },
+  {
+    "name": "whatsapp_credit_nonnegative_invalid",
+    "severity": "blocker",
+    "requires": [
+      "WhatsAppCreditLot"
+    ],
+    "sql": "SELECT count(*) FROM public.\"WhatsAppCreditLot\" WHERE total <= 0 OR used < 0 OR reserved < 0"
+  },
+  {
+    "name": "whatsapp_credit_overdrawn",
+    "severity": "warning",
+    "requires": [
+      "WhatsAppCreditLot"
+    ],
+    "sql": "SELECT count(*) FROM public.\"WhatsAppCreditLot\" WHERE used::bigint + reserved::bigint > total::bigint"
+  },
+  {
+    "name": "web_whatsapp_credit_expiry_missing",
+    "severity": "blocker",
+    "requires": [
+      "WhatsAppCreditLot"
+    ],
+    "sql": "SELECT count(*) FROM public.\"WhatsAppCreditLot\" WHERE \"invoiceId\" IS NOT NULL AND \"expiresAt\" IS NULL"
+  },
+  {
+    "name": "period_source_xor_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.appleTransactionId",
+      "SubscriptionPeriod.revokedAt"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" WHERE (\"invoiceId\" IS NOT NULL)::int + (\"appleTransactionId\" IS NOT NULL)::int <> 1 OR (\"revokedAt\" IS NOT NULL AND \"appleTransactionId\" IS NULL)"
+  },
+  {
+    "name": "whatsapp_source_or_expiry_invalid",
+    "severity": "blocker",
+    "requires": [
+      "WhatsAppCreditLot.appleTransactionId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"WhatsAppCreditLot\" WHERE (\"invoiceId\" IS NOT NULL)::int + (\"appleTransactionId\" IS NOT NULL)::int <> 1 OR (\"appleTransactionId\" IS NOT NULL AND \"expiresAt\" IS NOT NULL) OR (\"invoiceId\" IS NOT NULL AND \"expiresAt\" IS NULL)"
+  },
+  {
+    "name": "post139_source_columns_still_not_null",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction",
+      "SubscriptionPeriod.appleTransactionId"
+    ],
+    "sql": "SELECT count(*) FROM pg_attribute a WHERE a.attnotnull AND NOT a.attisdropped AND ((a.attrelid='public.\"SubscriptionPeriod\"'::regclass AND a.attname='invoiceId') OR (a.attrelid='public.\"WhatsAppCreditLot\"'::regclass AND a.attname IN ('invoiceId','expiresAt')))"
+  },
+  {
+    "name": "deleted_account_identity_not_erased",
+    "severity": "warning",
+    "requires": [
+      "User.deletedAt"
+    ],
+    "sql": "SELECT count(*) FROM public.\"User\" WHERE \"deletedAt\" IS NOT NULL AND (\"isActive\" OR \"isOrgOwner\" OR email !~ '^deleted[+][^@]+@deleted[.]invalid$' OR phone IS NOT NULL OR \"jobTitle\" IS NOT NULL OR \"signupAttribution\" IS NOT NULL OR \"emailVerifiedAt\" IS NOT NULL)"
+  },
+  {
+    "name": "apple_account_tenant_missing",
+    "severity": "blocker",
+    "requires": [
+      "AppleBillingAccount",
+      "Organization"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleBillingAccount\" a LEFT JOIN public.\"Organization\" o ON o.id=a.\"organizationId\" WHERE o.id IS NULL"
+  },
+  {
+    "name": "apple_intent_account_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleBillingAccount",
+      "ApplePurchaseIntent"
+    ],
+    "sql": "SELECT count(*) FROM public.\"ApplePurchaseIntent\" i LEFT JOIN public.\"AppleBillingAccount\" a ON a.\"organizationId\"=i.\"organizationId\" WHERE a.\"organizationId\" IS NULL OR i.\"appAccountToken\" IS DISTINCT FROM a.\"appAccountToken\" OR i.environment NOT IN ('Production','Sandbox') OR (i.\"scope\"='SUBSCRIPTION' AND (i.\"purchaseSnapshot\" IS NULL OR i.\"productType\"='CONSUMABLE')) OR (i.\"scope\"='WHATSAPP_PACK' AND i.\"productType\" <> 'CONSUMABLE')"
+  },
+  {
+    "name": "apple_chain_intent_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleSubscriptionChain",
+      "ApplePurchaseIntent"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleSubscriptionChain\" c LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=c.\"initialIntentId\" WHERE i.id IS NULL OR i.\"organizationId\" IS DISTINCT FROM c.\"organizationId\" OR i.\"appAccountToken\" IS DISTINCT FROM c.\"appAccountToken\" OR i.environment IS DISTINCT FROM c.environment OR i.\"productType\" <> 'AUTO_RENEWABLE' "
+  },
+  {
+    "name": "apple_transaction_account_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction",
+      "AppleBillingAccount"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" t LEFT JOIN public.\"AppleBillingAccount\" a ON a.\"organizationId\"=t.\"organizationId\" WHERE a.\"organizationId\" IS NULL OR t.\"appAccountToken\" IS DISTINCT FROM a.\"appAccountToken\""
+  },
+  {
+    "name": "apple_transaction_intent_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction",
+      "ApplePurchaseIntent"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" t LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE t.\"intentId\" IS NOT NULL AND (i.id IS NULL OR i.\"organizationId\" IS DISTINCT FROM t.\"organizationId\" OR i.\"appAccountToken\" IS DISTINCT FROM t.\"appAccountToken\" OR i.environment IS DISTINCT FROM t.environment OR i.\"productId\" IS DISTINCT FROM t.\"productId\" OR i.\"productType\" IS DISTINCT FROM t.\"productType\" OR i.\"offerSnapshot\" IS DISTINCT FROM t.\"offerSnapshot\")"
+  },
+  {
+    "name": "apple_signed_price_pair_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" WHERE (\"priceMillis\" IS NULL) <> (currency IS NULL) OR \"priceMillis\" < 0 OR (currency IS NOT NULL AND currency !~ '^[A-Z]{3}$')"
+  },
+  {
+    "name": "apple_review_receipts_retained",
+    "severity": "warning",
+    "requires": [
+      "AppleTransaction"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" WHERE status='REVIEW' "
+  },
+  {
+    "name": "apple_unbound_receipts_retained",
+    "severity": "warning",
+    "requires": [
+      "AppleTransaction"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" WHERE \"intentId\" IS NULL"
+  },
+  {
+    "name": "apple_period_tenant_or_signed_dates_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction",
+      "SubscriptionPeriod.appleTransactionId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p LEFT JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" WHERE p.\"appleTransactionId\" IS NOT NULL AND (t.id IS NULL OR t.\"organizationId\" IS DISTINCT FROM p.\"organizationId\" OR t.\"productType\" NOT IN ('AUTO_RENEWABLE','NON_RENEWING') OR (t.\"productType\"='AUTO_RENEWABLE' AND (p.\"startsAt\" IS DISTINCT FROM t.\"purchaseDate\" OR p.\"endsAt\" IS DISTINCT FROM t.\"expiresDate\")))"
+  },
+  {
+    "name": "apple_period_frozen_purchase_differs",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "SubscriptionPeriod.appleTransactionId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE i.id IS NULL OR i.\"authorizedAt\" IS NULL OR i.\"purchaseSnapshot\" IS NULL OR EXISTS(SELECT 1 FROM unnest(ARRAY['plan','months','extras','amountMinor','monthlyMinor','discountBps','fullAmountMinor','serviceValueMinor','creditMinor','catalogVersion','organizationId','entitlements']) AS f(key) WHERE p.\"purchaseSnapshot\"->f.key IS DISTINCT FROM i.\"purchaseSnapshot\"->f.key)"
+  },
+  {
+    "name": "apple_consumable_lot_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction",
+      "WhatsAppCreditLot.appleTransactionId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"WhatsAppCreditLot\" l LEFT JOIN public.\"AppleTransaction\" t ON t.id=l.\"appleTransactionId\" WHERE l.\"appleTransactionId\" IS NOT NULL AND (t.id IS NULL OR t.\"organizationId\" IS DISTINCT FROM l.\"organizationId\" OR t.\"productType\" <> 'CONSUMABLE' OR t.\"offerSnapshot\"->>'kind' IS DISTINCT FROM 'WHATSAPP_PACK' OR l.total IS DISTINCT FROM (t.\"offerSnapshot\"->>'messages')::integer)"
+  },
+  {
+    "name": "non_auto_intents_with_multiple_fulfillments",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction",
+      "SubscriptionPeriod.appleTransactionId",
+      "WhatsAppCreditLot.appleTransactionId"
+    ],
+    "sql": "SELECT count(*) FROM (SELECT t.\"intentId\" FROM public.\"AppleTransaction\" t LEFT JOIN public.\"SubscriptionPeriod\" p ON p.\"appleTransactionId\"=t.id LEFT JOIN public.\"WhatsAppCreditLot\" l ON l.\"appleTransactionId\"=t.id WHERE t.\"intentId\" IS NOT NULL AND t.\"productType\" <> 'AUTO_RENEWABLE' AND (p.id IS NOT NULL OR l.id IS NOT NULL) GROUP BY t.\"intentId\" HAVING count(*) > 1) duplicate_fulfillments"
+  },
+  {
+    "name": "superseded_apple_transaction_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction.supersededAt"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" WHERE \"supersededAt\" IS NOT NULL AND (\"productType\" <> 'AUTO_RENEWABLE' OR status <> 'REVOKED')"
+  },
+  {
+    "name": "superseded_apple_period_still_active",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction.supersededAt",
+      "SubscriptionPeriod.appleTransactionId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" WHERE t.\"supersededAt\" IS NOT NULL AND p.\"revokedAt\" IS NULL"
+  },
+  {
+    "name": "pending_apple_change_shape_invalid",
+    "severity": "blocker",
+    "requires": [
+      "AppleSubscriptionChain.pendingChangeOffer",
+      "AppleSubscriptionChain.pendingProductId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleSubscriptionChain\" WHERE \"pendingChangeOffer\" IS NOT NULL AND (\"pendingProductId\" IS NULL OR \"pendingChangeOffer\"->>'kind' IS DISTINCT FROM 'SUBSCRIPTION' OR jsonb_typeof(\"pendingChangeOffer\"->'entitlements') IS DISTINCT FROM 'object')"
+  },
+  {
+    "name": "required_financial_privacy_triggers_missing_or_disabled",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleBillingAccount','AppleBillingAccount_binding_guard'),('ApplePurchaseIntent','ApplePurchaseIntent_snapshot_guard'),('AppleSubscriptionChain','AppleSubscriptionChain_binding_guard'),('AppleTransaction','AppleTransaction_snapshot_guard'),('AppleServerNotification','AppleServerNotification_evidence_guard'),('AppleTransactionObservation','AppleTransactionObservation_evidence_guard'),('SubscriptionPeriod','SubscriptionPeriod_source_guard'),('SubscriptionPeriod','SubscriptionPeriod_purchase_binding_guard'),('WhatsAppCreditLot','WhatsAppCreditLot_source_guard'),('User','User_deleted_identity_guard')) AS expected(table_name,trigger_name) WHERE NOT EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname=expected.table_name AND t.tgname=expected.trigger_name AND NOT t.tgisinternal AND t.tgenabled IN ('O','A'))"
+  },
+  {
+    "name": "reviewed_guard_function_bodies_changed",
+    "severity": "blocker",
+    "requires": [
+      "AppleTransaction"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('public.\"protectAppleBillingAccount\"()','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e'),('public.\"protectAppleIntent\"()','a2b71c63f15c7be726f8d3d42090ed56','a2b71c63f15c7be726f8d3d42090ed56'),('public.\"protectAppleChain\"()','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64'),('public.\"protectAppleTransaction\"()','8d2d58e95e8f7abdf41723580d3d6118','c0d1aa0c2d552bf7d0c6903d10c334df'),('public.\"protectAppleEvidence\"()','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce'),('public.\"validateSubscriptionPeriodPurchase\"()','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8'),('public.\"protectSubscriptionPeriodSource\"()','249ab5329614e549df495b8b578acbc7','0e25ad94de6eb2476d52c55b771153ce'),('public.\"protectWhatsAppCreditSource\"()','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb'),('public.\"protectDeletedUserIdentity\"()','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f'),('public.\"enforceSubscriptionCapacity\"()','045d31abb34abb69cd318592e35175c0','da4172d8d0001200163f24d4c34f6146'),('public.\"assertSubscriptionFeatureConfiguration\"(text,text)','46750b3c1edc7cd45a8be46629819179','161b96ade46fe7ee1d24f42a5a38c156'),('public.\"enforceSubscriptionMarketplaceChannel\"()','f13db24fddd9405aacb634c58a8c7626','80e2425b0b5bf48838d6342e4b54421c')) AS expected(signature,before_140,after_140) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR md5(p.prosrc) IS DISTINCT FROM CASE WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"AppleTransaction\"'::regclass AND attname='supersededAt' AND NOT attisdropped) THEN expected.after_140 ELSE expected.before_140 END"
+  }
+]
+$checks$::jsonb)
+  LOOP
+    missing := false;
+    FOR requirement IN SELECT value FROM jsonb_array_elements(spec->'requires') LOOP
+      parts := string_to_array(requirement#>>'{}','.');
+      IF to_regclass(format('public.%I',parts[1])) IS NULL THEN missing := true;
+      ELSIF array_length(parts,1)=2 AND NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass(format('public.%I',parts[1])) AND attname=parts[2] AND NOT attisdropped) THEN missing := true;
+      END IF;
+    END LOOP;
+    IF missing THEN
+      checks := checks || jsonb_build_array(jsonb_build_object('name',spec->>'name','severity',spec->>'severity','count',NULL,'skipped',true));
+      CONTINUE;
+    END IF;
+    BEGIN
+      EXECUTE spec->>'sql' INTO affected;
+      checks := checks || jsonb_build_array(jsonb_build_object('name',spec->>'name','severity',spec->>'severity','count',affected,'skipped',false));
+    EXCEPTION WHEN OTHERS THEN
+      -- Never emit SQLERRM: malformed historical values can contain personal data.
+      GET STACKED DIAGNOSTICS state = RETURNED_SQLSTATE;
+      checks := checks || jsonb_build_array(jsonb_build_object('name',spec->>'name','severity','blocker','count',NULL,'skipped',false,'errorCode',state));
+    END;
+  END LOOP;
+  report := jsonb_build_object('reportVersion',1,'transactionReadOnly',true,'schemaStage',stage,'checks',checks);
+  PERFORM set_config('bazaar.ios_pair_preflight',report::text,true);
+END;
+$audit$;
+SELECT current_setting('bazaar.ios_pair_preflight')::jsonb;
+COMMIT;

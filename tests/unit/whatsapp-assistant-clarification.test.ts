@@ -9,10 +9,13 @@ const mocks = vi.hoisted(() => ({
   budgetUpsert: vi.fn(async () => ({ spentMicros: 0n, reservedMicros: 0n })),
   budgetUpdate: vi.fn(async () => ({})),
   lock: vi.fn(async () => 1),
+  consentingOwner: vi.fn(),
+  findConsentingUser: vi.fn(),
 }));
 
 vi.mock("@/server/db/prisma", () => ({
   prisma: {
+    user: { findFirst: mocks.consentingOwner, findUnique: mocks.findConsentingUser },
     bazaarCatalog: { findFirst: mocks.findCatalog },
     whatsAppWorkerState: { update: mocks.budgetUpdate },
     $transaction: async (run: (tx: unknown) => Promise<unknown>) =>
@@ -30,6 +33,7 @@ vi.mock("@/server/whatsapp/catalog", () => ({
 vi.mock("@/server/whatsapp/quota", () => ({ recordWhatsAppEstimate: mocks.estimate }));
 
 import { generateWhatsAppAnswer } from "@/server/whatsapp/assistant";
+import { AI_PRIVACY_CONSENT_VERSION } from "@/lib/aiPrivacy";
 
 const offer: WhatsAppOffer = {
   ref: "public-product:BASE",
@@ -96,6 +100,10 @@ async function answer(incoming: string, model: ModelAnswer, offers = [offer]) {
 
 describe("WhatsApp direct SKU answers avoid redundant clarification", () => {
   beforeEach(() => {
+    mocks.consentingOwner.mockResolvedValue({ id: "synthetic-consenting-owner" });
+    mocks.findConsentingUser.mockResolvedValue({ id: "synthetic-consenting-owner", organizationId: "synthetic-org",
+      isActive: true, deletedAt: null, aiConsentVersion: AI_PRIVACY_CONSENT_VERSION,
+      aiConsentGrantedAt: new Date(0), aiConsentRevokedAt: null });
     vi.stubEnv("DEEPSEEK_API_KEY", "synthetic-ai-key");
     vi.stubEnv("WHATSAPP_PRIVACY_APPROVED", "1");
     vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "sandbox");

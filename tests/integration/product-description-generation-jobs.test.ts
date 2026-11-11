@@ -16,7 +16,8 @@ import {
 } from "@/server/services/productDescriptionGenerationJobs";
 import { toJson } from "@/server/services/json";
 import * as productContent from "@/server/services/productContentGeneration";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 
 const { mockDownloadRemoteImage, mockNormalizeProductImageUrl } = vi.hoisted(() => ({
   mockDownloadRemoteImage: vi.fn(),

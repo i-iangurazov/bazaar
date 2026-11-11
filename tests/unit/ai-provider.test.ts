@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ guard: vi.fn(), fetch: vi.fn(), expense: vi.fn(), settle: vi.fn() }));
 vi.mock("@/server/config/runtime", () => ({ assertExternalProviderCallAllowed: mocks.guard }));
+// Provider routing/budget tests assume the initiating person already opted in;
+// consent refusal/revocation is exercised independently at the network boundary.
+vi.mock("@/server/services/aiPrivacy", () => ({ assertAiConsent: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/server/billing/providerExpense", () => ({
   reserveProviderExpense: mocks.expense, settleProviderExpense: mocks.settle,
   aiExpenseMinor: (input: number, output: number) => input + output,

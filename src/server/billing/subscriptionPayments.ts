@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { appleWebPurchaseBlock, assertNoApplePurchaseConflict } from "./appleConcurrency";
 import type { Prisma, SubscriptionInvoice } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -74,22 +75,27 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
   const config = getSubscriptionPaymentConfig();
   const checkoutAvailable = canCreateBillingCheckout(organizationId);
   const now = new Date();
-  const [organization, pending, lastPeriod, nextPeriod] = await Promise.all([
+  const [organization, pending, lastPeriod, nextPeriod, appleBlock] = await Promise.all([
     getOrganizationPlan(organizationId),
     prisma.subscriptionInvoice.findFirst({
       where: { organizationId, OR: [{ pendingSlot: organizationId }, { status: "REVIEW" }] },
       orderBy: { createdAt: "desc" },
       include: { period: true },
     }),
-    prisma.subscriptionPeriod.findFirst({ where: { organizationId }, orderBy: { endsAt: "desc" } }),
+    prisma.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: null }, orderBy: { endsAt: "desc" } }),
     prisma.subscriptionPeriod.findFirst({
-      where: { organizationId, startsAt: { gt: now } },
+      where: { organizationId, revokedAt: null, startsAt: { gt: now } },
       orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     }),
+    appleWebPurchaseBlock(prisma, organizationId, now),
   ]);
   const nextPurchase = readPurchaseSnapshot(nextPeriod?.purchaseSnapshot);
   return {
     provider: config.provider,
+    currentPaymentSource: organization.subscriptionPaymentSource,
+    purchaseBlockedReason: appleBlock.reason,
+    appleCoverageUntil: appleBlock.chain?.expiresAt ?? null,
+    appleAutoRenew: appleBlock.chain?.autoRenewEnabled ?? false,
     available: checkoutAvailable,
     mode: config.mode,
     sellerName: config.sellerName,
@@ -101,7 +107,7 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
     catalogVersion: organization.billingCatalogVersion,
     currentExtras: organization.subscriptionExtras,
     currentMonths: organization.activePurchase?.months ?? 1,
-    canChange: Boolean(organization.activeSubscriptionPeriod),
+    canChange: Boolean(organization.activeSubscriptionPeriod) && !appleBlock.reason && organization.subscriptionPaymentSource !== "APPLE",
     scheduledSubscription: nextPeriod
       ? {
           plan: nextPeriod.plan,
@@ -121,7 +127,8 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
       organization.subscriptionBillingMode === "SELF_SERVE" &&
       !organization.lifetimeAccess &&
       organization.subscriptionStatus !== "CANCELED" &&
-      !pending,
+      !pending &&
+      !appleBlock.reason,
     currentPlan: organization.plan,
     mayChangePlan:
       !lastPeriod ||
@@ -209,6 +216,7 @@ export const createSubscriptionCheckout = async (input: {
         throw new AppError("idempotencyConflict", "CONFLICT", 409);
       return { value: prior, initialize: false };
     }
+    await assertNoApplePurchaseConflict(tx, org.id, "SUBSCRIPTION");
     if (!canCreateBillingCheckout(org.id))
       throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
     const pending = await tx.subscriptionInvoice.findFirst({
@@ -499,7 +507,7 @@ export const applySubscriptionReceipt = async (input: {
       // Pre-v2 invoices keep their original one-month grant semantics.
       if (!purchase) {
         const anyPeriod = await tx.subscriptionPeriod.findFirst({
-          where: { organizationId: org.id },
+          where: { organizationId: org.id, revokedAt: null },
           select: { id: true },
         });
         if (
@@ -548,7 +556,7 @@ export const applySubscriptionReceipt = async (input: {
           }
         : undefined;
       const hasPriorPeriod = await tx.subscriptionPeriod.findFirst({
-        where: { organizationId: org.id },
+        where: { organizationId: org.id, revokedAt: null },
         select: { id: true },
       });
       await tx.subscriptionPeriod.create({
@@ -621,6 +629,48 @@ export const applySubscriptionReceipt = async (input: {
           : { status: "PENDING" }),
       },
     });
+  });
+};
+
+
+/** A saved provider URL is an existing obligation, not a new checkout. Recheck
+ * current rights immediately before returning it to the browser; never call the
+ * provider or create another invoice while resuming. */
+export const resumeSubscriptionCheckout = async (input: { organizationId: string; actorId: string; invoiceId: string }) => {
+  return prisma.$transaction(async (tx) => {
+    const org = await lockOrganization(tx, input.organizationId);
+    const actor = await tx.user.findFirst({ where: { id: input.actorId, organizationId: org.id, isActive: true, deletedAt: null, role: "ADMIN" }, select: { id: true } });
+    if (!actor) throw new AppError("forbidden", "FORBIDDEN", 403);
+    const invoice = await tx.subscriptionInvoice.findFirst({ where: { id: input.invoiceId, organizationId: org.id }, include: { period: true } });
+    if (!invoice) throw new AppError("recordNotFound", "NOT_FOUND", 404);
+    const now = new Date();
+    if (invoice.status === "REVIEW") throw new AppError("billingPaymentNeedsReview", "CONFLICT", 409);
+    if (invoice.provider !== "GOPAY" || invoice.status !== "PENDING" || !invoice.checkoutUrl || invoice.expiresAt <= now || invoice.paidAt || invoice.period)
+      throw new AppError("billingQuoteChanged", "CONFLICT", 409);
+    const checkoutUrl = invoice.checkoutUrl;
+    if (org.subscriptionContract?.lifetimeAccess || LIFETIME_ORGANIZATION_IDS.has(org.id)) throw new AppError("billingLifetimeProtected", "FORBIDDEN", 403);
+    if (org.subscriptionBillingMode !== "SELF_SERVE" || org.subscriptionStatus === "CANCELED") throw new AppError("billingManualAccessProtected", "CONFLICT", 409);
+    if (!canCreateBillingCheckout(org.id)) throw new AppError("billingPaymentsUnavailable", "CONFLICT", 409);
+    await assertNoApplePurchaseConflict(tx, org.id, "SUBSCRIPTION", now);
+    const otherReview = await tx.subscriptionInvoice.findFirst({ where: { organizationId: org.id, id: { not: invoice.id }, status: "REVIEW" }, select: { id: true } });
+    if (otherReview) throw new AppError("billingPaymentNeedsReview", "CONFLICT", 409);
+    const purchase = readPurchaseSnapshot(invoice.purchaseSnapshot);
+    const effective = await getOrganizationPlan(org.id, tx);
+    if (purchase) {
+      if (purchase.organizationId !== org.id || purchase.plan !== invoice.plan || purchase.catalogVersion !== effective.billingCatalogVersion ||
+        purchase.expectedPlan !== org.plan || purchase.expectedPeriodEnd !== (org.currentPeriodEndsAt?.toISOString() ?? null) ||
+        (purchase.kind === "UPGRADE" && (effective.activeSubscriptionPeriod?.id !== purchase.sourcePeriodId || new Date(purchase.endsAt) <= now)))
+        throw new AppError("billingQuoteChanged", "CONFLICT", 409);
+      const target = purchase.entitlements ?? contractPlan(effective.contractTerms, purchase.plan, purchase.extras);
+      await assertSubscriptionSelectionReady(effective, target, tx);
+      if (purchase.kind === "UPGRADE") await assertScheduledSubscriptionCompatibility(effective, target, tx, now);
+    } else {
+      // Historical one-month obligations have no v2 quote. Never resume one
+      // against different access or a newly introduced catalog contract.
+      if (effective.billingCatalogVersion !== "2026-10" || org.plan !== invoice.plan || (org.currentPeriodEndsAt && org.currentPeriodEndsAt > invoice.createdAt))
+        throw new AppError("billingQuoteChanged", "CONFLICT", 409);
+    }
+    return { ...presentInvoice(invoice), checkoutUrl };
   });
 };
 
@@ -764,7 +814,7 @@ export const verifyInvoiceCanBePaid = async (invoiceId: string, fields: SignedFi
       throw new AppError("billingQuoteChanged", "CONFLICT", 409);
     if (!purchase) {
       const prior = await tx.subscriptionPeriod.findFirst({
-        where: { organizationId: org.id },
+        where: { organizationId: org.id, revokedAt: null },
         select: { id: true },
       });
       if (

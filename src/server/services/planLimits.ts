@@ -1,6 +1,7 @@
 import type { OrganizationPlan, Prisma } from "@prisma/client";
 import { LEGACY_PLAN_FEATURE_CODES } from "@/lib/billing/plans";
 
+import { applePreservedAccess } from "@/server/billing/appleAccess";
 import { prisma } from "@/server/db/prisma";
 import {
   getFeatureLockedErrorKey,
@@ -17,7 +18,7 @@ import {
   type SubscriptionCatalogVersion, type SubscriptionExtras,
 } from "@/lib/billing/subscriptionPricing";
 import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
-import { contractPlan, createContractTerms, readContractTerms } from "@/server/billing/contractTerms";
+import { contractPlan, createContractTerms, planDefinitionSchema, readContractTerms } from "@/server/billing/contractTerms";
 import { readPurchaseSnapshot } from "@/server/billing/purchaseSnapshot";
 import { AppError } from "@/server/services/errors";
 import { readTrialOffer } from "@/server/billing/trialPolicy";
@@ -41,6 +42,9 @@ type OrganizationAccessPlan = {
   currentPeriodEndsAt: Date | null;
   subscriptionBillingMode?: "MANUAL" | "SELF_SERVE";
   billingCatalogVersion?: string;
+  subscriptionPaymentSource?: string;
+  appleGraceEndsAt?: Date | null;
+  paidCoverageGap?: boolean;
 };
 
 export const hasActivePaidOrApprovedSubscription = (
@@ -48,6 +52,7 @@ export const hasActivePaidOrApprovedSubscription = (
   now = new Date(),
 ) => {
   if (org.lifetimeAccess) return true;
+  if (org.paidCoverageGap) return false;
   if (org.subscriptionStatus !== "ACTIVE") {
     return false;
   }
@@ -83,7 +88,7 @@ export const resolveOrganizationAccessState = (org: OrganizationAccessPlan, now 
     (org.subscriptionBillingMode !== "SELF_SERVE" || org.subscriptionStatus === "ACTIVE"));
   const trialExpired = isTrialExpiredWithoutSubscription(org, now);
   const paidEnd = org.currentPeriodEndsAt;
-  const graceEndsAt = org.billingCatalogVersion === "2026-11" && !org.lifetimeAccess &&
+  const graceEndsAt = org.paidCoverageGap ? null : org.subscriptionPaymentSource === "APPLE" ? org.appleGraceEndsAt ?? null : org.billingCatalogVersion === "2026-11" && !org.lifetimeAccess &&
     paidEnd && (!org.trialEndsAt || paidEnd > org.trialEndsAt)
     ? new Date(paidEnd.getTime() + 7 * 86_400_000) : null;
   const inGrace = !subscriptionActive && !trialActive &&
@@ -128,15 +133,28 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     throw new AppError("orgNotFound", "NOT_FOUND", 404);
   }
   const lifetimeAccess = Boolean(org.subscriptionContract?.lifetimeAccess || LIFETIME_ORGANIZATION_IDS.has(org.id));
-  const latestPeriod = org.subscriptionBillingMode === "SELF_SERVE" && !lifetimeAccess
+  const latestStartedPeriod = org.subscriptionBillingMode === "SELF_SERVE" && !lifetimeAccess
     ? await db.subscriptionPeriod.findFirst({
-        where: { organizationId, startsAt: { lte: new Date() } },
+        where: { organizationId, revokedAt: null, startsAt: { lte: new Date() } },
         orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       }) : null;
-  const activePeriod = latestPeriod && latestPeriod.endsAt > new Date() ? latestPeriod : null;
+  const [currentCoverage, revokedCoverage, preserved] = org.subscriptionBillingMode === "SELF_SERVE" && !lifetimeAccess ? await Promise.all([
+    db.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: null, startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
+      orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }, { id: "desc" }] }),
+    db.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: { not: null }, appleTransactionId: { not: null },
+      startsAt: { lte: new Date() }, endsAt: { gt: new Date() } }, select: { id: true } }),
+    applePreservedAccess(db, organizationId),
+  ]) : [null, null, null] as const;
+  const latestPeriod = currentCoverage ?? latestStartedPeriod;
+  const activePeriod = currentCoverage;
+  const paidCoverageGap = Boolean(revokedCoverage && !currentCoverage && !preserved);
+  const appleTransaction = latestPeriod?.appleTransactionId ? await db.appleTransaction.findUnique({
+    where: { id: latestPeriod.appleTransactionId }, select: { environment: true, originalTransactionId: true } }) : null;
+  const appleChain = appleTransaction ? await db.appleSubscriptionChain.findUnique({ where: { environment_originalTransactionId: {
+    environment: appleTransaction.environment, originalTransactionId: appleTransaction.originalTransactionId } } }) : null;
   const initialTrialPurchase = !latestPeriod && org.subscriptionBillingMode === "SELF_SERVE" && org.trialEndsAt && org.trialEndsAt >= new Date()
     ? await db.subscriptionPeriod.findFirst({
-        where: { organizationId, startsAt: org.trialEndsAt }, orderBy: { startsAt: "asc" },
+        where: { organizationId, revokedAt: null, startsAt: org.trialEndsAt }, orderBy: { startsAt: "asc" },
       }) : null;
   // A new trial remains the same preview until its original end, even when a
   // future paid period has already been purchased. This matches database guards
@@ -148,11 +166,11 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
   const version = catalogVersion(org.subscriptionContract?.catalogVersion);
   const terms = readContractTerms(org.subscriptionContract?.termsSnapshot) ?? createContractTerms(version);
   if (terms.catalogVersion !== version) throw new AppError("billingContractNeedsReview", "CONFLICT", 409);
-  const plan = purchase?.plan ?? org.plan;
+  const plan = !activePeriod && preserved ? preserved.plan : purchase?.plan ?? org.plan;
   const extras = purchase?.extras ?? EMPTY_SUBSCRIPTION_EXTRAS;
   const trialOffer = !lifetimeAccess && org.subscriptionBillingMode === "SELF_SERVE" &&
-    version === "2026-11" && !purchase ? readTrialOffer(org.subscriptionContract?.trialOffer) : null;
-  const entitlements = purchase?.entitlements ?? trialOffer?.entitlements ?? contractPlan(terms, plan, extras);
+    version === "2026-11" && !purchase && !preserved ? readTrialOffer(org.subscriptionContract?.trialOffer) : null;
+  const entitlements = !activePeriod && preserved ? preserved.entitlements : purchase?.entitlements ?? trialOffer?.entitlements ?? contractPlan(terms, plan, extras);
   return {
     ...org,
     plan,
@@ -163,6 +181,9 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     contractTerms: terms,
     entitlements,
     trialOffer,
+    paidCoverageGap,
+    subscriptionPaymentSource: !activePeriod && preserved ? "MANUAL" : appleTransaction ? "APPLE" : latestPeriod?.invoiceId ? "GATEWAY" : "MANUAL",
+    appleGraceEndsAt: appleChain?.graceExpiresAt ?? null,
     activeSubscriptionPeriod: activePeriod,
     activePurchase: purchase ?? (trialOffer ? futurePurchase : null),
   };
@@ -258,7 +279,7 @@ export const getCapacityLimits = async (org: Awaited<ReturnType<typeof getOrgani
   const limits = getOrganizationLimits(org);
   if (org.lifetimeAccess || org.billingCatalogVersion === LEGACY_CATALOG_VERSION) return limits;
   const scheduled = await db.subscriptionPeriod.findMany({
-    where: { organizationId: org.id, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
+    where: { organizationId: org.id, revokedAt: null, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
   });
   for (const period of scheduled) {
     const purchase = readPurchaseSnapshot(period.purchaseSnapshot);
@@ -278,6 +299,24 @@ export const getCapacityLimits = async (org: Awaited<ReturnType<typeof getOrgani
     limits.maxProducts = Math.min(limits.maxProducts, next.limits.maxProducts);
     limits.maxUsers = Math.min(limits.maxUsers, next.limits.maxActiveUsers);
   }
+  const applePending = await db.applePurchaseIntent.findMany({ where: { organizationId: org.id, scope: "SUBSCRIPTION",
+    status: { in: ["PENDING", "REVIEW"] } }, select: { purchaseSnapshot: true } });
+  for (const intent of applePending) {
+    const purchase = readPurchaseSnapshot(intent.purchaseSnapshot);
+    if (!purchase?.entitlements) continue;
+    limits.maxStores = Math.min(limits.maxStores, purchase.entitlements.limits.maxStores);
+    limits.maxProducts = Math.min(limits.maxProducts, purchase.entitlements.limits.maxProducts);
+    limits.maxUsers = Math.min(limits.maxUsers, purchase.entitlements.limits.maxActiveUsers);
+  }
+  const appleChanges = await db.appleSubscriptionChain.findMany({ where: { organizationId: org.id, autoRenewEnabled: true, pendingProductId: { not: null } },
+    select: { pendingChangeOffer: true } });
+  for (const change of appleChanges) {
+    const parsed = planDefinitionSchema.safeParse((change.pendingChangeOffer as { entitlements?: unknown } | null)?.entitlements);
+    if (!parsed.success) continue;
+    limits.maxStores = Math.min(limits.maxStores, parsed.data.limits.maxStores);
+    limits.maxProducts = Math.min(limits.maxProducts, parsed.data.limits.maxProducts);
+    limits.maxUsers = Math.min(limits.maxUsers, parsed.data.limits.maxActiveUsers);
+  }
   return limits;
 };
 
@@ -291,7 +330,7 @@ export const assertFeatureCanBeConfigured = async (organizationId: string, featu
   if (!resolveOrganizationAccessState(org).hasAccess) throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   if (!org.entitlements.features[feature]) throw new AppError(getFeatureLockedErrorKey(feature), "FORBIDDEN", 403);
   const scheduled = await db.subscriptionPeriod.findMany({
-    where: { organizationId, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
+    where: { organizationId, revokedAt: null, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
   });
   for (const period of scheduled) {
     const purchase = readPurchaseSnapshot(period.purchaseSnapshot);
@@ -305,6 +344,19 @@ export const assertFeatureCanBeConfigured = async (organizationId: string, featu
     const purchase = readPurchaseSnapshot(invoice.purchaseSnapshot);
     const next = purchase?.entitlements ?? contractPlan(org.contractTerms, invoice.plan, purchase?.extras);
     if (!next.features[feature]) throw new AppError("billingScheduledFeatureRestriction", "CONFLICT", 409, { feature });
+  }
+  const applePending = await db.applePurchaseIntent.findMany({ where: { organizationId, scope: "SUBSCRIPTION",
+    status: { in: ["PENDING", "REVIEW"] } }, select: { purchaseSnapshot: true } });
+  for (const intent of applePending) {
+    const purchase = readPurchaseSnapshot(intent.purchaseSnapshot);
+    if (purchase?.entitlements && !purchase.entitlements.features[feature])
+      throw new AppError("billingScheduledFeatureRestriction", "CONFLICT", 409, { feature });
+  }
+  const appleChanges = await db.appleSubscriptionChain.findMany({ where: { organizationId, autoRenewEnabled: true, pendingProductId: { not: null } },
+    select: { pendingChangeOffer: true } });
+  for (const change of appleChanges) {
+    const parsed = planDefinitionSchema.safeParse((change.pendingChangeOffer as { entitlements?: unknown } | null)?.entitlements);
+    if (parsed.success && !parsed.data.features[feature]) throw new AppError("billingScheduledFeatureRestriction", "CONFLICT", 409, { feature });
   }
   return org;
 };

@@ -71,6 +71,10 @@ const syncUserStoreAccesses = async (
 
 export const createUser = async (input: CreateUserInput) =>
   prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
+    const actor = await tx.user.findUnique({ where: { id: input.actorId } });
+    if (!actor || actor.deletedAt || !actor.isActive || actor.organizationId !== input.organizationId)
+      throw new AppError("forbidden", "FORBIDDEN", 403);
     await assertWithinLimits({ organizationId: input.organizationId, kind: "users" });
     const passwordHash = await bcrypt.hash(input.password, 10);
     const user = await tx.user.create({
@@ -119,7 +123,7 @@ export type UpdatePreferredLocaleInput = {
 export const updatePreferredLocale = async (input: UpdatePreferredLocaleInput) =>
   prisma.$transaction(async (tx) => {
     const before = await tx.user.findUnique({ where: { id: input.userId } });
-    if (!before || before.organizationId !== input.organizationId) {
+    if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
     }
 
@@ -160,7 +164,7 @@ export type UpdateUserInput = {
 export const updateUser = async (input: UpdateUserInput) =>
   prisma.$transaction(async (tx) => {
     const before = await tx.user.findUnique({ where: { id: input.userId } });
-    if (!before || before.organizationId !== input.organizationId) {
+    if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
     }
 
@@ -212,7 +216,7 @@ export type SetUserActiveInput = {
 export const setUserActive = async (input: SetUserActiveInput) =>
   prisma.$transaction(async (tx) => {
     const before = await tx.user.findUnique({ where: { id: input.userId } });
-    if (!before || before.organizationId !== input.organizationId) {
+    if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
     }
 
@@ -262,7 +266,7 @@ export type ResetUserPasswordInput = {
 export const resetUserPassword = async (input: ResetUserPasswordInput) =>
   prisma.$transaction(async (tx) => {
     const before = await tx.user.findUnique({ where: { id: input.userId } });
-    if (!before || before.organizationId !== input.organizationId) {
+    if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
     }
 
