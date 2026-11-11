@@ -370,8 +370,14 @@ try {
       if (width === 1440 || width === 390) {
         const nextLocale = locale === "en" ? "kg" : "en";
         for (const language of [nextLocale, locale]) {
+          const destination = new URL(page.url());
+          destination.pathname = `/${language}`;
           await page.locator('footer [role="combobox"]').click();
-          await page.getByRole('option', { name: language.toUpperCase(), exact: true }).click();
+          await Promise.all([
+            page.waitForURL((url) => url.href === destination.href, { waitUntil: "networkidle" }),
+            page.getByRole('option', { name: language.toUpperCase(), exact: true }).click(),
+          ]);
+          await settle(page);
           await page.waitForFunction(expected => document.documentElement.lang === expected, htmlLocales[language]);
         }
         if (width === 390) {
@@ -485,6 +491,24 @@ try {
   report.error = error.stack ?? String(error);
   process.exitCode = 1;
   console.error(report.error);
+  const failedPage = browser.contexts().flatMap((context) => context.pages())
+    .filter((page) => !page.isClosed()).at(-1);
+  if (failedPage) {
+    report.failure = { url: failedPage.url() };
+    try {
+      report.failure.navigation = await failedPage.locator('header button[aria-expanded]')
+        .evaluateAll((buttons) => buttons.map((button) => ({
+          label: button.getAttribute("aria-label"),
+          expanded: button.getAttribute("aria-expanded"),
+          controls: button.getAttribute("aria-controls"),
+        })));
+      report.failure.htmlLang = await failedPage.locator("html").getAttribute("lang");
+      report.failure.screenshot = `${output}/failure.png`;
+      await failedPage.screenshot({ path: report.failure.screenshot, fullPage: true, timeout: 10_000 });
+    } catch (artifactError) {
+      report.failure.artifactError = artifactError.message ?? String(artifactError);
+    }
+  }
 } finally {
   await browser.close();
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
