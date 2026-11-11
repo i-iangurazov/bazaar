@@ -195,6 +195,26 @@ native handoff: those actions use direct attachment anchors. It does not prove
 that no bytes reached the device. No new export job or provider operation was
 created during this check; the native download path remains to be completed.
 
+After that same download finished, the observed outcome changed: WKWebView
+replaced the Bazaar interface with a tiny raw CSV table beneath the status bar,
+without the app navigation or a Share control. The screenshot is preserved as
+`export-history-inline-csv-before-fca36cf7.png`. Fully restarting the app recovered
+the dashboard. The correction must keep the authenticated history page in place
+and hand the downloaded file to the system sheet.
+
+The date spacing matches a documented [WebKit issue with padded date inputs on
+iOS](https://bugs.webkit.org/show_bug.cgi?id=301648). A bounded native-iOS style
+removes that input appearance and applies explicit border-box containment while
+retaining the real `date` type, picker, values, handlers and shared control height.
+The existing offline fixture passed 30 checks, including populated/blank/disabled
+date bounds and the column gap at widths 320, 393 and 1024, with unchanged web and
+Android appearance/geometry. Its initial run failed a fixture assumption that
+all controls must be at least 36px high: existing desktop controls intentionally
+use 32px. The corrected assertion compares dates with an actual same-class text
+control at the same width; no production height was changed to satisfy it.
+That failed log remains preserved. Actual iOS field spacing and both native
+calendars still need their new deployment check.
+
 Read-only public signup-mode requests returned `open` on `www.bazaar.kg` and
 `invite_only` on this Preview. A missing open-signup link in this TestFlight
 environment is therefore a server-policy difference. No production signup policy

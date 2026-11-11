@@ -77,6 +77,23 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
 }
 
+/* iOS's native date appearance adds intrinsic width/content-box padding to
+   percentage-sized fields (WebKit 301648). Keep the real date input/picker,
+   while letting the shared field's declared size fit its grid column. */
+html.native-ios input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+html.native-ios input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.5em;
+}
+
 /* Radix locks BODY with overflow:hidden. In WKWebView that creates a new
    scrolling ancestor and detaches the app's sticky header from the viewport.
    Keep the real document lock on HTML; clip BODY without making it scrollable.

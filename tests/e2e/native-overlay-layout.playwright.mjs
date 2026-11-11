@@ -84,12 +84,33 @@ const centeredMd = `<section id="surface" role="dialog" aria-label="Synthetic ac
     <div class="flex flex-wrap justify-end gap-2 pt-2"><button id="cancel" type="button">Cancel</button><button type="submit" disabled>${escapeHtml(privacy.deleteConfirm)}</button></div>
   </form><button id="close" type="button" class="absolute right-4 top-4 h-10 w-10">Close</button>
 </section>`;
-const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd;
+const inputClasses = fs.readFileSync(path.join(repo, "src/components/ui/input.tsx"), "utf8")
+  .match(/className=\{cn\(\s*"([^"]+)"/)?.[1];
+assert(inputClasses, "Use the actual shared Input classes for date containment");
+const reportDates = (variant = "populated") => `<section id="date-card" class="mx-4 rounded-lg border border-border bg-card p-4">
+  <div class="grid grid-cols-2 gap-3">
+    ${["from", "to"].map((id, index) => `<label id="date-${id}-label" class="grid min-w-0 content-start gap-1.5 text-xs font-medium">
+      <span>${index ? "По дату" : "С даты"}</span><input id="date-${id}" aria-label="${index ? "По дату" : "С даты"}"
+        type="date" class="${inputClasses}" value="${variant === "blank" ? "" : index ? "2026-11-12" : "2026-10-14"}"
+        ${variant === "disabled" ? "disabled" : ""} /></label>`).join("")}
+  </div><input id="date-height-reference" type="text" class="${inputClasses}" tabindex="-1" aria-hidden="true"
+    style="position:absolute;visibility:hidden;pointer-events:none" ${variant === "disabled" ? "disabled" : ""} /></section>`;
+const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd + reportDates();
 const compiled = await postcss([
   postcssImport(),
   tailwindcss({ ...tailwindConfig, content: [{ raw: allMarkup, extension: "html" }] }),
 ]).process(fs.readFileSync(source, "utf8"), { from: source });
 const currentCss = compiled.css;
+const dateBaseline = postcss.parse(currentCss);
+let dateRulesRemoved = 0;
+dateBaseline.walkRules((rule) => {
+  if (rule.selector === 'html.native-ios input[type="date"]' ||
+      rule.selector === 'html.native-ios input[type="date"]::-webkit-date-and-time-value') {
+    rule.remove(); dateRulesRemoved += 1;
+  }
+});
+assert.equal(dateRulesRemoved, 2, "Compare only the scoped native date correction");
+const beforeDateCss = dateBaseline.toString();
 // Execute the actual shared coordinator in this offline browser, not a copied
 // focus/viewport implementation. No native plugin or shipping test API is added.
 const keyboardScript = ts.transpileModule(fs.readFileSync(path.join(repo, "src/lib/native/keyboardViewport.ts"), "utf8"), {
@@ -362,6 +383,41 @@ try {
   assert.equal(tabletAfter.top, tabletBefore.top);
   assert.equal(tabletAfter.height, tabletBefore.height);
   check("existing wider inset dialog geometry remains unchanged");
+
+  const dateBounds = () => page.evaluate(() => {
+    const card = document.getElementById("date-card");
+    const cardBox = card.getBoundingClientRect(), style = getComputedStyle(card);
+    return { referenceHeight: document.getElementById("date-height-reference").getBoundingClientRect().height,
+      left: cardBox.left + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth),
+      right: cardBox.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth),
+      fields: ["from", "to"].map((id) => {
+        const input = document.getElementById(`date-${id}`), label = document.getElementById(`date-${id}-label`);
+        const box = input.getBoundingClientRect(), parent = label.getBoundingClientRect(), css = getComputedStyle(input);
+        return { left: box.left, right: box.right, height: box.height, labelLeft: parent.left, labelRight: parent.right,
+          appearance: css.appearance, boxSizing: css.boxSizing, value: input.value, type: input.type, disabled: input.disabled };
+      }) };
+  });
+  for (const width of [320, 393, 1024]) for (const variant of ["populated", "blank", "disabled"]) {
+    await load(page, { width, surface: reportDates(variant) });
+    const bounds = await dateBounds();
+    for (const field of bounds.fields) {
+      assert(field.left >= bounds.left - 1 && field.right <= bounds.right + 1);
+      assert(field.left >= field.labelLeft - 1 && field.right <= field.labelRight + 1);
+      assert.equal(field.appearance, "none"); assert.equal(field.boxSizing, "border-box");
+      assert.equal(field.type, "date"); assert.equal(field.disabled, variant === "disabled");
+      assert(bounds.referenceHeight > 0 && Math.abs(field.height - bounds.referenceHeight) <= 1,
+        "Populated/blank/disabled dates must retain the actual same-class text field height at this viewport");
+    }
+    assert(bounds.fields[1].left - bounds.fields[0].right >= 11, "Keep the existing 12px date-column gap");
+    check(`native date ${variant} stays within two report columns at ${width}`, bounds);
+  }
+  for (const platform of ["web", "android"]) {
+    await load(page, { platform, css: beforeDateCss, width: 1024, surface: reportDates() });
+    const before = await dateBounds();
+    await load(page, { platform, width: 1024, surface: reportDates() });
+    assert.deepEqual(await dateBounds(), before);
+    check(`${platform} date appearance and geometry remain unchanged`);
+  }
 
   fs.writeFileSync(path.join(outputDir, `${engine}.json`), JSON.stringify({
     result: "PASS", engine, networkBlocked: blockedNetwork, checks: results,
