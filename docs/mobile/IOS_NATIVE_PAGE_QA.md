@@ -67,9 +67,67 @@ registration and the Baam popup in the first TestFlight build.
   typecheck, lint and translation validation. Updated native geometry remains
   to be rechecked after its own Preview build.
 
-Production build, Preview deployment and actual updated runtime checks are
-recorded when complete. A successful component test does not prove WKWebView
-geometry or native keyboard behavior.
+## Updated runtime checks — 12 November 2026
+
+The immutable `9f221b8f4f37297d619bed2278f1c6c5f7233c06` Preview passed
+`pnpm build`/`next build`, including compilation and all 133 static pages. Its
+dedicated alias was verified against deployment
+`dpl_4NFgvQ1do8DqNFUAaWv1a3Hwvssy`. The owner’s installed staging app can load
+these hosted UI changes after a full restart; no replacement IPA was uploaded.
+
+The agent rechecked the actual Simulator application after restarting it:
+
+- One Baam icon tap opens the full workspace; Back returns to the originating
+  dashboard. An unsent numeric draft survived leaving and reopening Baam. It was
+  then cleared without sending a request.
+- A product overflow menu opened after scrolling while the app header stayed in
+  place. Closing it restored normal navigation.
+- The completed sale appeared in history. Its full-height detail surface and
+  close control sat below the status bar; a touch closed it successfully.
+  This is separate from the exact inline POS receipt-journal instance, which
+  still needs its own post-fix observation.
+- Write-off catalog and line sections now fit the screen; the complete reason
+  warning is visible. The native date control background still reaches the card
+  edge; that narrower appearance issue is not claimed fixed.
+- The counts list, dismissible introduction, new-count dialog and Cancel worked.
+  No count was created or posted. Profile data, preferences and privacy controls
+  were reachable by scrolling.
+
+The account-deletion check exposed another real defect: a tall default size-md
+dialog can still put its title/close under the notch. It was dismissed without
+entering confirmation or deleting the account. The additional native centered
+dialog height constraint passed all 14 extended offline layout checks, including
+safe form/Cancel bounds at widths 393 and 320, followed by typecheck, lint and
+translation validation. Its new production build and actual native confirmation
+remain to be observed.
+
+Read-only public signup-mode requests returned `open` on `www.bazaar.kg` and
+`invite_only` on this Preview. A missing open-signup link in this TestFlight
+environment is therefore a server-policy difference. No production signup policy
+or email-verification requirement was changed to make a test pass.
+
+## Native Keychain and StoreKit fixture checkpoint
+
+The earlier unsigned Debug test host had no usable entitlement identity; both
+raw Keychain probes returned `-34018`. A normal local ad-hoc Simulator build was
+then inspected: complete bound signatures/resources, no provisioning profile,
+and the correct application identity in the actual Simulator Mach-O entitlements.
+No shipping entitlement, account, or provisioning setting was changed.
+
+With that exact compiled, blank/no-website host, the raw two-probe diagnostic
+passed and all five actual Keychain integration cases passed without skips:
+fresh-instance signing, device-only/non-synchronizing attributes, tampered
+credentials, exact removal and isolation between attempts. The separate original
+StoreKit class still failed its four purchase cases before obtaining a purchase;
+the unknown-ID case passed. This is not a successful local StoreKit purchase.
+
+The error occurs while configuring the test session and then at purchase, before
+the application transaction finisher. It matches an Apple-reported Simulator
+connection issue fixed in [iOS 26.6 release notes](https://developer.apple.com/documentation/ios-ipados-release-notes/ios-ipados-26_6-release-notes.md).
+That match is a diagnosis to verify, not proof that a runtime update has fixed
+this machine. A compatible available runtime and adequate disk space must be
+established before the next bounded purchase experiment. Prior failed evidence
+remains preserved. Apple Sandbox and physical-device purchases remain unverified.
 
 ## Remaining verification
 

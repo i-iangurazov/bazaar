@@ -45,10 +45,10 @@ const fullscreen = (kind) => kind === "journal"
       </header><div class="shrink-0 h-[1800px] p-4">Synthetic scrollable rows</div>
     </section>`
   : `<section id="surface" role="dialog" aria-label="Synthetic full dialog"
-      class="fixed left-1/2 top-1/2 z-[1001] flex h-[100dvh] max-h-[100dvh] w-screen -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto bg-card sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]">
+      class="fixed left-1/2 top-1/2 z-[1001] flex h-[100dvh] max-h-[100dvh] w-screen -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden bg-card sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)]">
       <h2 class="shrink-0 p-4">Synthetic full dialog</h2>
       <button id="close" type="button" class="absolute right-4 top-4">Close</button>
-      <div class="shrink-0 h-[1800px] p-4">Synthetic scrollable rows</div>
+      <div id="dialog-scroll" class="min-h-0 flex-1 overflow-y-auto"><div class="h-[1800px] p-4">Synthetic scrollable rows</div></div>
     </section>`;
 const ordinarySheet = `<section id="surface" role="dialog" aria-label="Synthetic bottom sheet"
   class="fixed inset-x-0 bottom-0 z-[1001] h-[300px] max-h-[90dvh] overflow-y-auto bg-card">
@@ -62,13 +62,47 @@ const app = `<main data-bazaar-app class="min-h-screen bg-background">
     <div class="flex min-h-11 items-center">Existing mobile app header</div>
   </header><div class="h-[2500px] p-4">Synthetic product list</div>
 </main>`;
-const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog;
+// Reproduce the actual default size-md DialogContent / DialogHeader and the
+// account-deletion form's overflow-auto body, with real Russian copy. This
+// fixture never wires a deletion mutation and must not submit anything.
+const privacy = JSON.parse(fs.readFileSync(path.join(repo, "messages/ru.json"), "utf8")).accountPrivacy;
+const escapeHtml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+const centeredMd = `<section id="surface" role="dialog" aria-label="Synthetic account deletion"
+  class="fixed left-1/2 top-1/2 z-[1001] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg">
+  <div class="shrink-0 border-b border-border px-5 py-4 pr-16 sm:px-6">
+    <h2 class="text-lg font-semibold">${escapeHtml(privacy.deleteTitle)}</h2>
+    <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(privacy.deleteSummary)}</p>
+  </div>
+  <form id="dialog-scroll" class="space-y-4 overflow-y-auto p-5" onsubmit="event.preventDefault()">
+    <p class="text-sm leading-6">${escapeHtml(privacy.retention)}</p>
+    <p class="text-sm leading-6">${escapeHtml(privacy.appleWarning)}</p>
+    <span class="inline-flex min-h-11 items-center text-sm">${escapeHtml(privacy.manageApple)}</span>
+    <p class="text-sm leading-6">${escapeHtml(privacy.soleOwner)}</p>
+    <div class="space-y-2"><label for="deletion-password">${escapeHtml(privacy.password)}</label><input id="deletion-password" type="password" class="h-10 w-full border" /></div>
+    <div class="space-y-2"><label for="deletion-confirmation">${escapeHtml(privacy.confirmation)}</label><input id="deletion-confirmation" class="h-10 w-full border" /></div>
+    <div class="flex flex-wrap justify-end gap-2 pt-2"><button id="cancel" type="button">Cancel</button><button type="submit" disabled>${escapeHtml(privacy.deleteConfirm)}</button></div>
+  </form><button id="close" type="button" class="absolute right-4 top-4 h-10 w-10">Close</button>
+</section>`;
+const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd;
 const compiled = await postcss([
   postcssImport(),
   tailwindcss({ ...tailwindConfig, content: [{ raw: allMarkup, extension: "html" }] }),
 ]).process(fs.readFileSync(source, "utf8"), { from: source });
 const currentCss = compiled.css;
-const baseline = postcss.parse(currentCss);
+// Keep the previous root-lock/fullscreen fix in the tall-dialog negative case.
+const centeredBaseline = postcss.parse(currentCss);
+const centeredSelectors = new Set([
+  "html.native-ios",
+  'html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"]',
+  'html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[85dvh]"]',
+]);
+let centeredRemoved = 0;
+centeredBaseline.walkRules((rule) => {
+  if (centeredSelectors.has(rule.selector)) { rule.remove(); centeredRemoved += 1; }
+});
+assert.equal(centeredRemoved, 4, "Remove only the four reviewed centered-dialog rules");
+const beforeCenteredCss = centeredBaseline.toString();
+const baseline = postcss.parse(beforeCenteredCss);
 const addedSelectors = new Set([
   "html.native-ios:has(body[data-scroll-locked])",
   "html.native-ios body[data-scroll-locked]",
@@ -105,15 +139,15 @@ const state = (page) => page.evaluate(() => {
     y: scrollY, headerTop: header.top,
     rootOverflow: html.overflowY, bodyOverflow: body.overflowY,
     ...(bounds ? { top: bounds.top, bottom: bounds.bottom, height: bounds.height,
-      scrollTop: surface.scrollTop } : {}),
+      scrollTop: (document.getElementById("dialog-scroll") ?? surface).scrollTop } : {}),
     ...(close ? { closeTop: close.top } : {}),
   };
 });
-const load = async (page, { css = currentCss, platform = "ios", width = 393, surface = "" } = {}) => {
-  await page.setViewportSize({ width, height: 844 });
+const load = async (page, { css = currentCss, platform = "ios", width = 393, height = 844, surface = "" } = {}) => {
+  await page.setViewportSize({ width, height });
   await page.setContent(`<!doctype html><html class="${platform === "web" ? "" : `native-app native-${platform}`}">
     <head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-      <style>${css}</style><style>:root { --mobile-top-safe-area:59px; }</style>
+      <style>${css}</style><style>:root { --mobile-top-safe-area:59px; --mobile-bottom-safe-area:34px; }</style>
     </head><body>${app}${surface}</body></html>`);
   await frame(page);
 };
@@ -182,9 +216,44 @@ try {
     await page.waitForTimeout(100);
     const scrolled = await state(page);
     assert(scrolled.scrollTop > 0 && scrolled.y === geometry.y, "Dialog must scroll without scrolling the locked page");
-    if (kind === "journal") assert(scrolled.closeTop >= 59, "Sticky journal header must stay below notch after scrolling");
+    assert(scrolled.closeTop >= 59, "Header/absolute close must stay below notch while its actual body scrolls");
     check(`native ${kind} fullscreen bounds, close action and inner scrolling`, scrolled);
     await page.screenshot({ path: path.join(outputDir, `${engine}-${kind}.png`) });
+  }
+
+  for (const viewport of [{ width: 393, height: 844 }, { width: 320, height: 667 }]) {
+    await load(page, { ...viewport, css: beforeCenteredCss, surface: centeredMd });
+    const brokenMd = await state(page);
+    assert(brokenMd.top < 59 && brokenMd.closeTop < 59, "Previous size-md layout must reproduce notch overlap");
+    await load(page, { ...viewport, surface: centeredMd });
+    await lock(page);
+    const bounds = await state(page);
+    assert(bounds.top >= 59 && bounds.bottom <= viewport.height - 34, JSON.stringify(bounds));
+    assert(bounds.closeTop >= 59);
+    await page.mouse.move(Math.floor(viewport.width / 2), Math.floor(viewport.height / 2));
+    await page.mouse.wheel(0, 500);
+    await page.waitForTimeout(100);
+    assert((await state(page)).scrollTop > 0, "The actual form body must remain scrollable");
+    await page.locator("#deletion-password").fill("Synthetic-unused-password");
+    await page.locator("#deletion-confirmation").fill("DELETE");
+    await page.locator("#cancel").scrollIntoViewIfNeeded();
+    const cancel = await page.locator("#cancel").boundingBox();
+    assert(cancel && cancel.y >= 59 && cancel.y + cancel.height <= viewport.height - 34);
+    const after = await state(page);
+    assert.equal(after.y, bounds.y, "Form focus/scroll must not move the locked page");
+    assert(after.closeTop >= 59, "Close remains reachable after reaching the last fields");
+    check(`native tall size-md header, form fields and Cancel fit safe bounds at ${viewport.width}`, after);
+    await page.screenshot({ path: path.join(outputDir, `${engine}-centered-md-${viewport.width}.png`) });
+  }
+
+  for (const platform of ["web", "android"]) {
+    await load(page, { platform, css: beforeCenteredCss, width: 1024, surface: centeredMd });
+    const oldBounds = await state(page);
+    await load(page, { platform, width: 1024, surface: centeredMd });
+    const sameBounds = await state(page);
+    assert.equal(sameBounds.top, oldBounds.top);
+    assert.equal(sameBounds.height, oldBounds.height);
+    check(`${platform} wider size-md dialog geometry remains unchanged`);
   }
 
   for (const [name, surface] of [["bottom sheet", ordinarySheet], ["centered dialog", ordinaryDialog]]) {

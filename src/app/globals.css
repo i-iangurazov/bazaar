@@ -89,6 +89,27 @@ html.native-ios body[data-scroll-locked] {
   overflow: clip !important;
 }
 
+/* Keep centered native dialogs inside both safe areas without moving small
+   dialogs or changing their centering. The larger inset is reserved on both
+   sides because these surfaces use a 50% center and translateY(-50%). */
+html.native-ios {
+  --native-centered-dialog-safe-height: calc(100dvh - 2 * max(var(--mobile-top-safe-area), var(--mobile-bottom-safe-area)) - 1rem);
+}
+
+html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"] {
+  max-height: var(--native-centered-dialog-safe-height) !important;
+}
+
+html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[85dvh]"] {
+  max-height: min(85dvh, var(--native-centered-dialog-safe-height)) !important;
+}
+
+@media (min-width: 640px) {
+  html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"] {
+    max-height: min(calc(100dvh - 2rem), var(--native-centered-dialog-safe-height)) !important;
+  }
+}
+
 @media (max-width: 639px) {
   /* Only the existing full-viewport dialog variants reach the status bar.
      Insetting the whole surface also protects sticky headers/absolute close
