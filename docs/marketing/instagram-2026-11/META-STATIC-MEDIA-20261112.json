@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "updatedLocalDate": "2026-11-12",
+  "status": "STATIC_NATIVE_MEDIA_MAPPING_VERIFIED_NO_PAID_LAUNCH",
+  "sourceCodeBase": "4d8f7770c4168e0349d6bf63c2d7438b6fa7756c",
+  "pathBase": "Primary BAZAAR workspace root; the ignored native export directory is not automatically present in another clone.",
+  "exportRoot": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export",
+  "sourceEvidence": "artifacts/instagram-canva-20261103/prelaunch-20261111/asset-release-index.json",
+  "copyDocument": "ADVERTISING-DRAFTS-20261111.md",
+  "scope": "Only existing approved native static carousels and original vertical Story images; no new artwork, no image processing, no video, no account or campaign changes.",
+  "allowedPlacementsForPlannedPreview": [
+    "Instagram Feed",
+    "Instagram Stories"
+  ],
+  "excludedFormats": [
+    "video",
+    "Reels"
+  ],
+  "notIncludedInThisMapping": [
+    "horizontal creative",
+    "automatic image-to-video conversion"
+  ],
+  "paidLaunchAuthorized": false,
+  "budget": null,
+  "billingAdded": false,
+  "campaignCreated": false,
+  "productFacts": {
+    "trial_days": 7,
+    "trial_offer": "7 дней бесплатно — без карты и автосписаний",
+    "trial_scope": "Limited preview under the published offer; not all paid modules/unlimited usage. See billing.trial.scope and trialPolicy.",
+    "tariffs_current_new_contracts": [
+      {
+        "code": "STARTER",
+        "name": "Новичок",
+        "monthly_base_kgs": 2000,
+        "included_stores": 1,
+        "products": 1000,
+        "active_users": 2
+      },
+      {
+        "code": "BUSINESS",
+        "name": "Бизнесмен",
+        "monthly_base_kgs": 3500,
+        "included_stores": 1,
+        "products": 5000,
+        "active_users": 5
+      },
+      {
+        "code": "ENTERPRISE",
+        "name": "Монополист",
+        "monthly_base_kgs": 5500,
+        "included_stores": 1,
+        "products": 15000,
+        "active_users": 15
+      }
+    ],
+    "tariff_caveat": "Current 2026-11 new-contract base limits and one-month prices; add-ons/long-period discounts are separate, existing contracts retain agreed terms. Tariff names are never translated.",
+    "source_files": [
+      "src/lib/billing/trial.ts",
+      "src/server/billing/trialPolicy.ts",
+      "src/lib/billing/subscriptionPricing.ts",
+      "src/server/billing/planCatalog.ts",
+      "src/components/marketing/MarketingPricing.tsx",
+      "messages/ru.json"
+    ]
+  },
+  "creatives": [
+    {
+      "id": "ad01_ru",
+      "theme": "catalog",
+      "feed": {
+        "format": "static_carousel",
+        "aspectRatio": "4:5",
+        "nativeCanvaSource": "https://www.canva.com/d/5WPejEG4mk7vcdZ",
+        "sourceDesignId": "DAHanIggavk",
+        "pages": [
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p02/01.png",
+            "sourcePage": 1,
+            "sourceDesignId": "DAHanIggavk",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 1820779,
+            "sha256": "25922f14850e9ea6a25208a6cdc193f24024b7d5e1ae17fb3e92fe3fe3fdbd2c",
+            "bytesModified": false
+          },
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p02/02.png",
+            "sourcePage": 2,
+            "sourceDesignId": "DAHanIggavk",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 93533,
+            "sha256": "81e05e30ae31fcb333ee90d85b4a93764102eaf3df1eff4a662f00db4c9b5bf4",
+            "bytesModified": false
+          },
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p02/03.png",
+            "sourcePage": 3,
+            "sourceDesignId": "DAHanIggavk",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 127057,
+            "sha256": "b077bead3be497db9722df26373e82e8b19f155e5aa543b0e09b00c08bce1617",
+            "bytesModified": false
+          },
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p02/04.png",
+            "sourcePage": 4,
+            "sourceDesignId": "DAHanIggavk",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 1819120,
+            "sha256": "c18881ae3802f275a446a6e0a2228456fdd6e6d5366094573c7de3754e10e5c7",
+            "bytesModified": false
+          }
+        ],
+        "screenshotsAreSeparateSlides": true,
+        "sourceQa": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p02/export-verification.json"
+      },
+      "story": {
+        "format": "static_single_image",
+        "aspectRatio": "9:16",
+        "nativeCanvaSource": "https://www.canva.com/d/R1jxGP1cXOCr_YV",
+        "sourceDesignId": "DAHanEmzeTw",
+        "headline": "Одна модель. Разные размеры.",
+        "image": {
+          "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/stories/04.png",
+          "sourcePage": 4,
+          "sourceDesignId": "DAHanEmzeTw",
+          "format": "PNG",
+          "width": 1080,
+          "height": 1920,
+          "bytes": 2352193,
+          "sha256": "d9abedf48f91da31fceaed44fe53cd7c14c61cda373ffadfe69128ca92f836b2",
+          "bytesModified": false
+        },
+        "sourceQa": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/stories/manifest.json"
+      },
+      "platformCta": "Send message",
+      "recipient": "Instagram @bazaar.pos",
+      "directKeyword": "КАТАЛОГ",
+      "registrationFollowupUrl": "https://www.bazaar.kg/signup?utm_source=instagram&utm_medium=paid_social&utm_campaign=kg_store_launch_202611&utm_content=ad01_ru_direct",
+      "platformIdentityRecipientAndPlacementPreviewVerifiedByThisFile": false
+    },
+    {
+      "id": "ad02_ru",
+      "theme": "stock-history",
+      "feed": {
+        "format": "static_carousel",
+        "aspectRatio": "4:5",
+        "nativeCanvaSource": "https://www.canva.com/d/qjpHG3BdKZwXtJ4",
+        "sourceDesignId": "DAHanP5cPP0",
+        "pages": [
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p04/01.png",
+            "sourcePage": 1,
+            "sourceDesignId": "DAHanP5cPP0",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 1469675,
+            "sha256": "fbc73027b58ec5499558ad2027f5305aad65a74bd4c8caf63986e137b2def870",
+            "bytesModified": false
+          },
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p04/02.png",
+            "sourcePage": 2,
+            "sourceDesignId": "DAHanP5cPP0",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 104135,
+            "sha256": "b925223175f257385445e4b8b4dff65e1fe2be03e068aa1c135ecdf47b2b21b2",
+            "bytesModified": false
+          },
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p04/03.png",
+            "sourcePage": 3,
+            "sourceDesignId": "DAHanP5cPP0",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 101847,
+            "sha256": "77dbdd2f22d45cc6d4ed235ac6b28df90131dfd3d950ebe35940aeac1efc29bc",
+            "bytesModified": false
+          },
+          {
+            "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p04/04.png",
+            "sourcePage": 4,
+            "sourceDesignId": "DAHanP5cPP0",
+            "format": "PNG",
+            "width": 1080,
+            "height": 1350,
+            "bytes": 1466274,
+            "sha256": "9cbe64975e50e4b33aa1293d0d6f06a1132d152679b6d9fd51fbe5a42a0b6e85",
+            "bytesModified": false
+          }
+        ],
+        "screenshotsAreSeparateSlides": true,
+        "sourceQa": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/p04/export-verification.json"
+      },
+      "story": {
+        "format": "static_single_image",
+        "aspectRatio": "9:16",
+        "nativeCanvaSource": "https://www.canva.com/d/R1jxGP1cXOCr_YV",
+        "sourceDesignId": "DAHanEmzeTw",
+        "headline": "Почему товара стало меньше?",
+        "image": {
+          "path": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/stories/10.png",
+          "sourcePage": 10,
+          "sourceDesignId": "DAHanEmzeTw",
+          "format": "PNG",
+          "width": 1080,
+          "height": 1920,
+          "bytes": 1684769,
+          "sha256": "83d3507223d41c4b066e375da8561238d3509e00e6cbf4c9b38d8052fc973515",
+          "bytesModified": false
+        },
+        "sourceQa": "artifacts/instagram-canva-20261103/prelaunch-20261111/carousel-conversion-20261111/final-export/stories/manifest.json"
+      },
+      "platformCta": "Send message",
+      "recipient": "Instagram @bazaar.pos",
+      "directKeyword": "ОСТАТОК",
+      "registrationFollowupUrl": "https://www.bazaar.kg/signup?utm_source=instagram&utm_medium=paid_social&utm_campaign=kg_store_launch_202611&utm_content=ad02_ru_direct",
+      "platformIdentityRecipientAndPlacementPreviewVerifiedByThisFile": false
+    }
+  ],
+  "verification": {
+    "files": 10,
+    "allOriginalPngBytesMatchAssetReleaseIndex": true,
+    "feedFiles1080x1350": 8,
+    "verticalFiles1080x1920": 2,
+    "approvedAdTextAndDirectFlowUnchanged": true,
+    "googleSearchSectionUnchanged": true,
+    "imagesGeneratedOrEdited": false,
+    "platformPreviewIsSeparateRootTask": true,
+    "existingGooglePacketSha256": "be1aecc9729887b73c61adfbd2f8b6cc31411f8fc4e034b47fbd13bb05f77417",
+    "previousGoogleFileVerification": "artifacts/instagram-canva-20261103/prelaunch-20261111/qa-code/google-ads-preparation-verification-20261111.json",
+    "previousVerificationScope": "Original Google packet and immutable source permalink remain unchanged; this revision only replaces obsolete Meta media bindings in the current Markdown."
+  }
+}
