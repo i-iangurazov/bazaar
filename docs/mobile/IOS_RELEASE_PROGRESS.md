@@ -686,3 +686,89 @@ denied. The exact saved rule is being checked from the owner's screenshot; the
 app also refuses automation of its own settings. Actual products/prices, signing, Apple Sandbox, TestFlight
 and iPhone acceptance remain required. The isolated Preview is still on143 until
 the separately guarded remote upgrade/deployment is observed.
+
+### Updated Preview and signed internal iOS candidate
+
+The isolated Preview now runs committed application source
+`56c744aaa241d6abc8c585b997935440adf5e801`, including the white presentation,
+privacy dispatch fix and earned Apple completion/recovery. Deployment
+`dpl_Whpx6cmUZ2bLVgHeJyr1F1KfivdX` was observed READY with the exact project,
+Preview OIDC, source and stable alias binding. The public test URL remains
+`https://bazaar-ios-preview-20261111.vercel.app`.
+
+Reviewed migrations144 and145 were applied to the dedicated remote Preview database.
+All 24 original access/financial/auth/usage table hashes remained unchanged;
+new completion/deferred/key rows were empty. The final read-only
+POST_COMPLETION_UTC audit had zero blockers, warnings or skipped checks.
+Current-source real HTTP follow-ups passed **16/16**, and the two-login prepaid
+access follow-up passed **7/7**, preserving current/future coverage, additions
+and consumed quotas. These are synthetic fixtures over real isolated services,
+not customer transactions or provider payment evidence. All payment providers
+and Apple sales remain off within this Preview.
+
+The owner configured the paid Apple Account in Xcode, connected and trusted the
+personal iPhone, then enabled Developer Mode and confirmed it after reboot.
+Passive discovery matched the same paired, wired, booted phone. The
+first generic and exact-destination archives failed with no registered devices
+or development profile. A subsequent physical-device build failed before
+provisioning with a destination timeout: Xcode could not mount its developer
+disk image. The concrete error was a missing hardware variant in DDI 17F113;
+its manifest did not include the phone's product/hardware identity. The official
+`-runFirstLaunch -checkForNewerComponents` command returned 0 but reported
+**No new updates for 17F113**, so no fix or compatible component is claimed.
+No identical device build/mount was repeated after that result.
+
+The Developer portal was accessible through the owner's Chrome even while the
+separate App Store Connect origin remained denied. In the intended team
+`DWR6Z246Y8`, the portal showed **Registration Complete** after registering the
+exact owner phone, and the identifiers list confirmed `kg.bazaar.app`.
+Private UDID/device details remain outside Git. No App Store Connect/API/cookie
+workaround was used to view its blocked Apps page.
+
+After that actual registration, one generic `AppStaging/ReleaseStaging` archive
+completed successfully: **1.0.0/111120**, source `56c744aa`. Its real Development
+signature and unexpired profile matched the intended team, exact bundle ID and
+owner phone; `get-task-allow` was true. All native input hashes, staging markers,
+fixed Preview origin, eleven plugin classes, white presentation and source
+privacy manifest matched. This is a signed device archive, not a phone run.
+
+One local export of that same archive then completed successfully with the
+repository's `iosExportOptions` generator, `destination=export` and
+`testFlightInternalTestingOnly=true`. It used the configured Xcode account and
+normal automatic signing; signing-service contacts were permitted, and no new
+API key or explicit private Apps query was introduced. There was no upload.
+The resulting **App.ipa** SHA256 is
+`d6ee74fb1ebf68d0183ef1d28a00e1bf9b873182bfe2adb53a27a36c7963d55d`.
+Actual extracted-artifact checks established Apple Distribution signing,
+the intended team/application/version, an unexpired distribution profile,
+`get-task-allow=false`, no provisioned-device list, the exact Preview origin,
+all eleven plugins and unchanged privacy manifest. Its bundled
+**TFInternalTestingOnly=true** was directly observed. Original archive/input
+digests stayed unchanged across export. These results establish a local
+distribution artifact; successful Apple processing and its Internal status have
+not been observed.
+
+The current SDK 26.5/Xcode 26.6 meets Apple's published upload minimum of
+Xcode 26/iOS 26, with iOS 15 minimum deployment. Cable debugging still needs
+compatible hardware support, but no macOS upgrade is required merely to use
+the already exported TestFlight candidate. No OS upgrade or global Xcode/DDI
+replacement was performed. See
+[Apple's upload requirements](https://developer.apple.com/news/upcoming-requirements/)
+and [hardware-support updates](https://developer.apple.com/documentation/xcode/downloading-and-installing-additional-xcode-components).
+
+The owner created the App Store Connect record **Bazaar POS**, Apple ID
+**6833508529**, while the automated origin denial remained unresolved. The
+owner confirmed **Russian as the primary listing language**; English is
+secondary, and selected **Full Access** for existing App Store Connect users.
+That app-management setting does not create TestFlight invitations or public
+distribution. Apple reported that the plain name Bazaar was already used. The
+accepted name and numeric ID were supplied by the owner; the record's other
+settings and build-number availability have not been independently inspected.
+
+The full goal remains open: actual registered/approved products and storefront
+prices, commercial change terms including below-minimum upgrades, server keys
+and notifications, real Apple Sandbox purchases, upload/processing, internal
+TestFlight and physical-iPhone acceptance are still required. A local signed IPA
+does not establish completed Apple payments. Production/main/public release
+remain separately authorized steps. Owned database/Redis and Simulator remain
+stopped; the serial archive/export jobs have both finished.

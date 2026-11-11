@@ -53,13 +53,15 @@ with Apple determining effective upgrade/downgrade timing and charges. That
 alternative has different recurrence and multi-organization constraints and is
 not automatically selected for the prepaid catalog.
 
-Immediate prorated upgrades/additions to an already prepaid GoPay or
-non-renewing Apple term remain a commercial/design gate. An arbitrary prorated
-KGS quote cannot be charged as a fixed Apple SKU. Do not call a renewal-only
-path complete, drop existing additions, invent a credit currency, erase paid
-remainder, or charge a full overlapping subscription. Prepare and approve a
-specific transfer/upgrade model before enabling that transition. Existing paid
-access and website functionality continue to work while this is resolved.
+Immediate prorated upgrades/additions to a current prepaid GoPay or non-renewing
+Apple term now have a reviewable, isolated-tested implementation: option C,
+[direct temporary upgrades](APPLE_TEMPORARY_UPGRADES.md). Configured non-renewing
+price bands fund only the remaining-term increment, preserving the paid base,
+future periods and consumed usage without a retained wallet. Products, prices,
+valuation/discount rules and terms remain unapproved and sales stay off. The
+proposed below-minimum/zero BLOCK policy does not establish commercial coverage
+of every web change. Existing paid access and website functionality continue.
+An arbitrary prorated KGS quote is still not a StoreKit charge argument.
 
 Before sales, confirm the exact registered IDs, prices in Kyrgyzstan and other
 approved storefronts, applicable commission/Small Business eligibility, tax and
@@ -70,11 +72,11 @@ reference](https://developer.apple.com/help/app-store-connect/reference/in-app-p
 
 ## Commercial decision appendix: customers with prepaid access
 
-**Owner decision prepared on 2026-11-11; neither alternative is approved or
-enabled.** Recommend **A** if next-period paid changes and separately approved
-early access are acceptable. If immediate paid changes must match the web at
-launch, compare **B** with the later **C** proposal below and keep that requirement
-open until the selected behavior is implemented and tested.
+**Owner decision prepared on 2026-11-11; no alternative's commercial terms are
+approved or enabled.** A and B remain design alternatives. C now has implemented
+mechanics and isolated regression coverage; review its prices, discount limits
+and below-minimum/zero policy for immediate changes without a retained wallet.
+This does not establish full catalog coverage or actual Apple acceptance.
 
 An identified IAP product has configured storefront prices; a time-sensitive
 web KGS quote is not an amount argument Bazaar can pass to StoreKit for that
@@ -152,19 +154,21 @@ partially spent and multiply funded upgrades. Do not repurpose existing
 subscription or WhatsApp balances as this wallet.
 
 **Reviewable choices:** A's commercial change/goodwill policy, B's new products
-and credit economics, or C's direct temporary-upgrade products below. All need actual prices/terms, transition tests
-and owner access gates. Renewal-only support does not complete the full goal.
-This appendix changes no code, draft products, paid access or release status.
+and credit economics, or C's implemented direct temporary-upgrade mechanics
+below. All require actual prices/terms and owner access gates. C's isolated tests
+do not replace Apple/device validation or complete the full catalog/release goal.
+This appendix enables no products, payment collection or changed paid access.
 
 ### C: direct temporary upgrade, without a retained balance
 
-**Unapproved design proposal; not implemented or registered.** The owner asked
-for a simpler explanation of the earlier A/B question and has not approved a
-wallet or changed commercial terms. A retained balance is not inherently
-necessary: a clearly described non-renewing product could fund a temporary
-upgrade fixed by an immutable organization/rights/interval/source-grant quote.
-This is an inference from Apple's app-managed non-renewing subscription model,
-not an approval of generic money-value products. See
+**Mechanics implemented and isolated-tested; commercial terms unapproved,
+products/prices unregistered and sales off.** C uses a configured non-renewing
+product to fund a temporary upgrade fixed by an immutable organization, rights,
+interval and source-grant quote, without a retained balance. The owner has not
+approved a wallet or changed commercial terms. Applying Apple's app-managed
+non-renewing model to this upgrade is an inference, not Apple acceptance. The
+configured band SKUs are separate from the 145-entry draft; none are enabled by
+that artifact. See
 [Apple's non-renewing guidance](https://developer.apple.com/documentation/StoreKit/handling-subscriptions-billing).
 
 The proposal uses reviewed fixed-price upgrade bands and owner-funded downward
@@ -172,16 +176,20 @@ rounding. Hypothetical same-currency example: an approved cap of 3.20 with a
 registered price of 2.99 charges 2.99 for the agreed upgrade; the difference is
 a discount, with no retained customer balance. No real price or exchange rate is
 established by that example. KGS reference valuation, Apple localized price and
-seller proceeds remain separate. Price changes and other storefront currencies
-need an approved comparison/refresh rule; fixed USD bands do not establish it.
+seller proceeds remain separate. Other storefront currencies require an
+approved versioned valuation; fixed USD bands do not establish it. Native
+price/storefront checks and server receipt matching are implemented; a changed
+price requires a new quote and consent.
 
-Implementation would still require non-renewing CHANGE quotes/intents,
-version-bound current/future base segments, dependent incremental grants in
-shared entitlement and SQL-capacity checks, preserved usage anchors, restore,
-stale-paid recovery and refund/reversal handling. Refund of an increment removes
-only its rights; a revoked base cannot leave an unfunded full target. Existing
-manual GoPay bank-refund attestations do not themselves revoke access and must
-not be reinterpreted as base revocation.
+Implemented mechanics include server-signed current-term CHANGE quotes, exact
+per-intent receipt binding, frozen source/future fingerprints, parent-dependent
+grants in shared entitlement and SQL-capacity checks, preserved legacy/current
+usage anchors, restore, stale-paid REVIEW and refund/reversal recovery. Future
+prepayments remain unchanged; existing compatibility checks still apply. Refund
+of an increment removes only its rights; a revoked base cannot leave an unfunded
+full target. Existing manual GoPay bank-refund attestations remain non-revoking.
+See [implementation and isolated-test boundaries](APPLE_TEMPORARY_UPGRADES.md);
+synthetic verified receipts and database tests are not actual Apple purchases.
 
 Before sales, approve the affected intervals, discount ceiling, below-minimum
 behavior, storefront/currency rule, base/increment refund consequences, meaningful

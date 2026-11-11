@@ -1,20 +1,35 @@
 # Bazaar — App Store listing and review draft
 
-Prepared 2026-11-11. **Draft only; not ready for submission.** No App Store
-Connect record, metadata, price, public seller declaration or release setting was
-changed. The current native evidence is a compiled Simulator app, not a signed
-device archive, completed Sandbox purchase or TestFlight release. The complete
-release scope remains in `IOS_RELEASE_PROGRESS.md`.
+Prepared 2026-11-11. **Draft only; not ready for submission.** A signed
+AppStaging archive and locally exported distribution IPA now exist from source
+`56c744aa`, version `1.0.0`, build `111120`. The export was observed with Apple
+Distribution signing for team `DWR6Z246Y8`, an unexpired distribution profile,
+`get-task-allow=false`, no `ProvisionedDevices`, and the bundled
+`TFInternalTestingOnly=true` restriction.
+
+The IPA has **not been uploaded**: there is no verified TestFlight availability,
+successful physical-iPhone installation/run or completed real Sandbox purchase.
+Whether build number `111120` is unused in App Store Connect remains unverified.
+The intended bundle ID `kg.bazaar.app` and the owner's device registration were
+confirmed in the Developer portal. The owner then created the App Store Connect
+record **Bazaar POS**, Apple ID **6833508529**, after Apple rejected the plain
+name Bazaar as already used. This record identity was supplied by the owner;
+automated access to App Store Connect remains denied. No price, public seller
+declaration or release setting has been configured by this work. The complete
+release scope and verification evidence remain in `IOS_RELEASE_PROGRESS.md`.
 
 ## App record proposal
 
 | Field | Concrete draft / remaining decision |
 | --- | --- |
-| Name | Bazaar |
+| Name | Bazaar POS — created by the owner; plain Bazaar was unavailable |
+| Apple ID | `6833508529`, supplied by the owner after creation |
 | Bundle ID | `kg.bazaar.app` — preserve the existing identity |
+| Primary language | Russian `ru`, confirmed by the owner; English is secondary. Verify the saved localization details before submission |
+| User Access | Full Access, selected by the owner for App Store Connect users; this does not invite TestFlight users or publish the app |
 | Platform / devices | iOS; existing iPhone and iPad support; minimum iOS 15 |
 | Other Apple platforms | Inspect Mac with Apple silicon / Vision Pro availability defaults in the actual account; no compatibility or release on those platforms is claimed by the iPhone/iPad checks |
-| Version / build | Source currently `1.0.0` / `1`; select an unused build number after inspecting the actual App Store Connect record |
+| Version / build | Signed archive and local IPA: `1.0.0` / `111120`, source `56c744aa`; availability of this build number in the actual App Store Connect record remains unverified before upload |
 | Primary category | Business, matching the existing retail operations application |
 | Download price | Proposed free download with approved digital offers sold through Apple; this does not approve any IAP price or offer |
 | Initial territory | Kyrgyzstan is a proposal requiring owner confirmation, not a saved availability setting |
@@ -28,12 +43,15 @@ only after the checks below; it is not an approved iOS metadata export.
 
 ## Supported listing languages
 
-Apple's current list supports Russian and English (U.K./U.S.), but not Kyrgyz as
-an App Store metadata localization. The country table lists English (U.K.) for
-Kyrgyzstan; displayed language also depends on device, storefront, added
-localizations and primary language. Proposed listing: English (U.K.) `en-GB`
-with Russian `ru`; the existing `en-US` copy can also be retained if that locale
-is selected. Verify actual storefront presentation before release.
+The owner confirmed **Russian `ru` as the primary listing language**, with
+English secondary. Apple's current list supports Russian and English
+(U.K./U.S.), but not Kyrgyz as an App Store metadata localization. English
+(U.K.) `en-GB` can be added as the secondary localization, or the existing
+`en-US` copy retained if that locale is selected. The country table lists
+English (U.K.) for Kyrgyzstan; that does not change the owner's choice of
+Russian as primary. Displayed language also depends on device, storefront,
+added localizations and primary language. Verify actual storefront presentation
+before release; the saved localization details have not been independently read.
 [Apple localization reference](https://developer.apple.com/help/app-store-connect/reference/app-information/app-store-localizations/).
 
 **Keep Kyrgyz in the app.** `messages/kg.json` and native `ky.lproj` stay. The
@@ -43,7 +61,7 @@ with another language.
 
 ## Public copy — Russian
 
-Name: **Bazaar**
+Name: **Bazaar POS**
 
 Subtitle: **Продажи и учёт магазина**
 
@@ -72,7 +90,7 @@ Keywords: **магазин,товары,остатки,продажи,склад
 
 ## Public copy — English (U.K.; reusable for en-US)
 
-Name: **Bazaar**
+Name: **Bazaar POS**
 
 Subtitle: **Sales and store inventory**
 
@@ -101,7 +119,7 @@ Keywords: **inventory,store,retail,sales,stock,orders,barcode,warehouse,POS**
 
 ## Kyrgyz source copy — keep; not an App Store locale
 
-Name: **Bazaar**
+Name: **Bazaar POS**
 
 Subtitle: **Дүкөндүн сатуусу жана эсеби**
 
@@ -135,7 +153,7 @@ release notes can stay in internal/Android materials.
 [Apple version fields](https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information/).
 
 Lightweight final text check: Russian name/subtitle/promotional text/description
-are 6/23/106/752 characters, English 6/25/106/760; keyword byte counts above were
+are 10/23/106/752 characters, English 10/25/106/760; keyword byte counts above were
 measured from the exact draft strings. No production build or provider call was
 needed for this text validation.
 
@@ -162,13 +180,16 @@ native SDKs. A framework's empty data array is not a “Data Not Collected” an
 for Bazaar. Final declared purposes, linkage, processors/regions, retention and
 enabled communication/AI services need owner review and archive reconciliation.
 
-Current `Info.plist` contains `ITSAppUsesNonExemptEncryption=false`. This means no
-non-exempt encryption, **not** “the app uses no encryption.” The inspected native
-code uses system HTTPS/StoreKit and has no custom native crypto implementation;
-server-side BAAM media encryption is a separate processor/storage fact. Check
-the final linked SDKs and dynamic web features, then complete Apple's export
-questions and any required documentation before upload. No exemption or CCATS
-classification is certified by this draft.
+Current `Info.plist` contains `ITSAppUsesNonExemptEncryption=false`. This states
+no non-exempt encryption, **not** “the app uses no encryption.” The native code
+uses system HTTPS/StoreKit and Apple's Security/CryptoKit frameworks for P-256
+device-key signing and authentication of native purchase-completion proofs. It
+does not implement its own elliptic-curve primitive. Server-side BAAM media
+encryption remains a separate processor/storage fact. The owner must reconcile
+the actual cryptographic uses, final linked SDKs and dynamic web features with
+Apple's export questions and any required documentation before upload. Local
+signing/export success does not certify an exemption, export declaration or
+CCATS classification.
 [Apple plist meaning](https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption),
 [export compliance workflow](https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance/).
 
@@ -179,30 +200,44 @@ real-device checks; a responsive layout alone is not a completed evaluation.
 
 ## Icon and launch-asset audit
 
-Inspected visually and by image metadata on 2026-11-11; **no raster was changed**.
+Current white assets were generated and inspected on 2026-11-11 and committed
+with the startup changes in `bed052a9`. The existing blue Bazaar mark was
+preserved; its generated surround and launch background changed to white.
 
 | Asset | Observed result |
 | --- | --- |
 | `public/brand/icon.png` | Existing blue rising-chart Bazaar mark; 195×183, alpha, sRGB; unchanged source traced to commit `4e48e65b` |
 | `public/brand/logo.png` | Matching BAZAAR wordmark, 724×181, alpha, sRGB |
-| Native `AppIcon-512@2x.png` | 1024×1024, no alpha, sRGB; universal iOS icon set references it; compiled app build accepted the catalog |
-| `store/assets/app-store-icon-1024.png` | 1024×1024, no alpha, sRGB; matching existing mark, prepared by the store-assets script |
-| Light/dark Splash images | All six referenced 1x/2x/3x PNGs are 2732×2732; matching light/navy backgrounds and mark; these are launch assets, not store screenshots |
+| Native `AppIcon-512@2x.png` | 1024×1024, opaque RGB, white edges; existing mark and 760×714 composition preserved; the compiled app accepted the catalog |
+| `store/assets/app-store-icon-1024.png` | 1024×1024, opaque RGB, white edges; generated from the native icon and currently byte-identical to it; a store icon, not a native screenshot |
+| Light/dark Splash images | Referenced 1x/2x/3x resources regenerated on white; the 2732×2732 light/dark source PNGs are opaque and byte-identical; these are launch assets, not store screenshots |
+| `StartupLogo.imageset` | Reuses the existing 560×525 logo composition for the UIKit cover, aligned with the static aspect-fill launch image |
 
-`scripts/mobile/generate-assets.ts` (introduced with Capacitor in `3f90093c`)
-resizes/composites the existing raster; it draws no new axes and performs no
-rotation. No editable SVG/vector master for the Bazaar mark was found in the
-inspected asset directories, and the PNGs have no EXIF orientation. Enlargement
-explains visible source softness. Thin straight marks are also visible outside
-the blue badge in existing generated icon/splash sources. Their intended status
-is **unconfirmed**; root/owner must compare the originals before treating chart
-axes as a stray artifact or editing the brand. A clean approved higher-resolution
-master would improve future scaling, but none was invented for this draft.
+The thin line previously seen below the generated mark was traced to opaque
+black `contain` padding from a slight aspect-ratio difference during resize.
+The generator now requests transparent padding before composition. The original
+brand pixels were not redrawn, cropped or replaced, and no new vector master
+was invented. The unchanged source PNG and the resized/composited store asset
+are different files: `public/brand/icon.png` has SHA-256
+`329c710dbcafd9523984f97ddf6978f1f125e23aa211dccf40a790a676d4c159`;
+the current native/store 1024² icon pair has SHA-256
+`ba2d30d4aee875303d51f850616263728235965ac441e6057fcbea306992be5b`.
+These hashes identify source and generated bytes, not proof of phone rendering.
 
-The launch storyboard uses `Splash` with `scaleAspectFill`; verify clipping,
-centering, light/dark appearance and rotation on the final iPhone/iPad build.
-Icon choice and launch appearance still need final visual approval; the metadata
-inspection is not a device screenshot review.
+Actual `AppStaging/ReleaseStaging` Simulator build `1.0.0/111115` showed the
+white logo/dots and transition to the real isolated Preview login. A temporary
+same-origin incomplete-document fault exercised foreground timeout and the
+actual retry button; loading continued after a Home/background return. The
+original bundle was restored by exact checksum and its normal login observed
+again. This proves that scoped Simulator behavior, not a physical network
+outage. See `IOS_STARTUP_PRESENTATION.md` and its private verification evidence.
+
+The signed `1.0.0/111120` archive/local IPA includes this startup source; it has
+not been observed running on the owner's iPhone. Reduce Motion,
+landscape/dynamic type, clipping/rotation and a real connection outage remain
+actual-UI checks, followed by real-iPhone verification. Neither the generated
+assets nor these Simulator diagnostic captures are approved App Store gallery
+screenshots or a completed accessibility evaluation.
 
 ## Native screenshots — pending, with a concrete capture plan
 
