@@ -468,6 +468,7 @@ export const MarketingLanding = async () => {
           </div>
           <div>
             <h3>{copy.footer.company}</h3>
+            <Link href="/help">{copy.footer.help}</Link>
             <a href={whatsappUrl}>{copy.footer.contact}</a>
             <Link href="/login">{copy.nav.signIn}</Link>
             <Link href="/signup">{copy.footer.signup}</Link>
