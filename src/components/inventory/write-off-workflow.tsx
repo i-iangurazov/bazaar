@@ -681,7 +681,7 @@ export const InventoryWriteOffsPage = ({
       />
 
       <div className="space-y-6">
-        <section className="bazaar-doc-surface p-4">
+        <section className="bazaar-doc-surface min-w-0 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-foreground">{t("writeOffDetailsTitle")}</h3>
             <Button asChild variant="ghost" size="sm" className="md:hidden">
@@ -691,8 +691,8 @@ export const InventoryWriteOffsPage = ({
               </Link>
             </Button>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="min-w-0 space-y-2">
               <Label>{t("writeOffStore")}</Label>
               <Select value={storeId} onValueChange={handleStoreChange}>
                 <SelectTrigger>
@@ -707,22 +707,23 @@ export const InventoryWriteOffsPage = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="write-off-date">{t("writeOffDate")}</Label>
               <Input
                 id="write-off-date"
                 type="datetime-local"
+                className="max-w-full"
                 value={documentDate}
                 onChange={(event) => setDocumentDate(event.target.value)}
               />
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label>{t("writeOffAuthor")}</Label>
               <div className="flex h-10 items-center rounded-lg border border-input bg-muted/30 px-3 text-sm text-foreground">
                 {authorLabel}
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label>{t("writeOffReason")}</Label>
               <Select
                 value={reason}
@@ -740,7 +741,7 @@ export const InventoryWriteOffsPage = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 lg:col-span-2">
+            <div className="min-w-0 space-y-2 lg:col-span-2">
               <Label htmlFor="write-off-comment">{t("writeOffComment")}</Label>
               <Textarea
                 id="write-off-comment"
@@ -753,8 +754,8 @@ export const InventoryWriteOffsPage = ({
           </div>
         </section>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <section className="bazaar-doc-surface p-4">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <h3 className="text-base font-semibold text-foreground">
                 {t("writeOffSearchTitle")}
@@ -827,10 +828,11 @@ export const InventoryWriteOffsPage = ({
             </div>
           </section>
 
-          <section className="bazaar-doc-surface p-4">
+          <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">{t("writeOffTableTitle")}</h3>
-              <Badge variant={validationMessage ? "warning" : "success"}>
+              <Badge variant={validationMessage ? "warning" : "success"}
+                className="h-auto min-h-5 min-w-0 whitespace-normal break-words py-0.5">
                 {validationMessage || t("writeOffValidationReady")}
               </Badge>
             </div>

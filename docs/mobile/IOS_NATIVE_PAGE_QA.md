@@ -33,6 +33,7 @@ registration and the Baam popup in the first TestFlight build.
 | Receipt journal | The full-screen dialog put its title and close control beneath the status bar; the close touch was blocked. Hardware Escape dismissed it. |
 | Receiving | Selected product B, entered quantity 2 and cost `175,50` using the actual iOS decimal keyboard; the UI showed 351.00 KGS. Normal input focus scrolled above the keyboard; tapping the heading hid it and restored the actions. Canceled the draft without posting stock. |
 | Transfers | Opened the form and both store selectors. The manual demo currently has one store; a completed two-store native transfer remains to be verified. |
+| Write-offs | Native date picker opened and canceled correctly. The long stock/cost summary expanded the implicit mobile grid beyond the viewport and clipped the right side of both catalog and line sections. |
 
 ## Changes and bounded automated verification
 
@@ -58,6 +59,13 @@ registration and the Baam popup in the first TestFlight build.
   This fixture does not establish actual WKWebView behavior or full Radix focus.
 - Final scoped regression: 16 mobile/dialog/workflow files, 75 checks passed;
   typecheck, lint and RU/KG/EN translation validation passed with unchanged source.
+- The subsequent native warehouse pass exposed width overflow. Receiving and
+  write-off grids now use an explicit shrinking mobile column, matching the
+  transfer workflow; detail fields and cards can shrink and long validation
+  text can wrap. The existing desktop 2fr/3fr columns and order are preserved.
+  The 3 affected workflow/source suites passed all 18 checks, followed by clean
+  typecheck, lint and translation validation. Updated native geometry remains
+  to be rechecked after its own Preview build.
 
 Production build, Preview deployment and actual updated runtime checks are
 recorded when complete. A successful component test does not prove WKWebView
