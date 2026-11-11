@@ -35,7 +35,7 @@ const content = {
     action: "Жазылууну жана төлөмдү көрүү",
     footer:
       "Автоматтык түрдө акча алынбайт. Жазылуунун мөөнөтү жана курамы, анын ичинде төлөнгөн кошумчалар, кабинетте көрсөтүлгөн. Бул Bazaar кызматтык ырастоосу, фискалдык чек эмес.",
-    plans: { STARTER: "Жаңы баштаган", BUSINESS: "Ишкер", ENTERPRISE: "Монополист" },
+    plans: { STARTER: "Новичок", BUSINESS: "Бизнесмен", ENTERPRISE: "Монополист" },
   },
   en: {
     confirmed: "Bazaar: subscription payment confirmed",
@@ -49,7 +49,7 @@ const content = {
     action: "View subscription and payment",
     footer:
       "There are no automatic charges. Your subscription period and configuration, including paid extras, are shown in your account. This is a service confirmation from Bazaar, not a fiscal receipt.",
-    plans: { STARTER: "Starter", BUSINESS: "Business", ENTERPRISE: "Enterprise" },
+    plans: { STARTER: "Новичок", BUSINESS: "Бизнесмен", ENTERPRISE: "Монополист" },
   },
 };
 export function subscriptionPaymentNotificationContent(input: {
