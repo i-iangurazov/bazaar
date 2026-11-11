@@ -215,6 +215,25 @@ control at the same width; no production height was changed to satisfy it.
 That failed log remains preserved. Actual iOS field spacing and both native
 calendars still need their new deployment check.
 
+The history download correction uses an authenticated same-origin fetch of the
+existing export endpoint, verifies the CSV/XLSX response and filename, and hands
+the blob to native Share without navigating the WebView. Browser download links
+retain their exact href. Native actions wait for platform hydration, show one
+pending operation, handle Cancel quietly and expose localized errors with an
+explicit retry. Account/role/store changes and unmount invalidate and abort the
+operation; a stale request cannot clear the next account's pending state. The
+existing server authorization and artifact-generation paths are unchanged.
+Seven focused suites passed 92 checks, followed by typecheck, lint and translation
+validation. Its combined production build and actual existing-file Share check
+remain pending.
+
+The actual customer page also rendered the empty state with export disabled.
+In its add-customer sheet, focusing the lower address textarea with the hardware
+keyboard disconnected kept the title/close and field above the software
+keyboard. A synthetic `Q` and newline remained in that textarea, validation kept
+creation disabled, and touching the close control returned to the unchanged
+zero-customer list. No customer was created or updated.
+
 Read-only public signup-mode requests returned `open` on `www.bazaar.kg` and
 `invite_only` on this Preview. A missing open-signup link in this TestFlight
 environment is therefore a server-policy difference. No production signup policy

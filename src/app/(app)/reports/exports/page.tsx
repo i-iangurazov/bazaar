@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ExportJobStatus, ExportType } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { IconButton } from "@/components/ui/icon-button";
 import {
   Select,
   SelectContent,
@@ -54,6 +56,8 @@ import {
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { useNativePlatform } from "@/lib/native/useNativePlatform";
+import { NativeExportDownloadError, shareExportJobNative } from "@/lib/native/exportDownload";
 
 type ExportFileFormat = "csv" | "xlsx";
 type CategoryFilter = ExportTypeCategory | "all";
@@ -147,6 +151,7 @@ const ExportsPage = () => {
   const locale = useLocale();
   const { data: session, status } = useSession();
   const canGenerate = ["ADMIN", "MANAGER"].includes(session?.user?.role ?? "");
+  const platform = useNativePlatform();
   const { toast } = useToast();
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: status === "authenticated" });
@@ -186,6 +191,76 @@ const ExportsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+
+  type HistoryJob = NonNullable<typeof jobsQuery.data>[number];
+  const storeIds = (storesQuery.data ?? []).map((store) => store.id).sort();
+  const audience = JSON.stringify([status, session?.user.id, session?.user.organizationId, session?.user.role,
+    platform, storeId, storeIds, Boolean(storesQuery.error)]);
+  const context = useRef({ audience, jobs: jobsQuery.data ?? [], storeIds, allowed: false });
+  context.current = { audience, jobs: jobsQuery.data ?? [], storeIds,
+    allowed: status === "authenticated" && canGenerate && Boolean(session?.user.id) && Boolean(storesQuery.data) && !storesQuery.error };
+  const mounted = useRef(true);
+  const nextDownload = useRef(0);
+  const activeDownload = useRef<{ epoch: number; audience: string; controller: AbortController } | null>(null);
+  const [downloading, setDownloading] = useState<{ epoch: number; audience: string; jobId: string } | null>(null);
+  const [downloadError, setDownloadError] = useState<{ audience: string; jobId: string; message: string } | null>(null);
+  useEffect(() => {
+    const active = activeDownload.current;
+    if (active && active.audience !== audience) { active.controller.abort(); activeDownload.current = null; }
+    setDownloading((value) => value?.audience === audience ? value : null);
+    setDownloadError((value) => value?.audience === audience ? value : null);
+  }, [audience]);
+  useEffect(() => {
+    const lifecycle = mounted, active = activeDownload;
+    lifecycle.current = true;
+    return () => { lifecycle.current = false; active.current?.controller.abort(); active.current = null; };
+  }, []);
+  const native = platform === "ios" || platform === "android";
+  const currentDownload = downloading?.audience === audience ? downloading : null;
+  const canDownloadNative = (job: HistoryJob) => context.current.allowed &&
+    job.organizationId === session?.user.organizationId && context.current.storeIds.includes(job.storeId) &&
+    job.status === "DONE" && job.downloadAvailable && Boolean(job.downloadUrl);
+  const downloadNative = async (job: HistoryJob) => {
+    if (!native || activeDownload.current || !canDownloadNative(job)) return;
+    const expected = context.current.audience, epoch = ++nextDownload.current;
+    const controller = new AbortController();
+    const isCurrent = () => mounted.current && context.current.audience === expected && context.current.allowed &&
+      context.current.storeIds.includes(job.storeId) && context.current.jobs.some((value) => value.id === job.id &&
+        value.organizationId === job.organizationId && value.storeId === job.storeId && value.status === "DONE" && value.downloadAvailable);
+    activeDownload.current = { epoch, audience: expected, controller };
+    setDownloading({ epoch, audience: expected, jobId: job.id });
+    setDownloadError(null);
+    try {
+      const result = await shareExportJobNative({ jobId: job.id, fileName: job.fileName, mimeType: job.mimeType,
+        signal: controller.signal, shouldShare: isCurrent });
+      if (isCurrent() && (result.status === "failed" || result.status === "unavailable"))
+        setDownloadError({ audience: expected, jobId: job.id, message: tErrors("genericMessage") });
+    } catch (error) {
+      if (isCurrent()) {
+        const reason = error instanceof NativeExportDownloadError ? error.reason : "exportDownloadFailed";
+        setDownloadError({ audience: expected, jobId: job.id,
+          message: reason === "exportDownloadFailed" ? tErrors("genericMessage") : tErrors(reason) });
+      }
+    } finally {
+      if (activeDownload.current?.epoch === epoch) activeDownload.current = null;
+      if (mounted.current) setDownloading((value) => value?.epoch === epoch ? null : value);
+    }
+  };
+  const downloadAction = (job: HistoryJob) => ({
+    key: "download",
+    label: currentDownload?.jobId === job.id ? tCommon("loading") : tCommon("tooltips.download"),
+    icon: currentDownload?.jobId === job.id ? Spinner : DownloadIcon,
+    ...(platform === "web" ? { href: job.downloadUrl ?? "#" } : { onSelect: () => { void downloadNative(job); } }),
+    disabled: platform === null || !job.downloadAvailable || (native && (Boolean(currentDownload) || !canDownloadNative(job))),
+    variant: "primary",
+  });
+  const renderDownloadError = (job: HistoryJob) => downloadError?.audience === audience && downloadError.jobId === job.id ? (
+    <div role="alert" className="mt-2 flex items-center gap-2 text-sm text-danger">
+      <span>{downloadError.message}</span>
+      <IconButton icon={RestoreIcon} label={tCommon("tryAgain")} disabled={Boolean(currentDownload) || !canDownloadNative(job)}
+        onClick={() => { void downloadNative(job); }} />
+    </div>
+  ) : null;
 
   const storeOptions = storesQuery.data ?? [];
   const selectedMetadata = EXPORT_TYPE_METADATA[exportType];
@@ -567,14 +642,7 @@ const ExportsPage = () => {
                       {visibleItems.map((job) => {
                         const StatusIcon = statusIcon(job.status);
                         const actions = [
-                          {
-                            key: "download",
-                            label: tCommon("tooltips.download"),
-                            icon: DownloadIcon,
-                            href: job.downloadUrl ?? "#",
-                            disabled: !job.downloadAvailable,
-                            variant: "primary",
-                          },
+                          downloadAction(job),
                           ...(job.status === "FAILED"
                             ? [
                                 {
@@ -648,6 +716,7 @@ const ExportsPage = () => {
                                   actions={actions}
                                 />
                               </div>
+                              {renderDownloadError(job)}
                             </TableCell>
                           </TableRow>
                         );
@@ -659,14 +728,7 @@ const ExportsPage = () => {
               renderMobile={(job) => {
                 const StatusIcon = statusIcon(job.status);
                 const actions = [
-                  {
-                    key: "download",
-                    label: tCommon("tooltips.download"),
-                    icon: DownloadIcon,
-                    href: job.downloadUrl ?? "#",
-                    disabled: !job.downloadAvailable,
-                    variant: "primary",
-                  },
+                  downloadAction(job),
                   ...(job.status === "FAILED"
                     ? [
                         {
@@ -728,6 +790,7 @@ const ExportsPage = () => {
                     <div className="mt-3 flex items-center justify-end">
                       <RowActions moreLabel={tCommon("tooltips.moreActions")} actions={actions} />
                     </div>
+                    {renderDownloadError(job)}
                   </div>
                 );
               }}
