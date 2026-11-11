@@ -23,6 +23,7 @@ type Period = {
     providerPaymentId: string | null;
     amountMinor: number;
     events: { state: string; source: string }[];
+    manualRefunds?: { id: string }[];
   };
 };
 
@@ -64,6 +65,9 @@ export function summarizeConfirmedPaidMrr(
       invoice.paidAt > now ||
       !invoice.providerPaymentId ||
       invoice.amountMinor <= 0 ||
+      // A bank refund leaves the provider payment PAID. Exclude it rather than
+      // inventing a proportional net value for an upgrade's replacement plan.
+      Boolean(invoice.manualRefunds?.length) ||
       !invoice.events.some(
         (event) => event.state === "PAID" && ["CALLBACK", "RECONCILIATION"].includes(event.source),
       )
@@ -113,6 +117,7 @@ export async function getConfirmedPaidMrr(
           paidAt: true,
           providerPaymentId: true,
           amountMinor: true,
+          manualRefunds: { select: { id: true }, take: 1 },
           events: {
             where: { state: "PAID", source: { in: ["CALLBACK", "RECONCILIATION"] } },
             select: { state: true, source: true },

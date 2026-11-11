@@ -130,6 +130,59 @@ describe("confirmed paid MRR from current verified contracts", () => {
       confirmedPaidMrrKgs: 0,
     });
   });
+  it.each([
+    ["partial", 50_000],
+    ["full", 5_100_000],
+  ] as const)(
+    "excludes a renewal with a recorded %s bank refund without prorating its remaining payment",
+    (_kind, amountMinor) => {
+      const paid = period();
+      const refunded = {
+        ...paid,
+        invoice: {
+          ...paid.invoice,
+          manualRefunds: [{ id: "synthetic-recorded-bank-refund", amountMinor }],
+        },
+      };
+      expect(summarizeConfirmedPaidMrr([org()], [refunded], now)).toEqual({
+        organizationsPaid: 0,
+        confirmedPaidMrrKgs: 0,
+      });
+      expect(refunded.invoice.status).toBe("PAID");
+      expect(refunded.invoice.amountMinor).toBe(5_100_000);
+    },
+  );
+  it("excludes an upgrade with a partial bank refund instead of reporting its frozen replacement-plan value", () => {
+    const upgraded = period("upgrade-refund");
+    upgraded.startsAt = new Date("2027-06-01T00:00:00.000Z");
+    upgraded.invoice.amountMinor = 765_000;
+    Object.assign(upgraded.purchaseSnapshot as object, {
+      kind: "UPGRADE",
+      monthlyMinor: 650_000,
+      amountMinor: 765_000,
+      creditMinor: 1_000_000,
+    });
+    const refunded = {
+      ...upgraded,
+      invoice: { ...upgraded.invoice, manualRefunds: [{ id: "partial-upgrade-bank-refund" }] },
+    };
+    expect(summarizeConfirmedPaidMrr([org()], [refunded], now)).toEqual({
+      organizationsPaid: 0,
+      confirmedPaidMrrKgs: 0,
+    });
+  });
+  it("does not fall back to an earlier overlapping paid period when the latest invoice has a bank refund", () => {
+    const current = period("latest-bank-refund");
+    current.startsAt = new Date("2027-06-01T00:00:00.000Z");
+    const refunded = {
+      ...current,
+      invoice: { ...current.invoice, manualRefunds: [{ id: "latest-invoice-bank-refund" }] },
+    };
+    expect(summarizeConfirmedPaidMrr([org()], [period(), refunded], now)).toEqual({
+      organizationsPaid: 0,
+      confirmedPaidMrrKgs: 0,
+    });
+  });
   it.each(["PAST_DUE", "CANCELED"])(
     "excludes inactive %s access even with historical payment",
     (status) => {

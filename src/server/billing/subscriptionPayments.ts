@@ -48,9 +48,18 @@ const lockOrganization = async (tx: Prisma.TransactionClient, organizationId: st
 };
 
 export const presentInvoice = (
-  invoice: SubscriptionInvoice & { period?: { startsAt: Date; endsAt: Date } | null },
+  invoice: SubscriptionInvoice & {
+    period?: { startsAt: Date; endsAt: Date } | null;
+    manualRefunds?: {
+      id: string;
+      amountMinor: number;
+      bankTransferredOn: Date;
+      createdAt: Date;
+    }[];
+  },
 ) => ({
   id: invoice.id,
+  orderId: invoice.providerOrderId,
   provider: invoice.provider,
   plan: invoice.plan,
   purchase: readPurchaseSnapshot(invoice.purchaseSnapshot),
@@ -60,6 +69,18 @@ export const presentInvoice = (
   isTest: invoice.isTest,
   createdAt: invoice.createdAt,
   paidAt: invoice.paidAt,
+  refundedMinor: (invoice.manualRefunds ?? []).reduce(
+    (total, refund) => total + refund.amountMinor,
+    0,
+  ),
+  // The organization sees its own amounts and dates, never internal operator
+  // notes, actor identities or bank references belonging to the seller.
+  refunds: (invoice.manualRefunds ?? []).map((refund) => ({
+    id: refund.id,
+    amountMinor: refund.amountMinor,
+    bankTransferredOn: refund.bankTransferredOn.toISOString().slice(0, 10),
+    createdAt: refund.createdAt,
+  })),
   syncDelayed: invoice.lastIssue === "RECONCILIATION_REQUIRED",
   expiresAt: invoice.expiresAt,
   period: invoice.period,
@@ -151,7 +172,13 @@ export const listSubscriptionInvoices = async (organizationId: string, cursor?: 
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 21,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    include: { period: true },
+    include: {
+      period: true,
+      manualRefunds: {
+        select: { id: true, amountMinor: true, bankTransferredOn: true, createdAt: true },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      },
+    },
   });
   return {
     items: records.slice(0, 20).map(presentInvoice),

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { toPlanCode, type PlanCode } from "@/lib/billing/plans";
-import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
+import { formatCurrencyKGS, formatDate, formatDateTime } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -644,6 +644,15 @@ export function SubscriptionPayments({
                             >
                               {invoiceStatus(invoice.status, invoice.isTest)}
                             </Badge>
+                            {(invoice.refundedMinor ?? 0) > 0 ? (
+                              <Badge variant="warning">
+                                {t(
+                                  (invoice.refundedMinor ?? 0) >= invoice.amountMinor
+                                    ? "manualRefundFull"
+                                    : "manualRefundPartial",
+                                )}
+                              </Badge>
+                            ) : null}
                           </span>
                         </summary>
                         <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
@@ -651,6 +660,12 @@ export function SubscriptionPayments({
                             <dt>{t("invoice")}</dt>
                             <dd className="break-all font-mono">{invoice.id}</dd>
                           </div>
+                          {invoice.orderId ? (
+                            <div className="min-w-0">
+                              <dt>{t("orderId")}</dt>
+                              <dd className="break-all font-mono">{invoice.orderId}</dd>
+                            </div>
+                          ) : null}
                           <div>
                             <dt>{t("created")}</dt>
                             <dd>{formatDateTime(invoice.createdAt, locale)}</dd>
@@ -711,6 +726,30 @@ export function SubscriptionPayments({
                             </dd>
                           </div>
                         </dl>
+                        {(invoice.refundedMinor ?? 0) > 0 ? (
+                          <section
+                            className="mt-3 space-y-2 rounded-md border border-input p-3 text-xs"
+                            aria-label={t("manualRefundAmount")}
+                          >
+                            <p className="font-medium">
+                              {t("manualRefundAmount")}: {money(invoice.refundedMinor ?? 0)}
+                            </p>
+                            <ul className="space-y-1">
+                              {(invoice.refunds ?? []).map((refund) => (
+                                <li key={refund.id}>
+                                  {t("manualRefundEntry", {
+                                    amount: money(refund.amountMinor),
+                                    date: formatDate(
+                                      `${refund.bankTransferredOn}T00:00:00.000Z`,
+                                      locale,
+                                    ),
+                                  })}
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="text-muted-foreground">{t("manualRefundHint")}</p>
+                          </section>
+                        ) : null}
                         {!["PAID", "RESOLVED"].includes(invoice.status) &&
                         invoice.id !== pendingId ? (
                           <div className="mt-3 flex justify-end">

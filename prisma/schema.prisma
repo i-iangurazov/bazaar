@@ -616,6 +616,7 @@ model Organization {
   subscriptionContract          SubscriptionContract?
   subscriptionReminders         SubscriptionReminder[]
   subscriptionPaymentNotifications SubscriptionPaymentNotification[]
+  manualSubscriptionRefunds     ManualSubscriptionRefund[]
   subscriptionUsageBuckets      SubscriptionUsageBucket[]
   subscriptionUsageReservations SubscriptionUsageReservation[]
   initialProductImportSession   InitialProductImportSession?
@@ -723,6 +724,7 @@ model SubscriptionInvoice {
   events            SubscriptionPaymentEvent[]
   period            SubscriptionPeriod?
   notifications     SubscriptionPaymentNotification[]
+  manualRefunds     ManualSubscriptionRefund[]
 
   @@unique([organizationId, idempotencyKey])
   @@unique([id, organizationId])
@@ -758,6 +760,29 @@ model SubscriptionPeriod {
 
   @@unique([invoiceId, organizationId])
   @@index([organizationId, endsAt])
+}
+
+// A platform operator records an already executed bank transfer. This is not
+// a provider refund state and never changes the original payment or access.
+model ManualSubscriptionRefund {
+  id                String   @id @default(cuid())
+  organizationId    String
+  invoiceId         String
+  amountMinor       Int
+  bankOperationId   String   @db.VarChar(120)
+  bankOperationKey  String   @unique @db.VarChar(120)
+  bankTransferredOn DateTime @db.Date
+  reason            String   @db.VarChar(500)
+  idempotencyKey    String   @unique @db.Uuid
+  recordedById      String
+  proofType         String   @default("OPERATOR_ATTESTATION") @db.VarChar(32)
+  createdAt         DateTime @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  invoice      SubscriptionInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([invoiceId, createdAt, id])
+  @@index([organizationId, createdAt, id])
 }
 
 model SubscriptionReminder {

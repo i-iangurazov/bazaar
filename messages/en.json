@@ -834,7 +834,13 @@
       "scheduledDescription": "{plan}: {start} — {end}. Current terms apply until it starts.",
       "choosePlan": "Select for payment",
       "openCheckout": "Choose a term and pay",
-      "checkOnReturn": "Checked automatically when you return to this page or your connection recovers."
+      "checkOnReturn": "Checked automatically when you return to this page or your connection recovers.",
+      "orderId": "GoPay order number",
+      "manualRefundAmount": "Bank refunds recorded",
+      "manualRefundPartial": "Partial refund recorded",
+      "manualRefundFull": "Full refund recorded",
+      "manualRefundEntry": "{amount} · bank transfer on {date}",
+      "manualRefundHint": "The service provider recorded a separate bank refund. The original GoPay payment and access dates are not automatically cancelled."
     },
     "featureRequiresPlan": "This feature requires a different plan.",
     "featureUpgradeHint": "Compare plans and choose what fits your business. Your products and history are preserved.",
@@ -955,7 +961,7 @@
       "activePlanCount": "{plan}: {count}",
       "confirmedPaidSubscriptions": "Confirmed paid subscriptions",
       "confirmedPaidMrr": "Confirmed paid MRR (KGS)",
-      "confirmedPaidMrrNote": "Monthly equivalent of current verified payments, including term discounts and add-ons. Excludes test payments and free access. This is neither profit nor cash received this month."
+      "confirmedPaidMrrNote": "Monthly equivalent of current verified payments without refunds. Invoices with a recorded refund are excluded pending a separate accounting decision; access is unchanged. Excludes tests and free access. This is neither profit nor cash received this month."
     },
     "paymentReviews": {
       "title": "Payments requiring review",
@@ -976,7 +982,39 @@
     "billingModeSelfServe": "Self-service payments",
     "billingModeHint": "Self-service access ends when the trial or paid period expires. Change this mode only after agreement with the organization.",
     "applyBillingDates": "Set new access dates",
-    "applyBillingDatesHint": "Periods are counted from today. When unchecked, existing dates are preserved when changing the plan, status or billing mode."
+    "applyBillingDatesHint": "Periods are counted from today. When unchecked, existing dates are preserved when changing the plan, status or billing mode.",
+    "manualRefunds": {
+      "title": "Subscription bank refunds",
+      "description": "Record a bank refund already completed. Recording it does not transfer money, cancel the GoPay payment or change access.",
+      "orderId": "GoPay order number (order_id)",
+      "searchHint": "Find a verified Live payment by its order number. Search runs only when submitted.",
+      "invoiceTitle": "Original payment and refunds",
+      "paidAmount": "Paid",
+      "refundedAmount": "Refunds recorded",
+      "remainingAmount": "Remaining refundable amount",
+      "paidAt": "Payment date",
+      "period": "Access period",
+      "full": "Full refund recorded",
+      "partial": "Partial refund recorded",
+      "recordAction": "Record completed refund",
+      "modalHint": "Complete the agreed bank transfer first. Enter only the details from its confirmation here.",
+      "amount": "Amount actually refunded (KGS)",
+      "amountHint": "Remaining: {amount}. Use a comma or dot and at most two decimal places; amounts are never rounded.",
+      "bankOperationId": "Bank transaction reference",
+      "bankTransferredOn": "Actual bank-transfer date",
+      "bankDateHint": "Date on the bank confirmation in Bishkek, from the original payment day through today.",
+      "reason": "Grounds and explanation (10–500 characters)",
+      "confirm": "I verified the recipient, amount actually transferred and bank document; the reference includes the original order_id. The transfer is completed.",
+      "recorded": "Bank refund recorded. Access and the original payment are unchanged.",
+      "retryRecord": "Retry recording",
+      "retryHint": "Retry sends the same details with the same identifier. Do not repeat the transfer. For another operation, close this form and open a new one.",
+      "history": "Recorded refunds",
+      "empty": "No refund has been recorded for this payment.",
+      "notFound": "No eligible payment found. Check the order number.",
+      "recordedBy": "Recorded by {actor} · {date}",
+      "proofType": "Operator attestation based on a bank document; no automatic bank verification.",
+      "accessUnchanged": "Recording a refund does not cancel the original GoPay payment or change access dates or permissions. Any access change requires a separate agreed decision."
+    }
   },
   "nav": {
     "platform": "Platform",
@@ -6128,7 +6166,16 @@
       "rawDataExport": "Export your data"
     },
     "receivingReviewStale": "Stock, prices or settings have changed. Review the refreshed estimate before posting.",
-    "receivingAttemptCanceled": "This posting attempt is closed. Refresh the estimate and post the receipt again."
+    "receivingAttemptCanceled": "This posting attempt is closed. Refresh the estimate and post the receipt again.",
+    "billingManualRefundInvoiceNotFound": "No payment matches this GoPay order number. Check the order_id.",
+    "billingManualRefundNotEligible": "Only a verified Live GoPay subscription payment with a recorded access period is eligible.",
+    "billingManualRefundAmountInvalid": "Enter a positive amount no greater than the remainder, using a comma or dot and at most two decimal places.",
+    "billingManualRefundDateInvalid": "Enter a valid bank-transfer date from the payment day through today in Bishkek.",
+    "billingManualRefundBankOperationInvalid": "Enter a bank transaction reference of 3–120 characters without control characters.",
+    "billingManualRefundReasonInvalid": "Enter refund grounds of 10–500 characters.",
+    "billingManualRefundIdempotencyInvalid": "The record identifier could not be created. Close and reopen the form; do not repeat the transfer.",
+    "billingManualRefundIdempotencyConflict": "This identifier was already used for different details. Review the history and open a new form if needed.",
+    "billingManualRefundBankOperationUsed": "This bank transaction has already been recorded. Review the history; do not repeat the transfer."
   },
   "adminJobs": {
     "title": "Admin jobs",

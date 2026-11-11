@@ -8,7 +8,7 @@ export const enLegal: LegalCopy = {
   published: "Version dated 11 November 2026",
   paymentSystemsTitle: "Payment methods",
   paymentSystemsNotice:
-    "Available payment methods and restrictions are shown on the provider page opened from your Bazaar invoice. Owning a card or bank app does not guarantee support for a particular method.",
+    "Confirm payment in a supported banking app through the GoPay page opened from your Bazaar invoice. That page shows available banks and restrictions; having the app does not guarantee that any amount can be paid.",
   draftNotice:
     "Draft for review. Current entrepreneur and Bakai KGS account details and the building address, excluding floor and apartment details, are prepared; the support mailbox is verified. Until separately approved, this text is available only in the local preview, remains unpublished and is not an effective offer. Viewing this page does not enable payments.",
   missing: "To be completed from the entrepreneur's documents",
@@ -74,7 +74,7 @@ export const enLegal: LegalCopy = {
           paragraphs: [
             "Prices are in Kyrgyz som (KGS). The final amount and selected plan are shown before payment confirmation. If the price changes before invoice creation, the updated amount must be confirmed again. The price of an already paid period cannot be increased retrospectively.",
             "Access is purchased in one payment for a selected term of 1, 6 or 12 calendar months, when that term is available in the published plan. The discount, its application to extra capacity and the full amount are determined by the selected offer and shown before payment. There are no automatic charges or mandatory card saving.",
-            "When online payment is available, the provider identified at confirmation and in the invoice history processes the transaction. Available payment methods and restrictions are shown on its payment page. Card details and bank verification codes are entered on the provider's side. The payer's bank determines any bank fees and currency conversion.",
+            "All new Bazaar online payments are processed through GoPay in KGS: the customer confirms the payment in an available banking app. Funds go directly to the service provider’s current account at Bakai Bank. The service provider pays the payment-acceptance fee; it does not increase the Bazaar invoice amount. The payer’s bank determines any fees or currency conversion charged by that bank.",
           ],
         },
         {
@@ -147,17 +147,17 @@ export const enLegal: LegalCopy = {
           id: "review",
           title: "4. Review and timing",
           paragraphs: [
-            "The provider reviews the request within 3 business days of receipt: checks the invoice, provider status and access supplied, and communicates the result and justification of the amount. Following approval of a refund, the provider submits the operation to GoPay or the servicing bank within 2 business days. Any shorter statutory review or refund deadline takes precedence. Requests for further information do not automatically extend mandatory deadlines.",
-            "The time for funds to reach the account after a refund is processed depends on the payment provider and the payer's bank. The provider supplies confirmation once the refund is processed. If funds do not arrive, contact your bank with that confirmation and inform the provider.",
+            "The service provider reviews the request within 3 business days of receipt: checks the original payment and access supplied, and communicates the result and justification of the amount. Following approval of a refund, the service provider submits a bank-transfer instruction to the servicing bank within 2 business days. Any shorter statutory review or refund deadline takes precedence. Requests for further information do not automatically extend mandatory deadlines.",
+            "The time for funds to arrive after the bank transfer is submitted depends on the banks and is separate from the service provider’s commitment to submit an approved refund within 2 business days. The service provider supplies confirmation of the bank transaction. If funds do not arrive, contact your bank with that confirmation and inform the service provider.",
           ],
         },
         {
           id: "method",
           title: "5. How refunds are made",
           paragraphs: [
-            "Refunds reference the original transaction and require verification of the payer and recipient. The available process is agreed with GoPay and the bank for that payment. Funds are not sent to an arbitrary third party. If the original account is unavailable, the process is agreed with the provider and bank after verifying the recipient.",
-            "A partial refund is processed if the amount is justified and the provider supports it for that transaction. Full or partial repayment is determined by the request's circumstances and applicable law. Receiving a request does not mean repayment has already occurred; processing is confirmed separately.",
-            "The effect of a refund on its corresponding paid period is agreed and recorded separately. Transaction history and other periods must not be changed without grounds. The Bazaar account has no automatic self-service refund button: the service provider handles the request. Cancelling an unpaid invoice stops awaiting payment and does not refund money.",
+            "The service provider makes an approved refund by a separate bank transfer after verifying the original payment, payer and recipient’s account details. The transfer reference includes the original GoPay order number. Funds are not sent to an arbitrary third party. If the original account is unavailable, the process is agreed with the servicing bank after verifying the recipient.",
+            "A refund may be full or partial: its grounds and amount are determined by the request’s circumstances and applicable law. The service provider’s payment-acceptance fee is not automatically deducted from the approved refund amount. Receiving a request does not mean funds have already been transferred; confirmation of the bank transfer is provided separately.",
+            "A paid order is not refunded by a cancellation button in GoPay or Bazaar. The original GoPay payment status alone does not confirm the separate bank transfer. The effect on the corresponding paid period is agreed and recorded separately; transaction history and other periods are not changed without grounds. Cancelling an unpaid invoice stops awaiting payment and does not refund money.",
           ],
         },
         {
@@ -203,6 +203,7 @@ export const enLegal: LegalCopy = {
           paragraphs: [
             "Payment covers 1, 6 or 12 calendar months of Bazaar access on the selected plan with the chosen extra capacity. Prices are in Kyrgyz som (KGS). Compare features and limits on the plans page; the full amount and discount appear in the account before confirmation.",
             "This pays for business software, not purchases by shoppers at a store's POS. Online payment is available only with acquiring connected and for organisations eligible for this renewal method. If no payment button is available, contact support; do not pay through somebody else's account.",
+            "GoPay permits one-off prepayment for 1, 6 or 12 months; automatic debits are not connected. GoPay’s limit is 999,999.99 KGS per payment, and the payer’s bank may impose lower limits. If the bank does not allow the selected amount, contact support before attempting another payment.",
           ],
         },
         {
@@ -220,6 +221,7 @@ export const enLegal: LegalCopy = {
           paragraphs: [
             "After payment, return to Bazaar and check the invoice status and access dates in the subscription section. Access is extended after server-side verification of successful payment with the provider identified on the invoice. A browser message, transfer screenshot or success-page redirect alone is not confirmation.",
             "If the bank charged you but the invoice still awaits confirmation, check its status in the account or contact support with the invoice number. Do not pay again until the first transaction's result is established. Bank-declined or cancelled payments do not add a paid period.",
+            "A Bazaar email and a bank payment confirmation are not a fiscal receipt or electronic invoice (ESF). GoPay does not issue fiscal receipts for this Bazaar connection. The service provider prepares mandatory tax-accounting documents under the applicable rules; contact the service provider about those documents.",
           ],
         },
         {

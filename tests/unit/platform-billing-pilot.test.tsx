@@ -39,6 +39,9 @@ vi.mock("next-auth/react", () => ({
 }));
 vi.mock("@/components/page-breadcrumbs", () => ({ PageBreadcrumbs: () => null }));
 vi.mock("@/components/billing/payment-reviews", () => ({ PaymentReviews: () => null }));
+vi.mock("@/components/billing/manual-subscription-refunds", () => ({
+  ManualSubscriptionRefunds: () => null,
+}));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/trpc", () => {
   const query = (data: unknown) => ({ data, isLoading: false, error: null, refetch: mock.refetch });

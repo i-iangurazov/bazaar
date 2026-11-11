@@ -24,6 +24,9 @@ type InvoiceFixture = {
   sellerName: string;
   termsVersion: string;
   termsUrl: string;
+  orderId?: string | null;
+  refundedMinor?: number;
+  refunds?: { id: string; amountMinor: number; bankTransferredOn: string; createdAt: string }[];
 };
 type QuoteSelection = {
   plan: string;
@@ -220,6 +223,41 @@ afterEach(() => {
 });
 
 describe("subscription payment consent and recovery", () => {
+  it.each([
+    [50000, "manualRefundPartial"],
+    [200000, "manualRefundFull"],
+  ] as const)(
+    "shows a recorded bank refund of %s without implying provider cancellation",
+    (refundedMinor, badge) => {
+      mocks.records = [
+        invoice({
+          status: "PAID",
+          paidAt: "2026-11-10T00:00:00Z",
+          orderId: "c".repeat(32),
+          refundedMinor,
+          refunds: [
+            {
+              id: "refund-public-summary",
+              amountMinor: refundedMinor,
+              bankTransferredOn: "2026-11-11",
+              createdAt: "2026-11-11T00:00:00Z",
+            },
+          ],
+        }),
+      ];
+      render(<SubscriptionPayments onUpdated={vi.fn()} />);
+      expect(screen.getByText(`billing.payments.${badge}`)).toBeTruthy();
+      expect(screen.getByText("c".repeat(32))).toBeTruthy();
+      expect(screen.getByText("billing.payments.manualRefundHint")).toBeTruthy();
+      expect(screen.getByText(/^billing.payments.manualRefundEntry/).textContent).toContain(
+        formatCurrencyKGS(refundedMinor / 100, "ru"),
+      );
+      expect(screen.getByText("billing.payments.statuses.PAID")).toBeTruthy();
+      expect(mocks.checkMutate).not.toHaveBeenCalled();
+      expect(mocks.mutate).not.toHaveBeenCalled();
+    },
+  );
+
   const serverQuotes = [
     ["STARTER", 1, 200000, 200000, 0, 0],
     ["STARTER", 6, 1140000, 1200000, 60000, 500],
