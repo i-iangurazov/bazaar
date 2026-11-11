@@ -44,7 +44,9 @@ export const deleteOwnAccount = async (input: AccountScope & {
   const unusableHash = await bcrypt.hash(randomBytes(48).toString("base64url"), 10);
 
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
+    // Serialize organization writers without blocking the audit FK's KEY SHARE
+    // lock while a concurrent consent/profile update already holds its user.
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR NO KEY UPDATE`;
     await tx.$queryRaw`SELECT id FROM "User" WHERE "organizationId" = ${input.organizationId} ORDER BY id FOR UPDATE`;
     const user = await tx.user.findUnique({ where: { id: input.userId } });
     if (!user || user.organizationId !== input.organizationId || user.deletedAt || !user.isActive)

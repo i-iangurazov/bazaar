@@ -166,6 +166,7 @@ export async function transcribeBaamAudio(
   }
   let usageLease: UsageLease = null;
   let expense: ProviderExpense | null = null;
+  let outboundStarted = false;
   try {
     usageLease = await reserveSubscriptionUsage({
       organizationId: scope.organizationId,
@@ -228,6 +229,7 @@ export async function transcribeBaamAudio(
     await assertAiConsent({ userId: scope.actorId, organizationId: scope.organizationId,
       impersonating: Boolean(ctx.impersonator) });
     assertExternalProviderCallAllowed("openai");
+    outboundStarted = true;
     const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       redirect: "error",
@@ -269,7 +271,8 @@ export async function transcribeBaamAudio(
     });
     return await prisma.baamTranscription.findUniqueOrThrow({ where: { id: transcription.id } });
   } catch (error) {
-    await settleProviderExpense(expense);
+    if (outboundStarted) await settleProviderExpense(expense);
+    else await settleProviderExpense(expense, 0);
     await settleSubscriptionUsage(usageLease, false);
     await prisma.baamTranscription.updateMany({
       where: { id: transcription.id, status: "PROCESSING", leaseUntil },

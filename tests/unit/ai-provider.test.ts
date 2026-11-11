@@ -75,6 +75,27 @@ describe("AI provider routing and credentials", () => {
     });
     expect(mocks.settle).toHaveBeenLastCalledWith(expect.any(Object), undefined);
   });
+  it("returns unused vendor and response allowances when an already-aborted request never dispatches", async () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "synthetic-metered");
+    mocks.expense.mockResolvedValue({ lease: null, reserved: 2000 });
+    mocks.fetch.mockResolvedValue(Response.json({ usage: { input_tokens: 1, output_tokens: 1 }, output: [] }));
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await withAiOperationBudget({ organizationId: "org", enabled: true }, async () => {
+      // Three unsent 2k-token requests must not consume the shared 6k response
+      // allowance or prevent the next intentionally dispatched request.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await expect(fetchAiResponse(resolveTextAiConfig()!, { input: "cancelled" }, cancelled.signal))
+          .rejects.toMatchObject({ name: "AbortError" });
+        expect(mocks.settle).toHaveBeenLastCalledWith(expect.any(Object), 0);
+      }
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      await fetchAiResponse(resolveTextAiConfig()!, { input: "allowed" }, new AbortController().signal);
+    });
+    expect(mocks.fetch).toHaveBeenCalledOnce();
+    expect(mocks.expense).toHaveBeenCalledTimes(4);
+    expect(mocks.settle).toHaveBeenLastCalledWith(expect.any(Object), 2);
+  });
   it("strips provider credentials from QA while preserving explicit HTTPS and browser controls", () => {
     const env = baamTestEnvironment({
       NODE_ENV: "test",

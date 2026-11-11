@@ -668,19 +668,26 @@ export const callOpenAiImageEnhancement = async (input: {
     }) : null;
     let response: Response;
     let responseBody: OpenAiImageResponseBody | null = null;
+    let outboundStarted = false;
     try {
+      const requestBodyJson = JSON.stringify(requestBody);
       await assertAiConsent();
       assertExternalProviderCallAllowed("openai");
+      outboundStarted = true;
       response = await fetch(OPENAI_IMAGE_EDITS_URL, {
         method: "POST",
         redirect: "error",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify(requestBody),
+        body: requestBodyJson,
         signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
       });
       responseBody = (await response.json().catch(() => null)) as OpenAiImageResponseBody | null;
     } catch (error) {
-      await settleProviderExpense(expense);
+      if (outboundStarted) await settleProviderExpense(expense);
+      else {
+        await settleProviderExpense(expense, 0);
+        if (error instanceof AppError) throw error;
+      }
       const normalized = normalizeProviderError({ error });
       // A timeout may leave a paid image request running. Never launch another
       // generation after an uncertain network outcome.

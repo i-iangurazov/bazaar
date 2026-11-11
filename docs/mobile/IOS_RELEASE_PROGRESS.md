@@ -579,3 +579,47 @@ verification record and the stale test expectation. The deployed application
 still contains that exact verified runtime source. Any future helper requiring
 current HEAD equality must export/deploy its new immutable candidate rather than
 silently relaxing the identity guard for this documentation-only difference.
+
+### White icon, native startup and privacy dispatch checkpoint
+
+The owner's additional white-icon and animated-startup requests are implemented.
+The generated icon preserves the existing mark, with an opaque white surround;
+the static launch image and readiness-driven UIKit cover also use white. The
+actual isolated Preview login followed that cover in the compiled Simulator app
+`1.0.0/111115`. A same-origin incomplete-document fault demonstrated timeout,
+the real retry button and continued loading after a background return. The
+unaltered bundle was restored and its normal login observed again. The owned
+Simulator was shut down. See `IOS_STARTUP_PRESENTATION.md` for exact scope and
+the outstanding physical-network, accessibility and real-iPhone UI checks.
+
+The privacy audit found a real User/AuditLog organization-lock cycle during
+concurrent consent withdrawal and account deletion. The pinned143 reproduction
+failed with PostgreSQL `40P01`; changing only the initial organization lock to
+`FOR NO KEY UPDATE` let the same orchestration commit, retaining fresh actor and
+owner checks and serialization against other organization writers. Text/voice/
+image/WhatsApp dispatch also rechecks consent after budget waits. A request that
+never reached its provider now releases its unused estimate; uncertain requests
+already sent remain conservatively charged internally.
+
+The scoped143 regression covered 14 files / 116 tests. Twelve files passed in
+the first run; two new test fixtures were corrected (required WhatsApp period
+and an accidental JavaScript newline after `return`), then all eleven cases in
+those two files passed. These checks use the actual isolated PostgreSQL and no
+live provider calls. They do not verify the concurrently authored144 Apple
+completion/recovery changes, which remain unapplied until their final review.
+
+The same pinned143 snapshot with the current privacy/startup source then passed
+typecheck, lint, translation validation and a production web build. An initial
+lint failure required ordinary type-only imports; its runtime dispatch behavior
+was unchanged. The final quality run is clean. The actual local Simulator
+compile/UI evidence is recorded separately from that web build. White startup
+source and generated assets are committed as `bed052a9`; production and the
+currently deployed isolated Preview have not received these changes yet.
+
+The fresh owned StoreKit diagnostic also reached a terminal result: the single
+real purchase test failed before the application ACK assertions with the same
+configuration-save errors and `.notEntitled`. A stale Simulator is therefore
+insufficient to explain the failure. Its exact platform cause is still unknown;
+neither global Xcode selection nor application entitlements were changed on
+that speculation. Apple Sandbox, signed phone/TestFlight and publication gates
+remain open; the full release goal is not complete.

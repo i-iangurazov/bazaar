@@ -1,5 +1,6 @@
 import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { reserveAiCallBudget } from "@/server/billing/aiOperationBudget";
+import type * as ProviderExpenseModule from "@/server/billing/providerExpense";
 import { AppError } from "./errors";
 import { assertAiConsent } from "./aiPrivacy";
 
@@ -65,39 +66,50 @@ export async function fetchAiResponse(
   await assertAiConsent();
   assertExternalProviderCallAllowed(config.provider);
   const budget = reserveAiCallBudget(aiResponseBody(config, body, options));
-  if (budget.active && config.provider !== "deepseek")
-    throw new AppError("billingAiProviderUnavailable", "CONFLICT", 409);
-  const expenseModule = budget.active ? await import("@/server/billing/providerExpense") : null;
-  const expense = expenseModule && budget.organizationId ? await expenseModule.reserveProviderExpense({
-    organizationId: budget.organizationId, kind: budget.kind, operationKey: budget.expenseKey,
-    estimatedMinor: expenseModule.aiExpenseMinor(budget.inputTokens, budget.outputTokens, config.model),
-  }) : null;
+  let expenseModule: typeof ProviderExpenseModule | null = null;
+  let expense: ProviderExpenseModule.ProviderExpense | null = null;
+  let outboundStarted = false;
   try {
-  const response = await fetch(config.url, {
-    method: "POST",
-    redirect: "error",
-    headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(budget.body),
-    signal,
-  });
-  if (budget.active) {
-    const result = await response.clone().json().catch(() => null) as {
-      usage?: { input_tokens?: number; output_tokens?: number; prompt_tokens?: number; completion_tokens?: number }
-    } | null;
-    budget.finish(result?.usage);
-    const input = result?.usage?.input_tokens ?? result?.usage?.prompt_tokens;
-    const output = result?.usage?.output_tokens ?? result?.usage?.completion_tokens;
-    const known = Number.isSafeInteger(input) && Number.isSafeInteger(output) && input! >= 0 && output! >= 0;
-    await expenseModule!.settleProviderExpense(expense, known
-      ? expenseModule!.aiExpenseMinor(input!, output!, config.model)
-      : response.status >= 400 && response.status < 500 && response.status !== 408 ? 0 : undefined);
-  }
-  return response;
+    if (budget.active && config.provider !== "deepseek")
+      throw new AppError("billingAiProviderUnavailable", "CONFLICT", 409);
+    expenseModule = budget.active ? await import("@/server/billing/providerExpense") : null;
+    expense = expenseModule && budget.organizationId ? await expenseModule.reserveProviderExpense({
+      organizationId: budget.organizationId, kind: budget.kind, operationKey: budget.expenseKey,
+      estimatedMinor: expenseModule.aiExpenseMinor(budget.inputTokens, budget.outputTokens, config.model),
+    }) : null;
+    const requestBody = JSON.stringify(budget.body);
+    // Budget reservations can wait on other transactions. Permission must still
+    // be current after that wait, immediately before a new outbound request.
+    await assertAiConsent();
+    assertExternalProviderCallAllowed(config.provider);
+    signal.throwIfAborted();
+    outboundStarted = true;
+    const response = await fetch(config.url, {
+      method: "POST",
+      redirect: "error",
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+      body: requestBody,
+      signal,
+    });
+    if (budget.active) {
+      const result = await response.clone().json().catch(() => null) as {
+        usage?: { input_tokens?: number; output_tokens?: number; prompt_tokens?: number; completion_tokens?: number }
+      } | null;
+      budget.finish(result?.usage);
+      const input = result?.usage?.input_tokens ?? result?.usage?.prompt_tokens;
+      const output = result?.usage?.output_tokens ?? result?.usage?.completion_tokens;
+      const known = Number.isSafeInteger(input) && Number.isSafeInteger(output) && input! >= 0 && output! >= 0;
+      await expenseModule!.settleProviderExpense(expense, known
+        ? expenseModule!.aiExpenseMinor(input!, output!, config.model)
+        : response.status >= 400 && response.status < 500 && response.status !== 408 ? 0 : undefined);
+    }
+    return response;
   } catch (error) {
-    // An uncertain attempt still occupies its request budget; retries cannot
-    // multiply the declared ceiling after provider or network failures.
-    budget.finish();
-    await expenseModule?.settleProviderExpense(expense);
+    // Only a request that was never dispatched can release its estimate. An
+    // uncertain transport outcome still occupies the declared request ceiling.
+    budget.finish(outboundStarted ? undefined : { input_tokens: 0, output_tokens: 0 });
+    if (outboundStarted) await expenseModule?.settleProviderExpense(expense);
+    else await expenseModule?.settleProviderExpense(expense, 0);
     throw error;
   }
 }
