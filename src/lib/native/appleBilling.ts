@@ -34,7 +34,14 @@ export type AppleProductResult = { products: AppleProduct[]; missingProductIds: 
 export type ApplePurchaseResult =
   | { status: "purchased"; transaction: AppleSignedTransaction }
   | { status: "pending" }
-  | { status: "cancelled"; cancellationAcknowledged: boolean; cancellationRecorded: boolean };
+  | { status: "cancelled"; cancellationAcknowledged: boolean; cancellationRecorded: boolean }
+  | {
+    /** This invocation never called StoreKit; this does not assert no prior payment. */
+    status: "not_started";
+    cancellationAcknowledged: boolean;
+    cancellationRecorded: boolean;
+    error: { code: string; serverCode?: string };
+  };
 export type AppleCancellationRetryResult = {
   pendingCount: number;
   acknowledgedCount: number;

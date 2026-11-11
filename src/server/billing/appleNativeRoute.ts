@@ -5,8 +5,9 @@ import { getServerAuthToken } from "@/server/auth/token";
 import { AppError } from "@/server/services/errors";
 import { acknowledgeApplePurchase, authorizeApplePurchase, cancelApplePurchaseIntent, type AppleBillingActor } from "./applePayments";
 import { APPLE_BUNDLE_ID } from "./appleConfig";
-const authorizeSchema = z.object({ intentId: z.string().min(1).max(80), prepareOnly: z.boolean().optional() }).strict();
-const cancelSchema = z.object({ intentId: z.string().min(1).max(80) }).strict();
+const authorizeSchema = z.object({ intentId: z.string().min(1).max(80), prepareOnly: z.boolean().optional(), attemptId: z.string().uuid().optional() }).strict()
+  .refine((input) => input.prepareOnly ? !input.attemptId : Boolean(input.attemptId));
+const cancelSchema = z.object({ intentId: z.string().min(1).max(80), attemptId: z.string().uuid().optional() }).strict();
 const acknowledgeSchema = z.object({ transactionId: z.string().regex(/^[0-9]{1,40}$/), signedTransactionInfo: z.string().min(30).max(100_000) }).strict();
 export function appleNativeOriginAllowed(raw: string | null, env: Record<string, string | undefined> = process.env) {
   try {
@@ -37,11 +38,13 @@ export async function appleNativeRoute(request: Request, action: "authorize" | "
     const raw = await request.json();
     if (action === "authorize") {
       const input = authorizeSchema.parse(raw);
-      return NextResponse.json(await authorizeApplePurchase(actor, input.intentId, { prepareOnly: input.prepareOnly }),
+      return NextResponse.json(await authorizeApplePurchase(actor, input.intentId, { prepareOnly: input.prepareOnly, attemptId: input.attemptId }),
         { headers: { "Cache-Control": "no-store" } });
     }
-    if (action === "cancel") return NextResponse.json(await cancelApplePurchaseIntent(actor, cancelSchema.parse(raw).intentId),
-      { headers: { "Cache-Control": "no-store" } });
+    if (action === "cancel") {
+      const input = cancelSchema.parse(raw);
+      return NextResponse.json(await cancelApplePurchaseIntent(actor, input.intentId, input.attemptId), { headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.json(await acknowledgeApplePurchase(actor, acknowledgeSchema.parse(raw)), { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const status = error instanceof AppError ? error.status : error instanceof z.ZodError ? 400 : 503;

@@ -37,6 +37,7 @@ private struct ApplePurchaseAuthorization: Decodable {
     let appAccountToken: UUID
     let expiresAt: String
     let environment: String
+    let attemptId: UUID?
 
     func isValid(for intentId: String) -> Bool {
         let formatter = ISO8601DateFormatter()
@@ -113,6 +114,7 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                   intentId.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) else {
                 throw AppleBillingFailure(code: "APPLE_INVALID_ARGUMENT")
             }
+            let purchaseOrigin = try self.trustedOrigin()
             try self.beginStoreSheet()
             defer { self.showingStoreSheet = false }
             guard AppStore.canMakePayments else { throw AppleBillingFailure(code: "APPLE_PAYMENTS_NOT_ALLOWED") }
@@ -124,44 +126,59 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                 throw AppleBillingFailure(code: "APPLE_PRODUCT_UNAVAILABLE")
             }
             try await self.requireSubscriptionAccountOwnership(product, token: authorization.appAccountToken)
-            // Fetching StoreKit metadata can take time. Recheck provider conflicts,
-            // permissions and intent expiry immediately before Apple's payment UI.
-            let current = try await self.authorize(intentId)
-            guard current.productId == authorization.productId,
-                  current.appAccountToken == authorization.appAccountToken else {
-                throw AppleBillingFailure(code: "APPLE_AUTHORIZATION_CHANGED")
-            }
-            let purchaseOrigin = try self.trustedOrigin()
-            let scene = try self.foregroundScene()
-            let options: Set<Product.PurchaseOption> = [.appAccountToken(current.appAccountToken)]
-            let result: Product.PurchaseResult
-            do {
-                if #available(iOS 17.0, *) {
-                    result = try await product.purchase(confirmIn: scene, options: options)
-                } else {
-                    result = try await product.purchase(options: options)
+            let attemptId = UUID()
+            return try await BazaarApplePreSheetAttempt.perform(
+                authorize: { try await self.authorize(intentId, attemptId: attemptId) },
+                prepare: { current in
+                    guard current.productId == authorization.productId,
+                          current.appAccountToken == authorization.appAccountToken else {
+                        throw AppleBillingFailure(code: "APPLE_AUTHORIZATION_CHANGED")
+                    }
+                    // Auth HTTP may finish after backgrounding or navigation.
+                    // Keep the original origin for a caught no-SDK abort proof.
+                    guard try self.trustedOrigin() == purchaseOrigin else {
+                        throw AppleBillingFailure(code: "APPLE_UNTRUSTED_ORIGIN")
+                    }
+                    let scene = try self.foregroundScene()
+                    let options: Set<Product.PurchaseOption> = [.appAccountToken(current.appAccountToken)]
+                    return (scene, options)
+                },
+                invoke: { prepared in
+                    // No await or fallible preflight separates this boundary
+                    // from the SDK call. Every unknown error from here is paid-
+                    // outcome recovery, never a caught pre-sheet cancellation.
+                    let (scene, options) = prepared
+                    let result: Product.PurchaseResult
+                    do {
+                        if #available(iOS 17.0, *) {
+                            result = try await product.purchase(confirmIn: scene, options: options)
+                        } else {
+                            result = try await product.purchase(options: options)
+                        }
+                    } catch StoreKitError.userCancelled {
+                        return try await self.terminalCancellation(intentId, origin: purchaseOrigin, attemptId: attemptId)
+                    }
+                    switch result {
+                    case .success(let verification):
+                        guard case .verified(let transaction) = verification else {
+                            throw AppleBillingFailure(code: "APPLE_UNVERIFIED_TRANSACTION")
+                        }
+                        guard self.permitsTransaction(transaction, signed: verification.jwsRepresentation) else {
+                            throw AppleBillingFailure(code: "APPLE_ENVIRONMENT_MISMATCH")
+                        }
+                        return ["status": "purchased", "transaction": self.transactionData(transaction, signed: verification.jwsRepresentation)]
+                    case .pending:
+                        return ["status": "pending"]
+                    case .userCancelled:
+                        return try await self.terminalCancellation(intentId, origin: purchaseOrigin, attemptId: attemptId)
+                    @unknown default:
+                        throw AppleBillingFailure(code: "APPLE_UNKNOWN_PURCHASE_RESULT")
+                    }
+                },
+                abort: { error in
+                    try await self.preSheetAbort(intentId, origin: purchaseOrigin, attemptId: attemptId, error: error)
                 }
-            } catch StoreKitError.userCancelled {
-                return try await self.terminalCancellation(intentId, origin: purchaseOrigin)
-            }
-            switch result {
-            case .success(let verification):
-                guard case .verified(let transaction) = verification else {
-                    throw AppleBillingFailure(code: "APPLE_UNVERIFIED_TRANSACTION")
-                }
-                guard self.permitsTransaction(transaction, signed: verification.jwsRepresentation) else {
-                    throw AppleBillingFailure(code: "APPLE_ENVIRONMENT_MISMATCH")
-                }
-                // A signed transaction is evidence for the server, never an
-                // entitlement. A mismatch or late completion must be reconciled.
-                return ["status": "purchased", "transaction": self.transactionData(transaction, signed: verification.jwsRepresentation)]
-            case .pending:
-                return ["status": "pending"]
-            case .userCancelled:
-                return try await self.terminalCancellation(intentId, origin: purchaseOrigin)
-            @unknown default:
-                throw AppleBillingFailure(code: "APPLE_UNKNOWN_PURCHASE_RESULT")
-            }
+            )
         }
     }
 
@@ -335,12 +352,17 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         return id
     }
 
-    @MainActor private func authorize(_ intentId: String, prepareOnly: Bool = false) async throws -> ApplePurchaseAuthorization {
+    @MainActor private func authorize(_ intentId: String, prepareOnly: Bool = false, attemptId: UUID? = nil) async throws -> ApplePurchaseAuthorization {
         var body: [String: Any] = ["intentId": intentId]
         if prepareOnly { body["prepareOnly"] = true }
+        else {
+            guard let attemptId else { throw AppleBillingFailure(code: "APPLE_INVALID_ARGUMENT") }
+            body["attemptId"] = attemptId.uuidString.lowercased()
+        }
         let data = try await post(path: "/api/billing/apple/native/authorize", body: body)
         guard let authorization = try? JSONDecoder().decode(ApplePurchaseAuthorization.self, from: data),
-              authorization.isValid(for: intentId) else {
+              authorization.isValid(for: intentId),
+              prepareOnly || authorization.attemptId == attemptId else {
             throw AppleBillingFailure(code: "APPLE_AUTHORIZATION_INVALID")
         }
         guard BazaarNativeBuildChannel.compiled.permitsTransactionEnvironment(authorization.environment) else {
@@ -349,14 +371,32 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         return authorization
     }
 
-    @MainActor private func terminalCancellation(_ intentId: String, origin: BazaarBillingOrigin) async throws -> [String: Any] {
+    @MainActor private func terminalCancellation(_ intentId: String, origin: BazaarBillingOrigin, attemptId: UUID) async throws -> [String: Any] {
         let journal = try BazaarAppleCancellationJournal()
         // Persist BEFORE any promise resolves. A lost cancel response or app
         // termination cannot turn this definite OS outcome into an endless hold.
-        let entry = try journal.record(intentId: intentId, origin: origin)
+        let entry = try journal.record(intentId: intentId, origin: origin, attemptId: attemptId)
         let outcome = try await acknowledgeCancellation(entry, journal: journal)
         return [
             "status": "cancelled",
+            "cancellationAcknowledged": outcome == .acknowledged,
+            "cancellationRecorded": outcome == .recorded,
+        ]
+    }
+
+    @MainActor private func preSheetAbort(_ intentId: String, origin: BazaarBillingOrigin, attemptId: UUID, error: Error) async throws -> [String: Any] {
+        let journal = try BazaarAppleCancellationJournal()
+        // Called only by the caught pre-SDK boundary. A different device's
+        // winning attempt cannot be cancelled with this UUID on the server.
+        let entry = try journal.record(intentId: intentId, origin: origin, attemptId: attemptId)
+        let outcome = try await acknowledgeCancellation(entry, journal: journal)
+        let failure = (error as? AppleBillingFailure) ?? AppleBillingFailure(
+            code: error is URLError ? "APPLE_NETWORK_ERROR" : "APPLE_STORE_ERROR"
+        )
+        var detail: [String: Any] = ["code": failure.code]
+        if let serverCode = failure.serverCode { detail["serverCode"] = serverCode }
+        return [
+            "status": "not_started", "error": detail,
             "cancellationAcknowledged": outcome == .acknowledged,
             "cancellationRecorded": outcome == .recorded,
         ]
@@ -367,12 +407,12 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         let journal = try BazaarAppleCancellationJournal()
         let entries = try journal.entries(for: origin)
         var summary = AppleCancellationRetrySummary()
-        var inaccessible = Set<String>()
+        var inaccessible = Set<BazaarAppleCancellationJournal.Entry>()
         for entry in entries {
             switch try await acknowledgeCancellation(entry, journal: journal) {
             case .acknowledged: summary.acknowledgedCount += 1
             case .recorded: summary.recordedCount += 1
-            case .inaccessible: inaccessible.insert(entry.intentId)
+            case .inaccessible: inaccessible.insert(entry)
             case .noSession:
                 // Preserve every entry. Without an authenticated actor we cannot
                 // label any remaining intent as pending for the current org.
@@ -381,7 +421,7 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
             case .unresolved: break
             }
         }
-        summary.pendingCount = try journal.entries(for: origin).filter { !inaccessible.contains($0.intentId) }.count
+        summary.pendingCount = try journal.entries(for: origin).filter { !inaccessible.contains($0) }.count
         return summary
     }
 
@@ -391,10 +431,13 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         guard entry.origin == (try trustedOrigin()).url.absoluteString else { return .inaccessible }
         let data: Data
         do {
-            data = try await post(path: "/api/billing/apple/native/cancel", body: ["intentId": entry.intentId])
+            var body: [String: Any] = ["intentId": entry.intentId]
+            if let attemptId = entry.attemptId { body["attemptId"] = attemptId.uuidString.lowercased() }
+            data = try await post(path: "/api/billing/apple/native/cancel", body: body)
         } catch let error as AppleBillingFailure {
             if error.code == "APPLE_SESSION_REQUIRED" || error.httpStatus == 401 { return .noSession }
             if error.code == "APPLE_FORBIDDEN" || error.httpStatus == 403 || error.httpStatus == 404 { return .inaccessible }
+            if error.httpStatus == 409 && error.serverCode == "applePurchaseAttemptMismatch" { return .inaccessible }
             if error.code == "APPLE_UNTRUSTED_ORIGIN" { throw error }
             return .unresolved
         } catch is URLError {

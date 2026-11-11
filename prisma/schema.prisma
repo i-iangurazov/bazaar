@@ -4435,6 +4435,7 @@ model ApplePurchaseIntent {
   status String @default("PENDING")
   expiresAt DateTime
   authorizedAt DateTime?
+  nativeAttemptId String? @unique @db.Uuid
   lastIssue String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

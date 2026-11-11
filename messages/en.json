@@ -5696,7 +5696,9 @@
     }
   },
   "errors": {
-    "APPLE_CANCELLATION_STORAGE_FAILED": "The purchase was cancelled in the App Store, but its cancellation could not be saved for synchronization. Reconnect and check purchases. If it remains pending, contact Bazaar support before paying again.",
+    "applePurchaseAttemptRequired": "Refresh the purchase in the Bazaar app. A native purchase attempt is required before opening Apple payment.",
+    "applePurchaseAttemptMismatch": "Another device or attempt owns this purchase request. Check its status before paying again.",
+    "APPLE_CANCELLATION_STORAGE_FAILED": "The app could not save the stopped payment attempt for synchronization. Reconnect and check purchases. If it remains pending, contact Bazaar support before paying again.",
     "appleIntentAlreadyFulfilled": "Apple sent an additional operation for an already used purchase request. It is recorded for reconciliation without another grant; do not pay again.",
     "APPLE_SUBSCRIPTION_ACCOUNT_CONFLICT": "This Apple Account already has a subscription for another organization. Switch to its original organization to manage it.",
     "appleQuoteRequired": "Refresh the offer and review the period dates before purchasing.",
@@ -8914,6 +8916,8 @@
     "mediaUnavailable": "The image could not be loaded. Close and retry; if it expired, ask the customer to resend it."
   },
   "billingApple": {
+    "purchaseNotStarted": "This attempt did not open Apple payment. {reason}",
+    "purchaseNotStartedPending": "This attempt did not open Apple payment. Its stopped request is awaiting synchronization; do not pay again until the status refreshes. {reason}",
     "scheduledChange": "Scheduled Apple subscription change",
     "scheduledChangeDetails": "Open Apple subscription settings to check the selected option.",
     "scheduledChangeStarts": "Expected at renewal: {date}",

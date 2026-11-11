@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  assertReviewedPreflightPair, IOS_PREFLIGHT_SQL, parsePreflightReport, parsePreflightTarget,
+  assertReviewedPreflightMigrations, IOS_PREFLIGHT_SQL, parsePreflightReport, parsePreflightTarget,
   preflightProcessEnvironment, runIosBillingPreflight,
 } from "../../scripts/deployment/ios-billing-preflight";
 
@@ -8,7 +8,7 @@ const url = "postgresql://synthetic_user:synthetic%40password@127.0.0.1:55461/ba
 const args = ["--url-env", "EXPLICIT_AUDIT_URL", "--expect-host", "127.0.0.1", "--expect-port", "55461",
   "--expect-database", "bazaar_hardening_ci", "--expect-user", "synthetic_user"];
 const options = () => parsePreflightTarget(args, { EXPLICIT_AUDIT_URL: url });
-const report = (extra: object = {}) => JSON.stringify({ reportVersion: 1, transactionReadOnly: true, schemaStage: "POST_140",
+const report = (extra: object = {}) => JSON.stringify({ reportVersion: 1, transactionReadOnly: true, schemaStage: "POST_NATIVE_ATTEMPT",
   checks: [{ name: "source_binding_invalid", severity: "blocker", count: 0, skipped: false }], ...extra });
 
 describe("explicit read-only iOS migration preflight", () => {
@@ -54,7 +54,7 @@ describe("explicit read-only iOS migration preflight", () => {
   });
 
   it("checks the exact reviewed pair and invokes psql without a startup file or interactive password prompt", async () => {
-    await expect(assertReviewedPreflightPair()).resolves.toBeUndefined();
+    await expect(assertReviewedPreflightMigrations()).resolves.toBeUndefined();
     const execute = vi.fn().mockResolvedValue(report());
     expect((await runIosBillingPreflight(options(), {}, execute)).ok).toBe(true);
     expect(execute).toHaveBeenCalledWith("psql", ["-X", "--no-password", "--quiet", "--tuples-only", "--no-align",
@@ -72,8 +72,8 @@ describe("explicit read-only iOS migration preflight", () => {
     const parsed = parsePreflightReport(report({ checks: [
       { name: "legacy_invoices_without_snapshot", severity: "warning", count: 4, skipped: false },
       { name: "source_binding_invalid", severity: "blocker", count: 0, skipped: false },
-      { name: "post_139_binding", severity: "blocker", count: null, skipped: true },
-    ] }), "PRE_139");
+      { name: "post_privacy_binding", severity: "blocker", count: null, skipped: true },
+    ] }), "PRE_APPLE");
     expect(parsed).toMatchObject({ ok: false, blockerChecks: 1, warningChecks: 1, skippedChecks: 1 });
     expect(parsed.checks.at(-1)?.name).toBe("expected_schema_stage_mismatch");
     expect(parsePreflightReport(report({ checks: [{ name: "query_failed", severity: "blocker", count: null, skipped: false, errorCode: "22003" }] })).ok).toBe(false);

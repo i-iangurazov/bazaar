@@ -1,11 +1,14 @@
 import Foundation
 
-/// Only terminal StoreKit cancellations belong here. Pending/unknown/verified
-/// purchases remain in StoreKit and must never be inferred to be cancelled.
+/// Only a definite OS cancellation or caught abort before invoking StoreKit
+/// belongs here. Pending/unknown/verified SDK outcomes are never cancelled here.
 final class BazaarAppleCancellationJournal {
-    struct Entry: Codable, Equatable, Sendable {
+    struct Entry: Codable, Hashable, Sendable {
         let intentId: String
         let origin: String
+        // Missing only for preserved v1 entries. These cannot cancel a newly
+        // authorized intent, because the server requires its winning attempt.
+        let attemptId: UUID?
     }
 
     enum Failure: Error, Equatable {
@@ -57,8 +60,8 @@ final class BazaarAppleCancellationJournal {
     }
 
     @discardableResult
-    func record(intentId: String, origin: BazaarBillingOrigin) throws -> Entry {
-        let entry = Entry(intentId: intentId, origin: origin.url.absoluteString)
+    func record(intentId: String, origin: BazaarBillingOrigin, attemptId: UUID) throws -> Entry {
+        let entry = Entry(intentId: intentId, origin: origin.url.absoluteString, attemptId: attemptId)
         guard valid(entry) else { throw Failure.invalidEntry }
         var entries = try load()
         if !entries.contains(entry) {
@@ -104,8 +107,9 @@ final class BazaarAppleCancellationJournal {
         guard let document = try? JSONDecoder().decode(Document.self, from: data) else {
             throw Failure.invalidContents
         }
-        guard document.version == 1 else { throw Failure.unsupportedVersion }
-        guard document.entries.allSatisfy(valid), Set(document.entries.map { $0.origin + "\n" + $0.intentId }).count == document.entries.count else {
+        guard document.version == 1 || document.version == 2 else { throw Failure.unsupportedVersion }
+        guard document.version != 1 || document.entries.allSatisfy({ $0.attemptId == nil }) else { throw Failure.invalidContents }
+        guard document.entries.allSatisfy(valid), Set(document.entries).count == document.entries.count else {
             throw Failure.invalidContents
         }
         return document.entries
@@ -114,13 +118,13 @@ final class BazaarAppleCancellationJournal {
     private func save(_ entries: [Entry]) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(Document(version: 1, entries: entries))
+        let data = try encoder.encode(Document(version: 2, entries: entries))
         guard data.count <= maximumBytes else { throw Failure.tooLarge }
         let directory = fileURL.deletingLastPathComponent()
         do {
             var attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
             #if os(iOS)
-            attributes[.protectionKey] = FileProtectionType.complete
+            attributes[.protectionKey] = FileProtectionType.completeUntilFirstUserAuthentication
             #endif
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: attributes)
             try FileManager.default.setAttributes(attributes, ofItemAtPath: directory.path)
@@ -130,7 +134,7 @@ final class BazaarAppleCancellationJournal {
             try directoryURL.setResourceValues(excluded)
             var options: Data.WritingOptions = [.atomic]
             #if os(iOS)
-            options.insert(.completeFileProtection)
+            options.insert(.completeFileProtectionUntilFirstUserAuthentication)
             #endif
             try data.write(to: fileURL, options: options)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
@@ -139,5 +143,25 @@ final class BazaarAppleCancellationJournal {
         } catch {
             throw Failure.storageUnavailable
         }
+    }
+}
+
+/// This boundary is shared by the real purchase path and executable regression
+/// checks. Once invoke begins, its errors can never enter the pre-sheet handler.
+enum BazaarApplePreSheetAttempt {
+    @MainActor static func perform<Authorization, Prepared, Result>(
+        authorize: @MainActor () async throws -> Authorization,
+        prepare: @MainActor (Authorization) throws -> Prepared,
+        invoke: @MainActor (Prepared) async throws -> Result,
+        abort: @MainActor (Error) async throws -> Result
+    ) async throws -> Result {
+        let prepared: Prepared
+        do {
+            let authorization = try await authorize()
+            prepared = try prepare(authorization)
+        } catch {
+            return try await abort(error)
+        }
+        return try await invoke(prepared)
     }
 }

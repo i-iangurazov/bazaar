@@ -18,18 +18,31 @@ Native code reads the current WebKit session, POSTs
 `/api/billing/apple/native/authorize`, loads the returned StoreKit product, and
 re-authorizes immediately before Apple's purchase sheet. The server selects the
 allowlisted SKU and organization-bound UUID `appAccountToken`. JavaScript cannot
-choose either value. Results distinguish `purchased`, `pending` and `cancelled`;
-errors have stable codes. A purchase result never grants rights or finishes a
-transaction.
+choose either value. Results distinguish `purchased`, `pending`, `cancelled` and
+`not_started`; errors have stable codes. A purchase result never grants rights or
+finishes a transaction.
 
 The first native request includes `prepareOnly: true`: it validates ownership,
 catalog and conflicts without marking the intent as durably authorized. A
 metadata/preflight failure therefore does not create a possibly-charged hold.
-The second request omits that flag and durably authorizes immediately before the
-sheet. After that durable authorization, every further prepare/authorize request
-for the same intent is refused. Retrying an unknown result cannot reopen a second
-payment sheet, including for consumables and non-renewing products. Late purchases
-retain their recovery protection.
+The second request omits that flag, supplies a native-generated UUID `attemptId`,
+and durably binds that attempt immediately before the sheet. Native requires the
+echoed UUID to match. After durable authorization, every further prepare/authorize
+request for the same intent is refused, including the same UUID. Retrying an
+unknown result cannot reopen a second payment sheet, including for consumables
+and non-renewing products. Late purchases retain their recovery protection.
+
+The original trusted origin is captured before authorization. The shared
+`BazaarApplePreSheetAttempt` boundary catches only final authorization and
+post-auth preflight failures. For example, backgrounding while auth HTTP runs or
+losing its response can be durably recorded if this invocation never called
+`Product.purchase`. Its result is `not_started`, with required
+`cancellationAcknowledged` / `cancellationRecorded` and an
+`error: {code, serverCode?}` reason. It never claims that Apple cancelled a sheet
+or that another attempt did not pay. A different winning attempt cannot be
+cancelled with this UUID. Once the SDK invocation begins, all unknown errors
+bypass this handler; only explicit StoreKit `userCancelled` creates cancellation
+proof. There is no armed record, cold-start inference or timeout cancellation.
 
 Before presenting an auto-renewable purchase, native code checks StoreKit's
 verified current entitlements in the selected subscription group. A different or
@@ -53,17 +66,22 @@ transaction in StoreKit's queue for recovery.
 ## Recovery and Apple account actions
 
 - A definite StoreKit cancellation (the `.userCancelled` result or thrown
-  `StoreKitError.userCancelled` from `Product.purchase`) is synchronously written
+  `StoreKitError.userCancelled` from `Product.purchase`) or caught pre-SDK abort
+  is synchronously written
   to `Application Support/AppleBillingRecovery/cancelled-intents.json` before the
-  native promise can resolve. Only the opaque intent ID and canonical compiled
-  origin are stored, with a schema version. The atomic file has complete iOS data
-  protection, owner-only file/directory permissions, and backup exclusion. It
+  native promise can resolve. Only the opaque intent ID, attempt UUID and canonical
+  compiled origin are stored, with schema version 2. The atomic file has iOS data
+  protection until first user authentication, owner-only file/directory permissions
+  and backup exclusion. This allows a caught background callback to write after
+  the device locks; no authorization material is stored. It
   contains no JWS, cookies, account token, user ID or organization ID and does not
   use UserDefaults. Corrupt/unknown/oversized journals fail closed; a persistence
   error is reported as `APPLE_CANCELLATION_STORAGE_FAILED` rather than a falsely
-  completed cancellation. Pending, unverified and network-unknown purchase
-  outcomes are never journaled as cancellations.
-- Native POSTs `/api/billing/apple/native/cancel` with `{intentId}`. Only the
+  completed cancellation. Pending, unverified and network-unknown outcomes after
+  invoking StoreKit are never journaled as cancellations.
+- Native POSTs `/api/billing/apple/native/cancel` with `{intentId, attemptId}`.
+  Authorized cancellation requires the matching immutable winning attempt plus
+  original creator/organization and no recorded money. Only the
   current authenticated, scoped server response can clear that journal entry:
   `canceled: true` acknowledges cancellation; `recorded: true` acknowledges money
   already stored on the server and takes precedence. Recorded money goes through
@@ -71,14 +89,21 @@ transaction in StoreKit's queue for recovery.
   lost responses retain the journal for another attempt. The cancelled bridge
   result has required `cancellationAcknowledged` and `cancellationRecorded`
   booleans; an `APPLE_CANCELLED` exception is never converted into that result by
-  the TypeScript wrapper.
+  the TypeScript wrapper. The web/tRPC cancellation path remains only for a
+  never-authorized soft intent; checkout does not use it as a fallback after
+  native final authorization might have happened.
 - `retryAppleCancellations()` retries this journal on authenticated login/resume
   and returns `pendingCount`, `acknowledgedCount` and `recordedCount`. It does not
   open an Apple sheet. Entries for other compiled origins are untouched. A missing
   session or 401 retains entries without claiming they belong to the current
   organization; 403/404 entries remain stored and are excluded from the current
   organization's pending count. They can be acknowledged after the appropriate
-  administrator returns. Successful ACK removal rereads the file, preserving
+  administrator returns. Explicit HTTP 409 `applePurchaseAttemptMismatch` also
+  preserves proof without counting the losing attempt as a pending cancellation.
+  This exclusion keys origin/intent/attempt, never hiding another proof for the
+  same intent. Other 409s remain unresolved. Version 1 entries are preserved and
+  migrated without inventing attempt IDs; they cannot cancel an authorized intent
+  under the new protocol. Successful ACK removal rereads the file, preserving
   other entries added while a network request was in flight.
 - A native `Transaction.updates` observer starts when the plugin loads. It emits
   verified evidence or an explicit verification failure while the trusted app is
@@ -114,6 +139,11 @@ holds, reassign the intent or open another payment solely to remove a warning.
 Review operations must distinguish this case from a currently authorized
 administrator whose journal will retry normally. This limitation still requires
 a verified support/reconciliation procedure before commercial release.
+
+A hard process termination before a caught abort proof is written remains
+ambiguous and retains REVIEW protection. Empty StoreKit history, a missing local
+journal or an elapsed timeout is not proof that no purchase was invoked. This
+minimal recovery deliberately does not infer cancellation on cold start.
 
 ## Native security boundary
 
@@ -162,8 +192,17 @@ precedence, backup/permissions, bounded opaque contents, storage failure and
 corrupt/unknown-version preservation. Compile/run it separately from the policy
 executable below. Verified 2026-11-11: it compiled and exited 0 with **40 checks
 passed**; evidence: `.local/ios-release-20261111/apple-cancellation-journal-check.log`.
-The iOS-only complete-protection branches were also compiled in the full App
-build. Device lock/unlock and real interruption still require iPhone checks.
+Those 40 checks and earlier native builds predate the attempt-bound v2/pre-sheet
+addition. The updated executable also covers attempt isolation, v1 preservation,
+lost final-auth response, post-auth background failure, no cancellation after SDK
+invocation, pending SDK results and persistence-failure propagation. Updated
+compile/check evidence: exit 0 and **57 checks passed** in
+`.local/ios-release-20261111/apple-cancellation-journal-attempt-check.log`.
+The updated iOS protection branch and complete native purchase path also compiled
+in the latest unsigned device archive:
+`.local/ios-release-20261111/staging-device-archive-attempt-recovery.log`
+(session 66584, `ARCHIVE SUCCEEDED`). Device lock/unlock and real interruption
+still require iPhone checks; the executable performs no Apple/network purchase.
 
 The production origin/cookie policy is compiled directly into an executable:
 

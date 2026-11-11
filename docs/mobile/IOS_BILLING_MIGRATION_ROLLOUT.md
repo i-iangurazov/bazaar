@@ -1,39 +1,57 @@
 # iOS billing migration preflight and rollout
 
-This playbook covers exactly these two migrations, in this order. It prepares a
+Coordinator verification: the owned disposable baseline139-to142 exercise passed
+on 2026-11-11. All 43 seeded financial/access/usage/auth/bank-refund/audit rows
+were preserved exactly; nine checks passed, and the extra database/temporary
+files were removed. Detailed aggregate evidence stays outside Git. This is
+synthetic migration evidence, not permission to inspect or migrate customers.
+
+This playbook covers exactly these three named Apple migrations, in this order. It prepares a
 reviewable operational procedure; it does not authorize a production deployment.
 
-| Sequence | Migration | SHA-256 |
+| Purpose | Migration | SHA-256 |
 | --- | --- | --- |
-| 139 | `20261111120000_ios_apple_billing_privacy` | `734e62c89a76aaedb153eb0b8029021f7713074b4526ca5501dac9abd41e2f38` |
-| 140 | `20261111130000_apple_lifecycle_recovery` | `4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10` |
+| Privacy/source separation | `20261111120000_ios_apple_billing_privacy` | `734e62c89a76aaedb153eb0b8029021f7713074b4526ca5501dac9abd41e2f38` |
+| Lifecycle recovery | `20261111130000_apple_lifecycle_recovery` | `4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10` |
+| Native attempt recovery | `20261111140000_apple_native_attempt_recovery` | `1b3d22538c669d7f940e45dc14127842c25fe14accbe753c8a2b7e3efed32d0b` |
 
-Both contain explicit transactions. Migration 139 adds the separate Apple
+The merged-main prerequisite is
+`20261111020000_manual_subscription_refunds`, SHA-256
+`800cd487fb2d4b0ecd5501e5edc7182c4a06b851f68b0b02c18e40d795370b87`.
+It remains separate GoPay bank-transfer accounting and is included in the
+pre-Apple baseline. Migration names, rather than changing ordinal positions,
+define this audit. The current reviewed manifest has 139 baseline migrations
+and 142 total migrations.
+
+All three contain explicit transactions. The privacy migration adds the separate Apple
 financial journal, immutable organization/token/intent bindings, Apple source
 references, account tombstones and consent fields, and private asset erasure
 queue. It makes gateway invoice references nullable only alongside exactly one
 Apple source. Web WhatsApp lots retain a required expiry; Apple lots have no
-expiry. Migration 140 adds sticky same-chain superseding and signed future plan
-preferences, then updates the affected access and financial guards.
+expiry. The lifecycle migration adds sticky same-chain superseding and signed future plan
+preferences, then updates the affected access and financial guards. The native
+attempt migration adds an immutable UUID bound atomically to first sheet
+authorization. A terminal native cancellation must match that UUID; a missing
+historical UUID cannot be retroactively claimed by another device.
 
 The SQL files must remain unchanged after application. Remedial work belongs in
-a new reviewed migration. There is no down migration for either file.
+a new reviewed migration. There is no down migration for this chain.
 
 ## Current rollout boundary
 
-The pair is not in `approvedProductionMigrations` in
+The Apple chain is not in `approvedProductionMigrations` in
 `scripts/deployment/migrations.ts`. The production prebuild therefore refuses a
-deployment when either is pending. This playbook does not change that allowlist
+deployment when an Apple migration is pending. This playbook does not change that allowlist
 or the existing requirement for explicit human authorization before production.
 The branch must also be verified against the then-current main branch before
 an eventual merge.
 
 `APPLE_BILLING_MODE=off` and both approval flags remaining false prevent new
 Apple sales. They do **not** make the new application compatible with a database
-at migration 138: authentication, privacy and existing billing/access paths
-already reference the new fields and tables. Apply the complete pair before
-serving this application version. Never run an intermediate 139 schema with the
-application that expects 140.
+at the pre-Apple baseline: authentication, privacy and existing billing/access paths
+already reference the new fields and tables. Apply the complete chain before
+serving this application version. Never serve the final application from an intermediate privacy-only or
+lifecycle-only schema; it expects native attempt recovery as well.
 
 Commercial choices for all plan/store/reserve combinations, Apple-specific
 credit expiry terms, and cross-provider prorated changes remain release gates;
@@ -68,12 +86,12 @@ pnpm exec tsx scripts/deployment/ios-billing-preflight.ts \
   --expect-port "$IOS_AUDIT_EXPECTED_PORT" \
   --expect-database "$IOS_AUDIT_EXPECTED_DATABASE" \
   --expect-user "$IOS_AUDIT_EXPECTED_USER" \
-  --expect-stage PRE_139
+  --expect-stage PRE_APPLE
 ```
 
 Use `--psql /absolute/path/to/psql` when it is not on the operator's PATH. After
-the complete pair, run the same audit with `--expect-stage POST_140`.
-`POST_139` exists only to diagnose an interrupted rollout; it is not an approved
+the complete chain, run the same audit with `--expect-stage POST_NATIVE_ATTEMPT`.
+`POST_PRIVACY` and `POST_LIFECYCLE` exist only to diagnose an interrupted rollout; neither is an approved
 application serving state. `PARTIAL` and `UNBASELINED` are blockers. The script
 also refuses altered local migration checksums.
 
@@ -82,8 +100,8 @@ SQLSTATE codes only. It emits no target URL, identifiers, names, addresses,
 invoice amounts, signed payloads, keys or raw database error messages. Exit 0
 means no blocking check was found; exit 2 means a blocker or audit failure.
 Retain the report with the release evidence. Do not interpret skipped checks
-as passing: Apple checks are expected to be skipped at `PRE_139`, while a fully
-applied `POST_140` should have none skipped.
+as passing: Apple checks are expected to be skipped at `PRE_APPLE`, while a fully
+applied `POST_NATIVE_ATTEMPT` should have none skipped.
 
 The audit checks these assumptions:
 
@@ -96,10 +114,12 @@ The audit checks these assumptions:
   binding, and a separate signed Apple currency/price pair.
 - Auto-renewing signed term dates, frozen subscription purchase terms, pack
   quantity binding, duplicate non-auto fulfillment, sticky superseded grants,
-  and the shape of signed pending changes.
-- Exact pair migration history/checksums; unfinished migrations; new validated
+  the shape of signed pending changes, and immutable one-use native attempt
+  authorization/cancellation binding. Historical authorized intents without a
+  UUID remain recoverable through signed receipts and are reported separately.
+- Exact named migration history/checksums; unfinished migrations; new validated
   constraints and valid unique indexes; enabled financial/privacy triggers;
-  and the reviewed bodies of every function added/replaced by 139/140.
+  and the reviewed bodies of every function added/replaced by the named Apple chain.
 
 Historical missing snapshots and overdrawn credit counters are warnings for
 explicit review, not an instruction to rewrite accounting. Review/unbound Apple
@@ -125,14 +145,14 @@ maintenance/write-control procedure and again after application.
    Confirm the deployed web GoPay merchant configuration separately. Freeze
    deployment and financial writes for the brief audited migration window, or
    document another reviewed procedure that closes the preflight/write race.
-3. On the independently verified target, collect the `PRE_139` report. If the
-   pair is already applied, require `POST_140` and matching history instead of
+3. On the independently verified target, collect the `PRE_APPLE` report. If the
+   chain is already applied, require `POST_NATIVE_ATTEMPT` and matching history instead of
    replaying SQL. Stop on blockers, unfinished history or unexpected skips.
 4. Only after production authorization and separate migration review may the
-   exact pair be added to the production allowlist. Apply through the normal
+   exact named Apple chain be added to the production allowlist. Apply through the normal
    guarded deployment path in migration order. Do not manually mark a failed
    migration applied, bypass checksum checks, or remove transaction statements.
-5. Before traffic reaches the new code, require `POST_140`, zero blockers and no
+5. Before traffic reaches the new code, require `POST_NATIVE_ATTEMPT`, zero blockers and no
    skipped checks. Check auth, existing approved/manual/lifetime access, GoPay
    history and callbacks, future prepayment timing, quota continuity, and web
    lot expiry. Verify that no synthetic journal or invoice was created in the
@@ -148,11 +168,12 @@ maintenance/write-control procedure and again after application.
    anomaly or an unexpected grant appears. Do not use the audit as a recurring
    customer-data export.
 
-The two migrations are separate transactions. If 139 completes and 140 fails,
-the database can be at `POST_139`; keep the new application unserved, inspect
-the failed migration through the established operator procedure, and recover
-forward to the exact reviewed 140. A deployment failure after both commit does
-not roll back database state.
+Each migration is a separate transaction. If a later step fails after privacy
+or lifecycle completes, the database may be at `POST_PRIVACY` or
+`POST_LIFECYCLE`. Keep the final application unserved, inspect the failed
+migration through the established operator procedure, and recover forward to
+the exact reviewed native-attempt stage. An application deployment failure
+after commit does not roll back database state.
 
 ## Recovery and rollback
 
@@ -204,12 +225,13 @@ not broaden it to include customer databases.
 
 1. Create the separately owned local test database and least-privilege test
    role. Record its host/port/name/role and label it disposable. Use a temporary
-   migration directory containing the repository's unchanged migrations through
-   138, preserving their checksums. Do not remove migrations from the working
+   migration directory containing the repository's unchanged migrations preceding
+   the first named Apple migration, preserving their checksums. This current
+   baseline has 139 migrations and includes the manual bank refund prerequisite. Do not remove migrations from the working
    tree or production history to simulate an older schema.
-2. Apply only that baseline. Seed synthetic data using the 138 schema (raw
-   parameterized SQL or a separately generated 138 client). The current Prisma
-   client already expects 140 and must not be used to claim baseline
+2. Apply only that baseline. Seed synthetic data using that baseline schema (raw
+   parameterized SQL or a separately generated baseline client). The current Prisma
+   client already expects native attempt recovery and must not be used to claim baseline
    compatibility. Include manual/free approval, legacy terms, current terms,
    lifetime, active and expired periods, future GoPay prepayments, unpaid/review/
    paid invoices, used/reserved/expired web WhatsApp lots, quotas, and financial
@@ -217,18 +239,19 @@ not broaden it to include customer databases.
 3. Capture canonical, ordered snapshots/hashes of the original financial rows,
    periods, contract snapshots, entitlement timing, user references, credit
    counters/expiries and quota operation identities. Keep only synthetic output.
-   Require `PRE_139` with the expected populations and reviewed warnings.
-4. Apply the exact 139/140 files. Require `POST_140`, matching digests/history,
+   Require `PRE_APPLE` with the expected populations and reviewed warnings.
+4. Apply the exact three named Apple migrations. Require `POST_NATIVE_ATTEMPT`, matching digests/history,
    valid guards, zero blockers and no skipped checks. Compare all original
    rows with the before snapshot: no invoice amount/currency/source, grant
    interval, contract, approval, expiry, counter or quota identity may change.
 5. Run the owned-DB Apple/lifecycle/GoPay/privacy regression suites. Exercise
    duplicate/out-of-order receipts, revoked base plus future GoPay coverage,
    same-chain replacement, manual/lifetime access, non-expiring Apple lots,
-   unchanged web expiry, tombstone auth, terminal cancellation and stale unpaid
+   unchanged web expiry, preserved manual bank refund records, tombstone auth,
+   wrong-device/legacy/lost-response native attempt recovery and stale unpaid
    checkout recovery. Attempt forbidden tenant/money/source rewrites and require
    real database rejections.
-6. Run the proposed compatibility recovery build against this synthetic 140
+6. Run the proposed compatibility recovery build against this synthetic final
    database both before and after Apple grants/tombstones exist. Verify auth,
    approved access, current/future periods, quotas, history and lifecycle work.
    A failed old-build scenario disqualifies that build as a rollback target;
@@ -245,4 +268,4 @@ CLI/process policy and report validation) and
 unchanged synthetic accounting, historical warnings and duplicate fulfillment
 detection). The integration runner uses the explicitly guarded
 `DATABASE_TEST_URL`; set `IOS_MIGRATION_PREFLIGHT_PSQL` when a non-PATH binary is
-needed. These checks do not replace the separate 138-to-140 preservation run.
+needed. These checks do not replace the separate baseline-to-native-attempt preservation run.

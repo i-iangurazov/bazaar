@@ -40,7 +40,7 @@ const intentFor = async (f: Awaited<ReturnType<typeof seed>>, extra = {}) => {
   const preview = await getApplePurchasePreview(f.actor, { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" });
   const intent = await createApplePurchaseIntent(f.actor, { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey: offer.offerKey,
     action: "RENEW", idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true, ...extra });
-  await authorizeApplePurchase(f.actor, intent.intentId);
+  await authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() });
   return intent;
 };
 const receive = async (intent: Awaited<ReturnType<typeof intentFor>>, extra = {}) => {
@@ -82,7 +82,7 @@ describeDb("verified Apple purchases on isolated PostgreSQL", () => {
     const params = { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" as const, idempotencyKey: key, termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true as const };
     const intents = await Promise.all([createApplePurchaseIntent(f.actor, params), createApplePurchaseIntent(f.actor, params)]);
     expect(intents[0].intentId).toBe(intents[1].intentId);
-    await authorizeApplePurchase(f.actor, intents[0].intentId);
+    await authorizeApplePurchase(f.actor, intents[0].intentId, { attemptId: randomUUID() });
     const receipt = await syntheticAppleVerifier().transaction(syntheticAppleTransaction({ appAccountToken: intents[0].appAccountToken, productId }));
     const results = await Promise.all([applyAppleTransaction(receipt, { organizationId: f.org.id, source: "CLIENT" }),
       applyAppleTransaction(receipt, { organizationId: f.org.id, source: "NOTIFICATION" })]);
@@ -138,7 +138,7 @@ describeDb("verified Apple purchases on isolated PostgreSQL", () => {
       idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true })).rejects.toThrow("applePurchaseOrganizationMismatch");
     const intent = await intentFor(f);
     await prisma.user.update({ where: { id: f.adminUser.id }, data: { role: "STAFF" } });
-    await expect(authorizeApplePurchase(f.actor, intent.intentId)).rejects.toThrow("forbidden");
+    await expect(authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() })).rejects.toThrow("forbidden");
   });
   it("enforces source XOR, immutable money and tenant constraints in the database", async () => {
     const f = await seed(), intent = await intentFor(f); await receive(intent);

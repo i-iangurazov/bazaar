@@ -310,6 +310,11 @@ The compiled native bridge durably journals a definite StoreKit cancellation and
 retries its server acknowledgement after login/resume; a lost network response
 must not be presented as a completed server cancellation. Verify cancellation,
 offline interruption, restart and subsequent retry on the real review build.
+The new attempt-bound pre-sheet path separately reports a caught `not_started`
+outcome when this invocation never called StoreKit, including post-auth
+backgrounding or a lost final-auth response. It never labels that as cancellation
+in the App Store. A different winning attempt and every ambiguous post-SDK outcome
+retain their payment protection; no timeout or missing-history auto-cancel exists.
 Money already recorded by the server requires receipt/status review rather than
 a cancelled message. The original intent creator and organization still govern
 authorization: after payer deletion, loss of ADMIN or departure, a different

@@ -186,7 +186,10 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
   });
 }
 
-export async function authorizeApplePurchase(actor: AppleBillingActor, intentId: string, options: { prepareOnly?: boolean } = {}) {
+export async function authorizeApplePurchase(actor: AppleBillingActor, intentId: string, options: { prepareOnly?: boolean; attemptId?: string } = {}) {
+  const attempt = options.attemptId ? z.string().uuid().safeParse(options.attemptId) : null;
+  const attemptId = attempt?.success ? attempt.data.toLowerCase() : undefined;
+  if (!options.prepareOnly && !attemptId) throw new AppError("applePurchaseAttemptRequired", "BAD_REQUEST", 400);
   const config = appleBillingConfig();
   const environment = appleEnvironmentForOrganization(actor.organizationId, config);
   if (!config.ready) throw new AppError("appleUnavailable", "CONFLICT", 409);
@@ -215,8 +218,10 @@ export async function authorizeApplePurchase(actor: AppleBillingActor, intentId:
     // Product metadata and same-group eligibility are prepared before a sheet
     // can open. Only the second native call reserves a potentially paid result.
     // An authorization is consumed once: retries recover signed receipts and never reopen a sheet.
-    if (!options.prepareOnly) await db.applePurchaseIntent.update({ where: { id: intent.id }, data: { authorizedAt: new Date() } });
-    return presentIntent(intent);
+    if (options.prepareOnly) return { ...presentIntent(intent), attemptId: null };
+    const authorized = await db.applePurchaseIntent.update({ where: { id: intent.id },
+      data: { authorizedAt: new Date(), nativeAttemptId: attemptId! } });
+    return { ...presentIntent(authorized), attemptId: authorized.nativeAttemptId };
   });
 }
 
@@ -492,13 +497,18 @@ export async function acknowledgeApplePurchase(actor: AppleBillingActor, input: 
 }
 
 
-export async function cancelApplePurchaseIntent(actor: AppleBillingActor, intentId: string) {
+export async function cancelApplePurchaseIntent(actor: AppleBillingActor, intentId: string, attemptId?: string) {
   return prisma.$transaction(async (db) => {
     await lockAppleOrganization(db, actor.organizationId);
     await assertAppleBillingActor(actor, db);
     const intent = await db.applePurchaseIntent.findFirst({ where: { id: intentId, organizationId: actor.organizationId, createdById: actor.id } });
     if (!intent) throw new AppError("recordNotFound", "NOT_FOUND", 404);
     const recorded = await db.appleTransaction.count({ where: { intentId: intent.id } });
+    // A retained money obligation takes precedence over terminal cancellation.
+    // Its recovery belongs to signed receipts, including for a losing device.
+    if (recorded) return { canceled: false, recorded: true };
+    if (intent.authorizedAt && (!intent.nativeAttemptId || !attemptId || intent.nativeAttemptId !== attemptId.toLowerCase()))
+      throw new AppError("applePurchaseAttemptMismatch", "CONFLICT", 409);
     const cancellable = !recorded && (intent.status === "PENDING" || (intent.status === "EXPIRED" && !intent.authorizedAt) || (intent.status === "REVIEW" && intent.lastIssue === "applePurchasePendingVerification"));
     if (cancellable) await db.applePurchaseIntent.update({ where: { id: intent.id }, data: { status: "CANCELED", pendingSlot: null, lastIssue: null } });
     return { canceled: !recorded && (cancellable || intent.status === "CANCELED"), recorded: recorded > 0 };

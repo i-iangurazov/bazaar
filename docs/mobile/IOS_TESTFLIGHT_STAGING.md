@@ -152,6 +152,37 @@ unused App Store Connect number. The app has no signature or provisioning
 profile and is **not installable or TestFlight-ready**. Log:
 `staging-device-archive-local-rehearsal.log`.
 
+That archive predates the new attempt-bound pre-sheet recovery protocol. It is
+baseline device-platform evidence, not a current upload candidate. Rebuild the
+final source with the matching server protocol before any signed TestFlight work.
+
+The subsequent attempt-recovery device archive also passed (session 66584,
+exit 0 / `ARCHIVE SUCCEEDED`):
+`Bazaar-Staging-ATTEMPT-RECOVERY-LOCAL-REHEARSAL-unsigned.xcarchive`, under the same
+ignored evidence directory, with **local rehearsal 1.0.0/111112**. It compiles the
+matching UUID authorization, caught pre-SDK `not_started` boundary, v2 journal and
+protection-until-first-authentication branch. The standalone production journal /
+boundary executable passed **57 checks**. The actual archive passes the strict
+staging validator and is refused by the production export path. Its source
+configuration still points at `www`; only the built staging copy uses the preview.
+
+Its read-only audit verifies iPhoneOS arm64 / minimum iOS 15, all 11 plugin classes,
+18 source-matching privacy categories, all three permission languages, no app
+signature/profile and no synthetic StoreKit/XCTest assets. The marker scan covers
+**33 files / 3,788,368 bytes** with **0 findings**, with the same explicitly limited
+marker-scan scope described below. Evidence:
+
+- `staging-device-archive-attempt-recovery.log`.
+- `staging-device-attempt-archive-inspection.json`.
+- `staging-attempt-archive-export-guard.json`, including source hashes and actual
+  WMO thread count 10.
+- `apple-cancellation-journal-attempt-check.log`.
+
+The previous valid archive was preserved and no Simulator, signing, account or
+upload action was performed. This newer archive is still unsigned, not installable
+or TestFlight-ready, and its build number has not been checked in App Store
+Connect. Signed distribution and the physical-device/Sandbox scenarios remain open.
+
 The read-only archive inspection scanned **33 files / 3,770,936 bytes** with no
 forbidden server-secret names, provider-key prefixes, private-key material or
 embedded session values found, and no `.storekit` / XCTest / synthetic fixture

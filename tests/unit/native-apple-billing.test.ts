@@ -119,6 +119,27 @@ describe("Apple native billing boundary", () => {
     await expect(retryAppleCancellations()).rejects.toMatchObject({ code: "APPLE_CANCELLATION_STORAGE_FAILED" });
   });
 
+  it("keeps a caught pre-SDK abort distinct from App Store cancellation and recorded money", async () => {
+    const notStarted = {
+      status: "not_started", cancellationAcknowledged: false, cancellationRecorded: false,
+      error: { code: "APPLE_NETWORK_ERROR" },
+    };
+    native.purchase.mockResolvedValueOnce(notStarted);
+    expect(await purchaseAppleProduct("intent-with-lost-auth-response")).toEqual(notStarted);
+    expect(native.purchase).toHaveBeenCalledWith({ intentId: "intent-with-lost-auth-response" });
+    const recorded = {
+      ...notStarted, cancellationRecorded: true,
+      error: { code: "APPLE_BILLING_CONFLICT", serverCode: "applePurchasePendingVerification" },
+    };
+    native.purchase.mockResolvedValueOnce(recorded);
+    expect(await purchaseAppleProduct("intent-recorded-elsewhere")).toEqual(recorded);
+    native.purchase.mockRejectedValueOnce({ code: "APPLE_NETWORK_ERROR" });
+    await expect(purchaseAppleProduct("unknown-sdk-outcome")).rejects.toMatchObject({ code: "APPLE_NETWORK_ERROR" });
+    expect(native.finishTransaction).not.toHaveBeenCalled();
+    expect(native.restorePurchases).not.toHaveBeenCalled();
+    expect(native.retryCancellations).not.toHaveBeenCalled();
+  });
+
   it("preserves exact transaction IDs and server refusal for later recovery", async () => {
     native.finishTransaction.mockRejectedValueOnce({ code: "APPLE_BILLING_CONFLICT", data: { serverCode: "billingAppleTransactionNeedsReview" } });
     await expect(finishAppleTransaction(transaction.transactionId)).rejects.toMatchObject({

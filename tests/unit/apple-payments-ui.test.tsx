@@ -188,6 +188,7 @@ describe("iOS Apple checkout and recovery", () => {
     async (locale) => {
       const { container } = mount(locale);
       await screen.findByText(product.displayPrice);
+      expect(screen.getByRole("link", { name: messages[locale].billingApple.privacy }).getAttribute("href")).toBe("/privacy");
       expect(container.querySelector("[data-apple-price]")?.textContent).not.toContain("2000");
       expect(screen.getAllByText("Synthetic organization").length).toBe(1);
       const dialog = await openConsent();
@@ -258,13 +259,14 @@ describe("iOS Apple checkout and recovery", () => {
     expect(mock.cancel).not.toHaveBeenCalled();
   });
 
-  it("releases only a definitively cancelled intent", async () => {
+  it("does not replace the native attempt acknowledgement with a generic web cancellation", async () => {
     mock.purchase.mockResolvedValueOnce({ status: "cancelled", cancellationAcknowledged: false, cancellationRecorded: false });
     mount();
     const dialog = await openConsent();
     fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
-    await screen.findByText(ru.billingApple.cancelled);
-    expect(mock.cancel).toHaveBeenCalledWith({ intentId: "native-authorized-intent" });
+    await screen.findByText(ru.billingApple.cancellationPending);
+    expect(mock.cancel).not.toHaveBeenCalled();
+    expect(screen.queryByText(ru.billingApple.cancelled)).toBeNull();
     expect(mock.finish).not.toHaveBeenCalled();
   });
 
@@ -281,7 +283,6 @@ describe("iOS Apple checkout and recovery", () => {
 
   it("keeps an unacknowledged definite cancellation pending and asks native recovery to retry", async () => {
     mock.purchase.mockResolvedValueOnce({ status: "cancelled", cancellationAcknowledged: false, cancellationRecorded: false });
-    mock.cancel.mockRejectedValueOnce(new Error("network-down"));
     const retry = vi.fn();
     window.addEventListener("bazaar:apple-retry", retry);
     try {
@@ -293,6 +294,7 @@ describe("iOS Apple checkout and recovery", () => {
       expect(retry).toHaveBeenCalledTimes(1);
       expect(mock.confirm).not.toHaveBeenCalled();
       expect(mock.finish).not.toHaveBeenCalled();
+      expect(mock.cancel).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener("bazaar:apple-retry", retry);
     }
@@ -306,6 +308,37 @@ describe("iOS Apple checkout and recovery", () => {
     await screen.findByText(ru.billingApple.cancellationRecorded);
     expect(screen.queryByText(ru.billingApple.cancelled)).toBeNull();
     expect(mock.cancel).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("describes a pre-sheet abort distinctly with native acknowledgement=%s", async (acknowledged) => {
+    mock.purchase.mockResolvedValueOnce({
+      status: "not_started", cancellationAcknowledged: acknowledged, cancellationRecorded: false,
+      error: { code: "APPLE_APP_NOT_ACTIVE" },
+    });
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    const copy = acknowledged ? ru.billingApple.purchaseNotStarted : ru.billingApple.purchaseNotStartedPending;
+    await screen.findByText(copy.replace("{reason}", ru.errors.APPLE_APP_NOT_ACTIVE));
+    expect(screen.queryByText(ru.billingApple.cancelled)).toBeNull();
+    expect(mock.cancel).not.toHaveBeenCalled();
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+  });
+
+  it("keeps another device's recorded money distinct from this pre-sheet abort", async () => {
+    mock.purchase.mockResolvedValueOnce({
+      status: "not_started", cancellationAcknowledged: false, cancellationRecorded: true,
+      error: { code: "APPLE_SERVER_ERROR", serverCode: "applePurchasePendingVerification" },
+    });
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.cancellationRecorded);
+    expect(screen.queryByText(ru.billingApple.cancelled)).toBeNull();
+    expect(mock.cancel).not.toHaveBeenCalled();
+    expect(mock.confirm).not.toHaveBeenCalled();
     expect(mock.finish).not.toHaveBeenCalled();
   });
 

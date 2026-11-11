@@ -188,7 +188,9 @@ export function ApplePayments({
         ? error.serverCode
         : error instanceof Error
           ? error.message
-          : "";
+          : error && typeof error === "object" && "code" in error && typeof error.code === "string"
+            ? error.code
+            : "";
     return key && errors.has(key) ? errors(key) : t("operationFailed");
   };
   const refresh = async () => {
@@ -245,17 +247,15 @@ export function ApplePayments({
       }
       setConsentOpen(false);
       setAccepted(false);
-      if (result.status === "cancelled") {
-        let acknowledged = result.cancellationAcknowledged;
-        let recorded = result.cancellationRecorded;
-        if (!acknowledged && !recorded) {
-          try {
-            const response = await cancel.mutateAsync({ intentId: authorization.intentId });
-            acknowledged = response.canceled; recorded = response.recorded;
-          } catch { /* Native keeps the terminal cancellation until a durable ACK. */ }
-        }
+      if (result.status === "cancelled" || result.status === "not_started") {
+        const acknowledged = result.cancellationAcknowledged;
+        const recorded = result.cancellationRecorded;
+        // Authorized cancellations belong to the native attempt. The website
+        // cannot use a generic RPC to cancel a different device's live attempt.
         requestKey.current = null;
-        setNotice(t(recorded ? "cancellationRecorded" : acknowledged ? "cancelled" : "cancellationPending"));
+        setNotice(recorded ? t("cancellationRecorded") : result.status === "not_started"
+          ? t(acknowledged ? "purchaseNotStarted" : "purchaseNotStartedPending", { reason: messageFor(result.error) })
+          : t(acknowledged ? "cancelled" : "cancellationPending"));
         if (!acknowledged || recorded) window.dispatchEvent(new Event("bazaar:apple-retry"));
       } else if (result.status === "pending") {
         setNotice(t("pending"));
@@ -631,7 +631,7 @@ export function ApplePayments({
               <a href={catalog.data.termsUrl} target="_blank" rel="noopener noreferrer">
                 {t("terms")}
               </a>
-              <a href="https://www.bazaar.kg/privacy" target="_blank" rel="noopener noreferrer">
+              <a href="/privacy" target="_blank" rel="noopener noreferrer">
                 {t("privacy")}
               </a>
             </div>

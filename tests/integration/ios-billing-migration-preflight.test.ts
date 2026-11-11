@@ -15,7 +15,7 @@ const audit = async () => {
   const { databaseUrl } = assertSafeTestDatabaseReset();
   const connection = new URL(databaseUrl);
   const args = ["--url-env", "EXPLICIT_OWNED_CI_AUDIT_URL", "--expect-host", connection.hostname, "--expect-port", connection.port || "5432",
-    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_140"];
+    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_NATIVE_ATTEMPT"];
   if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
   return runIosBillingPreflight(parsePreflightTarget(args, { EXPLICIT_OWNED_CI_AUDIT_URL: databaseUrl }));
 };
@@ -39,7 +39,7 @@ const seedWebCredit = async () => {
   return { ...f, lot };
 };
 
-describeDb("migration 139/140 aggregate preflight on explicitly owned PostgreSQL", () => {
+describeDb("named Apple migration aggregate preflight on explicitly owned PostgreSQL", () => {
   beforeEach(resetDatabase);
 
   it("audits legacy, current and lifetime records without changing financial rows or disclosing identities", async () => {
@@ -58,11 +58,12 @@ describeDb("migration 139/140 aggregate preflight on explicitly owned PostgreSQL
     await prisma.subscriptionContract.create({ data: { organizationId: lifetime.id, catalogVersion: "2026-11", lifetimeAccess: true, termsSnapshot: createContractTerms("2026-11") } });
     const before = await accountingSnapshot();
     const result = await audit();
-    expect(result).toMatchObject({ ok: true, schemaStage: "POST_140", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
+    expect(result).toMatchObject({ ok: true, schemaStage: "POST_NATIVE_ATTEMPT", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
     for (const name of ["legacy_contracts_total", "lifetime_contracts_preserved", "future_web_periods_preserved", "legacy_invoices_without_purchase_snapshot"])
       expect(result.checks.find((check) => check.name === name)?.count).toBe(1);
     expect(result.checks.find((check) => check.name === "current_contracts_total")?.count).toBe(2);
-    for (const name of ["required_139_constraints_missing_or_unvalidated", "required_140_constraints_missing_or_unvalidated",
+    for (const name of ["required_privacy_constraints_missing_or_unvalidated", "required_lifecycle_constraints_missing_or_unvalidated",
+      "required_native_attempt_constraint_missing", "required_native_attempt_unique_index_missing", "native_attempt_without_authorization",
       "required_financial_privacy_triggers_missing_or_disabled", "required_apple_unique_indexes_missing_or_invalid", "reviewed_guard_function_bodies_changed"])
       expect(result.checks.find((check) => check.name === name)?.count).toBe(0);
     expect(await accountingSnapshot()).toEqual(before);

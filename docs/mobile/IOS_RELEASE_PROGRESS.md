@@ -3,6 +3,10 @@
 Started: 2026-11-11 (Asia/Bishkek).
 Status: **in progress; not ready for submission or release**.
 
+Current website baseline: merged `origin/main` through `be5a9375` (including the
+five newer GoPay/manual bank refund changes) into `codex/playground` at
+`fabf2227`. Main/customer deployments were not changed by this iOS work.
+
 ## Scope and boundaries
 
 The owner-approved goal covers the complete current Bazaar iOS application,
@@ -295,3 +299,47 @@ not requested again.
   resource-setting experiments were stopped, the working release settings were
   restored, and the valid original unsigned archive was preserved. Do not claim
   that this archive's compiler ran with only two internal threads.
+
+## Current website and native-attempt recovery checkpoint
+
+- The interrupted full run completed 97 files / 1,165 tests without a failure
+  before the five newly fetched website commits were integrated. It was stopped
+  deliberately to avoid spending laptop resources on the superseded snapshot;
+  this is not a full-suite pass.
+- The latest merge preserves manual bank refund history/MRR treatment and Apple
+  currency/source separation. Fresh locked operator authorization also prevents
+  an already-waiting refund request from acting after the operator is deleted,
+  deactivated or loses platform authorization.
+- The new `20261111140000_apple_native_attempt_recovery` migration binds one
+  immutable native attempt UUID to final sheet authorization. Caught failures
+  before any StoreKit invocation are durably retried with that UUID. A different
+  device cannot cancel the winner; recorded money takes precedence. The UI uses
+  `not_started` separately from App Store cancellation and never supplies a
+  generic web cancellation for an authorized native attempt. Hard process death
+  before local proof remains conservative REVIEW.
+- All 142 current migrations applied to the owned local CI database and the
+  separate seeded remote Preview database. Applied earlier SQL was unchanged.
+- Latest financial/auth/native-attempt/UI/preflight group passed 17 files / 250
+  tests. Additional full-suite verification follows the final source freeze.
+- Production-source native journal/boundary executable passed 57 checks. The
+  latest unsigned iPhoneOS archive (local rehearsal `1.0.0/111112`) compiled and
+  its actual bundle/origin/18-category manifest/plugins were inspected. The safe
+  marker scan reported zero findings and no synthetic StoreKit assets. The real
+  archive validator rejected a production export of this staging artifact.
+- A separate owned database exercised the merged pre-Apple baseline (139
+  migrations) through the complete named Apple chain (142). All 43 original
+  financial, access, quota, auth, bank refund and audit rows matched exactly;
+  nine checks passed, including immutable financial guards and no created Apple
+  money. The extra database and temporary files were removed. This synthetic
+  preservation exercise does not authorize or replace a customer preflight.
+- Latest integrated typecheck, lint and translation validation all passed.
+  Production dependency audit now reports zero findings: the newly introduced
+  transitive CLI-config Zod was pinned to the already used patched 4.6.7 version
+  for [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+- The native-reachable public purchase FAQ now directs iOS users to in-app Apple
+  billing, uses neutral copy before hydration and preserves the web answer.
+  Its focused cases are included in the upcoming full run. Preview privacy links
+  use the same host's current policy.
+- Cloud web build/deployment and actual Preview storage/login/UI checks remain.
+  Actual product registration/prices, commercial change-model approval, signing,
+  Sandbox/TestFlight/iPhone checks and release authorization remain open.

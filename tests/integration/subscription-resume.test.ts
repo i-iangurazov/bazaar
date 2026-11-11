@@ -38,7 +38,7 @@ describeDb("fresh validation of saved GoPay payment links", () => {
         subscriptionGroupId: "synthetic-resume-group", approved: true }]) })) vi.stubEnv(key, value);
     const intent = await createApplePurchaseIntent(actor(), { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW",
       idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
-    await authorizeApplePurchase(actor(), intent.intentId);
+    await authorizeApplePurchase(actor(), intent.intentId, { attemptId: randomUUID() });
     const signed = syntheticAppleTransaction({ appAccountToken: intent.appAccountToken, productId: intent.productId,
       type: Type.AUTO_RENEWABLE_SUBSCRIPTION, subscriptionGroupIdentifier: "synthetic-resume-group", purchaseDate: Date.now() - 120_000, expiresDate: Date.now() - 60_000 });
     await applyAppleTransaction(await syntheticAppleVerifier().transaction(signed), { organizationId: f.org.id, intentId: intent.intentId, source: "CLIENT" });
@@ -116,7 +116,7 @@ describeDb("fresh validation of saved GoPay payment links", () => {
     const preview = await getApplePurchasePreview(actor(), { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" });
     const intent = await createApplePurchaseIntent(actor(), { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW", quoteToken: preview.quoteToken!,
       idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
-    await authorizeApplePurchase(actor(), intent.intentId);
+    await authorizeApplePurchase(actor(), intent.intentId, { attemptId: randomUUID() });
     const purchaseDate = Date.now();
     await applyAppleTransaction(await syntheticAppleVerifier().transaction(syntheticAppleTransaction({ appAccountToken: intent.appAccountToken,
       productId: intent.productId, purchaseDate })), { organizationId: f.org.id, intentId: intent.intentId, source: "CLIENT" });
