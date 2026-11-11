@@ -11,6 +11,12 @@ import { canAccessAppRoute, getRoleHomePath } from "./lib/roleAccess";
 import { legalDraftPreviewAllowed } from "./lib/legalPreview";
 import { legalPublicationState } from "./lib/legalPublication";
 import {
+  isMarketingLandingPath,
+  marketingHomePath,
+  marketingLocaleFromPath,
+  marketingLocaleHeader,
+} from "./lib/marketingSeo";
+import {
   acquisitionCookieName,
   acquisitionFromSearch,
   acquisitionMaxAge,
@@ -83,7 +89,16 @@ export const middleware = async (request: NextRequest) => {
   const segments = pathname.split("/");
   const maybeLocale = segments[1];
   const pathLocale = normalizeLocale(maybeLocale);
-  if (pathLocale) {
+  const marketingLocale = marketingLocaleFromPath(pathname);
+  if (marketingLocale && maybeLocale === "ky") {
+    const nextUrl = request.nextUrl.clone();
+    nextUrl.pathname = marketingHomePath(marketingLocale);
+    const redirectResponse = NextResponse.redirect(nextUrl);
+    redirectResponse.headers.set("x-request-id", requestId);
+    redirectResponse.cookies.set("NEXT_LOCALE", marketingLocale, localeCookieOptions);
+    return redirectResponse;
+  }
+  if (pathLocale && !marketingLocale) {
     const rest = segments.slice(2).join("/");
     const nextUrl = request.nextUrl.clone();
     nextUrl.pathname = rest ? `/${rest}` : "/";
@@ -127,11 +142,14 @@ export const middleware = async (request: NextRequest) => {
     }
   }
 
-  const response = NextResponse.next();
+  const forwardedHeaders = new Headers(request.headers);
+  forwardedHeaders.delete(marketingLocaleHeader);
+  if (marketingLocale) forwardedHeaders.set(marketingLocaleHeader, marketingLocale);
+  const response = NextResponse.next({ request: { headers: forwardedHeaders } });
   // First tagged visit wins for 30 days. Never track private app/catalog pages,
   // prefetches or privacy opt-outs; capture happens before any signup navigation.
   if (
-    (pathname === "/" || pathname === "/signup") &&
+    (isMarketingLandingPath(pathname) || pathname === "/signup") &&
     !request.headers.has("next-router-prefetch") &&
     request.headers.get("purpose") !== "prefetch"
   ) {
@@ -149,7 +167,7 @@ export const middleware = async (request: NextRequest) => {
         });
     }
   }
-  const resolvedLocale = resolveLocale(request);
+  const resolvedLocale = marketingLocale ?? resolveLocale(request);
   const existingLocale = request.cookies.get("NEXT_LOCALE")?.value;
   if (existingLocale !== resolvedLocale) {
     response.cookies.set("NEXT_LOCALE", resolvedLocale, localeCookieOptions);

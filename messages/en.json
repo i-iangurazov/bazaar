@@ -588,15 +588,15 @@
     "accessTitle": "Your access",
     "plans": {
       "starter": {
-        "name": "Starter",
+        "name": "Новичок",
         "short": "Start"
       },
       "business": {
-        "name": "Business",
+        "name": "Бизнесмен",
         "short": "Growth"
       },
       "enterprise": {
-        "name": "Enterprise",
+        "name": "Монополист",
         "short": "Network"
       },
       "trial": "Trial",
@@ -7680,6 +7680,15 @@
     "connectorModeStep3": "After pairing, print jobs can be sent directly to the device.",
     "readOnly": "Read-only. Editing is available to ADMIN and MANAGER."
   },
+  "analyticsConsent": {
+    "title": "Allow Google Analytics?",
+    "description": "It helps us understand which pages lead to registration. Google uses cookies. We do not send information entered in forms. You can continue without analytics.",
+    "allow": "Allow",
+    "decline": "Without analytics",
+    "privacy": "About your data",
+    "settings": "Analytics settings",
+    "browserChoice": "Your browser requests no analytics. We respect that choice."
+  },
   "privacy": {
     "metaTitle": "Privacy policy — Bazaar",
     "metaDescription": "How Bazaar handles and protects data in its web and mobile applications.",
@@ -7687,11 +7696,13 @@
     "eyebrow": "Privacy",
     "title": "Bazaar privacy policy",
     "intro": "This policy describes data processing in the Bazaar web application, PWA and supported mobile versions. Processing depends on the features your organization uses.",
-    "updated": "Updated: November 7, 2026",
+    "updated": "Updated: November 11, 2026",
     "dataTitle": "Data Bazaar uses",
     "dataBody": "Account, organization and location information; products, photographs, stock, documents, sales, orders and contacts entered by authorized users; security and diagnostic events. Voice, images and other attachments are processed when you submit them to the relevant feature. Device information and push tokens support selected notifications.",
     "acquisitionTitle": "Acquisition source",
-    "acquisitionBody": "When you follow a campaign-tagged link, Bazaar may keep the first source in the bazaar_acquisition cookie for 30 days and attach it to a submitted access request or a new account. Only source, medium, campaign and content labels and the visit time are stored. Full page URLs and advertising click identifiers are not collected. Labels must not contain personal data. Do Not Track and Global Privacy Control signals disable storage. You can delete the cookie in your browser; contact support to remove a stored acquisition source.",
+    "analyticsTitle": "Optional Google Analytics",
+    "analyticsBody": "If Google Analytics is configured on the site, it loads only after you allow it. It helps measure public page visits, WhatsApp link clicks and successful registration steps. Google receives technical connection data and uses its own analytics cookies. Campaign information is limited to reviewed source, medium, campaign, creative and keyword-group labels. Unrecognized labels are not sent. We do not send form contents, names, email addresses, phone numbers, legal or store details, registration tokens or full referral URLs. The private application is not tracked. Advertising personalization is disabled. Your choice is stored in your browser for up to 180 days and can be changed using Analytics settings on public pages. Declining prevents the Google script from loading; withdrawing consent disables new events and removes analytics cookies. Do Not Track and Global Privacy Control override consent. The acquisition-source measurement described above operates separately.",
+    "acquisitionBody": "When you follow a campaign-tagged link, Bazaar may keep the first source in the bazaar_acquisition cookie for 30 days and attach it to a submitted access request or a new account. Only source, medium, campaign, content and keyword labels and the visit time are stored. Full page URLs and advertising click identifiers are not collected. Labels must not contain personal data. Do Not Track and Global Privacy Control signals disable storage. You can delete the cookie in your browser; contact support to remove a stored acquisition source.",
     "purposeTitle": "Why the data is needed",
     "purposeBody": "Data supports authentication and access management, authorized business operations, record storage and synchronization, payment for Bazaar, selected notifications and integrations, requested AI features, service security and troubleshooting.",
     "permissionsTitle": "Camera and notifications",

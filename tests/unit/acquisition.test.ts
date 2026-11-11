@@ -27,7 +27,7 @@ describe("campaign acquisition", () => {
     expect(parseAcquisition(JSON.stringify(value), new Date("2026-11-02"))).toBeUndefined();
     expect(parseAcquisition(JSON.stringify(value), new Date("2026-12-03"))).toBeUndefined();
   });
-  it.each(["/", "/signup"])("captures first tagged touch on %s and preserves it", async (path) => {
+  it.each(["/", "/ru", "/kg", "/en", "/signup"])("captures first tagged touch on %s and preserves it", async (path) => {
     const response = await middleware(new NextRequest(`https://www.bazaar.kg${path}?${tagged}`));
     const cookie = response.cookies.get(acquisitionCookieName)!;
     expect(parseAcquisition(cookie.value)?.utm_content).toBe("r01_ru");
@@ -60,8 +60,9 @@ describe("campaign acquisition", () => {
     },
   );
   it("retains UTM across locale redirect then captures at the destination", async () => {
-    const response = await middleware(new NextRequest(`https://www.bazaar.kg/kg?${tagged}`));
+    const response = await middleware(new NextRequest(`https://www.bazaar.kg/ky?${tagged}`));
     const location = response.headers.get("location")!;
+    expect(new URL(location).pathname).toBe("/kg");
     expect(new URL(location).searchParams.get("utm_content")).toBe("r01_ru");
     const landing = await middleware(new NextRequest(location));
     expect(parseAcquisition(landing.cookies.get(acquisitionCookieName)?.value)?.utm_source).toBe(

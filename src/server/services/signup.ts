@@ -67,6 +67,7 @@ export const createSignup = async (input: {
   attribution?: Acquisition;
 }): Promise<{
   sent: boolean;
+  accountCreated: boolean;
   nextPath?: string;
   verifyLink?: string | null;
   verificationEmailSent?: boolean;
@@ -114,7 +115,7 @@ export const createSignup = async (input: {
       existingUser.email,
       existingUser.organizationId,
     );
-    return { sent: true, nextPath };
+    return { sent: true, accountCreated: false, nextPath };
   }
 
   const passwordHash = await bcrypt.hash(input.password, 10);
@@ -132,7 +133,7 @@ export const createSignup = async (input: {
   });
 
   const nextPath = await createRegistrationNextPath(user.id, user.email, user.organizationId);
-  return { sent: true, nextPath };
+  return { sent: true, accountCreated: true, nextPath };
 };
 
 const normalizeCode = (value: string) => value.trim().toUpperCase().replace(/\s+/g, "-");

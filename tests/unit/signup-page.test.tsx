@@ -18,7 +18,10 @@ const mocks = vi.hoisted(() => ({
   signupMutate: vi.fn(),
   requestMutate: vi.fn(),
   requestSuccess: null as (() => void) | null,
+  signupSuccess: null as ((result: { accountCreated: boolean; nextPath?: string }, variables: { preferredLocale: string }) => Promise<void>) | null,
   signupError: null as ((error: { message: string }) => void) | null,
+  track: vi.fn(),
+  navigate: vi.fn((path: string, replace: (path: string) => void) => replace(path)),
   replace: vi.fn(),
   toast: vi.fn(),
 }));
@@ -34,6 +37,7 @@ vi.mock("@/components/language-switcher", () => ({
   LanguageSwitcher: () => <span>Interface language</span>,
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
+vi.mock("@/lib/marketingAnalytics", () => ({ trackMarketingEvent: mocks.track, replaceAfterMarketingSuccess: mocks.navigate }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     publicAuth: {
@@ -45,8 +49,9 @@ vi.mock("@/lib/trpc", () => ({
         },
       },
       signup: {
-        useMutation: (options: { onError: (error: { message: string }) => void }) => {
+        useMutation: (options: { onError: (error: { message: string }) => void; onSuccess: NonNullable<typeof mocks.signupSuccess> }) => {
           mocks.signupError = options.onError;
+          mocks.signupSuccess = options.onSuccess;
           return { mutate: mocks.signupMutate, isLoading: false };
         },
       },
@@ -66,7 +71,20 @@ describe("signup mode transitions", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it("measures a new account after server success and does not count onboarding resumption", async () => {
+    mocks.modeQuery.isLoading = false;
+    mocks.modeQuery.data = { mode: "open" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    render(<SignupPage />);
+    expect(mocks.track).not.toHaveBeenCalled();
+    await act(async () => mocks.signupSuccess?.({ accountCreated: false, nextPath: "/register-business/resume-token" }, { preferredLocale: "ru" }));
+    expect(mocks.track).not.toHaveBeenCalled();
+    await act(async () => mocks.signupSuccess?.({ accountCreated: true, nextPath: "/register-business/new-token" }, { preferredLocale: "ru" }));
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith("sign_up");
+    expect(mocks.navigate).toHaveBeenLastCalledWith("/register-business/new-token", expect.any(Function));
+  });
 
   it("translates displayed validation without clearing values or changing the selected account language", () => {
     mocks.localizeErrors = true;
@@ -195,6 +213,7 @@ describe("signup mode transitions", () => {
     });
     expect(mocks.signupMutate).not.toHaveBeenCalled();
     act(() => mocks.requestSuccess?.());
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith("access_request_submitted");
     expect(screen.getByText("signup.submittedRequest")).toBeTruthy();
     expect(screen.getByRole("link", { name: "signup.backToLogin" }).getAttribute("href")).toBe(
       "/login",

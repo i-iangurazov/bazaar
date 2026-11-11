@@ -11,6 +11,7 @@ import { loadPublicSellerLegalName } from "@/server/legal/seller";
 import { legalCopy } from "@/content/legal";
 import { legalDocumentIds } from "@/content/legal/types";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { marketingHomePath, marketingSiteUrl } from "@/lib/marketingSeo";
 import { MarketingPricing } from "./MarketingPricing";
 
 import { FeatureShowcase } from "./FeatureShowcase";
@@ -154,12 +155,32 @@ export const MarketingLanding = async () => {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "Bazaar",
+    "@id": `${marketingSiteUrl}/#software`,
+    name: "BAZAAR",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web, iOS PWA, Android PWA",
     description: copy.meta.structuredDescription,
     inLanguage: locale === "kg" ? "ky" : locale,
-    url: "https://www.bazaar.kg/",
+    url: `${marketingSiteUrl}${marketingHomePath(locale)}`,
+    publisher: {
+      "@type": "Organization",
+      "@id": `${marketingSiteUrl}/#organization`,
+      name: "BAZAAR",
+      url: `${marketingSiteUrl}/`,
+      logo: {
+        "@type": "ImageObject",
+        url: `${marketingSiteUrl}/brand/logo.png`,
+        width: 724,
+        height: 181,
+      },
+      sameAs: ["https://www.instagram.com/bazaar.pos/"],
+      contactPoint: {
+        "@type": "ContactPoint",
+        contactType: "customer support",
+        telephone: "+996709911300",
+        email: "support@bazaar.kg",
+      },
+    },
     offers: plans.map((plan) => ({
       "@type": "Offer",
       name: t(`plans.${plan.code.toLowerCase()}.name`),

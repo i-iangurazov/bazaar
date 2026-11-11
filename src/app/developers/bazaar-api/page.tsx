@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: "BAZAAR API v1 — документация для интеграций",
   description:
     "Публичная документация BAZAAR API v1 для интеграции товаров, цен, остатков, заказов и клиентов с внешними системами и маркетплейсами.",
+  alternates: { canonical: "https://www.bazaar.kg/developers/bazaar-api" },
   robots: {
     index: true,
     follow: true,

@@ -4,6 +4,7 @@ import { useId, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { defaultLocale, locales, normalizeLocale } from "@/lib/locales";
+import { marketingLanguageDestination } from "@/lib/marketingSeo";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import styles from "./marketing.module.css";
 
@@ -28,7 +29,15 @@ export function MarketingLocaleSwitcher() {
         body: JSON.stringify({ locale: next }),
       });
       if (!response.ok) throw new Error();
-      startTransition(() => router.refresh());
+      startTransition(() => {
+        const destination = marketingLanguageDestination(next, window.location.href);
+        if (destination) {
+          // Re-render the root locale provider as well as the landing itself.
+          window.location.assign(destination);
+        } else {
+          router.refresh();
+        }
+      });
     } catch {
       setFailed(true);
     } finally {

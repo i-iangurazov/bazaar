@@ -34,6 +34,7 @@ describe("privacy matches subscription, AI and real seller processing", () => {
         "data",
         "purpose",
         "acquisition",
+        "analytics",
         "permissions",
         "security",
         "sharing",
