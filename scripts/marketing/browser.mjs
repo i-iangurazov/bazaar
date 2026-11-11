@@ -232,7 +232,7 @@ try {
       );
       assert.equal(
         new URL(await page.locator('link[rel="canonical"]').getAttribute("href")).href,
-        "https://www.bazaar.kg/",
+        `https://www.bazaar.kg/${locale}`,
       );
       await noOverflow(page, label);
       await verifyPricingPresentation(page, label);
