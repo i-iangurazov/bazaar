@@ -92,6 +92,17 @@ The agent rechecked the actual Simulator application after restarting it:
 - The counts list, dismissible introduction, new-count dialog and Cancel worked.
   No count was created or posted. Profile data, preferences and privacy controls
   were reachable by scrolling.
+- Normal sign-out returned to login. The invite-only registration form rendered
+  in RU/KG/EN; its new login link returned to the working login page. Invitation
+  entry showed its validation error and retained a usable return link.
+
+The native More menu also exposed a browser-PWA installation card inside the
+already installed app. Its install button now uses the existing hydrated native
+platform detection: icon/card/guidance stay hidden in iOS/Android while web
+installation remains available. Three scoped suites passed 18 checks (including
+native hiding and the real web prompt callback), followed by typecheck, lint and
+translation validation. Those UI-only tests explicitly disabled DB execution;
+actual native visibility still needs its new Preview deployment.
 
 The account-deletion check exposed another real defect: a tall default size-md
 dialog can still put its title/close under the notch. It was dismissed without
