@@ -1,8 +1,8 @@
 # Bazaar iOS privacy evidence and declaration worksheet
 
-Audited on 2026-11-11 against the compiled simulator app and this branch. These are evidence-backed draft answers for the release owner to review; nothing has been submitted to App Store Connect.
+Initially audited on 2026-11-11 against the compiled Simulator app, with the signed distribution IPA checkpoint below added from the actual `1.0.0/111120` artifact. These are evidence-backed draft answers for the release owner to review. This audit has not accessed, submitted or certified App Store Connect privacy answers or export classification.
 
-## Compiled artifact inspected
+## Initial Simulator artifact inspected — historical checkpoint
 
 Artifact: `.local/ios-release-20261111/DerivedData/Build/Products/Debug-iphonesimulator/App.app`, `kg.bazaar.app`, version `1.0.0`, build `1`. This is a simulator/test build, not a signed distribution archive. Its test-framework contents must not be treated as the shipping SDK inventory.
 
@@ -21,7 +21,24 @@ The initial bundle omitted app-level collected-data dictionaries, an actual disc
 
 After that initial bundle inspection, the native owner added the baseline to `ios/App/App/PrivacyInfo.xcprivacy` and rebuilt the simulator app. An independent property-list read and SHA-256 comparison confirms the source and actual packaged file match: `d8b53410b91be51749ded955acdbac4bb000c4181bf4a49fc8455bb538ac6532`. Both contain 18 distinct categories with all four dictionary keys: the table below plus Audio Data, Emails/Text Messages and Performance Data. Linkage is conservatively true, tracking false; search/attribution use Analytics, authenticated technical/product events use Functionality and Analytics, and account/content/device/purchase types use Functionality. Absent location/address-book/advertising/crash/support categories were not added. This verifies packaging in the simulator artifact, not a distribution archive or runtime network trace. App Store Connect answers remain unsubmitted; processor conditions below still require review.
 
-The StoreKit cancellation-recovery journal stores only its format version, an opaque purchase-intent identifier and the compiled canonical origin in app-owned Application Support. The file uses complete protection, private file/directory permissions and backup exclusion. It does not persist cookies, signed transactions, authorization tokens, or user/organization IDs, and does not introduce UserDefaults access. These are source/test evidence for local retry bookkeeping, not a new claim that purchase data is unlinked or that server-side purchase history is absent.
+The legacy StoreKit cancellation-recovery journal remains separate: it stores its format version, opaque purchase-intent identifier, canonical origin and optional native attempt UUID. It contains no signed Apple transaction/renewal evidence, cookies, account passwords or user/organization IDs. Its current files use protection until first user authentication, atomic writes, private file/directory permissions and backup exclusion, allowing an earned callback to persist after the device has been unlocked once. It does not introduce UserDefaults access.
+
+The newer `earned-completions.json` journal in app-owned Application Support has a different scope. It retains an already earned, attempt-bound native completion for durable server acknowledgement. For a deferred StoreKit result it can contain the signed Apple transaction and renewal JWS, app-account token, product/source context and public-key credential metadata. It must not be described as another no-JWS cancellation file. It uses OS file protection until first user authentication, atomic writes, `0600` file/`0700` directory permissions and exclusion from backup. The private signing key, cookies and account passwords do not enter that file.
+
+The per-attempt P-256 private key is generated with Apple's CryptoKit and stored through Security in a non-synchronizing Keychain item with `AfterFirstUnlockThisDeviceOnly` accessibility. This is not a Secure Enclave or App Attest claim. Only its public credential and a scoped signature are used in the completion protocol; the private key is not exposed to JavaScript. These linked financial/authentication records remain part of the Purchase History/User ID/Device ID functionality inventory, not an unlinked or no-collection claim.
+
+## Signed distribution IPA checkpoint — 2026-11-11
+
+The actual local export at `.local/ios-release-20261111/local-export-staging-111120-56c744aa/export/App.ipa` and its unpacked `Payload/App.app` were inspected read-only: source `56c744aa`, version `1.0.0`, build `111120`, fixed staging Preview origin and internal-TestFlight-only marker. This is the signed distribution artifact, not the earlier Simulator bundle. Its initial web URL is `https://bazaar-ios-preview-20261111.vercel.app/dashboard`; it does not establish current production-web processor settings or a runtime network capture.
+
+The private evidence file `.local/ios-release-20261111/final-ipa-privacy-audit.json` records **eight passed checks and zero demonstrated material defects within that static scope**, with paths and SHA-256 hashes. It records:
+
+- Three packaged privacy manifests: app, Capacitor and Cordova. The app manifest is byte-identical to the reviewed source baseline `d8b53410b91be51749ded955acdbac4bb000c4181bf4a49fc8455bb538ac6532`, with 18 distinct collected-data types, all linked and nontracking, and the reviewed Functionality/Analytics purposes. Capacitor and Cordova carry their own manifests; empty SDK data arrays do not replace Bazaar's own disclosures.
+- The app-owned file metadata reason `C617.1`. Targeted imports/selectors in the app and three embedded framework executables evidenced file-date access already covered by that declaration; no additional listed required-reason API was demonstrated by that bounded check. It is not exhaustive disassembly or certification of every vendor's runtime behavior.
+- All nine camera, microphone and photo purpose strings in the actual Russian, Kyrgyz and English resources, matching source values, plus the English base purposes.
+- Actual native links/imports for Security, CryptoKit, P-256 signing, SHA-256 and Keychain operations, consistent with the separate completion-key/journal behavior above. `ITSAppUsesNonExemptEncryption=false` remains an observed plist declaration; this inspection does not approve an export exemption or classification.
+
+The audit did not execute the app on an iPhone, exercise permission prompts or AI transmissions, inspect customer/provider settings, or access App Store Connect. Owner App Privacy and export declarations, actual SDK/processor practices and physical-device/runtime checks remain separate. The earlier production public-page/static tracker inspection below retains its original scope; it is not a fresh authenticated or production-web network trace.
 
 ## Evidence-based App Privacy answers
 
@@ -86,4 +103,4 @@ Based on this inspected code and public response, no cross-company tracking path
 
 ## Remaining verification
 
-The simulator rebuild packages the factual collection baseline. Archive the distribution build in the serialized verification queue and inspect its actual packaged manifests again. The owner should reconcile that report, the table above, final enabled web features and processor agreements with App Store Connect's questionnaire. This audit does not submit or certify that questionnaire and does not claim App Review acceptance.
+The signed `111120` IPA now packages the same factual collection baseline, and its scoped static audit is recorded above. Reconcile the actual artifact, the table above, final enabled hosted-web features, processor agreements and native completion-proof storage with the owner's App Store Connect questionnaire and export answers. Physical permission behavior and actual runtime/network checks remain to be observed separately. This audit does not submit or certify those declarations and does not claim App Review acceptance.
