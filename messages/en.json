@@ -1004,7 +1004,7 @@
       "bankTransferredOn": "Actual bank-transfer date",
       "bankDateHint": "Date on the bank confirmation in Bishkek, from the original payment day through today.",
       "reason": "Grounds and explanation (10–500 characters)",
-      "confirm": "I verified the recipient, amount actually transferred and bank document; the reference includes the original order_id. The transfer is completed.",
+      "confirm": "I verified the recipient, amount actually transferred, bank document and its link to the selected original order. The transfer is completed.",
       "recorded": "Bank refund recorded. Access and the original payment are unchanged.",
       "retryRecord": "Retry recording",
       "retryHint": "Retry sends the same details with the same identifier. Do not repeat the transfer. For another operation, close this form and open a new one.",
