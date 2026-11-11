@@ -237,6 +237,38 @@ describe("BAAM persistent companion workspace", () => {
     await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2));
     expect(mocks.send.mock.calls[1][0]).toEqual(request);
   });
+  it.each([false, true])(
+    "restores a cached new-dialog draft on initial open and remount (failed outbox: %s)",
+    (hasFailedOutbox) => {
+      localStorage.removeItem("baam-dialog:org:actor");
+      const pending = hasFailedOutbox
+        ? {
+            conversationId: "dialog",
+            clientRequestId: "c6154bf4-98dc-4747-a138-61db13b7706e",
+            revision: 0,
+            text: "Previously submitted request",
+            locale: "en",
+            attachmentIds: [],
+            page: { path: "/inventory" },
+          }
+        : undefined;
+      sessionStorage.setItem(
+        "baam-draft:org:actor:new",
+        JSON.stringify({ text: "Unsent new-dialog draft", pending, at: Date.now() }),
+      );
+      const view = render(shell());
+      expect(input().value).toBe("Unsent new-dialog draft");
+      expect(Boolean(screen.queryByRole("button", { name: "Retry" }))).toBe(hasFailedOutbox);
+      view.rerender(shell(false));
+      view.rerender(shell());
+      expect(input().value).toBe("Unsent new-dialog draft");
+      expect(Boolean(screen.queryByRole("button", { name: "Retry" }))).toBe(hasFailedOutbox);
+      expect(JSON.parse(sessionStorage.getItem("baam-draft:org:actor:new") ?? "null"))
+        .toMatchObject({ text: "Unsent new-dialog draft", ...(pending ? { pending } : {}) });
+      expect(mocks.create).not.toHaveBeenCalled();
+      expect(mocks.send).not.toHaveBeenCalled();
+    },
+  );
   it("prevents duplicate sends while a request is pending and preserves a newly typed draft", async () => {
     let finish!: () => void;
     mocks.send.mockReturnValue(
@@ -282,10 +314,13 @@ describe("BAAM persistent companion workspace", () => {
     submit("New request");
     await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2));
     fireEvent.change(input(), { target: { value: "New draft" } });
+    expect(input().value).toBe("New draft");
     await act(async () => {
       finishOld();
     });
     expect(input().value).toBe("New draft");
+    expect(JSON.parse(sessionStorage.getItem("baam-draft:org:actor:new-dialog") ?? "null"))
+      .toMatchObject({ text: "New draft" });
     expect(
       (screen.getByRole("button", { name: "Send message" }) as HTMLButtonElement).disabled,
     ).toBe(true);
