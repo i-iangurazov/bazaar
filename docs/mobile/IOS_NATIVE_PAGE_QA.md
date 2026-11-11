@@ -176,6 +176,25 @@ the real system Share sheet (772 bytes). Cancelling returned to the report. A
 source audit separately found that this cancellation also takes the browser
 fallback-download branch; no second visible download prompt was observed.
 
+The cancellation change distinguishes a dismissed native Share sheet from an
+unavailable plugin, a preparation/share failure, a successful share and a stale
+export audience. Cancellation is terminal and quiet, cleans the prepared cache
+file and does not invoke a browser download or a print-fallback notice. Existing
+failure/unavailable fallback behavior is retained and is not claimed repaired.
+The audience guard is rechecked after asynchronous preparation before showing
+the sheet. Five focused suites passed 39 checks, covering CSV/XLSX/PDF, failure
+classification, cleanup, audience races and the existing browser path. Typecheck,
+lint and translation validation passed with the compact Baam change included.
+The new cancellation behavior still requires its own cloud build/native recheck.
+
+The history-of-exports page also opened in the actual app. Its introductory guide
+closed correctly and three previously generated synthetic price-list jobs showed
+Ready. Touching one ready job's download icon left the app without a visible
+file, system Share sheet or error. This matches a separate source-level missing
+native handoff: those actions use direct attachment anchors. It does not prove
+that no bytes reached the device. No new export job or provider operation was
+created during this check; the native download path remains to be completed.
+
 Read-only public signup-mode requests returned `open` on `www.bazaar.kg` and
 `invite_only` on this Preview. A missing open-signup link in this TestFlight
 environment is therefore a server-policy difference. No production signup policy

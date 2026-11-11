@@ -21,32 +21,56 @@ const blobToBase64 = (blob: Blob) =>
     reader.readAsDataURL(blob);
   });
 
+export type NativeShareResult = {
+  status: "shared" | "cancelled" | "unavailable" | "failed" | "discarded";
+};
+
+const shareWasCancelled = (error: unknown) =>
+  (typeof error === "string" ? error : error && typeof error === "object" && "message" in error ? error.message : null) ===
+  "Share canceled";
+
 export const shareBlobNative = async (input: {
   blob: Blob;
   fileName: string;
   title?: string;
-}): Promise<boolean> => {
-  if (!isPluginAvailable("Filesystem") || !isPluginAvailable("Share")) return false;
+  shouldShare?: () => boolean;
+}): Promise<NativeShareResult> => {
+  const isCurrent = () => !input.shouldShare || input.shouldShare();
+  if (!isCurrent()) return { status: "discarded" };
+  if (!isPluginAvailable("Filesystem") || !isPluginAvailable("Share")) return { status: "unavailable" };
 
-  const path = `bazaar-share/${crypto.randomUUID()}-${safeFileName(input.fileName)}`;
+  let path: string | undefined;
   try {
     const data = await blobToBase64(input.blob);
+    if (!isCurrent()) return { status: "discarded" };
+    path = `bazaar-share/${crypto.randomUUID()}-${safeFileName(input.fileName)}`;
     await Filesystem.writeFile({ path, data, directory: Directory.Cache, recursive: true });
+    if (!isCurrent()) return { status: "discarded" };
     const uri = await Filesystem.getUri({ path, directory: Directory.Cache });
-    await Share.share({
-      title: input.title ?? "Bazaar",
-      files: [uri.uri],
-      dialogTitle: input.title ?? "Bazaar",
-    });
-    return true;
+    if (!isCurrent()) return { status: "discarded" };
+    try {
+      await Share.share({
+        title: input.title ?? "Bazaar",
+        files: [uri.uri],
+        dialogTitle: input.title ?? "Bazaar",
+      });
+    } catch (error) {
+      // The native Share plugin rejects a dismissed sheet. It is a terminal
+      // user action, not a failed preparation or a request for another download.
+      if (shareWasCancelled(error)) return { status: "cancelled" };
+      throw error;
+    }
+    return { status: "shared" };
   } catch {
     void reportNativeDiagnostic("native_share_failed");
-    return false;
+    return { status: "failed" };
   } finally {
-    try {
-      await Filesystem.deleteFile({ path, directory: Directory.Cache });
-    } catch {
-      // Cache cleanup is best effort and never exposes a permanent public URL.
+    if (path) {
+      try {
+        await Filesystem.deleteFile({ path, directory: Directory.Cache });
+      } catch {
+        // Cache cleanup is best effort and never exposes a permanent public URL.
+      }
     }
   }
 };
