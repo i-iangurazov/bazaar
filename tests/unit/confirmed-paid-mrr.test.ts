@@ -100,6 +100,21 @@ describe("confirmed paid MRR from current verified contracts", () => {
       confirmedPaidMrrKgs: 0,
     });
   });
+  it("does not convert an Apple grant's service valuation to KGS revenue or revive an overlapping older gateway period", () => {
+    const apple = {
+      ...period("current-apple"),
+      startsAt: new Date("2027-06-01T00:00:00.000Z"),
+      invoice: null,
+    };
+    const independent = period("independent-web", "other-paid-org");
+    const refunded = period("refunded-web", "refunded-org");
+    const bankRefund = {
+      ...refunded,
+      invoice: { ...refunded.invoice, manualRefunds: [{ id: "recorded-partial-refund" }] },
+    };
+    expect(summarizeConfirmedPaidMrr([org(), org("other-paid-org"), org("refunded-org")],
+      [period(), apple, independent, bankRefund], now)).toEqual({ organizationsPaid: 1, confirmedPaidMrrKgs: 4250 });
+  });
   it.each([
     { status: "REVIEW" },
     { status: "RESOLVED" },
@@ -126,6 +141,59 @@ describe("confirmed paid MRR from current verified contracts", () => {
     current.startsAt = new Date("2027-06-01T00:00:00.000Z");
     current.invoice.status = "REVIEW";
     expect(summarizeConfirmedPaidMrr([org()], [period(), current], now)).toEqual({
+      organizationsPaid: 0,
+      confirmedPaidMrrKgs: 0,
+    });
+  });
+  it.each([
+    ["partial", 50_000],
+    ["full", 5_100_000],
+  ] as const)(
+    "excludes a renewal with a recorded %s bank refund without prorating its remaining payment",
+    (_kind, amountMinor) => {
+      const paid = period();
+      const refunded = {
+        ...paid,
+        invoice: {
+          ...paid.invoice,
+          manualRefunds: [{ id: "synthetic-recorded-bank-refund", amountMinor }],
+        },
+      };
+      expect(summarizeConfirmedPaidMrr([org()], [refunded], now)).toEqual({
+        organizationsPaid: 0,
+        confirmedPaidMrrKgs: 0,
+      });
+      expect(refunded.invoice.status).toBe("PAID");
+      expect(refunded.invoice.amountMinor).toBe(5_100_000);
+    },
+  );
+  it("excludes an upgrade with a partial bank refund instead of reporting its frozen replacement-plan value", () => {
+    const upgraded = period("upgrade-refund");
+    upgraded.startsAt = new Date("2027-06-01T00:00:00.000Z");
+    upgraded.invoice.amountMinor = 765_000;
+    Object.assign(upgraded.purchaseSnapshot as object, {
+      kind: "UPGRADE",
+      monthlyMinor: 650_000,
+      amountMinor: 765_000,
+      creditMinor: 1_000_000,
+    });
+    const refunded = {
+      ...upgraded,
+      invoice: { ...upgraded.invoice, manualRefunds: [{ id: "partial-upgrade-bank-refund" }] },
+    };
+    expect(summarizeConfirmedPaidMrr([org()], [refunded], now)).toEqual({
+      organizationsPaid: 0,
+      confirmedPaidMrrKgs: 0,
+    });
+  });
+  it("does not fall back to an earlier overlapping paid period when the latest invoice has a bank refund", () => {
+    const current = period("latest-bank-refund");
+    current.startsAt = new Date("2027-06-01T00:00:00.000Z");
+    const refunded = {
+      ...current,
+      invoice: { ...current.invoice, manualRefunds: [{ id: "latest-invoice-bank-refund" }] },
+    };
+    expect(summarizeConfirmedPaidMrr([org()], [period(), refunded], now)).toEqual({
       organizationsPaid: 0,
       confirmedPaidMrrKgs: 0,
     });

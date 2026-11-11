@@ -159,6 +159,75 @@ describe("deliberate legal publication and residential-address privacy", () => {
   );
 });
 
+describe("published GoPay buyer-document and bank-refund contract", () => {
+  it.each([
+    {
+      locale: "ru",
+      bankTransfer: "отдельным банковским переводом",
+      originalOrder: "номер исходного заказа GoPay",
+      merchantFee: "не вычитается автоматически из одобренной суммы",
+      review: "3 рабочих дней",
+      submission: "2 рабочих дней",
+      noProviderRefund: "не проводится кнопкой отмены в GoPay или Bazaar",
+      notFiscal: "не являются фискальным чеком",
+      noProviderReceipt: "GoPay не формирует фискальные чеки",
+      maximum: "999 999,99 KGS",
+    },
+    {
+      locale: "kg",
+      bankTransfer: "өзүнчө банктык которуу",
+      originalOrder: "баштапкы GoPay буйрутмасынын номери",
+      merchantFee: "жактырылган кайтаруу суммасынан автоматтык кармалбайт",
+      review: "3 жумуш күндүн",
+      submission: "2 жумуш күндүн",
+      noProviderRefund:
+        "GoPay же Bazaar программасындагы жокко чыгаруу баскычы аркылуу кайтарылбайт",
+      notFiscal: "фискалдык чек же электрондук эсеп-фактура (ЭСФ) болуп саналбайт",
+      noProviderReceipt: "GoPay фискалдык чектерди түзбөйт",
+      maximum: "999 999,99 KGS",
+    },
+    {
+      locale: "en",
+      bankTransfer: "separate bank transfer",
+      originalOrder: "original GoPay order number",
+      merchantFee: "not automatically deducted from the approved refund amount",
+      review: "3 business days",
+      submission: "2 business days",
+      noProviderRefund: "not refunded by a cancellation button in GoPay or Bazaar",
+      notFiscal: "not a fiscal receipt or electronic invoice (ESF)",
+      noProviderReceipt: "GoPay does not issue fiscal receipts",
+      maximum: "999,999.99 KGS",
+    },
+  ] as const)("keeps the executable provider contract visible on $locale pages", (contract) => {
+    const copy = legalCopy[contract.locale];
+    const rendered = (documentId: "refunds" | "payment") => {
+      const root = document.createElement("div");
+      root.innerHTML = renderToStaticMarkup(
+        <LegalDocument
+          documentId={documentId}
+          copy={copy}
+          seller={legalPublicationState(approved).seller}
+          draft={false}
+        />,
+      );
+      return root.textContent ?? "";
+    };
+    const refunds = rendered("refunds");
+    for (const key of [
+      "bankTransfer",
+      "originalOrder",
+      "merchantFee",
+      "review",
+      "submission",
+      "noProviderRefund",
+    ] as const)
+      expect(refunds, `${contract.locale}: ${key}`).toContain(contract[key]);
+    const payment = rendered("payment");
+    for (const key of ["notFiscal", "noProviderReceipt", "maximum"] as const)
+      expect(payment, `${contract.locale}: ${key}`).toContain(contract[key]);
+  });
+});
+
 describe("live checkout must bind to the real published offer", () => {
   it("allows complete production configuration without making a provider request", () => {
     expect(getSubscriptionPaymentConfig(live).ready).toBe(true);

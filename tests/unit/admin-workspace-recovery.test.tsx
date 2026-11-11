@@ -77,6 +77,8 @@ vi.mock("@/lib/trpc", () => {
     "platformOwner.paymentReviews",
     "platformOwner.recheckPayment",
     "platformOwner.resolvePaymentReview",
+    "platformOwner.refundInvoice",
+    "platformOwner.recordManualRefund",
   ];
   const tree: Record<string, unknown> = {};
   for (const path of paths) {
@@ -143,13 +145,21 @@ vi.mock("@/lib/trpc", () => {
     parent[parts.at(-1)!] = {
       useQuery: query,
       useInfiniteQuery: query,
-      useMutation: () => ({ mutate: state.mutate, mutateAsync: state.mutate, isLoading: false }),
+      useMutation: () => ({
+        mutate: state.mutate,
+        mutateAsync: state.mutate,
+        isLoading: false,
+        reset: vi.fn(),
+      }),
     };
   }
   return {
     trpc: {
       ...tree,
-      useUtils: () => ({ client: { adminMetrics: { export: { query: vi.fn() } } } }),
+      useUtils: () => ({
+        client: { adminMetrics: { export: { query: vi.fn() } } },
+        platformOwner: { refundInvoice: { setData: vi.fn() } },
+      }),
     },
   };
 });

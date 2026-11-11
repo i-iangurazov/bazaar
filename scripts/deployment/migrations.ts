@@ -8,6 +8,8 @@ import { resolveMigrationDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20261111020000_manual_subscription_refunds":
+    "800cd487fb2d4b0ecd5501e5edc7182c4a06b851f68b0b02c18e40d795370b87",
   "20261111010000_order_email_template_version":
     "0b57c05e0618f623da10a6366224fd85f75681a8afc214e761f41d30329a2aea",
   "20261110180000_subscription_payment_notifications":

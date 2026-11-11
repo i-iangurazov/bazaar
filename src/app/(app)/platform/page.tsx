@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PaymentReviews } from "@/components/billing/payment-reviews";
+import { ManualSubscriptionRefunds } from "@/components/billing/manual-subscription-refunds";
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
@@ -269,6 +270,10 @@ const PlatformPage = () => {
       ) : null}
 
       <PaymentReviews enabled={status === "authenticated" && isPlatformOwner} />
+      <ManualSubscriptionRefunds
+        enabled={status === "authenticated" && isPlatformOwner}
+        onRecorded={() => void summaryQuery.refetch()}
+      />
 
       <Card>
         <CardHeader>

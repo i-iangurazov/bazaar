@@ -22,6 +22,10 @@ import {
   resolveSubscriptionPaymentReview,
 } from "@/server/billing/subscriptionPayments";
 import { toTRPCError } from "@/server/trpc/errors";
+import {
+  lookupManualSubscriptionRefundInvoice,
+  recordManualSubscriptionRefund,
+} from "@/server/billing/manualSubscriptionRefunds";
 
 export const platformOwnerRouter = router({
   summary: platformOwnerProcedure.query(async ({ ctx }) => {
@@ -74,6 +78,41 @@ export const platformOwnerRouter = router({
   listUpgradeRequests: platformOwnerProcedure.query(async () => listPendingPlanUpgradeRequests()),
 
   paymentReviews: platformOwnerProcedure.query(() => listSubscriptionPaymentReviews()),
+
+  refundInvoice: platformOwnerProcedure
+    .input(z.object({ orderId: z.string().trim().min(1).max(128) }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+      try {
+        return await lookupManualSubscriptionRefundInvoice(input);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  recordManualRefund: platformOwnerProcedure
+    .input(
+      z.object({
+        invoiceId: z.string().min(1).max(128),
+        amountMinor: z.number().int().positive().max(2147483647),
+        bankOperationId: z.string().trim().min(3).max(120),
+        bankTransferredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        reason: z.string().trim().min(10).max(500),
+        idempotencyKey: z.string().uuid(),
+        confirmed: z.literal(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+      try {
+        return await recordManualSubscriptionRefund({
+          ...input,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   recheckPayment: platformOwnerProcedure
     .input(z.object({ organizationId: z.string().min(1), invoiceId: z.string().min(1) }))
     .mutation(async ({ input }) => {

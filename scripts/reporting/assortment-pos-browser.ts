@@ -434,8 +434,24 @@ try {
   const theme = page
     .getByRole("combobox")
     .filter({ hasText: new RegExp(`${themes.light}|${themes.dark}`) });
+  // Session GETs rotate the JWT cookie too. Do not let a poll that started
+  // with the old theme cookie overwrite the browser's pending session update.
+  const themeSaved =
+    (await theme.textContent())?.trim() === themes.light
+      ? Promise.resolve()
+      : page
+          .waitForResponse(
+            (response) =>
+              response.url().endsWith("/api/auth/session") &&
+              response.request().method() === "POST",
+          )
+          .then(async (response) => {
+            assert.equal(response.status(), 200);
+            assert.equal((await response.json()).user.themePreference, "LIGHT");
+          });
   await theme.click();
   await page.getByRole("option", { name: themes.light, exact: true }).click();
+  await themeSaved;
   await until(
     async () =>
       (await (await context.request.get(base + "/api/auth/session")).json()).user
