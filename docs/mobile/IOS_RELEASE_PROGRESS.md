@@ -64,24 +64,24 @@ synthetic fixture, or browser screenshot is not a verified native release.
 | ID | Required result | Evidence needed | Current state |
 | --- | --- | --- | --- |
 | R01 | Current application, accounts, roles, stores, commercial catalog, integrations and native capabilities audited | Source inventory, account observations, baseline builds/tests, recorded limitations | In progress |
-| R02 | One authoritative organization entitlement model for Apple and GoPay | Real-DB tests showing identical effective access across web/iOS and eligible roles | Open |
-| R03 | Existing paid, future prepaid, trial, manual, free/lifetime and legacy catalog rights preserved | Migration review and regression tests for all entitlement sources and monthly usage | Open |
-| R04 | No duplicate sale for the same covered period or capabilities | Server purchase checks, organization locks, durable pending intents and concurrent DB tests | Open |
+| R02 | One authoritative organization entitlement model for Apple and GoPay | Real-DB tests showing identical effective access across web/iOS and eligible roles | Server/isolated PostgreSQL checks pass; actual Apple/device acceptance remains |
+| R03 | Existing paid, future prepaid, trial, manual, free/lifetime and legacy catalog rights preserved | Migration review and regression tests for all entitlement sources and monthly usage | Owned migration rehearsal preserves 43 rows; nine checks pass; customer preflight not authorized/run |
+| R04 | No duplicate sale for the same covered period or capabilities | Server purchase checks, organization locks, durable pending intents and concurrent DB tests | Implemented; isolated concurrency/recovery tests pass; actual Sandbox acceptance remains |
 | R05 | Safe provider switching and recovery | Tests for prepaid GoPay remainder, Apple renewal states, pending/stale payments, cancellation and out-of-app renewals | Open |
 | R06 | Purchases cannot move between organizations or unauthorized users | Tests for account/device changes, restore, several organizations, role changes and departing payers | Open |
-| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | Open |
+| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 unapproved draft mappings; actual products/prices and immediate prorated upgrade/addition implementation remain open |
 | R08 | Website GoPay and historical reconciliation continue working | Existing and new DB/protocol regressions; provider-specific amounts and histories preserved | Open |
-| R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Open |
+| R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Compiles; 57 journal/boundary checks pass; four of five StoreKitTest cases fail; real Sandbox/TestFlight remain unrun |
 | R10 | Signed transaction verification, Server API and Notifications V2 are complete | Certificate/app/environment/product/ownership checks, replay/order/missed-event tests, reconciliation | Open |
 | R11 | Renewals, expiry, grace/retry, plan changes, refund and revocation update only the correct rights | DB lifecycle tests with independent Apple and GoPay grants | Open |
 | R12 | Physical-store customer payments stay separate from Bazaar digital sales | Source and UI review; POS/payment regressions | Open |
-| R13 | Signed, reproducible iOS archive and app registration are ready | Registered intended bundle ID, team/capabilities/profiles, archive/IPA validation and upload processing | Open |
-| R14 | iOS and web maintain all established customer workflows | Native/mobile/desktop checks for POS, prices, products, inventory, documents, reports and enabled integrations | Open |
+| R13 | Signed, reproducible iOS archive and app registration are ready | Registered intended bundle ID, team/capabilities/profiles, archive/IPA validation and upload processing | Unsigned iPhoneOS arm64 archive passes inspection; signing/app registration/upload remain open |
+| R14 | iOS and web maintain all established customer workflows | Native/mobile/desktop checks for POS, prices, products, inventory, documents, reports and enabled integrations | 22 desktop/mobile browser checks and six loaded-profile checks pass; native/device acceptance remains open |
 | R15 | Phone features and recovery work | Device checks for camera/scanner/photos/files/voice, keyboard, permissions, links, backgrounding, network loss and retry | Open |
-| R16 | Complete own-account deletion preserves required business records | Reauthentication/confirmation, ownership handling, personal-data removal/session invalidation and real-DB tests | Open |
-| R17 | Privacy, AI disclosures/consent and subscription deletion explanations are correct | Data/processor inventory, in-app consent tests, privacy manifest and store declarations reviewed against actual behavior | Open |
-| R18 | Russian, Kyrgyz and English strings are complete | Translation validation and UI review of new/error/recovery states | Open |
-| R19 | Required application checks and isolated integration tests pass | Typecheck, lint, translation check, relevant tests, web production build, native build; commands/results recorded | Open |
+| R16 | Complete own-account deletion preserves required business records | Reauthentication/confirmation, ownership handling, personal-data removal/session invalidation and real-DB tests | Implemented; PostgreSQL and browser dialog checks pass; actual iPhone acceptance remains |
+| R17 | Privacy, AI disclosures/consent and subscription deletion explanations are correct | Data/processor inventory, in-app consent tests, privacy manifest and store declarations reviewed against actual behavior | Implementation, boundary tests and archive manifest inspected; final store declarations/device acceptance remain |
+| R18 | Russian, Kyrgyz and English strings are complete | Translation validation and UI review of new/error/recovery states | Translation validation and focused localized UI tests pass; native localization acceptance remains |
+| R19 | Required application checks and isolated integration tests pass | Typecheck, lint, translation check, relevant tests, web production build, native build; commands/results recorded | 4,992 whole-suite tests plus 76 bounded follow-up tests pass; three pooling checks skipped; quality/cloud build pass; native purchase testing remains incomplete |
 | R20 | Real iPhone TestFlight verification is complete | Signed processed build installed on a real iPhone; full owner/device test script completed with evidence | Open |
 | R21 | App Store and IAP review materials are ready | Actual native screenshots, listing/icon/support/privacy, ratings/encryption, review credentials and separate synthetic organization | Open |
 | R22 | Production operations and rollback are prepared | Verified notification/reconciliation monitoring, support playbook, safe server rollout and rollback rehearsal | Open |
@@ -343,3 +343,76 @@ not requested again.
 - Cloud web build/deployment and actual Preview storage/login/UI checks remain.
   Actual product registration/prices, commercial change-model approval, signing,
   Sandbox/TestFlight/iPhone checks and release authorization remain open.
+
+## Cloud Preview and final local-check checkpoint
+
+- The complete merged-web run finished successfully: 533 files passed, one file
+  skipped; 4,992 tests passed and three skipped. The skips are the separate
+  PgBouncer/role pooling suite, which requires its own Docker setup. No skipped
+  test is counted as passed. Logs are private under ignored `.local`.
+- A subsequent bounded Blob image-source authorization fix passed seven files /
+  76 tests, including four real PostgreSQL cases. It checks exact public image
+  store, organization/product ownership and manager store access before fetching;
+  private exports, foreign products/origins and cross-product redirects are denied.
+  Typecheck, lint and translation validation passed again after that fix.
+- The separate Preview cloud production-mode web build is READY at source
+  `b3d06cc6cbe0dcecc566f694cd65b8be835c88e2`, deployment
+  `dpl_6ZPzDUj6iYvow84dbbqtWnozA2mi`. The stable isolated alias is
+  `https://bazaar-ios-preview-20261111.vercel.app`. Its fresh alias API binding
+  verifies the dedicated project and exact deployment; normal deployment metadata
+  may show an empty alias list after manual assignment. OIDC claims identify
+  Preview and the intended project.
+- The first unqualified deployment request in this new project selected its
+  default production target and failed without production environment variables.
+  No customer project was deployed. Later requests explicitly select Preview;
+  the ready deployment above is Preview. CLI source inspection also confirmed
+  private inputs/caches are absent and authenticated legacy upload routes remain
+  included. The checked-in environment example and synthetic test key are not
+  production credentials.
+- Actual HTTP login, fresh administrator identity, MANUAL demo access, store and
+  the three synthetic products all passed. Real image upload returned HTTP 500;
+  the cloud storage path is under diagnosis. This is not a storage acceptance pass
+  and actual private CSV/ZIP execution remains open.
+- Browser inspection passed 22 checks on desktop 1440×1000 and mobile 390×844:
+  real login/tenant, dashboard, products, receiving, transfers, write-offs, counts,
+  reports, billing, account privacy/deletion dialog and anonymous page denial.
+  A six-check profile follow-up also waited for the real deletion-preview response
+  before screenshots and verified the empty confirmation cannot submit. No
+  JavaScript errors or document-width overflow were observed. The only recorded
+  HTTP denial was an expected AI-consent 401 after deliberately clearing cookies.
+  Browser instances were closed. These are web screenshots, not native store assets.
+- Existing account setup remains complete; it is not requested again. Actual
+  Apple account operations were declined by automatic tool access review. They
+  are not bypassed. Registered products/prices/server setup, a valid signing
+  identity, actual Sandbox and TestFlight/iPhone evidence remain outstanding.
+- Full commercial behavior is still incomplete: immediate prorated iOS tier,
+  store and reserve additions over prepaid GoPay/non-renewing Apple coverage are
+  not implemented. The owner was asked about immediate incremental changes versus
+  next-period changes, then requested a plain explanation; no A/B decision or
+  new credit economics are approved by that clarification request. Next-period
+  purchases and overlap guards do not complete the full goal. Preview purchases
+  remain off, so the site is an infrastructure/UI rehearsal, not the owner's
+  requested fully purchasable acceptance candidate.
+
+### Runtime OIDC follow-up
+
+Scoped read-only provider inspection found both new stores active, empty and
+connected only to the intended project Preview. Project OIDC was enabled. The
+upload handler had swallowed the exception, so that first HTTP 500's exact cause
+was not observable and is not retrospectively claimed as proven.
+
+An independent compatibility defect was established from the installed SDK and
+Vercel's primary documentation: Functions receive OIDC through request context,
+while the service required a build-time environment token. The storage service
+now obtains a fresh token from the official resolver for each operation and
+passes only that explicit token plus its purpose-specific store ID. Missing or
+failed resolution refuses static/default credentials. The direct dependency
+reuses the already locked `@vercel/oidc` 4.0.8. Allowlisted diagnostic categories
+and presence bits preserve a generic client error without logging raw exception,
+header, credential, filename or account fields.
+
+The bounded storage/source/upload/export/guard group passes eight files / 97
+tests, including real PostgreSQL and per-operation token freshness/absence and
+log-redaction cases. The production dependency audit again reports zero known
+findings. The updated cloud build and real HTTP image/CSV/ZIP retry follow this
+checkpoint; a mocked SDK test remains insufficient cloud acceptance evidence.

@@ -101,6 +101,7 @@
     "@trpc/server": "10.45.4",
     "@vercel/blob": "2.9.0",
     "@vercel/functions": "^3.11.1",
+    "@vercel/oidc": "4.0.8",
     "@zxing/browser": "0.1.5",
     "@zxing/library": "0.21.3",
     "bcryptjs": "^2.4.3",

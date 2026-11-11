@@ -1,3 +1,14 @@
+import {
+  BlobAccessError,
+  BlobClientTokenExpiredError,
+  BlobError,
+  BlobRequestAbortedError,
+  BlobServiceNotAvailable,
+  BlobServiceRateLimited,
+  BlobStoreNotFoundError,
+  BlobStoreSuspendedError,
+} from "@vercel/blob";
+
 import { getServerAuthToken } from "@/server/auth/token";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
 import { resolveProductImageProxyUploadMaxBytes } from "@/lib/productImageUpload";
@@ -6,6 +17,29 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const toMessage = (value: unknown) => (value instanceof Error ? value.message : "genericMessage");
+const storageDiagnosticCodes = new Map([
+  ["blobStorageAuthenticationUnavailable", "blobStorageAuthenticationUnavailable"],
+  ["blobStorageNotConfigured", "blobStorageNotConfigured"],
+  ["blobStorageLocationInvalid", "blobStorageLocationInvalid"],
+  ["blobStorageStoresMustDiffer", "blobStorageStoresMustDiffer"],
+  ["HARDENING_PREVIEW_GUARD requires VERCEL_ENV=preview.", "blobPreviewEnvironmentMismatch"],
+  ["Blob storage does not match the approved hardening Preview project.", "blobPreviewProjectMismatch"],
+  ["Blob storage does not match the two approved hardening Preview stores.", "blobPreviewStoresMismatch"],
+  ["Hardening Preview Blob storage requires explicit image and export providers.", "blobPreviewProvidersMismatch"],
+]);
+const storageDiagnosticCode = (error: unknown) => {
+  const knownCode = storageDiagnosticCodes.get(toMessage(error));
+  if (knownCode) return knownCode;
+  if (error instanceof BlobAccessError) return "blobProviderAccessDenied";
+  if (error instanceof BlobClientTokenExpiredError) return "blobProviderTokenExpired";
+  if (error instanceof BlobStoreNotFoundError) return "blobProviderStoreNotFound";
+  if (error instanceof BlobStoreSuspendedError) return "blobProviderStoreSuspended";
+  if (error instanceof BlobRequestAbortedError) return "blobProviderAborted";
+  if (error instanceof BlobServiceRateLimited) return "blobProviderRateLimited";
+  if (error instanceof BlobServiceNotAvailable) return "blobProviderUnavailable";
+  if (error instanceof BlobError) return "blobProviderFailure";
+  return "unknownStorageFailure";
+};
 const resolveMaxImageBytes = () => {
   const parsed = Number(process.env.PRODUCT_IMAGE_MAX_BYTES);
   if (Number.isFinite(parsed) && parsed > 0) {
@@ -140,6 +174,14 @@ export const POST = async (request: Request) => {
     if (message === "forbidden") {
       return Response.json({ message }, { status: 403 });
     }
+    // Never log the exception, arbitrary messages/names, request headers, user
+    // identifiers or credentials. Only this fixed vocabulary and presence bits
+    // distinguish a runtime authentication failure from a provider rejection.
+    console.error("productImageUploadFailed", {
+      code: storageDiagnosticCode(error),
+      envOidcPresent: Boolean(process.env.VERCEL_OIDC_TOKEN?.trim()),
+      requestOidcHeaderPresent: Boolean(request.headers.get("x-vercel-oidc-token")?.trim()),
+    });
     return Response.json({ message: "genericMessage" }, { status: 500 });
   }
 };

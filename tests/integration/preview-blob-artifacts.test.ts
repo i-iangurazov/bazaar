@@ -17,6 +17,7 @@ const sdk = vi.hoisted(() => {
   };
 });
 vi.mock("@vercel/blob", () => ({ put: sdk.put, get: sdk.get, head: sdk.head, del: sdk.del, BlobNotFoundError: class extends Error {} }));
+vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: async () => "synthetic-resolved-oidc" }));
 vi.mock("@/server/auth/token", () => ({ getServerAuthToken: async () => sdk.auth }));
 
 import { prisma } from "@/server/db/prisma";

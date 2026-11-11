@@ -1,4 +1,5 @@
 import { BlobNotFoundError, del, get, head, put } from "@vercel/blob";
+import { getVercelOidcToken } from "@vercel/oidc";
 
 import { assertVercelBlobStorageAllowed } from "@/server/config/runtime";
 
@@ -35,13 +36,21 @@ export const getBlobStoragePath = (purpose: BlobStoragePurpose, value: string) =
   return parsed.pathname.slice(1);
 };
 
-const credentials = (purpose: BlobStoragePurpose) => {
+const credentials = async (purpose: BlobStoragePurpose) => {
   const storeId = getBlobStoreId(purpose);
   assertVercelBlobStorageAllowed(purpose, storeId);
-  // The SDK reads and refreshes the platform OIDC token itself. Requiring its
-  // presence prevents fallback to a generic BLOB_READ_WRITE_TOKEN from another store.
-  if (!process.env.VERCEL_OIDC_TOKEN?.trim()) throw new Error("blobStorageAuthenticationUnavailable");
-  return { storeId };
+  // Functions receive OIDC through the request context, whereas builds use an
+  // environment variable. Resolve afresh for every operation, including retries.
+  // Explicit tokens are not refreshed by Blob; these commands remain bounded to
+  // 45 seconds (15 for metadata/deletion), with no static/default token fallback.
+  let oidcToken: string;
+  try {
+    oidcToken = (await getVercelOidcToken()).trim();
+  } catch {
+    throw new Error("blobStorageAuthenticationUnavailable");
+  }
+  if (!oidcToken) throw new Error("blobStorageAuthenticationUnavailable");
+  return { storeId, oidcToken };
 };
 
 export const putManagedBlob = async (input: {
@@ -52,7 +61,7 @@ export const putManagedBlob = async (input: {
 }) => {
   const pathname = getBlobStoragePath(input.purpose, input.pathname);
   const result = await put(pathname, input.body, {
-    ...credentials(input.purpose),
+    ...(await credentials(input.purpose)),
     access: input.purpose === "images" ? "public" : "private",
     contentType: input.contentType,
     addRandomSuffix: false,
@@ -71,7 +80,7 @@ export const putManagedBlob = async (input: {
 export const readManagedBlob = async (purpose: BlobStoragePurpose, location: string) => {
   const pathname = getBlobStoragePath(purpose, location);
   const result = await get(pathname, {
-    ...credentials(purpose), access: purpose === "images" ? "public" : "private",
+    ...(await credentials(purpose)), access: purpose === "images" ? "public" : "private",
     useCache: false, abortSignal: AbortSignal.timeout(45_000),
   });
   if (!result || result.statusCode !== 200 || !result.stream || typeof result.blob.size !== "number") return null;
@@ -81,7 +90,7 @@ export const readManagedBlob = async (purpose: BlobStoragePurpose, location: str
 export const statManagedBlob = async (purpose: BlobStoragePurpose, location: string) => {
   const pathname = getBlobStoragePath(purpose, location);
   try {
-    const result = await head(pathname, { ...credentials(purpose), abortSignal: AbortSignal.timeout(15_000) });
+    const result = await head(pathname, { ...(await credentials(purpose)), abortSignal: AbortSignal.timeout(15_000) });
     return { size: result.size };
   } catch (error) {
     if (error instanceof BlobNotFoundError) return null;
@@ -91,5 +100,5 @@ export const statManagedBlob = async (purpose: BlobStoragePurpose, location: str
 
 export const deleteManagedBlob = async (purpose: BlobStoragePurpose, location: string) => {
   const pathname = getBlobStoragePath(purpose, location);
-  await del(pathname, { ...credentials(purpose), abortSignal: AbortSignal.timeout(15_000) });
+  await del(pathname, { ...(await credentials(purpose)), abortSignal: AbortSignal.timeout(15_000) });
 };

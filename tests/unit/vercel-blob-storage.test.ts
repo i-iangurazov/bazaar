@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sdk = vi.hoisted(() => ({ put: vi.fn(), get: vi.fn(), head: vi.fn(), del: vi.fn(), mkdir: vi.fn(), writeFile: vi.fn() }));
+const oidc = vi.hoisted(() => ({ getToken: vi.fn() }));
 vi.mock("@vercel/blob", () => ({ ...sdk, BlobNotFoundError: class extends Error {} }));
+vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: oidc.getToken }));
 vi.mock("node:fs/promises", () => ({ mkdir: sdk.mkdir, writeFile: sdk.writeFile, rm: vi.fn() }));
 
 const imageBase = "https://testimages.public.blob.vercel-storage.com";
@@ -17,6 +19,7 @@ beforeEach(() => {
   vi.stubEnv("VERCEL_OIDC_TOKEN", "synthetic-platform-oidc");
   vi.stubEnv("BLOB_STORE_ID", "store_foreignDefault");
   vi.stubEnv("BLOB_READ_WRITE_TOKEN", "synthetic-foreign-default-token-must-not-be-used");
+  oidc.getToken.mockReset().mockResolvedValue("synthetic-resolved-oidc");
   sdk.put.mockImplementation(async (path: string, _body: unknown, options: { access: string }) => ({
     url: `${options.access === "public" ? imageBase : exportBase}/${path}`,
   }));
@@ -31,20 +34,58 @@ describe("explicit separate Vercel Blob stores", () => {
       .resolves.toBe(`${imageBase}/retails/org/products/product/photo.png`);
     await expect(putManagedBlob({ purpose: "exports", pathname: "exports/org/job/report.csv", body: Buffer.from("report"), contentType: "text/csv" }))
       .resolves.toBe(`${exportBase}/exports/org/job/report.csv`);
-    expect(sdk.put.mock.calls[0]?.[2]).toMatchObject({ storeId: "store_testImages", access: "public", addRandomSuffix: false });
-    expect(sdk.put.mock.calls[1]?.[2]).toMatchObject({ storeId: "store_testExports", access: "private", cacheControlMaxAge: 60 });
+    expect(sdk.put.mock.calls[0]?.[2]).toMatchObject({ storeId: "store_testImages", oidcToken: "synthetic-resolved-oidc", access: "public", addRandomSuffix: false });
+    expect(sdk.put.mock.calls[1]?.[2]).toMatchObject({ storeId: "store_testExports", oidcToken: "synthetic-resolved-oidc", access: "private", cacheControlMaxAge: 60 });
     for (const call of sdk.put.mock.calls) {
       expect(call[2]).not.toHaveProperty("token");
-      expect(call[2]).not.toHaveProperty("oidcToken");
+      expect(call[2]).toHaveProperty("oidcToken", "synthetic-resolved-oidc");
     }
   });
 
-  it("fails closed without OIDC despite a generic default token/store", async () => {
+  it("accepts the official runtime resolver token when the build-only env token is absent", async () => {
     vi.stubEnv("VERCEL_OIDC_TOKEN", "");
+    oidc.getToken.mockResolvedValue("synthetic-request-context-oidc");
     const { putManagedBlob } = await import("@/server/services/vercelBlobStorage");
+    await expect(putManagedBlob({ purpose: "images", pathname: "retails/org/products/product/photo.png", body: Buffer.from("image"), contentType: "image/png" }))
+      .resolves.toBe(`${imageBase}/retails/org/products/product/photo.png`);
+    expect(oidc.getToken).toHaveBeenCalledOnce();
+    expect(sdk.put.mock.calls[0]?.[2]).toMatchObject({ storeId: "store_testImages", oidcToken: "synthetic-request-context-oidc" });
+    expect(sdk.put.mock.calls[0]?.[2]).not.toHaveProperty("token");
+  });
+
+  it.each(["throw", "empty", "whitespace"])("fails closed for %s OIDC resolution despite a generic default token/store", async (failure) => {
+    vi.stubEnv("VERCEL_OIDC_TOKEN", "");
+    if (failure === "throw") oidc.getToken.mockRejectedValue(new Error("private SDK details must not escape"));
+    else oidc.getToken.mockResolvedValue(failure === "empty" ? "" : "  ");
+    const { putManagedBlob, readManagedBlob, statManagedBlob, deleteManagedBlob } = await import("@/server/services/vercelBlobStorage");
     await expect(putManagedBlob({ purpose: "exports", pathname: "exports/org/job/report.csv", body: Buffer.from("report"), contentType: "text/csv" }))
       .rejects.toThrow("blobStorageAuthenticationUnavailable");
-    expect(sdk.put).not.toHaveBeenCalled();
+    await expect(readManagedBlob("exports", "exports/org/job/report.csv")).rejects.toThrow("blobStorageAuthenticationUnavailable");
+    await expect(statManagedBlob("exports", "exports/org/job/report.csv")).rejects.toThrow("blobStorageAuthenticationUnavailable");
+    await expect(deleteManagedBlob("exports", "exports/org/job/report.csv")).rejects.toThrow("blobStorageAuthenticationUnavailable");
+    for (const command of [sdk.put, sdk.get, sdk.head, sdk.del]) expect(command).not.toHaveBeenCalled();
+  });
+
+  it("resolves fresh credentials separately for upload, read, metadata and deletion", async () => {
+    vi.stubEnv("VERCEL_OIDC_TOKEN", "stale-build-oidc-must-not-be-used");
+    oidc.getToken.mockResolvedValueOnce("current-upload-oidc").mockResolvedValueOnce("current-read-oidc")
+      .mockResolvedValueOnce("current-metadata-oidc").mockResolvedValueOnce("current-delete-oidc");
+    sdk.get.mockResolvedValue({ statusCode: 200, stream: new Response("report").body, blob: { size: 6 } });
+    sdk.head.mockResolvedValue({ size: 6 });
+    const { putManagedBlob, readManagedBlob, statManagedBlob, deleteManagedBlob } = await import("@/server/services/vercelBlobStorage");
+    const location = "exports/org/job/report.csv";
+    await putManagedBlob({ purpose: "exports", pathname: location, body: Buffer.from("report"), contentType: "text/csv" });
+    await readManagedBlob("exports", location);
+    await statManagedBlob("exports", location);
+    await deleteManagedBlob("exports", location);
+    expect(oidc.getToken).toHaveBeenCalledTimes(4);
+    for (const [command, index, expected] of [
+      [sdk.put, 2, "current-upload-oidc"], [sdk.get, 1, "current-read-oidc"],
+      [sdk.head, 1, "current-metadata-oidc"], [sdk.del, 1, "current-delete-oidc"],
+    ] as const) {
+      expect(command.mock.calls[0]?.[index]).toMatchObject({ storeId: "store_testExports", oidcToken: expected, abortSignal: expect.any(AbortSignal) });
+      expect(command.mock.calls[0]?.[index]).not.toHaveProperty("token");
+    }
   });
 
   it("never accepts a missing explicit store or a shared public/private store", async () => {

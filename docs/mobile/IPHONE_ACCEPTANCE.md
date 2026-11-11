@@ -21,6 +21,56 @@ The staging build uses the same `kg.bazaar.app` identity and may replace another
 Bazaar installation. It is explicitly internal-TestFlight-only, and cannot be
 promoted into the public release. See [channel setup](IOS_TESTFLIGHT_STAGING.md).
 
+## Numbered first device run — all results Not run
+
+Prepare isolated synthetic fixtures before starting: **A** with active GoPay-funded
+coverage and known plan/additions/expiry, **B** eligible for an approved Apple
+Sandbox purchase without other coverage, and a different organization **C** for
+ownership checks. A is a test-ledger fixture, not a real GoPay charge. A protected
+operations/demo login is not a substitute for GoPay coverage or an eligible Apple
+buyer. Use the same preview website as the staging app, never the customer site.
+
+1. **Install the signed internal build.** Accept the TestFlight invitation and
+   install Bazaar Test on iPhone. Record build/source/device details above,
+   verify the intended preview organization, and confirm registered Apple products
+   are available in Sandbox. An unsigned local rehearsal cannot satisfy this step.
+   **Result: Not run.**
+2. **Keep existing web-paid access.** Sign into A in the preview website and on
+   iPhone. Compare plan, additions and expiry, then open an included paid feature.
+   Access must work without buying again through Apple. An automatic subscription
+   must not charge the already-covered period; any separately approved voluntary
+   future prepayment must show dates after existing coverage before consent.
+   **Result: Not run.**
+3. **Cancel before buying.** Sign into B, open the approved product, compare the
+   localized price/currency, organization and term with Apple's sheet, then tap
+   Cancel. Confirm no entitlement grant and a server-acknowledged cancellation.
+   Repeat with a lost connection if the definite OS cancellation can be observed:
+   reconnect/relaunch and verify its durable retry resolves without a new charge.
+   An unknown SDK error remains pending/review; it must not be labelled cancelled.
+   **Result: Not run.**
+4. **Purchase once and use the website.** After the previous cancellation is
+   resolved, complete the approved Sandbox purchase for B. Record the verified
+   initial transaction and resulting rights/dates. Open the same organization in
+   the preview website: the same access must be available without GoPay payment,
+   and replay/refresh must not grant it twice. **Result: Not run.**
+5. **Interrupt and relaunch.** Exercise connection loss/app closure around purchase
+   confirmation or the finish acknowledgement. Restore connection and reopen B:
+   a verified paid transaction must recover without another purchase; existing
+   durable access remains usable while finish synchronization retries. If Apple
+   has not established a purchase, preserve pending/review instead of inventing
+   success or cancellation. Record which interruption actually occurred.
+   **Result: Not run.**
+6. **Restore, reinstall and keep ownership.** With terminal cancellations already
+   acknowledged, record B's rights and consumed quota/credits. Restore purchases,
+   then reinstall from TestFlight and restore using the same Apple/Bazaar accounts.
+   Rights must recover without duplicate periods, credits or quota resets. Switch
+   to C and restore: B's purchase must stay bound to B, and C must not gain it.
+   **Result: Not run.**
+
+These steps are the first-run sequence, not a replacement for the full matrix.
+Keep every actual result below **Not run** until evidence from the installed
+shipping candidate establishes that individual case.
+
 | Check | Required observed result | Result / evidence |
 | --- | --- | --- |
 | Install, login, logout, password recovery, expired session | The intended organization/role/store appears, cookies survive restart, and protected data is unavailable after logout | Not run |

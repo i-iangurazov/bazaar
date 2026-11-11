@@ -148,6 +148,7 @@ vi.mock("@vercel/blob", () => ({
   },
   head: vi.fn(),
 }));
+vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: async () => "synthetic-resolved-oidc" }));
 
 let consumeZip: typeof import("@/lib/imageExportStore").consumeZip;
 let storeZipBuffer: typeof import("@/lib/imageExportStore").storeZipBuffer;
