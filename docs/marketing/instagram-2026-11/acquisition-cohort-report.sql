@@ -3,9 +3,12 @@
 -- $4 exact campaign label, e.g. profile or kg_store_launch_202611.
 -- No emails, names, phone numbers, organization IDs, tokens or amounts leave DB.
 -- This is first-touch attribution, not proof of a paid click or current MRR.
+-- Prisma's timestamp(3) fields store UTC; normalize offset-bearing cutoffs.
+-- A recorded manual refund excludes that invoice once known at observed_at.
 WITH settings AS (
-  SELECT $1::timestamptz AS cohort_start, $2::timestamptz AS cohort_end,
-         $3::timestamptz AS observed_at, $4::text AS campaign
+  SELECT ($1::timestamptz AT TIME ZONE 'UTC') AS cohort_start,
+         ($2::timestamptz AT TIME ZONE 'UTC') AS cohort_end,
+         ($3::timestamptz AT TIME ZONE 'UTC') AS observed_at, $4::text AS campaign
   WHERE $1::timestamptz < $2::timestamptz
     AND $2::timestamptz <= $3::timestamptz
     AND $4::text ~ '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$'
@@ -49,6 +52,11 @@ WITH settings AS (
         AND NOT i."isTest" AND i.currency = 'KGS' AND i."amountMinor" > 0
         AND i."providerPaymentId" IS NOT NULL
         AND i."paidAt" >= c.account_created_at AND i."paidAt" <= c.observed_at
+        AND NOT EXISTS (
+          SELECT 1 FROM "ManualSubscriptionRefund" r
+          WHERE r."invoiceId" = i.id AND r."organizationId" = i."organizationId"
+            AND r."createdAt" <= c.observed_at
+        )
         AND EXISTS (
           SELECT 1 FROM "SubscriptionPaymentEvent" e WHERE e."invoiceId" = i.id
             AND e.state = 'PAID' AND e.source IN ('CALLBACK', 'RECONCILIATION')

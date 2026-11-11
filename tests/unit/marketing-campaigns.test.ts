@@ -21,6 +21,27 @@ describe("controlled GA4 campaign export", () => {
     });
   });
 
+  it("exports exactly the approved Facebook Page website link", () => {
+    expect(marketingCampaignOverrides(new URLSearchParams({
+      utm_source: "facebook", utm_medium: "organic_social",
+      utm_campaign: "profile", utm_content: "page",
+    }))).toEqual({
+      campaign_source: "facebook", campaign_medium: "organic_social",
+      campaign_name: "profile", campaign_content: "page",
+    });
+  });
+
+  it.each([
+    ["utm_content", "bio"], ["utm_source", "instagram"],
+    ["utm_medium", "paid_social"], ["utm_term", "inventory"],
+  ])("rejects an unapproved Facebook Page variation %s=%s", (key, value) => {
+    const search = new URLSearchParams({
+      utm_source: "facebook", utm_medium: "organic_social", utm_campaign: "profile", utm_content: "page",
+    });
+    search.set(key, value);
+    expect(marketingCampaignOverrides(search)).toEqual({});
+  });
+
   it.each(["ad01_ru", "ad02_ru", "ad01_ru_direct", "ad02_ru_direct"])("exports only the approved Meta creative %s", (content) => {
     expect(marketingCampaignOverrides(labels(content))).toEqual({
       campaign_source: "instagram", campaign_medium: "paid_social",

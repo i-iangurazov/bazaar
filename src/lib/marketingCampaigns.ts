@@ -15,6 +15,10 @@ const campaigns: readonly {
     contents: ["bio", "highlight_start"],
   },
   {
+    source: "facebook", medium: "organic_social", campaign: "profile",
+    contents: ["page"],
+  },
+  {
     source: "instagram", medium: "paid_social", campaign: "kg_store_launch_202611",
     contents: ["ad01_ru", "ad02_ru", "ad01_ru_direct", "ad02_ru_direct"],
   },

@@ -305,15 +305,20 @@
 | --- | --- | --- | --- | --- |
 | instagram | organic_social | profile | bio | отсутствует |
 | instagram | organic_social | profile | highlight_start | отсутствует |
+| facebook | organic_social | profile | page | отсутствует |
 | instagram | paid_social | kg_store_launch_202611 | ad01_ru, ad02_ru | отсутствует |
 | instagram | paid_social | kg_store_launch_202611 | ad01_ru_direct, ad02_ru_direct | отсутствует |
 | google | cpc | kg_store_launch_202611 | search_inventory_a, search_inventory_b | inventory |
 | google | cpc | kg_store_launch_202611 | search_pos_a, search_pos_b | pos |
 | google | cpc | kg_store_launch_202611 | search_retail_a, search_retail_b | retail |
 
-Значения в каждой строке — допустимые альтернативы content, а не одна строка с запятой. Google `term` — фиксированная группа, не текст запроса. `{keyword}`, `{searchterm}`, email, телефоны, имена и номера клиентов в URL не добавляются. Неизвестные комбинации не передаются в GA4. Основной био-переход:
+Это 13 допустимых комбинаций. Значения в каждой строке — допустимые альтернативы content, а не одна строка с запятой. Google `term` — фиксированная группа, не текст запроса. `{keyword}`, `{searchterm}`, email, телефоны, имена и номера клиентов в URL не добавляются. Неизвестные комбинации не передаются в GA4. Основной био-переход:
 
 `https://www.bazaar.kg/ru?utm_source=instagram&utm_medium=organic_social&utm_campaign=profile&utm_content=bio`
+
+Website оформляемой Facebook Page:
+
+`https://www.bazaar.kg/ru?utm_source=facebook&utm_medium=organic_social&utm_campaign=profile&utm_content=page`
 
 First-touch не перезаписывается после показа: если человек сначала пришёл из био, а затем из платного диалога, первый источник останется органическим. Источник конкретной переписки и связь с регистрацией подтверждаются отдельно в закрытом журнале. Это не ошибка, которую нужно исправлять подменой атрибуции.
 
