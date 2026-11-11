@@ -6,6 +6,7 @@ const consentKey = "bazaar_analytics_consent_v1";
 const consentLifetime = 180 * 24 * 60 * 60 * 1000;
 const scriptId = "bazaar-marketing-analytics";
 const origin = "https://www.bazaar.kg";
+const signupEventTimeout = 1000;
 
 export type AnalyticsConsent = "granted" | "denied";
 export type MarketingEvent =
@@ -181,6 +182,9 @@ export function synchronizeMarketingAnalytics(
   }
   setDisabled(false);
   const analytics = window as AnalyticsWindow;
+  const pageContext = {
+    page_location: origin + page.path, page_referrer: "", page_title: page.title,
+  };
   if (initializedId !== id) {
     analytics.dataLayer = analytics.dataLayer ?? [];
     analytics.gtag = function () {
@@ -188,13 +192,17 @@ export function synchronizeMarketingAnalytics(
       // eslint-disable-next-line prefer-rest-params
       analytics.dataLayer!.push(arguments);
     };
+    // The tag is created only after our explicit-consent guard. Initialize with
+    // that known choice before config, without a denied-to-granted reconfiguration
+    // that can produce another automatic page_view in the real SDK.
     analytics.gtag("consent", "default", {
-      analytics_storage: "denied", ad_storage: "denied",
+      analytics_storage: "granted", ad_storage: "denied",
       ad_user_data: "denied", ad_personalization: "denied",
     });
     // Safe global defaults also cover automatic engagement/session parameters.
     analytics.gtag("set", {
-      page_location: origin + "/", page_referrer: "", page_title: "BAZAAR",
+      send_page_view: false,
+      ...pageContext,
       allow_google_signals: false, allow_ad_personalization_signals: false,
       ...marketingCampaignOverrides(new URLSearchParams(window.location.search)),
     });
@@ -202,14 +210,13 @@ export function synchronizeMarketingAnalytics(
     analytics.gtag("config", id, {
       send_page_view: false, allow_google_signals: false,
       allow_ad_personalization_signals: false,
-      page_location: origin + "/", page_referrer: "", page_title: "BAZAAR",
     });
     initializedId = id;
+  } else {
+    // Engagement uses global context too. Update only from the exact public
+    // allowlist, before the manual view, without re-running config or leaking URL data.
+    analytics.gtag?.("set", { send_page_view: false, ...pageContext });
   }
-  analytics.gtag?.("consent", "update", {
-    analytics_storage: "granted", ad_storage: "denied",
-    ad_user_data: "denied", ad_personalization: "denied",
-  });
   if (!document.getElementById(scriptId) && page) {
     const script = document.createElement("script");
     script.id = scriptId;
@@ -228,22 +235,45 @@ export function synchronizeMarketingAnalytics(
   if (!page) lastPage = null;
 }
 
-export function trackMarketingEvent(event: MarketingEvent) {
-  if (!["contact_whatsapp_click", "access_request_submitted", "sign_up"].includes(event)) return;
+function sendMarketingEvent(event: MarketingEvent, onProcessed?: () => void) {
+  if (!["contact_whatsapp_click", "access_request_submitted", "sign_up"].includes(event)) return false;
   const id = marketingMeasurementId();
   if (!consentAllowsAnalytics()) {
     stopMarketingAnalytics();
-    return;
+    return false;
   }
-  if (!id || initializedId !== id) return;
+  const gtag = (window as AnalyticsWindow).gtag;
+  if (!id || initializedId !== id || !gtag) return false;
   const path = window.location.pathname;
   const signupEvent = event === "sign_up" || event === "access_request_submitted";
-  if (signupEvent && path !== "/signup") return;
-  if (event === "contact_whatsapp_click" && !publicMarketingPage(path)) return;
-  (window as AnalyticsWindow).gtag?.("event", event, {
+  if (signupEvent && path !== "/signup") return false;
+  if (event === "contact_whatsapp_click" && !publicMarketingPage(path)) return false;
+  gtag("event", event, {
     send_to: id,
     page_location: origin + (event === "contact_whatsapp_click" ? publicMarketingPage(path)!.path : "/signup"),
     page_referrer: "", page_title: "BAZAAR",
     ...(event === "sign_up" ? { method: "email" } : {}),
+    ...(onProcessed ? { event_callback: onProcessed, event_timeout: signupEventTimeout } : {}),
+  });
+  return true;
+}
+
+export function trackMarketingEvent(event: MarketingEvent) {
+  sendMarketingEvent(event);
+}
+
+// A successful registration must leave the public document only after the SDK
+// can process its event. The independent deadline also covers blocked/unloaded
+// SDKs; analytics must never prevent onboarding or repeat the successful API call.
+// A callback is a processing acknowledgement, not proof of server/report receipt.
+export function trackSignupBeforeNavigation(): Promise<void> {
+  return new Promise(resolve => {
+    const finish = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(finish, signupEventTimeout);
+    try {
+      if (!sendMarketingEvent("sign_up", finish)) finish();
+    } catch {
+      finish();
+    }
   });
 }

@@ -20,7 +20,7 @@ beforeEach(() => {
   delete (window as AnalyticsWindow).dataLayer;
   delete (window as AnalyticsWindow).gtag;
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("optional marketing analytics", () => {
   it.each(["disabled", "invalid"])("preserves existing GA cookies when the SDK was never configured: %s", async (mode) => {
@@ -63,7 +63,7 @@ describe("optional marketing analytics", () => {
     expect(queued[overrides]?.[1]).toMatchObject({
       campaign_source: "instagram", campaign_medium: "organic_social",
       campaign_name: "profile", campaign_content: "bio",
-      page_location: "https://www.bazaar.kg/", page_referrer: "",
+      page_location: "https://www.bazaar.kg/ru", page_referrer: "",
     });
     expect(overrides).toBeGreaterThanOrEqual(0);
     expect(config).toBeGreaterThan(overrides);
@@ -81,6 +81,43 @@ describe("optional marketing analytics", () => {
     analytics.writeAnalyticsConsent("granted");
     analytics.synchronizeMarketingAnalytics("/en");
     expect(JSON.stringify(commands())).not.toMatch(/campaign_source|campaign_medium|campaign_name|campaign_content|campaign_term|996700000000/);
+  });
+
+  it("updates sanitized global engagement context before public route views without reconfiguring on signup or exposing private routes", async () => {
+    window.history.replaceState({}, "", "/ru?utm_source=instagram&utm_medium=organic_social&utm_campaign=profile&utm_content=bio&email=private@example.invalid#private");
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.writeAnalyticsConsent("granted");
+    analytics.synchronizeMarketingAnalytics("/ru");
+    const initial = commands();
+    const globalContext = initial.findIndex(command => command[0] === "set");
+    const config = initial.findIndex(command => command[0] === "config");
+    expect(initial[globalContext][1]).toMatchObject({
+      send_page_view: false, page_location: "https://www.bazaar.kg/ru",
+      page_referrer: "", page_title: "BAZAAR",
+    });
+    expect(globalContext).toBeLessThan(config);
+    expect(initial[config][2]).toEqual({
+      send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false,
+    });
+    for (const field of ["page_location", "page_referrer", "page_title"])
+      expect(initial[config][2]).not.toHaveProperty(field);
+    const initialLength = commands().length;
+    window.history.pushState({}, "", "/signup?phone=996700000000#private-form");
+    analytics.synchronizeMarketingAnalytics("/signup");
+    expect(commands().slice(initialLength)).toEqual([
+      ["set", { send_page_view: false, page_location: "https://www.bazaar.kg/signup", page_referrer: "", page_title: "BAZAAR — Sign up" }],
+      ["event", "page_view", { send_to: measurementId, page_location: "https://www.bazaar.kg/signup", page_referrer: "", page_title: "BAZAAR — Sign up" }],
+    ]);
+    analytics.synchronizeMarketingAnalytics("/signup");
+    expect(commands().filter(command => command[0] === "config")).toHaveLength(1);
+    expect(commands().filter(command => command[1] === "page_view")).toHaveLength(2);
+    const beforePrivate = commands().length;
+    window.history.pushState({}, "", "/register-business/private-registration-token?email=private@example.invalid");
+    analytics.synchronizeMarketingAnalytics(window.location.pathname);
+    analytics.trackMarketingEvent("sign_up");
+    expect(commands()).toHaveLength(beforePrivate);
+    expect(JSON.stringify(commands())).not.toMatch(/private@example|996700000000|private-form|private-registration-token|utm_source=/);
+    expect((window as unknown as Record<string, unknown>)[`ga-disable-${measurementId}`]).toBe(true);
   });
 
   it("does not activate from a copied stream ID before the readiness gate is enabled", async () => {
@@ -136,8 +173,107 @@ describe("optional marketing analytics", () => {
     expect(commands().find(command => command[0] === "config")?.[2]).toMatchObject({
       send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false,
     });
+    const queued = commands();
+    expect(queued[0]).toEqual(["consent", "default", {
+      analytics_storage: "granted", ad_storage: "denied",
+      ad_user_data: "denied", ad_personalization: "denied",
+    }]);
+    expect(queued.find(command => command[0] === "set")?.[1]).toMatchObject({ send_page_view: false });
+    expect(queued.findIndex(command => command[0] === "set"))
+      .toBeLessThan(queued.findIndex(command => command[0] === "config"));
+    // Initial consent is already known: no post-config grant reconfiguration.
+    expect(queued.filter(command => command[0] === "consent")).toHaveLength(1);
     expect(JSON.stringify(commands())).not.toMatch(/private@example|996709911300|#secret|\?email=/);
   });
+
+  it("waits for SDK event processing before disabling analytics and replacing the public document", async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, "", "/signup?email=private@example.invalid#private");
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.writeAnalyticsConsent("granted");
+    analytics.synchronizeMarketingAnalytics("/signup");
+    const spa = vi.fn();
+    const hard = vi.fn(() => {
+      expect((window as unknown as Record<string, unknown>)[`ga-disable-${measurementId}`]).toBe(true);
+    });
+    const pending = analytics.trackSignupBeforeNavigation().then(() => {
+      analytics.replaceAfterMarketingSuccess("/register-business/private-token", spa, hard);
+    });
+    const events = commands().filter(command => command[1] === "sign_up");
+    expect(events).toHaveLength(1);
+    const payload = events[0][2] as { event_callback: () => void; event_timeout: number };
+    expect(payload).toMatchObject({
+      send_to: measurementId, event_timeout: 1000, method: "email",
+      page_location: "https://www.bazaar.kg/signup", page_referrer: "",
+    });
+    expect(JSON.stringify(commands())).not.toMatch(/private@example|private-token|#private/);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(hard).not.toHaveBeenCalled();
+    expect(document.querySelector("script")).not.toBeNull();
+    expect((window as unknown as Record<string, unknown>)[`ga-disable-${measurementId}`]).toBe(false);
+    payload.event_callback();
+    await pending;
+    expect(hard).toHaveBeenCalledExactlyOnceWith(window.location.origin + "/register-business/private-token");
+    expect(spa).not.toHaveBeenCalled();
+    expect(document.querySelector("script")).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+    payload.event_callback(); // A late/repeated SDK acknowledgement cannot navigate twice.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(hard).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues at the independent deadline when a blocked SDK never invokes its callback", async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, "", "/signup");
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.writeAnalyticsConsent("granted");
+    analytics.synchronizeMarketingAnalytics("/signup");
+    const finished = vi.fn();
+    const pending = analytics.trackSignupBeforeNavigation().then(finished);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(finished).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(finished).toHaveBeenCalledTimes(1);
+    expect(commands().filter(command => command[1] === "sign_up")).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("never lets a third-party dispatch exception block successful registration", async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, "", "/signup");
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.writeAnalyticsConsent("granted");
+    analytics.synchronizeMarketingAnalytics("/signup");
+    (window as AnalyticsWindow).gtag = () => { throw new Error("Synthetic blocked SDK"); };
+    const timersBefore = vi.getTimerCount();
+    await analytics.trackSignupBeforeNavigation();
+    expect(vi.getTimerCount()).toBe(timersBefore);
+  });
+
+  it.each(["declined", "dnt", "gpc", "disabled", "uninitialized", "missing SDK", "private"])(
+    "does not delay or send a signup event when measurement is unavailable: %s", async scenario => {
+      vi.useFakeTimers();
+      window.history.replaceState({}, "", "/signup");
+      const analytics = await import("@/lib/marketingAnalytics");
+      analytics.writeAnalyticsConsent("granted");
+      if (scenario !== "uninitialized") analytics.synchronizeMarketingAnalytics("/signup");
+      if (scenario === "declined") analytics.writeAnalyticsConsent("denied");
+      if (scenario === "dnt") Object.defineProperty(navigator, "doNotTrack", { value: "1", configurable: true });
+      if (scenario === "gpc") Object.defineProperty(navigator, "globalPrivacyControl", { value: true, configurable: true });
+      if (scenario === "disabled") vi.stubEnv("NEXT_PUBLIC_GA4_ENABLED", "false");
+      if (scenario === "missing SDK") delete (window as AnalyticsWindow).gtag;
+      if (scenario === "private") {
+        window.history.replaceState({}, "", "/register-business/private-token");
+        analytics.synchronizeMarketingAnalytics(window.location.pathname);
+      }
+      const before = commands().length;
+      const timersBefore = vi.getTimerCount();
+      await analytics.trackSignupBeforeNavigation();
+      expect(commands()).toHaveLength(before);
+      expect(vi.getTimerCount()).toBe(timersBefore);
+    },
+  );
 
   it("never initializes on private or secret-token pages", async () => {
     const analytics = await import("@/lib/marketingAnalytics");

@@ -29,7 +29,7 @@ import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/loca
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { TRIAL_DAYS } from "@/lib/billing/trial";
-import { replaceAfterMarketingSuccess, trackMarketingEvent } from "@/lib/marketingAnalytics";
+import { replaceAfterMarketingSuccess, trackMarketingEvent, trackSignupBeforeNavigation } from "@/lib/marketingAnalytics";
 
 type RequestValues = {
   email: string;
@@ -145,7 +145,8 @@ const SignupPage = () => {
   const signupMutation = trpc.publicAuth.signup.useMutation({
     onSuccess: async (result, variables) => {
       // Resuming an existing registration must not create another conversion.
-      if (result.accountCreated) trackMarketingEvent("sign_up");
+      // Run alongside locale persistence, then wait only at the document boundary.
+      const measurement = result.accountCreated ? trackSignupBeforeNavigation() : undefined;
       setFormError(null);
       if (result.nextPath) {
         setRedirectingToBusiness(true);
@@ -156,6 +157,7 @@ const SignupPage = () => {
             body: JSON.stringify({ locale: variables.preferredLocale }),
           });
         } finally {
+          await measurement;
           replaceAfterMarketingSuccess(result.nextPath, path => router.replace(path));
         }
         return;
@@ -180,6 +182,7 @@ const SignupPage = () => {
         toast({ variant: "info", description: t("verifyHint") });
         return;
       }
+      await measurement;
       replaceAfterMarketingSuccess("/login", path => router.replace(path));
     },
     onError: (error) => {

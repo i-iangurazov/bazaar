@@ -18,9 +18,10 @@ const mocks = vi.hoisted(() => ({
   signupMutate: vi.fn(),
   requestMutate: vi.fn(),
   requestSuccess: null as (() => void) | null,
-  signupSuccess: null as ((result: { accountCreated: boolean; nextPath?: string }, variables: { preferredLocale: string }) => Promise<void>) | null,
+  signupSuccess: null as ((result: { accountCreated: boolean; nextPath?: string; verificationEmailSent?: boolean; verifyLink?: string }, variables: { preferredLocale: string }) => Promise<void>) | null,
   signupError: null as ((error: { message: string }) => void) | null,
   track: vi.fn(),
+  trackSignup: vi.fn(() => Promise.resolve()),
   navigate: vi.fn((path: string, replace: (path: string) => void) => replace(path)),
   replace: vi.fn(),
   toast: vi.fn(),
@@ -37,7 +38,10 @@ vi.mock("@/components/language-switcher", () => ({
   LanguageSwitcher: () => <span>Interface language</span>,
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: mocks.toast }) }));
-vi.mock("@/lib/marketingAnalytics", () => ({ trackMarketingEvent: mocks.track, replaceAfterMarketingSuccess: mocks.navigate }));
+vi.mock("@/lib/marketingAnalytics", () => ({
+  trackMarketingEvent: mocks.track, trackSignupBeforeNavigation: mocks.trackSignup,
+  replaceAfterMarketingSuccess: mocks.navigate,
+}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     publicAuth: {
@@ -62,6 +66,7 @@ vi.mock("@/lib/trpc", () => ({
 describe("signup mode transitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.trackSignup.mockResolvedValue(undefined);
     mocks.locale = "ru";
     mocks.localizeErrors = false;
     mocks.modeQuery.data = undefined;
@@ -78,12 +83,54 @@ describe("signup mode transitions", () => {
     mocks.modeQuery.data = { mode: "open" };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
     render(<SignupPage />);
-    expect(mocks.track).not.toHaveBeenCalled();
+    expect(mocks.trackSignup).not.toHaveBeenCalled();
     await act(async () => mocks.signupSuccess?.({ accountCreated: false, nextPath: "/register-business/resume-token" }, { preferredLocale: "ru" }));
-    expect(mocks.track).not.toHaveBeenCalled();
+    expect(mocks.trackSignup).not.toHaveBeenCalled();
     await act(async () => mocks.signupSuccess?.({ accountCreated: true, nextPath: "/register-business/new-token" }, { preferredLocale: "ru" }));
-    expect(mocks.track).toHaveBeenCalledExactlyOnceWith("sign_up");
+    expect(mocks.trackSignup).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.track).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenLastCalledWith("/register-business/new-token", expect.any(Function));
+  });
+
+  it.each([true, false])("awaits event processing before the private business redirect, including locale failure: %s", async localeSucceeds => {
+    mocks.modeQuery.isLoading = false;
+    mocks.modeQuery.data = { mode: "open" };
+    const fetchLocale = vi.fn(() => localeSucceeds ? Promise.resolve({ ok: true }) : Promise.reject(new Error("Synthetic locale failure")));
+    vi.stubGlobal("fetch", fetchLocale);
+    let completeEvent!: () => void;
+    mocks.trackSignup.mockReturnValueOnce(new Promise(resolve => { completeEvent = resolve; }));
+    render(<SignupPage />);
+    let success!: Promise<void>;
+    await act(async () => {
+      success = mocks.signupSuccess!({ accountCreated: true, nextPath: "/register-business/private-token" }, { preferredLocale: "ru" });
+    });
+    // Catch the existing locale failure semantics before completing the SDK wait.
+    const settled = success.catch(error => error);
+    expect(fetchLocale).toHaveBeenCalledExactlyOnceWith("/api/locale", expect.objectContaining({ method: "POST" }));
+    expect(mocks.trackSignup).toHaveBeenCalledTimes(1);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toBeTruthy();
+    await act(async () => { completeEvent(); await settled; });
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/register-business/private-token", expect.any(Function));
+    expect(mocks.signupMutate).not.toHaveBeenCalled(); // Never retry the successful server write.
+  });
+
+  it("awaits the same bounded event before a successful signup redirects to login", async () => {
+    mocks.modeQuery.isLoading = false;
+    mocks.modeQuery.data = { mode: "open" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    let completeEvent!: () => void;
+    mocks.trackSignup.mockReturnValueOnce(new Promise(resolve => { completeEvent = resolve; }));
+    render(<SignupPage />);
+    let success!: Promise<void>;
+    await act(async () => {
+      success = mocks.signupSuccess!({ accountCreated: true }, { preferredLocale: "ru" });
+    });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    await act(async () => { completeEvent(); await success; });
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/login", expect.any(Function));
+    expect(mocks.trackSignup).toHaveBeenCalledTimes(1);
+    expect(mocks.signupMutate).not.toHaveBeenCalled();
   });
 
   it("translates displayed validation without clearing values or changing the selected account language", () => {
