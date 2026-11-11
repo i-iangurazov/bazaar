@@ -1,1 +1,3 @@
-"NSCameraUsageDescription" = "Разрешите камеру, чтобы сканировать штрихкоды товаров в Bazaar.";
+"NSCameraUsageDescription" = "Камера нужна для сканирования штрихкодов, фотографий товаров и вложений в Baam.";
+"NSMicrophoneUsageDescription" = "Записывайте голосовые запросы для помощника Baam.";
+"NSPhotoLibraryUsageDescription" = "Выберите фотографии для товаров или запросов в Baam.";

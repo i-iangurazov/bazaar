@@ -7,11 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        BAA000000000000000000041 /* BazaarAppleCancellationJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000042 /* BazaarAppleCancellationJournal.swift */; };
+        BAA000000000000000000017 /* BazaarAppleTransactionFinisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000018 /* BazaarAppleTransactionFinisher.swift */; };
+        BAA000000000000000000021 /* BazaarAppleBillingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000022 /* BazaarAppleBillingTests.swift */; };
+        BAA000000000000000000023 /* BazaarNativeTests.storekit in Resources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000024 /* BazaarNativeTests.storekit */; };
+        BAA000000000000000000011 /* BazaarBillingOrigin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000012 /* BazaarBillingOrigin.swift */; };
+        BAA000000000000000000013 /* BazaarBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000014 /* BazaarBridgeViewController.swift */; };
+        BAA000000000000000000015 /* BazaarAppleBillingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000016 /* BazaarAppleBillingPlugin.swift */; };
         BAA000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000002 /* PrivacyInfo.xcprivacy */; };
         BAA000000000000000000003 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000004 /* InfoPlist.strings */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
-		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
@@ -20,7 +26,25 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+        BAA000000000000000000038 /* PBXContainerItemProxy */ = {
+            isa = PBXContainerItemProxy;
+            containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+            proxyType = 1;
+            remoteGlobalIDString = 504EC3031FED79650016851F;
+            remoteInfo = App;
+        };
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+        BAA000000000000000000042 /* BazaarAppleCancellationJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarAppleCancellationJournal.swift; sourceTree = "<group>"; };
+        BAA000000000000000000018 /* BazaarAppleTransactionFinisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarAppleTransactionFinisher.swift; sourceTree = "<group>"; };
+        BAA000000000000000000022 /* BazaarAppleBillingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarAppleBillingTests.swift; sourceTree = "<group>"; };
+        BAA000000000000000000024 /* BazaarNativeTests.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = BazaarNativeTests.storekit; sourceTree = "<group>"; };
+        BAA000000000000000000031 /* AppNativeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppNativeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+        BAA000000000000000000012 /* BazaarBillingOrigin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarBillingOrigin.swift; sourceTree = "<group>"; };
+        BAA000000000000000000014 /* BazaarBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarBridgeViewController.swift; sourceTree = "<group>"; };
+        BAA000000000000000000016 /* BazaarAppleBillingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarAppleBillingPlugin.swift; sourceTree = "<group>"; };
         BAA000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
         BAA000000000000000000005 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
         BAA000000000000000000006 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -39,6 +63,12 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+        BAA000000000000000000033 /* Frameworks */ = {
+            isa = PBXFrameworksBuildPhase;
+            buildActionMask = 2147483647;
+            files = ();
+            runOnlyForDeploymentPostprocessing = 0;
+        };
 		504EC3011FED79650016851F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -55,6 +85,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+                BAA000000000000000000025 /* AppNativeTests */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -63,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+                BAA000000000000000000031 /* AppNativeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +102,11 @@
 		504EC3061FED79650016851F /* App */ = {
 			isa = PBXGroup;
 			children = (
+                BAA000000000000000000042 /* BazaarAppleCancellationJournal.swift */,
+                BAA000000000000000000018 /* BazaarAppleTransactionFinisher.swift */,
+                BAA000000000000000000012 /* BazaarBillingOrigin.swift */,
+                BAA000000000000000000014 /* BazaarBridgeViewController.swift */,
+                BAA000000000000000000016 /* BazaarAppleBillingPlugin.swift */,
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
                 BAA000000000000000000002 /* PrivacyInfo.xcprivacy */,
                 BAA000000000000000000004 /* InfoPlist.strings */,
@@ -85,13 +122,38 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+        BAA000000000000000000025 /* AppNativeTests */ = {
+            isa = PBXGroup;
+            children = (
+                BAA000000000000000000022 /* BazaarAppleBillingTests.swift */,
+                BAA000000000000000000024 /* BazaarNativeTests.storekit */,
+            );
+            path = AppNativeTests;
+            sourceTree = "<group>";
+        };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+        BAA000000000000000000030 /* AppNativeTests */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = BAA000000000000000000035 /* Build configuration list for PBXNativeTarget "AppNativeTests" */;
+            buildPhases = (
+                BAA000000000000000000032 /* Sources */,
+                BAA000000000000000000033 /* Frameworks */,
+                BAA000000000000000000034 /* Resources */,
+            );
+            buildRules = ();
+            dependencies = (BAA000000000000000000039 /* PBXTargetDependency */,);
+            name = AppNativeTests;
+            productName = AppNativeTests;
+            productReference = BAA000000000000000000031 /* AppNativeTests.xctest */;
+            productType = "com.apple.product-type.bundle.unit-test";
+        };
 		504EC3031FED79650016851F /* App */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 504EC3161FED79650016851F /* Build configuration list for PBXNativeTarget "App" */;
 			buildPhases = (
+				BAA000000000000000000051 /* Prepare fixed native channel */,
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
@@ -117,6 +179,10 @@
 				LastSwiftUpdateCheck = 920;
 				LastUpgradeCheck = 920;
 				TargetAttributes = {
+                    BAA000000000000000000030 = {
+                        CreatedOnToolsVersion = 26.6;
+                        TestTargetID = 504EC3031FED79650016851F;
+                    };
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
@@ -143,11 +209,18 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+                BAA000000000000000000030 /* AppNativeTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+        BAA000000000000000000034 /* Resources */ = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (BAA000000000000000000023 /* BazaarNativeTests.storekit in Resources */,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
 		504EC3021FED79650016851F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -157,7 +230,6 @@
                 BAA000000000000000000003 /* InfoPlist.strings in Resources */,
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
-				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
 			);
@@ -165,17 +237,55 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+        BAA000000000000000000051 /* Prepare fixed native channel */ = {
+            isa = PBXShellScriptBuildPhase;
+            alwaysOutOfDate = 1;
+            buildActionMask = 2147483647;
+            files = ();
+            inputPaths = (
+                "$(SRCROOT)/App/capacitor.config.json",
+                "$(SRCROOT)/../../scripts/mobile/ios-prepare-config.sh",
+                "$(SRCROOT)/../../scripts/mobile/ios-build-config.ts",
+            );
+            name = "Prepare fixed native channel";
+            outputPaths = ("$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/capacitor.config.json",);
+            runOnlyForDeploymentPostprocessing = 0;
+            shellPath = /bin/sh;
+            shellScript = "/bin/sh \"$SRCROOT/../../scripts/mobile/ios-prepare-config.sh\"\n";
+        };
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+        BAA000000000000000000032 /* Sources */ = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (BAA000000000000000000021 /* BazaarAppleBillingTests.swift in Sources */,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
 		504EC3001FED79650016851F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                BAA000000000000000000041 /* BazaarAppleCancellationJournal.swift in Sources */,
+                BAA000000000000000000017 /* BazaarAppleTransactionFinisher.swift in Sources */,
+                BAA000000000000000000011 /* BazaarBillingOrigin.swift in Sources */,
+                BAA000000000000000000013 /* BazaarBridgeViewController.swift in Sources */,
+                BAA000000000000000000015 /* BazaarAppleBillingPlugin.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+        BAA000000000000000000039 /* PBXTargetDependency */ = {
+            isa = PBXTargetDependency;
+            target = 504EC3031FED79650016851F /* App */;
+            targetProxy = BAA000000000000000000038 /* PBXContainerItemProxy */;
+        };
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
         BAA000000000000000000004 /* InfoPlist.strings */ = {
@@ -207,6 +317,39 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+        BAA000000000000000000036 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                BUNDLE_LOADER = "$(TEST_HOST)";
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",);
+                PRODUCT_BUNDLE_IDENTIFIER = "kg.bazaar.app.native-tests";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+                TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/App";
+            };
+            name = Debug;
+        };
+        BAA000000000000000000037 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                BUNDLE_LOADER = "$(TEST_HOST)";
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",);
+                PRODUCT_BUNDLE_IDENTIFIER = "kg.bazaar.app.native-tests";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+                TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/App";
+            };
+            name = Release;
+        };
 		504EC3141FED79650016851F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
@@ -320,6 +463,10 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
+				BAZAAR_APP_DISPLAY_NAME = Bazaar;
+				BAZAAR_NATIVE_CHANNEL = development;
+				BAZAAR_ALLOWED_DISTRIBUTION = development;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
@@ -344,6 +491,10 @@
 		504EC3181FED79650016851F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BAZAAR_APP_DISPLAY_NAME = Bazaar;
+				BAZAAR_NATIVE_CHANNEL = production;
+				BAZAAR_ALLOWED_DISTRIBUTION = "app-store";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
@@ -364,14 +515,115 @@
 			};
 			name = Release;
 		};
+		BAA000000000000000000052 /* ReleaseStaging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = ReleaseStaging;
+		};
+		BAA000000000000000000053 /* ReleaseStaging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BAZAAR_APP_DISPLAY_NAME = "Bazaar Test";
+				BAZAAR_NATIVE_CHANNEL = "staging-testflight";
+				BAZAAR_ALLOWED_DISTRIBUTION = "testflight-internal";
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				APS_ENVIRONMENT = production;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = App/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = kg.bazaar.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = BAZAAR_STAGING;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = ReleaseStaging;
+		};
+        BAA000000000000000000054 /* ReleaseStaging */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                BUNDLE_LOADER = "$(TEST_HOST)";
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",);
+                PRODUCT_BUNDLE_IDENTIFIER = "kg.bazaar.app.native-tests";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = "1,2";
+                TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/App";
+            };
+            name = ReleaseStaging;
+        };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+        BAA000000000000000000035 /* Build configuration list for PBXNativeTarget "AppNativeTests" */ = {
+            isa = XCConfigurationList;
+            buildConfigurations = (BAA000000000000000000036 /* Debug */, BAA000000000000000000037 /* Release */, BAA000000000000000000054 /* ReleaseStaging */,);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
 		504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				504EC3141FED79650016851F /* Debug */,
 				504EC3151FED79650016851F /* Release */,
+				BAA000000000000000000052 /* ReleaseStaging */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -381,6 +633,7 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+				BAA000000000000000000053 /* ReleaseStaging */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -1,0 +1,274 @@
+# Native Apple billing contract and verification
+
+The iOS application keeps bundle ID `kg.bazaar.app`, Capacitor 8 and minimum iOS
+15. StoreKit does not establish Bazaar organization access. Signed transactions
+are submitted to the authenticated server; only its verified durable records and
+entitlement projection determine effective access on iOS and the website.
+
+## Bridge
+
+`src/lib/native/appleBilling.ts` registers `BazaarAppleBilling`. It is unavailable
+in ordinary browsers and Android. Product metadata includes Apple's localized
+price/name/description, decimal price string, currency, product type, and an
+auto-renewable subscription's group/period. Full catalogs are fetched in
+sequential batches of at most 100 IDs, including additions and all approved terms.
+
+`purchaseAppleProduct(intentId)` accepts only an opaque server-owned intent ID.
+Native code reads the current WebKit session, POSTs
+`/api/billing/apple/native/authorize`, loads the returned StoreKit product, and
+re-authorizes immediately before Apple's purchase sheet. The server selects the
+allowlisted SKU and organization-bound UUID `appAccountToken`. JavaScript cannot
+choose either value. Results distinguish `purchased`, `pending` and `cancelled`;
+errors have stable codes. A purchase result never grants rights or finishes a
+transaction.
+
+The first native request includes `prepareOnly: true`: it validates ownership,
+catalog and conflicts without marking the intent as durably authorized. A
+metadata/preflight failure therefore does not create a possibly-charged hold.
+The second request omits that flag and durably authorizes immediately before the
+sheet. After that durable authorization, every further prepare/authorize request
+for the same intent is refused. Retrying an unknown result cannot reopen a second
+payment sheet, including for consumables and non-renewing products. Late purchases
+retain their recovery protection.
+
+Before presenting an auto-renewable purchase, native code checks StoreKit's
+verified current entitlements in the selected subscription group. A different or
+missing organization token, missing group, or unverified entitlement fails closed
+before Apple's sheet. The same stable organization token can change its approved
+plan; unrelated verified groups do not block it. Non-renewing/consumable offers
+keep their existing explicit-intent behavior. This preflight never grants access
+and does not replace immutable server transaction/organization binding.
+
+Signed evidence has string `transactionId`/`originalTransactionId` (never a JS
+number), `productId`, `signedTransactionInfo`, dates, ownership information and
+optional `appAccountToken`/environment. The app must confirm the JWS on the server,
+then call `finishAppleTransaction(transactionId)`. Native code reads StoreKit's
+verified transaction and independently POSTs
+`/api/billing/apple/native/acknowledge` with the transaction ID and JWS. It calls
+`Transaction.finish()` only after `finishAllowed: true`. JavaScript cannot supply
+an acknowledgement flag. The ACK route requires a durable matching server record
+and does not create an entitlement. A refused/network-failed ACK leaves the
+transaction in StoreKit's queue for recovery.
+
+## Recovery and Apple account actions
+
+- A definite StoreKit cancellation (the `.userCancelled` result or thrown
+  `StoreKitError.userCancelled` from `Product.purchase`) is synchronously written
+  to `Application Support/AppleBillingRecovery/cancelled-intents.json` before the
+  native promise can resolve. Only the opaque intent ID and canonical compiled
+  origin are stored, with a schema version. The atomic file has complete iOS data
+  protection, owner-only file/directory permissions, and backup exclusion. It
+  contains no JWS, cookies, account token, user ID or organization ID and does not
+  use UserDefaults. Corrupt/unknown/oversized journals fail closed; a persistence
+  error is reported as `APPLE_CANCELLATION_STORAGE_FAILED` rather than a falsely
+  completed cancellation. Pending, unverified and network-unknown purchase
+  outcomes are never journaled as cancellations.
+- Native POSTs `/api/billing/apple/native/cancel` with `{intentId}`. Only the
+  current authenticated, scoped server response can clear that journal entry:
+  `canceled: true` acknowledges cancellation; `recorded: true` acknowledges money
+  already stored on the server and takes precedence. Recorded money goes through
+  receipt/status review, never a cancelled-payment message. Malformed, missing or
+  lost responses retain the journal for another attempt. The cancelled bridge
+  result has required `cancellationAcknowledged` and `cancellationRecorded`
+  booleans; an `APPLE_CANCELLED` exception is never converted into that result by
+  the TypeScript wrapper.
+- `retryAppleCancellations()` retries this journal on authenticated login/resume
+  and returns `pendingCount`, `acknowledgedCount` and `recordedCount`. It does not
+  open an Apple sheet. Entries for other compiled origins are untouched. A missing
+  session or 401 retains entries without claiming they belong to the current
+  organization; 403/404 entries remain stored and are excluded from the current
+  organization's pending count. They can be acknowledged after the appropriate
+  administrator returns. Successful ACK removal rereads the file, preserving
+  other entries added while a network request was in flight.
+- A native `Transaction.updates` observer starts when the plugin loads. It emits
+  verified evidence or an explicit verification failure while the trusted app is
+  loaded. It never finishes an update automatically.
+- `getUnfinishedAppleTransactions()` rereads StoreKit's durable queue, including
+  after app termination. It never prompts for Apple Account authentication. Each
+  valid record must be server-confirmed before it is acknowledged and finished.
+- `restoreApplePurchases()` is an explicit user action. It calls `AppStore.sync`
+  once and returns the first history page. Continue with
+  `getAppleTransactionHistory(nextCursor)` until `nextCursor` is `null`. Every
+  page returns verification failures separately. Date/ID cursors do not skip
+  older records when new transactions arrive. Unfinished recovery is separate
+  from history paging, so an old unpaid fulfillment obligation cannot be hidden
+  by the first page of newer renewals.
+- `SKIncludeConsumableInAppPurchaseHistory` enables finished-consumable history
+  on supporting OS versions. The server ledger remains authoritative, including
+  when a device/older OS cannot return a finished consumable. Restore never
+  constitutes a second purchase or grants the same credits again.
+- `showAppleSubscriptionManagement()` opens Apple's management sheet.
+  `requestAppleRefund(transactionId)` first requires a recorded same-organization
+  transaction, then opens Apple's refund request flow. `submitted` means a
+  request was sent; verified server notifications determine refund/revocation.
+
+### Operational cancellation recovery limit
+
+The server requires the original intent creator, current organization and ADMIN
+role. If that payer is deleted, loses the role or leaves before a cancellation
+ACK, another administrator cannot claim or clear the local proof. Preserve the
+journal and the organization's authorized pending/review record for server/support
+reconciliation. A role change, account deletion, missing local entry, elapsed time
+or failed request is not evidence that Apple did not charge. Do not clear money
+holds, reassign the intent or open another payment solely to remove a warning.
+Review operations must distinguish this case from a currently authorized
+administrator whose journal will retry normally. This limitation still requires
+a verified support/reconciliation procedure before commercial release.
+
+## Native security boundary
+
+The custom bridge controller checks the actual WebKit message frame and origin
+before Capacitor discards that information. Every bridge message must come from
+the trusted main frame and the currently loaded exact origin. This also covers
+plugin class aliases, listeners and indirect bridge callbacks. Production trusts
+only `https://www.bazaar.kg:443`. The dedicated non-DEBUG `ReleaseStaging` channel
+trusts only `https://bazaar-ios-preview-20261111.vercel.app:443`, with a matching
+per-build Capacitor configuration and Sandbox-only purchase authorization/evidence.
+An ordinary DEBUG build retains its explicit development origin. JavaScript
+cannot alter these origins. Each billing operation
+checks it again, including before returning signed records after navigation.
+The controller refuses a mismatched Release config before loading a remote page.
+See `IOS_TESTFLIGHT_STAGING.md` for archive checks and the forced internal-only
+TestFlight export; a staging archive is not a production/App Store artifact.
+
+Native API calls use an ephemeral URLSession, standard TLS validation, no shared
+cookie/credential/cache storage and no redirects. Only unexpired, domain-scoped
+NextAuth session cookie chunks at `/` are copied from WebKit. Cookies/JWS are not
+logged or copied into UserDefaults/files by this integration. Background events
+do not retain signed payloads for untrusted/offline pages; unfinished recovery
+obtains them from StoreKit when the user returns.
+
+Native requests fail before copying auth cookies if WebKit has an active scoped
+impersonation session. Omitting unrelated cookies therefore cannot hide
+impersonation from the server's billing boundary. Capacitor native logging is
+disabled so its DEBUG result logging cannot expose signed transaction payloads.
+
+The microphone permission purpose was added for the existing Baam voice capture.
+Camera/photo/voice purposes are localized in English, Russian and Kyrgyz. Purpose
+strings do not request permissions by themselves. AI processing consent remains
+an independently enforced application/server requirement.
+
+## Local checks
+
+`tests/unit/native-apple-billing.test.ts` covers platform gating, catalog batching,
+localized prices, intent-only purchase, journaled cancellation/retry, exact IDs, ACK
+refusal/retry, background recovery versus explicit sync, pagination, listeners and
+Apple management/refund responses. Run with the repository's isolated test runner.
+
+`scripts/mobile/test-apple-cancellation-journal.swift` compiles the production
+journal with the production origin policy. It covers restart/lost-response
+recovery, idempotency, scoped ACK removal, strict response decoding, recorded-money
+precedence, backup/permissions, bounded opaque contents, storage failure and
+corrupt/unknown-version preservation. Compile/run it separately from the policy
+executable below. Verified 2026-11-11: it compiled and exited 0 with **40 checks
+passed**; evidence: `.local/ios-release-20261111/apple-cancellation-journal-check.log`.
+The iOS-only complete-protection branches were also compiled in the full App
+build. Device lock/unlock and real interruption still require iPhone checks.
+
+The production origin/cookie policy is compiled directly into an executable:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer nice -n 10 \
+  /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc \
+  -sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk \
+  ios/App/App/BazaarBillingOrigin.swift scripts/mobile/test-apple-billing-policy.swift \
+  -o .local/ios-release-20261111/apple-billing-policy-check
+.local/ios-release-20261111/apple-billing-policy-check
+```
+
+Verified 2026-11-11: exit 0, **33 policy checks passed**, including impersonation
+and same-subscription-group organization-token checks. Final evidence:
+`.local/ios-release-20261111/apple-billing-policy-check-final.log`. `plutil` validates the
+project/plist; `xmllint` validates the storyboard/shared test scheme. These checks
+do not establish a compiled native app or a real Apple purchase.
+
+The separate shared `AppStoreKitTests` scheme contains `AppNativeTests` with
+synthetic `kg.bazaar.testing.*` SKUs. Its configuration is included only in the
+test bundle. Five StoreKit tests use the actual production transaction finisher:
+ACK refusal/recovery, preserving another purchase, repeated ACK, unknown IDs, and
+unverified transactions. The DEBUG-only test-host flag prevents loading the
+customer website. This scheme is never the release configuration or a production
+SKU/price approval. Run one simulator and one architecture, serialized with other
+heavy work, with `-jobs 2 -parallel-testing-enabled NO`.
+
+Verified 2026-11-11: the complete unsigned arm64 Simulator **App build passed**
+using Xcode 26.6, SDK 26.5, one architecture and `-jobs 2`. The log is
+`.local/ios-release-20261111/storekit-app-simulator-build-matched.log`. The final
+incremental build of the group guard, read-only prepare phase and collected-data
+manifest also passed; log:
+`.local/ios-release-20261111/storekit-app-simulator-build-final.log`. This
+compiled the bridge, StoreKit implementation, message/origin guard and actual
+phone plugin dependencies.
+
+The subsequent cancellation-journal build also exited 0 / `BUILD SUCCEEDED` with
+the same one-architecture unsigned Simulator setup:
+`.local/ios-release-20261111/storekit-app-simulator-build-cancellation.log`.
+The origin/cookie/subscription policy was recompiled and all 33 checks passed;
+log: `.local/ios-release-20261111/apple-billing-policy-check-cancellation.log`.
+No simulator was booted and the known-failing StoreKit purchase harness was not
+repeated for this change. These checks establish compiled storage/recovery policy,
+not a successful sandbox purchase or real-device cancellation lifecycle.
+
+The subsequent full non-DEBUG `AppStaging`/`ReleaseStaging` and normal
+`App`/`Release` Simulator builds also passed. The actual bundles were inspected
+for their distinct fixed origins, identity/distribution markers and all 11 native
+plugins. The updated pure policy passed 53 checks in each compiled channel, and
+the staging+DEBUG combination fails compilation intentionally. Complete logs,
+bundle inspection, compiler-thread cap evidence and still-missing signing/device
+verification are recorded in `IOS_TESTFLIGHT_STAGING.md`. The unsigned arm64
+device-platform staging archive also passed and its actual app/manifest/plugins
+and secret markers were inspected. Its local rehearsal build is not signed,
+installable or TestFlight-ready. The successful Release builds/archive used
+`-jobs 2` but actual WMO threads 10. Attempts to cap WMO internals exposed an
+object/output-map mismatch; the helper retains the verified working mode and
+does not claim an effective two-thread WMO cap.
+
+The final compiled `App.app/PrivacyInfo.xcprivacy` is plist-valid and byte-matches
+the source (SHA-256 `d8b53410b91be51749ded955acdbac4bb000c4181bf4a49fc8455bb538ac6532`).
+It contains 18 unique app-level collected-data dictionaries with the four required
+keys, linked status and non-tracking status. Category/purpose evidence and final
+owner/configuration review are documented in `IOS_APP_PRIVACY_AUDIT.md`; no App
+Store Connect privacy questionnaire was submitted. The distribution archive's
+final privacy report remains a separate release check.
+
+The installed SDK reports build `23F81a` / version 26.5.1 while the official
+runtime download installed iOS 26.5 `23F73`. Xcode initially rejected every
+destination despite `simctl` showing that verified installed runtime. The
+supported command `simctl runtime match set iphoneos26.5 23F73` selected the
+installed runtime; destinations and compilation then worked. The override is
+specific to this SDK and reversible with `simctl runtime match set iphoneos26.5
+--default`. No platform files or signatures were modified and no duplicate
+runtime was downloaded. Also keep the explicit shared `App` scheme: once a
+shared test scheme exists, Xcode need not generate an implicit application scheme.
+
+The StoreKit test target also compiled and executed on one iPhone 17 Pro
+Simulator (iOS 26.5 `23F73`). Both the initial unsigned run and the retry with
+the explicit test configuration and local ad hoc signature returned exit 65:
+four synthetic purchase cases failed with `SKInternalErrorDomain Code=3` while
+saving the StoreKit test configuration and `StoreKitError.notEntitled`; the
+unknown-ID case passed. Logs and result bundles:
+
+- `.local/ios-release-20261111/storekit-native-tests.log` / `.xcresult`
+- `.local/ios-release-20261111/storekit-native-tests-configured.log` / `.xcresult`
+
+These errors match the [iOS 26.5 CLI StoreKit Testing regression discussed with
+Apple DTS](https://developer.apple.com/forums/thread/826971). This is a diagnostic
+inference, not evidence that purchase/fulfillment passed. No invented StoreKit
+entitlement, private API/container workaround, live purchase or GUI/account-access
+workaround was used. A diagnostic collection step additionally could not locate
+`simctl` because the global developer directory remains Command Line Tools;
+build commands themselves used the explicit full Xcode directory. The test
+simulator is shut down and no simulator remains booted.
+
+Successful native StoreKit lifecycle execution, a signed device archive,
+sandbox/real iPhone and TestFlight evidence remain required. Local StoreKit evidence
+cannot substitute for server JWS verification with Apple's production/sandbox
+certificates or for approved App Store Connect products and signing.
+
+## Primary references
+
+- [StoreKit unfinished transactions](https://developer.apple.com/documentation/storekit/transaction/unfinished)
+- [StoreKit transaction updates](https://developer.apple.com/documentation/storekit/transaction/updates)
+- [StoreKit transaction history](https://developer.apple.com/documentation/storekit/transaction/all)
+- [Finishing a transaction](https://developer.apple.com/documentation/storekit/transaction/finish())
+- [Capacitor iOS plugins](https://capacitorjs.com/docs/plugins/ios)
