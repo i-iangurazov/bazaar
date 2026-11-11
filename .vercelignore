@@ -11,7 +11,8 @@ dist
 .pnpm-store
 tmp
 coverage
-uploads
+/uploads/
+/public/uploads/
 artifacts/
 *.log
 *.tsbuildinfo
