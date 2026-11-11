@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { businessDateKey } from "@/lib/timezone";
 import { prisma } from "@/server/db/prisma";
+import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { LIFETIME_ORGANIZATION_IDS } from "./lifetimeOrganizations";
@@ -181,6 +182,40 @@ const sameOperation = (record: RefundRecord, input: NormalizedInput) =>
   record.bankTransferredOn.toISOString().slice(0, 10) === input.bankTransferredOn &&
   record.reason === input.reason;
 
+const lockAuthorizedRefundInvoice = async (
+  tx: Prisma.TransactionClient,
+  invoiceId: string,
+  actorId: string,
+) => {
+  const seed = await tx.subscriptionInvoice.findUnique({
+    where: { id: invoiceId },
+    select: { organizationId: true },
+  });
+  if (!seed) invoiceNotFound();
+  // Organization first matches grant/refund and own-account deletion ordering.
+  // Do not lock the operator's separate organization: no cross-org lock cycle
+  // is needed to protect the actor's identity and current platform capability.
+  await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${seed.organizationId} FOR UPDATE`;
+  if (typeof actorId !== "string" || !actorId) throw new AppError("forbidden", "FORBIDDEN", 403);
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${actorId} FOR UPDATE`;
+  const actor = await tx.user.findUnique({
+    where: { id: actorId },
+    select: { email: true, organizationId: true, isActive: true, deletedAt: true },
+  });
+  // Platform capability comes from the current allowlisted email, not ADMIN
+  // role or an earlier request/session flag. Hold the row through commit.
+  if (!actor || !actor.organizationId || !actor.isActive || actor.deletedAt || !isPlatformOwnerEmail(actor.email)) {
+    throw new AppError("forbidden", "FORBIDDEN", 403);
+  }
+  const invoice = await tx.subscriptionInvoice.findUnique({
+    where: { id: invoiceId },
+    include: invoiceInclude,
+  });
+  if (!invoice) invoiceNotFound();
+  assertEligible(invoice);
+  return invoice;
+};
+
 /** Records an operator's bank-transfer attestation. It never contacts a bank/provider,
  * changes the payment, adjusts access, or sends another payment notification. */
 export async function recordManualSubscriptionRefund(raw: RecordInput) {
@@ -188,24 +223,7 @@ export async function recordManualSubscriptionRefund(raw: RecordInput) {
   try {
     return await prisma.$transaction(
       async (tx) => {
-        const originalOperation = await tx.manualSubscriptionRefund.findUnique({
-          where: { idempotencyKey: input.idempotencyKey },
-        });
-        if (originalOperation && !sameOperation(originalOperation, input))
-          fail("billingManualRefundIdempotencyConflict", true);
-        const seed = await tx.subscriptionInvoice.findUnique({
-          where: { id: input.invoiceId },
-          select: { organizationId: true },
-        });
-        if (!seed) invoiceNotFound();
-        // Match the payment/grant lock order and serialize cumulative partial refunds.
-        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${seed.organizationId} FOR UPDATE`;
-        const invoice = await tx.subscriptionInvoice.findUnique({
-          where: { id: input.invoiceId },
-          include: invoiceInclude,
-        });
-        if (!invoice) invoiceNotFound();
-        assertEligible(invoice);
+        const invoice = await lockAuthorizedRefundInvoice(tx, input.invoiceId, input.actorId);
         const previous = await tx.manualSubscriptionRefund.findUnique({
           where: { idempotencyKey: input.idempotencyKey },
         });
@@ -274,25 +292,21 @@ export async function recordManualSubscriptionRefund(raw: RecordInput) {
     // Recover only an identical committed record, never issue another transfer/key.
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002")
       throw error;
-    const previous = await prisma.manualSubscriptionRefund.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
-    });
-    if (previous) {
-      if (!sameOperation(previous, input)) fail("billingManualRefundIdempotencyConflict", true);
-      const invoice = await prisma.subscriptionInvoice.findUnique({
-        where: { id: input.invoiceId },
-        include: invoiceInclude,
+    // The failed transaction released its locks. Reauthorize under the same
+    // organization -> actor ordering before an idempotent financial summary.
+    return prisma.$transaction(async (tx) => {
+      const invoice = await lockAuthorizedRefundInvoice(tx, input.invoiceId, input.actorId);
+      const previous = await tx.manualSubscriptionRefund.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
       });
-      if (!invoice) invoiceNotFound();
-      assertEligible(invoice);
-      return summarize(invoice);
-    }
-    if (
-      await prisma.manualSubscriptionRefund.findUnique({
-        where: { bankOperationKey: input.bankOperationKey },
-      })
-    )
-      fail("billingManualRefundBankOperationUsed", true);
-    throw error;
+      if (previous) {
+        if (!sameOperation(previous, input)) fail("billingManualRefundIdempotencyConflict", true);
+        return summarize(invoice);
+      }
+      if (await tx.manualSubscriptionRefund.findUnique({ where: { bankOperationKey: input.bankOperationKey } })) {
+        fail("billingManualRefundBankOperationUsed", true);
+      }
+      throw error;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
   }
 }
