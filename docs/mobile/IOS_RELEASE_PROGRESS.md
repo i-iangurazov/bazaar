@@ -76,12 +76,12 @@ synthetic fixture, or browser screenshot is not a verified native release.
 | R11 | Renewals, expiry, grace/retry, plan changes, refund and revocation update only the correct rights | DB lifecycle tests with independent Apple and GoPay grants | Open |
 | R12 | Physical-store customer payments stay separate from Bazaar digital sales | Source and UI review; POS/payment regressions | Open |
 | R13 | Signed, reproducible iOS archive and app registration are ready | Registered intended bundle ID, team/capabilities/profiles, archive/IPA validation and upload processing | Unsigned iPhoneOS arm64 archive passes inspection; signing/app registration/upload remain open |
-| R14 | iOS and web maintain all established customer workflows | Native/mobile/desktop checks for POS, prices, products, inventory, documents, reports and enabled integrations | 22 desktop/mobile browser checks and six loaded-profile checks pass; native/device acceptance remains open |
+| R14 | iOS and web maintain all established customer workflows | Native/mobile/desktop checks for POS, prices, products, inventory, documents, reports and enabled integrations | Latest 11 desktop/mobile products/stock/closed-POS checks plus earlier 22 browser and six profile checks pass; native/device acceptance remains open |
 | R15 | Phone features and recovery work | Device checks for camera/scanner/photos/files/voice, keyboard, permissions, links, backgrounding, network loss and retry | Open |
 | R16 | Complete own-account deletion preserves required business records | Reauthentication/confirmation, ownership handling, personal-data removal/session invalidation and real-DB tests | Implemented; PostgreSQL and browser dialog checks pass; actual iPhone acceptance remains |
 | R17 | Privacy, AI disclosures/consent and subscription deletion explanations are correct | Data/processor inventory, in-app consent tests, privacy manifest and store declarations reviewed against actual behavior | Implementation, boundary tests and archive manifest inspected; final store declarations/device acceptance remain |
 | R18 | Russian, Kyrgyz and English strings are complete | Translation validation and UI review of new/error/recovery states | Translation validation and focused localized UI tests pass; native localization acceptance remains |
-| R19 | Required application checks and isolated integration tests pass | Typecheck, lint, translation check, relevant tests, web production build, native build; commands/results recorded | 4,992 whole-suite tests plus 76 bounded follow-up tests pass; three pooling checks skipped; quality/cloud build pass; native purchase testing remains incomplete |
+| R19 | Required application checks and isolated integration tests pass | Typecheck, lint, translation check, relevant tests, web production build, native build; commands/results recorded | Latest whole run has 5,070 passes and one outdated query expectation; corrected file passes all 13 cases; three pooling checks unrun; current quality/cloud/native archive checks pass; native purchase testing remains incomplete |
 | R20 | Real iPhone TestFlight verification is complete | Signed processed build installed on a real iPhone; full owner/device test script completed with evidence | Open |
 | R21 | App Store and IAP review materials are ready | Actual native screenshots, listing/icon/support/privacy, ratings/encryption, review credentials and separate synthetic organization | Open |
 | R22 | Production operations and rollback are prepared | Verified notification/reconciliation monitoring, support playbook, safe server rollout and rollback rehearsal | Open |
@@ -513,3 +513,69 @@ Final typecheck, lint and translation validation all passed again after the
 bounded reversal correction. Whole-application regression and the immutable
 cloud Preview rebuild follow this checkpoint; their older baseline results are
 not claimed as verification of this latest source.
+
+### Deployed current application and whole-regression checkpoint
+
+Committed application source `9cc3dd269a83bac459751870290ae0c7d3945974` built
+successfully in the dedicated Preview project. Deployment
+`dpl_AtVgtY3C3NgHAGpCmXAou7V9Vzar` is READY, with exact Preview OIDC, source,
+project and stable alias binding checked again. This is a production-mode web
+build in the isolated Preview, not a customer production deployment.
+
+- Current-source real cloud HTTP checks pass **16/16** for login, image
+  upload/attachment/read, private CSV job/download, exact image ZIP and access
+  denials. A's two independent logins pass **7/7** prepaid-access checks after
+  migration and deployment, with current/future test periods and original
+  consumed quotas intact. These remain synthetic fixtures, not real charges.
+- An explicitly pinned MANUAL demo now has one audited register and one real
+  reviewed stock receiving through the existing domain services: three original
+  products, 65 units in total and fractional KGS retail prices. Three movements,
+  snapshots, costs, prices and all eight expected audit actions were verified;
+  all 27 protected financial/access/usage model hashes stayed unchanged. No
+  provider request, shift, sale, cash movement or customer payment was created.
+- The complete single-worker regression run finished 538 files / 5,074 tests:
+  **536 files and 5,070 tests passed**, one file/test failed because its exact
+  query expectation omitted the newly required `dependencyRevokedAt:null`
+  filter, and the existing three Docker/PgBouncer tests were skipped. The
+  expectation was updated without changing application behavior; its complete
+  13-case file then passed. This accounts for every executed test, but is
+  explicitly two runs rather than a claimed clean rerun of the whole suite.
+- The current native archive, quality checks and all runtime application source
+  remain unchanged by that test-only correction. No additional full regression
+  was run merely to repeat the already passing cases. The skipped pooling tests
+  have not been represented as passed.
+- Both owned local PostgreSQL and Redis are now confirmed stopped; their data
+  and useful build caches remain. PostgreSQL's first bounded shutdown wait
+  expired while it completed its existing checkpoint; its own log then confirmed
+  a clean shutdown before the final cleanup verification. No forced kill or
+  customer service operation was used. One older owned source export was
+  removed, retaining the current and previous verified candidates.
+
+Passive local inspection still reports zero valid signing identities and zero
+listed physical devices. The two earlier local StoreKitTest results still show
+four `notEntitled` failures out of five cases, starting during StoreKitTest
+configuration before application ACK/finisher assertions. A fresh-Simulator
+single-case diagnostic is prepared but unrun. A platform/bootstrap cause is
+only an inference from the matching [Apple DTS discussion](https://developer.apple.com/forums/thread/826971),
+not a proven diagnosis or reason to change application entitlements. No actual
+Sandbox, signed upload, TestFlight install or native screenshot has been produced.
+
+The deployed candidate's real browser follow-up then passed **11 checks** with
+eight desktop/mobile captures: visible fractional retail prices and stock cells
+for all three products, inventory, the selected audited register and both
+closed-shift POS screens. No application error, failed HTTP response, horizontal
+overflow, business write or unexpected external request was observed. Exact
+read-only Google font stylesheet/font requests were allowed so the real fonts
+rendered; the known Vercel Preview toolbar script remained blocked and was
+reported separately. The initial harness's stricter external-reference failure
+and unchanged raw results remain as diagnostic evidence rather than being
+deleted. Normal tour-close preferences used the actual button and acknowledged
+`guidance.syncState`; no overlay DOM was removed. Prices, quantities and the
+closed shift remained unchanged, and the browser was closed. This does not prove
+a POS sale, native camera, real iPhone or Apple purchase. Those remain open.
+
+The final checkpoint after application commit `9cc3dd26` changes only this
+verification record and the stale test expectation. The deployed application
+still contains that exact verified runtime source. Any future helper requiring
+current HEAD equality must export/deploy its new immutable candidate rather than
+silently relaxing the identity guard for this documentation-only difference.
