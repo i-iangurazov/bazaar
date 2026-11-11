@@ -24,6 +24,8 @@ import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDateTime } from "@/lib/i18nFormat";
 import { Choice, Field, useFeedback, type Workspace } from "./workspace-ui";
 import { WHATSAPP_OFFER_VERSION } from "@/lib/whatsapp-ai";
+import { useNativePlatform } from "@/lib/native/useNativePlatform";
+import { ApplePayments } from "@/components/billing/apple-payments";
 
 export function Conversations({
   storeId,
@@ -435,12 +437,15 @@ export function Costs({
   data: Workspace;
   reload: () => Promise<unknown>;
 }) {
+  const platform = useNativePlatform();
+  const apple = useTranslations("billingApple");
+  const common = useTranslations("common");
   const t = useTranslations("whatsappAi"),
     paymentText = useTranslations("billing.payments"),
     locale = useLocale(),
     feedback = useFeedback();
   const payments = trpc.whatsappAi.payments.useQuery(undefined, {
-    enabled: data.canConnect,
+    enabled: data.canConnect && platform !== null && platform !== "ios",
     refetchInterval: 15_000,
   });
   const [quantity, setQuantity] = useState("1"),
@@ -448,7 +453,12 @@ export function Costs({
   const key = useRef<string | null>(null);
   useEffect(() => {
     setAgreed(false);
-  }, [payments.data?.provider, payments.data?.mode, payments.data?.termsVersion, data.pack.priceMinor]);
+  }, [
+    payments.data?.provider,
+    payments.data?.mode,
+    payments.data?.termsVersion,
+    data.pack.priceMinor,
+  ]);
   const checkout = trpc.whatsappAi.checkout.useMutation({ onError: feedback.error });
   const check = trpc.whatsappAi.checkPayment.useMutation({
     onError: feedback.error,
@@ -492,151 +502,186 @@ export function Costs({
         <CardContent className="space-y-3 text-sm leading-6">
           <p>{t("quotaHelp")}</p>
           <p>{t("renewsAt", { date: formatDateTime(data.quota.renewsAt, locale) })}</p>
-          <p>{t("packExpiry")}</p>
+          <p>{platform === null ? common("loading") : platform === "ios" ? apple("creditTerms") : t("packExpiry")}</p>
           <p className="text-muted-foreground">{t("limitsHelp")}</p>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("buyPack")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm">
-            {t("packPrice", { count: data.pack.messages, price: money(data.pack.priceMinor) })}
-          </p>
-          {!data.canConnect ? (
-            <p className="text-sm text-muted-foreground">{t("ownerOnly")}</p>
-          ) : (
-            <>
-              {payments.error && (
-                <QueryErrorState error={payments.error} onRetry={() => void payments.refetch()} />
-              )}
-              {!payments.data?.ready && (
-                <p className="rounded-md bg-secondary p-3 text-sm">{t("paymentsUnavailable")}</p>
-              )}
-              {payments.data?.ready && payments.data.mode === "sandbox" ? (
-                <p role="status" className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-                  {paymentText("sandbox", { provider: payments.data.provider === "GOPAY" ? "GoPay" : "FreedomPay" })}
-                </p>
-              ) : null}
-              <div className="max-w-xs">
-                <Choice
-                  label={t("packs")}
-                  value={quantity}
-                  options={Array.from({ length: 10 }, (_, i) => ({
-                    value: String(i + 1),
-                    label: `${(i + 1) * data.pack.messages} · ${money((i + 1) * data.pack.priceMinor)}`,
-                  }))}
-                  onChange={(v) => {
-                    setQuantity(v);
-                    key.current = null;
-                    setAgreed(false);
-                  }}
-                />
-              </div>
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  id="wa-terms"
-                  checked={agreed}
-                  onCheckedChange={(v) => setAgreed(v === true)}
-                />
-                <Label htmlFor="wa-terms" className="text-sm leading-6">
-                  {t("agreeTerms")}{" "}
-                  {payments.data?.termsUrl && (
-                    <a
-                      href={payments.data.termsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary underline"
-                    >
-                      {t("termsLink")}
-                    </a>
-                  )}
-                </Label>
-              </div>
-              <Button
-                disabled={
-                  !payments.data?.ready ||
-                  !agreed ||
-                  !data.active ||
-                  !data.readiness.manualWorkerReady ||
-                  data.connection?.state !== "CONNECTED" ||
-                  pending ||
-                  checkout.isLoading
-                }
-                onClick={async () => {
-                  key.current ??= crypto.randomUUID();
-                  try {
-                    const result = await checkout.mutateAsync({
-                      storeId,
-                      selection: {
-                        quantity: Number(quantity),
-                        offerVersion: WHATSAPP_OFFER_VERSION,
-                        termsAccepted: true,
-                        termsVersion: payments.data!.termsVersion,
-                        expectedAmountMinor: Number(quantity) * data.pack.priceMinor,
-                        expectedProvider: payments.data!.provider,
-                        idempotencyKey: key.current,
-                        locale: locale as "ru" | "kg" | "en",
-                      },
-                    });
-                    if (result.status === "PAID") key.current = null;
-                    await payments.refetch();
-                  } catch {
-                    /* The same key survives retries; a pending invoice prevents a second charge. */
-                  }
-                }}
-              >
-                {t("pay", { price: money(Number(quantity) * data.pack.priceMinor) })}
-              </Button>
-              {payments.data ? <p className="text-xs text-muted-foreground">{t("paymentHelp", { provider: payments.data.provider === "GOPAY" ? "GoPay" : "FreedomPay" })}</p> : null}
-              <div className="divide-y">
-                {payments.data?.invoices.map((invoice) => (
-                  <div
-                    key={invoice.id}
-                    className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+      {platform === "ios" && !data.canConnect ? (
+        <p className="text-sm text-muted-foreground">{t("ownerOnly")}</p>
+      ) : platform === "ios" ? (
+        <ApplePayments
+          kind="WHATSAPP_PACK"
+          storeId={storeId}
+          onUpdated={() => void reload()}
+          canPurchase={
+            data.canConnect &&
+            data.active &&
+            data.readiness.manualWorkerReady &&
+            data.connection?.state === "CONNECTED"
+          }
+        />
+      ) : platform === null ? (
+        <p role="status">{common("loading")}</p>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("buyPack")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm">
+              {t("packPrice", { count: data.pack.messages, price: money(data.pack.priceMinor) })}
+            </p>
+            {!data.canConnect ? (
+              <p className="text-sm text-muted-foreground">{t("ownerOnly")}</p>
+            ) : (
+              <>
+                {payments.error && (
+                  <QueryErrorState error={payments.error} onRetry={() => void payments.refetch()} />
+                )}
+                {!payments.data?.ready && (
+                  <p className="rounded-md bg-secondary p-3 text-sm">{t("paymentsUnavailable")}</p>
+                )}
+                {payments.data?.ready && payments.data.mode === "sandbox" ? (
+                  <p
+                    role="status"
+                    className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
                   >
-                    <div>
-                      <p>
-                        {invoice.quantity * data.pack.messages} · {money(invoice.amountMinor)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {invoice.isTest && invoice.status === "PAID" ? paymentText("testPaid") : t(`invoiceStates.${invoice.status}`)} ·{" "}
-                        {formatDateTime(invoice.createdAt, locale)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {paymentText("providerDescription", { provider: invoice.provider === "GOPAY" ? "GoPay" : "FreedomPay" })}
-                      </p>
-                      {invoice.isTest ? <Badge variant="warning">{paymentText("testInvoice")}</Badge> : null}
+                    {paymentText("sandbox", {
+                      provider: payments.data.provider === "GOPAY" ? "GoPay" : "FreedomPay",
+                    })}
+                  </p>
+                ) : null}
+                <div className="max-w-xs">
+                  <Choice
+                    label={t("packs")}
+                    value={quantity}
+                    options={Array.from({ length: 10 }, (_, i) => ({
+                      value: String(i + 1),
+                      label: `${(i + 1) * data.pack.messages} · ${money((i + 1) * data.pack.priceMinor)}`,
+                    }))}
+                    onChange={(v) => {
+                      setQuantity(v);
+                      key.current = null;
+                      setAgreed(false);
+                    }}
+                  />
+                </div>
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="wa-terms"
+                    checked={agreed}
+                    onCheckedChange={(v) => setAgreed(v === true)}
+                  />
+                  <Label htmlFor="wa-terms" className="text-sm leading-6">
+                    {t("agreeTerms")}{" "}
+                    {payments.data?.termsUrl && (
+                      <a
+                        href={payments.data.termsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                      >
+                        {t("termsLink")}
+                      </a>
+                    )}
+                  </Label>
+                </div>
+                <Button
+                  disabled={
+                    !payments.data?.ready ||
+                    !agreed ||
+                    !data.active ||
+                    !data.readiness.manualWorkerReady ||
+                    data.connection?.state !== "CONNECTED" ||
+                    pending ||
+                    checkout.isLoading
+                  }
+                  onClick={async () => {
+                    key.current ??= crypto.randomUUID();
+                    try {
+                      const result = await checkout.mutateAsync({
+                        storeId,
+                        selection: {
+                          quantity: Number(quantity),
+                          offerVersion: WHATSAPP_OFFER_VERSION,
+                          termsAccepted: true,
+                          termsVersion: payments.data!.termsVersion,
+                          expectedAmountMinor: Number(quantity) * data.pack.priceMinor,
+                          expectedProvider: payments.data!.provider,
+                          idempotencyKey: key.current,
+                          locale: locale as "ru" | "kg" | "en",
+                        },
+                      });
+                      if (result.status === "PAID") key.current = null;
+                      await payments.refetch();
+                    } catch {
+                      /* The same key survives retries; a pending invoice prevents a second charge. */
+                    }
+                  }}
+                >
+                  {t("pay", { price: money(Number(quantity) * data.pack.priceMinor) })}
+                </Button>
+                {payments.data ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t("paymentHelp", {
+                      provider: payments.data.provider === "GOPAY" ? "GoPay" : "FreedomPay",
+                    })}
+                  </p>
+                ) : null}
+                <div className="divide-y">
+                  {payments.data?.invoices.map((invoice) => (
+                    <div
+                      key={invoice.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
+                    >
+                      <div>
+                        <p>
+                          {invoice.quantity * data.pack.messages} · {money(invoice.amountMinor)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {invoice.isTest && invoice.status === "PAID"
+                            ? paymentText("testPaid")
+                            : t(`invoiceStates.${invoice.status}`)}{" "}
+                          · {formatDateTime(invoice.createdAt, locale)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {paymentText("providerDescription", {
+                            provider: invoice.provider === "GOPAY" ? "GoPay" : "FreedomPay",
+                          })}
+                        </p>
+                        {invoice.isTest ? (
+                          <Badge variant="warning">{paymentText("testInvoice")}</Badge>
+                        ) : null}
+                      </div>
+                      <div className="flex gap-2">
+                        {invoice.checkoutUrl && (
+                          <IconButton
+                            icon={ViewIcon}
+                            label={t("continuePayment")}
+                            variant="secondary"
+                            href={invoice.checkoutUrl}
+                            openInNewTab
+                          />
+                        )}
+                        {invoice.status !== "PAID" && (
+                          <IconButton
+                            icon={RestoreIcon}
+                            label={t("checkPayment")}
+                            loading={check.isLoading}
+                            disabled={check.isLoading}
+                            variant="ghost"
+                            onClick={() => check.mutate({ invoiceId: invoice.id })}
+                          />
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      {invoice.checkoutUrl && (
-                        <IconButton
-                          icon={ViewIcon}
-                          label={t("continuePayment")}
-                          variant="secondary"
-                          href={invoice.checkoutUrl}
-                          openInNewTab
-                        />
-                      )}
-                      {invoice.status !== "PAID" && (
-                        <IconButton
-                          icon={RestoreIcon}
-                          label={t("checkPayment")}
-                          loading={check.isLoading}
-                          disabled={check.isLoading}
-                          variant="ghost"
-                          onClick={() => check.mutate({ invoiceId: invoice.id })}
-                        />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

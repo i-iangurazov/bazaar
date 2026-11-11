@@ -11,6 +11,7 @@ import {
 import { Spinner } from "./ui/spinner";
 import type { BaamController } from "./use-baam-companion";
 import { productPhotoAccept } from "@/lib/productImageUpload";
+import { AiPrivacyConsent } from "./ai-privacy-consent";
 
 const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
@@ -22,6 +23,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
       ["EDITING", "FAILED", "RECEIPT"].includes(w.status),
   );
   return (
+    <AiPrivacyConsent>
     <div className="shrink-0 border-t border-border/70 bg-card p-3 sm:p-4">
       {c.notice ? (
         <p className="mb-2 text-xs text-muted-foreground" role="status">
@@ -223,5 +225,6 @@ export function BaamComposer({ c }: { c: BaamController }) {
         {c.t("voiceSupport")}
       </p>
     </div>
+    </AiPrivacyConsent>
   );
 }

@@ -38,6 +38,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { applyThemePreference, persistThemeCookie } from "@/lib/theme";
 import { DisplayScaleSettings } from "@/components/display-scale";
+import { AccountPrivacySettings } from "@/components/account-privacy-settings";
 import { locales, normalizeLocale } from "@/lib/locales";
 import {
   defaultCurrencyRateKgsPerUnit,
@@ -397,6 +398,7 @@ const ProfilePage = () => {
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
+        {status === "authenticated" ? <AccountPrivacySettings key="account-privacy" /> : null}
       </div>
     );
   }
@@ -406,6 +408,8 @@ const ProfilePage = () => {
       <div className="space-y-6">
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <p className="bazaar-admin-error">{translateError(tErrors, profileQuery.error)}</p>
+        <Button variant="outline" onClick={() => void profileQuery.refetch()}>{tCommon("tryAgain")}</Button>
+        {status === "authenticated" ? <AccountPrivacySettings key="account-privacy" /> : null}
       </div>
     );
   }
@@ -1077,6 +1081,7 @@ const ProfilePage = () => {
       {businessQuery.error ? (
         <p className="bazaar-admin-error">{translateError(tErrors, businessQuery.error)}</p>
       ) : null}
+      <AccountPrivacySettings key="account-privacy" />
     </div>
   );
 };

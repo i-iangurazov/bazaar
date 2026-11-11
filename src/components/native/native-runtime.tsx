@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { ApplePurchaseRecovery } from "@/components/native/apple-purchase-recovery";
 import { parseNativeDeepLink } from "@/lib/native/deepLinks";
 import { reportNativeDiagnostic } from "@/lib/native/diagnostics";
 import { getConnectivitySnapshot, subscribeConnectivity } from "@/lib/native/network";
@@ -129,7 +130,10 @@ export const NativeRuntime = () => {
       );
       trackListener(
         App.addListener("appStateChange", ({ isActive }) => {
-          if (isActive) void queryClient.invalidateQueries();
+          if (isActive) {
+            void queryClient.invalidateQueries();
+            window.dispatchEvent(new Event("bazaar:apple-retry"));
+          }
         }),
       );
       void App.getInfo().then(async (app) => {
@@ -252,6 +256,7 @@ export const NativeRuntime = () => {
 
   return (
     <>
+      <ApplePurchaseRecovery />
       {showPushPrompt ? (
         <aside
           className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-[950] mx-auto max-w-md rounded-lg border border-primary/25 bg-background p-4 shadow-2xl"

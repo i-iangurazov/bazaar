@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
 import type { BaamData } from "@/components/use-baam-companion";
+// This suite isolates an already-consented person's chat/draft behavior.
+// Explicit permission/refusal/revocation have a separate component suite.
+vi.mock("@/components/ai-privacy-consent", () => ({ AiPrivacyConsent: ({ children }: { children: React.ReactNode }) => children }));
 
 const mocks = vi.hoisted(() => ({
   pathname: vi.fn(),

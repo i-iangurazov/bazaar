@@ -52,6 +52,12 @@ Android needs Node 22, JDK 21 in PATH, Android SDK 36 in ANDROID_HOME. AAB outpu
 
 iOS signed mode creates an archive and locally exported IPA under `artifacts/mobile-release-<version>-<build>/`; it does not upload. Unsigned mode only rehearses compilation. Confirm SDK using `xcrun --sdk iphoneos --show-sdk-version`, validate the signed archive in Organizer, upload to the intended App Store Connect app, wait for processing, then select the build for internal TestFlight.
 
+For the isolated preview use the explicit `staging-testflight` release channel;
+its separate `AppStaging`/`ReleaseStaging` build and output directory require an
+internal-only TestFlight export. The normal production channel rejects its
+archive. Follow [the staging guide](../IOS_TESTFLIGHT_STAGING.md); after testing,
+create a new normal `App`/`Release` for any separately authorized App Store path.
+
 `.github/workflows/mobile-build.yml` is a manual **unsigned build rehearsal** for both platforms. It requires a pushed workflow and working Actions access. It neither signs nor uploads. Local preparation of this workflow is not a successful hosted build. Do not push main merely to run it if that would trigger an unauthorized web production deployment.
 
 After signed uploads: configure Play internal testing and TestFlight internal testers; run the complete release checklist on real devices. External TestFlight can require beta review. For affected new personal Play accounts, internal testing does not replace the 12-testers/14-consecutive-days closed-test requirement for production access. Complete console questionnaires and review credentials, then obtain confirmation of seller, privacy/payment declarations and public submission/release settings. Keep release manual after approval until explicitly authorized.

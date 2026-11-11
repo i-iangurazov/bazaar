@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { AiPrivacyConsent } from "./ai-privacy-consent";
 
 export type BaamConversationEntry = {
   id: string;
@@ -73,7 +74,7 @@ export function BaamAssistantPanel({
     ask(question);
   };
 
-  return <div className={cn("flex min-h-0 flex-col", compact ? "h-full" : "h-[min(44rem,75dvh)] min-h-[30rem]")}>
+  return <AiPrivacyConsent><div className={cn("flex min-h-0 flex-col", compact ? "h-full" : "h-[min(44rem,75dvh)] min-h-[30rem]")}>
     <div className="max-h-[40%] shrink-0 space-y-3 overflow-y-auto border-b border-border/70 px-4 py-3 sm:px-5">
       <div className="flex items-start justify-between gap-3">
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -191,5 +192,5 @@ export function BaamAssistantPanel({
       <p className="hidden text-[11px] leading-4 text-muted-foreground sm:block">{t("keyboardHint")}</p>
       <p className="text-[11px] leading-4 text-muted-foreground">{t("readOnly")}</p>
     </form>
-  </div>;
+  </div></AiPrivacyConsent>;
 }
