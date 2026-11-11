@@ -106,9 +106,9 @@ const entry = (
   parts: [],
   createdAt: new Date(),
 });
-const shell = (open = true) => (
+const shell = (open = true, nativeViewport = false) => (
   <NextIntlClientProvider locale="en" messages={{ errors: messages.errors }}>
-    <BaamAssistantProvider>{open ? <BaamAssistant /> : null}</BaamAssistantProvider>
+    <BaamAssistantProvider>{open ? <BaamAssistant nativeViewport={nativeViewport} /> : null}</BaamAssistantProvider>
   </NextIntlClientProvider>
 );
 const input = () =>
@@ -411,10 +411,10 @@ describe("BAAM persistent companion workspace", () => {
       expect(mocks.change).toHaveBeenCalledWith({ id: "dialog", revision: 0, remove: true }),
     );
   });
-  it("does not pull a reader away from old messages when a reply arrives", () => {
+  it.each([false, true])("does not pull a reader away from old messages when a reply arrives (native viewport: %s)", (nativeViewport) => {
     saved.messages = [entry("First", 1)];
-    const view = render(shell());
-    const history = document.querySelector<HTMLElement>("[data-baam-history]")!;
+    const view = render(shell(true, nativeViewport));
+    const history = document.querySelector<HTMLElement>(nativeViewport ? '[data-baam-scrollport="workspace"]' : "[data-baam-history]")!;
     Object.defineProperties(history, {
       scrollHeight: { configurable: true, value: 1500 },
       clientHeight: { configurable: true, value: 400 },
@@ -422,20 +422,34 @@ describe("BAAM persistent companion workspace", () => {
     history.scrollTop = 40;
     fireEvent.scroll(history);
     saved = { ...saved, messages: [...saved.messages, entry("New reply", 2)] };
-    view.rerender(shell());
+    view.rerender(shell(true, nativeViewport));
     expect(history.scrollTop).toBe(40);
     fireEvent.click(screen.getByRole("button", { name: "Jump to latest" }));
     expect(history.scrollTop).toBe(1500);
   });
-  it("loads earlier history without losing the reader's position", async () => {
+  it.each([false, true])("loads earlier history without losing the reader's position (native viewport: %s)", async (nativeViewport) => {
     saved.messages = [entry("Latest", 42)];
     saved.next = 42;
     mocks.fetch.mockResolvedValue({ ...saved, messages: [entry("Earlier", 1)], next: null });
-    render(shell());
+    render(shell(true, nativeViewport));
     fireEvent.click(screen.getByRole("button", { name: "Earlier messages" }));
     await waitFor(() => expect(screen.getByText("Earlier")).toBeTruthy());
     expect(screen.getByText("Latest")).toBeTruthy();
     expect(mocks.fetch).toHaveBeenCalledWith({ id: "dialog", before: 42 });
+  });
+  it("keeps the native composer outside the scrolling content and preserves its draft through history", () => {
+    render(shell(true, true));
+    const scrollport = document.querySelector('[data-baam-scrollport="workspace"]')!;
+    expect(scrollport.querySelector("[data-baam-history]")).toBeTruthy();
+    expect(scrollport.contains(input())).toBe(false);
+    expect(document.querySelector("[data-baam-composer]")?.contains(input())).toBe(true);
+    fireEvent.change(input(), { target: { value: "Draft above the keyboard" } });
+    fireEvent.click(screen.getByRole("button", { name: "Conversations" }));
+    expect(screen.queryByRole("textbox", { name: "Describe a task or ask a question…" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Back to conversation" }));
+    expect(input().value).toBe("Draft above the keyboard");
+    expect(document.activeElement).toBe(input());
+    expect(mocks.send).not.toHaveBeenCalled();
   });
   it("preserves Shift+Enter and IME composition and sends plain Enter once", async () => {
     render(shell());

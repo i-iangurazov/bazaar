@@ -112,6 +112,36 @@ safe form/Cancel bounds at widths 393 and 320, followed by typecheck, lint and
 translation validation. Its new production build and actual native confirmation
 remain to be observed.
 
+### Software-keyboard follow-up
+
+The `7c3c74ae` deployment was subsequently observed in the actual Simulator.
+The account-deletion title and close control were below the notch and the close
+touch worked. With the Simulator hardware keyboard disconnected, however, the
+real iOS software keyboard obscured the focused confirmation field and Cancel.
+The same keyboard also covered the full-page Baam composer. The first keyboard
+tutorial was dismissed and normal refocusing reproduced both defects. An unsent
+synthetic `Q` draft was entered; no AI request or account deletion was submitted.
+
+The follow-up fixes keep the configured Capacitor body-resize behavior. A shared
+iOS coordinator combines the native keyboard height with the layout and visual
+viewports without subtracting the keyboard twice. Native dialogs fit the visible
+rectangle and reveal a focused control through its existing inner scroller.
+The account-deletion description remains intact inside that scrollable form,
+while the title and close control stay outside it. Full-page iOS Baam uses the
+same visible-height contract: conversation controls/history scroll separately
+from its composer, retaining drafts and reader position. Web and Android keep
+their existing chat geometry.
+
+Before deployment, 12 focused suites passed all 124 checks, including actual
+runtime show/hide listener behavior, viewport cleanup, focused-control scrolling,
+Baam history/draft preservation, voice and AI consent. The extended offline
+layout fixture passed 19 checks, reproducing the prior keyboard occlusion and
+checking automatic field/Cancel reveal, body-only and already-resized viewports,
+hide recovery and full-screen/bottom-sheet bounds. Typecheck, lint and RU/KG/EN
+translation validation passed. These UI-only suites explicitly disabled database
+execution. The matching cloud production build and actual software-keyboard
+recheck are still required before claiming these keyboard defects resolved.
+
 Read-only public signup-mode requests returned `open` on `www.bazaar.kg` and
 `invite_only` on this Preview. A missing open-signup link in this TestFlight
 environment is therefore a server-policy difference. No production signup policy

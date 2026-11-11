@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import type { ComponentProps } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { useState, type ComponentProps } from "react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../../messages/en.json";
@@ -14,11 +14,23 @@ vi.mock("@/lib/native/platform", () => ({ isIOS: () => native.ios }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/baam", useSearchParams: () => new URLSearchParams(native.search) }));
 vi.mock("next/link", () => ({ default: ({ href, replace, prefetch: _prefetch, ...props }: ComponentProps<"a"> & { href: string; replace?: boolean; prefetch?: boolean }) =>
   <a {...props} href={href} data-replaces-route={replace ? "true" : undefined} /> }));
-vi.mock("@/components/baam-assistant", () => ({ BaamAssistant: () => <div data-testid="existing-baam-assistant">Existing history/composer surface</div> }));
+vi.mock("@/components/baam-assistant", () => ({ BaamAssistant: function Assistant({ nativeViewport }: { nativeViewport?: boolean }) {
+  const [draft, setDraft] = useState("");
+  return <div data-testid="existing-baam-assistant" data-native-viewport={nativeViewport ? "true" : "false"}>
+    Existing history/composer surface
+    <input aria-label="Workspace draft" value={draft} onChange={(event) => setDraft(event.target.value)} />
+  </div>;
+} }));
 
 const translations = { en, ru, kg };
 beforeEach(() => { native.ios = true; native.search = ""; });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  document.querySelectorAll("[data-native-bottom-nav]").forEach(element => element.remove());
+  delete document.documentElement.dataset.nativeKeyboard;
+  document.documentElement.style.removeProperty("--native-available-height");
+  vi.restoreAllMocks();
+});
 
 describe("native BAAM workspace navigation", () => {
   it("carries only a valid explicit store hint and an internal return destination", () => {
@@ -62,5 +74,45 @@ describe("native BAAM workspace navigation", () => {
     render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
     expect(screen.queryByRole("link", { name: en.common.back })).toBeNull();
     expect(screen.getByTestId("existing-baam-assistant")).toBeTruthy();
+    expect(screen.getByTestId("existing-baam-assistant").getAttribute("data-native-viewport")).toBe("false");
+    expect(screen.getByTestId("baam-page").style.getPropertyValue("--baam-workspace-top")).toBe("");
+  });
+
+  it("tracks the actual iOS workspace top and visible navigation without remounting a focused draft", async () => {
+    let top = 124, navHeight = 84;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return new DOMRect(0, this.hasAttribute("data-baam-workspace") ? top : 0, 390,
+        this.hasAttribute("data-native-bottom-nav") ? navHeight : 0);
+    });
+    const nav = document.createElement("nav");
+    nav.setAttribute("data-native-bottom-nav", "");
+    document.body.append(nav);
+    const view = render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
+    const workspace = screen.getByTestId("baam-page");
+    const draft = screen.getByRole("textbox", { name: "Workspace draft" });
+    expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("124px");
+    expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).toBe("92px");
+    expect(screen.getByTestId("existing-baam-assistant").getAttribute("data-native-viewport")).toBe("true");
+    fireEvent.change(draft, { target: { value: "Keep this draft while typing" } });
+    draft.focus();
+    await act(async () => {
+      top = 100; navHeight = 0;
+      document.documentElement.dataset.nativeKeyboard = "visible";
+      document.documentElement.style.setProperty("--native-available-height", "460px");
+      fireEvent.resize(window);
+    });
+    expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("100px");
+    expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).toBe("8px");
+    expect(screen.getByRole("textbox", { name: "Workspace draft" })).toBe(draft);
+    expect((draft as HTMLInputElement).value).toBe("Keep this draft while typing");
+    expect(document.activeElement).toBe(draft);
+    view.unmount();
+    await act(async () => {
+      top = 300;
+      document.documentElement.dataset.nativeKeyboard = "hidden";
+      fireEvent.resize(window);
+    });
+    expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("");
+    expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).toBe("");
   });
 });

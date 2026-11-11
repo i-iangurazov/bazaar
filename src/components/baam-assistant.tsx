@@ -65,7 +65,7 @@ export function BaamAssistantProvider({ children }: { children: ReactNode }) {
     </CompanionContext.Provider>
   );
 }
-export function BaamAssistant({ compact = false }: { compact?: boolean }) {
+export function BaamAssistant({ compact = false, nativeViewport = false }: { compact?: boolean; nativeViewport?: boolean }) {
   const { identity, loading } = useContext(CompanionContext);
   const locale = useLocale();
   if (!identity && loading)
@@ -90,6 +90,7 @@ export function BaamAssistant({ compact = false }: { compact?: boolean }) {
       key={`${identity.organizationId}:${identity.userId}`}
       identity={identity}
       compact={compact}
+      nativeViewport={nativeViewport}
     />
   );
 }

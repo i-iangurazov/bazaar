@@ -1,0 +1,40 @@
+/* Only the full iOS workspace uses the native visible-viewport contract.
+   The shared value already accounts for keyboard/body/visual viewport resize. */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: max(0px, calc(var(--native-available-height, 100dvh) - var(--baam-workspace-top, 0px) - var(--baam-workspace-bottom, 8px)));
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace > :global([data-page-header]) {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.surface {
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.surface :global([data-baam-chat]) {
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.surface :global([data-baam-scrollport="workspace"]) > :global([data-baam-toolbar]) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: hsl(var(--card));
+}
+
+.surface :global([data-baam-composer]) {
+  flex: 0 0 auto;
+  max-height: 100%;
+  overflow-y: auto;
+}

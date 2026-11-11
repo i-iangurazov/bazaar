@@ -82,17 +82,18 @@ export function AccountPrivacySettings() {
         <DialogContent size="md" showClose={!deletion.isLoading && !deleted}>
           <DialogHeader>
             <DialogTitle>{deleted ? t("deletedTitle") : t("deleteTitle")}</DialogTitle>
-            <DialogDescription>{deleted ? t("deletedBody") : t("deleteSummary")}</DialogDescription>
           </DialogHeader>
-          {deleted ? <div className="space-y-3 overflow-y-auto p-5">
+          {deleted ? <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+            <DialogDescription>{t("deletedBody")}</DialogDescription>
             <p className="text-sm">{t("appleWarning")}</p>
             <a className="inline-flex min-h-11 items-center text-primary underline" href="https://apps.apple.com/account/subscriptions" onClick={(event) => void manageApple(event)} target="_blank" rel="noopener noreferrer">{t("manageApple")}</a>
             {signOutFailed ? <Button onClick={() => void finishSignOut()}>{t("finishSignOut")}</Button> : <Spinner />}
-          </div> : <form className="space-y-4 overflow-y-auto p-5" onSubmit={(event) => {
+          </div> : <form className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5" onSubmit={(event) => {
             event.preventDefault();
             if (!preview.data || confirmation !== "DELETE") return;
             deletion.mutate({ password, confirmation: "DELETE", successorUserId: preview.data.requiresSuccessor ? successorUserId : undefined });
           }}>
+            <DialogDescription>{t("deleteSummary")}</DialogDescription>
             <p className="text-sm leading-6">{t("retention")}</p>
             <p className="text-sm leading-6">{t("appleWarning")}</p>
             <a className="inline-flex min-h-11 items-center text-sm text-primary underline" href="https://apps.apple.com/account/subscriptions" onClick={(event) => void manageApple(event)} target="_blank" rel="noopener noreferrer">{t("manageApple")}</a>

@@ -49,6 +49,7 @@ export const Modal = ({
         )}
       />
       <DialogPrimitive.Content
+        data-native-overlay-layout={mobileSheet ? "responsive-bottom" : "centered"}
         {...(subtitle ? {} : { "aria-describedby": undefined })}
         onOpenAutoFocus={() => {
           previouslyFocusedRef.current =

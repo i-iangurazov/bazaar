@@ -93,7 +93,20 @@ html.native-ios body[data-scroll-locked] {
    dialogs or changing their centering. The larger inset is reserved on both
    sides because these surfaces use a 50% center and translateY(-50%). */
 html.native-ios {
-  --native-centered-dialog-safe-height: calc(100dvh - 2 * max(var(--mobile-top-safe-area), var(--mobile-bottom-safe-area)) - 1rem);
+  --native-available-height: 100dvh;
+  --native-viewport-offset-top: 0px;
+  --native-dialog-top: var(--native-viewport-offset-top);
+  --native-dialog-height: calc(var(--native-available-height) - var(--native-dialog-top));
+  --native-centered-dialog-safe-height: calc(var(--native-dialog-height) - 2 * max(var(--mobile-top-safe-area), var(--mobile-bottom-safe-area)) - 1rem);
+}
+
+html.native-ios[data-native-keyboard="visible"] {
+  --native-dialog-top: max(var(--native-viewport-offset-top), var(--mobile-top-safe-area));
+  --native-centered-dialog-safe-height: max(0px, calc(var(--native-dialog-height) - 1rem));
+}
+
+html.native-ios [role="dialog"][class~="top-1/2"] {
+  top: calc(var(--native-dialog-top) + var(--native-dialog-height) / 2) !important;
 }
 
 html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"] {
@@ -108,16 +121,44 @@ html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[85dvh]"] {
   html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"] {
     max-height: min(calc(100dvh - 2rem), var(--native-centered-dialog-safe-height)) !important;
   }
+
+  html.native-ios [role="dialog"][data-native-overlay-layout="responsive-bottom"] {
+    top: calc(var(--native-dialog-top) + var(--native-dialog-height) / 2) !important;
+    bottom: auto !important;
+    max-height: min(85dvh, var(--native-centered-dialog-safe-height)) !important;
+  }
+}
+
+/* Fixed sheets still use the layout viewport when Capacitor resizes BODY.
+   Move their bottom edge to the measured visible edge, without subtracting
+   the keyboard again when WebKit has already resized its visual viewport. */
+html.native-ios[data-native-keyboard="visible"] [role="dialog"][class~="bottom-0"]:not([data-native-overlay-layout="responsive-bottom"]) {
+  bottom: calc(100dvh - var(--native-available-height)) !important;
+  max-height: max(0px, calc(var(--native-dialog-height) - 1rem)) !important;
+}
+
+html.native-ios[data-native-keyboard="visible"] [role="dialog"][class~="inset-y-0"],
+html.native-ios[data-native-keyboard="visible"] [role="dialog"][class~="h-[100dvh]"] {
+  top: max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) !important;
+  bottom: auto !important;
+  height: max(0px, calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)))) !important;
+  max-height: max(0px, calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)))) !important;
+  --tw-translate-y: 0px;
 }
 
 @media (max-width: 639px) {
+  html.native-ios[data-native-keyboard="visible"] [role="dialog"][data-native-overlay-layout="responsive-bottom"]:not([class~="h-[100dvh]"]) {
+    bottom: calc(100dvh - var(--native-available-height)) !important;
+    max-height: max(0px, calc(var(--native-dialog-height) - 1rem)) !important;
+  }
+
   /* Only the existing full-viewport dialog variants reach the status bar.
      Insetting the whole surface also protects sticky headers/absolute close
      buttons after scrolling; ordinary dialogs and bottom sheets stay as they are. */
   html.native-ios [role="dialog"][class~="h-[100dvh]"] {
-    top: var(--mobile-top-safe-area) !important;
-    height: calc(100dvh - var(--mobile-top-safe-area)) !important;
-    max-height: calc(100dvh - var(--mobile-top-safe-area)) !important;
+    top: max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) !important;
+    height: calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top))) !important;
+    max-height: calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top))) !important;
     --tw-translate-y: 0px;
   }
 }

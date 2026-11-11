@@ -20,6 +20,7 @@ import { getConnectivitySnapshot, subscribeConnectivity } from "@/lib/native/net
 import { registerPushTokenWithBazaar } from "@/lib/native/notifications";
 import { getNativePlatform, isPluginAvailable, isNativeApp } from "@/lib/native/platform";
 import { compareAppVersions } from "@/lib/native/version";
+import { createNativeKeyboardViewport } from "@/lib/native/keyboardViewport";
 
 const promptDismissedKey = "bazaar-native-push-prompt-dismissed-v1";
 
@@ -62,6 +63,7 @@ export const NativeRuntime = () => {
     root.classList.add("native-app", `native-${getNativePlatform()}`);
     root.dataset.nativeRuntime = "capacitor";
     root.dataset.nativeKeyboard = "hidden";
+    const keyboardViewport = getNativePlatform() === "ios" ? createNativeKeyboardViewport(root) : null;
 
     // A Capacitor release always streams the current compatible Bazaar frontend;
     // stale PWA asset caches must never sit between the native shell and Vercel.
@@ -109,18 +111,30 @@ export const NativeRuntime = () => {
     ]).then(() => reportNativeDiagnostic("runtime_ready"));
 
     if (isPluginAvailable("Keyboard")) {
+      const showKeyboard = ({ keyboardHeight }: { keyboardHeight: number }) => {
+        if (!active) return;
+        const height = Number.isFinite(keyboardHeight) ? Math.max(0, keyboardHeight) : 0;
+        root.dataset.nativeKeyboard = height > 0 ? "visible" : "hidden";
+        root.style.setProperty("--native-keyboard-height", `${height}px`);
+        keyboardViewport?.show(height);
+      };
       trackListener(
-        Keyboard.addListener("keyboardWillShow", ({ keyboardHeight }) => {
-          root.dataset.nativeKeyboard = "visible";
-          root.style.setProperty("--native-keyboard-height", `${keyboardHeight}px`);
-        }),
+        Keyboard.addListener("keyboardWillShow", showKeyboard),
       );
+      trackListener(Keyboard.addListener("keyboardDidShow", showKeyboard));
       trackListener(
         Keyboard.addListener("keyboardWillHide", () => {
+          if (!active) return;
           root.dataset.nativeKeyboard = "hidden";
           root.style.setProperty("--native-keyboard-height", "0px");
         }),
       );
+      trackListener(Keyboard.addListener("keyboardDidHide", () => {
+        if (!active) return;
+        root.dataset.nativeKeyboard = "hidden";
+        root.style.setProperty("--native-keyboard-height", "0px");
+        keyboardViewport?.hide();
+      }));
     }
 
     if (isPluginAvailable("App")) {
@@ -161,6 +175,7 @@ export const NativeRuntime = () => {
       active = false;
       for (const handle of handles) void handle.remove();
       unsubscribeConnectivity();
+      keyboardViewport?.dispose();
       root.classList.remove("native-app", "native-ios", "native-android");
       delete root.dataset.nativeRuntime;
       delete root.dataset.nativeKeyboard;

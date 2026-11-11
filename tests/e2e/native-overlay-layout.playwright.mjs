@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import postcss from "postcss";
 import postcssImport from "postcss-import";
 import tailwindcss from "tailwindcss";
+import ts from "typescript";
 import { chromium, webkit } from "playwright";
 import tailwindConfig from "../../tailwind.config.ts";
 
@@ -71,9 +72,9 @@ const centeredMd = `<section id="surface" role="dialog" aria-label="Synthetic ac
   class="fixed left-1/2 top-1/2 z-[1001] flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg">
   <div class="shrink-0 border-b border-border px-5 py-4 pr-16 sm:px-6">
     <h2 class="text-lg font-semibold">${escapeHtml(privacy.deleteTitle)}</h2>
-    <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(privacy.deleteSummary)}</p>
   </div>
-  <form id="dialog-scroll" class="space-y-4 overflow-y-auto p-5" onsubmit="event.preventDefault()">
+  <form id="dialog-scroll" class="min-h-0 flex-1 space-y-4 overflow-y-auto p-5" onsubmit="event.preventDefault()">
+    <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(privacy.deleteSummary)}</p>
     <p class="text-sm leading-6">${escapeHtml(privacy.retention)}</p>
     <p class="text-sm leading-6">${escapeHtml(privacy.appleWarning)}</p>
     <span class="inline-flex min-h-11 items-center text-sm">${escapeHtml(privacy.manageApple)}</span>
@@ -89,8 +90,31 @@ const compiled = await postcss([
   tailwindcss({ ...tailwindConfig, content: [{ raw: allMarkup, extension: "html" }] }),
 ]).process(fs.readFileSync(source, "utf8"), { from: source });
 const currentCss = compiled.css;
+// Execute the actual shared coordinator in this offline browser, not a copied
+// focus/viewport implementation. No native plugin or shipping test API is added.
+const keyboardScript = ts.transpileModule(fs.readFileSync(path.join(repo, "src/lib/native/keyboardViewport.ts"), "utf8"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+}).outputText.replaceAll("export function ", "function ");
+const keyboardBaseline = postcss.parse(currentCss);
+let keyboardRemoved = 0;
+keyboardBaseline.walkRules((rule) => {
+  if (rule.selector.startsWith("html.native-ios") && (
+    rule.selector.includes('[data-native-keyboard="visible"]') ||
+    rule.selector === 'html.native-ios [role="dialog"][class~="top-1/2"]' ||
+    rule.selector === 'html.native-ios [role="dialog"][data-native-overlay-layout="responsive-bottom"]'
+  )) { rule.remove(); keyboardRemoved += 1; return; }
+  if (rule.selector === "html.native-ios") rule.walkDecls("--native-centered-dialog-safe-height", (decl) => {
+    decl.value = "calc(100dvh - 2 * max(var(--mobile-top-safe-area), var(--mobile-bottom-safe-area)) - 1rem)";
+  });
+  if (rule.selector === 'html.native-ios [role="dialog"][class~="h-[100dvh]"]') rule.walkDecls((decl) => {
+    if (decl.prop === "top") decl.value = "var(--mobile-top-safe-area)";
+    if (decl.prop === "height" || decl.prop === "max-height") decl.value = "calc(100dvh - var(--mobile-top-safe-area))";
+  });
+});
+assert.equal(keyboardRemoved, 6, "The keyboard negative case removes only the reviewed keyboard bounds");
+const beforeKeyboardCss = keyboardBaseline.toString();
 // Keep the previous root-lock/fullscreen fix in the tall-dialog negative case.
-const centeredBaseline = postcss.parse(currentCss);
+const centeredBaseline = postcss.parse(beforeKeyboardCss);
 const centeredSelectors = new Set([
   "html.native-ios",
   'html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"]',
@@ -144,6 +168,7 @@ const state = (page) => page.evaluate(() => {
   };
 });
 const load = async (page, { css = currentCss, platform = "ios", width = 393, height = 844, surface = "" } = {}) => {
+  await page.evaluate(() => window.fixtureKeyboard?.dispose());
   await page.setViewportSize({ width, height });
   await page.setContent(`<!doctype html><html class="${platform === "web" ? "" : `native-app native-${platform}`}">
     <head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -244,6 +269,60 @@ try {
     assert(after.closeTop >= 59, "Close remains reachable after reaching the last fields");
     check(`native tall size-md header, form fields and Cancel fit safe bounds at ${viewport.width}`, after);
     await page.screenshot({ path: path.join(outputDir, `${engine}-centered-md-${viewport.width}.png`) });
+  }
+
+  for (const viewport of [{ width: 393, height: 844 }, { width: 320, height: 667 }]) {
+    const bottom = viewport.height - 300;
+    const installKeyboard = async () => {
+      await page.addScriptTag({ content: `${keyboardScript}\nwindow.fixtureKeyboard = createNativeKeyboardViewport(document.documentElement);` });
+      await page.evaluate(() => {
+        const form = document.getElementById("dialog-scroll");
+        form.scrollTop = form.scrollHeight;
+        document.getElementById("deletion-confirmation").focus({ preventScroll: true });
+        document.documentElement.dataset.nativeKeyboard = "visible";
+        document.body.style.height = `${innerHeight - 300}px`; // actual configured body-only resize
+        window.fixtureKeyboard.show(300);
+      });
+      await frame(page); await frame(page);
+    };
+    await load(page, { ...viewport, css: beforeKeyboardCss, surface: centeredMd });
+    await lock(page); await installKeyboard();
+    assert((await page.locator("#deletion-confirmation").boundingBox()).y > bottom,
+      "The previous dialog must reproduce the focused field behind the keyboard");
+    await load(page, { ...viewport, surface: centeredMd });
+    await lock(page); await installKeyboard();
+    const bounds = await state(page);
+    assert(bounds.top >= 59 && bounds.bottom <= bottom, JSON.stringify(bounds));
+    for (const id of ["deletion-confirmation", "deletion-password", "cancel"]) {
+      await page.locator(`#${id}`).evaluate((element) => element.focus({ preventScroll: true }));
+      await frame(page); await frame(page);
+      const field = await page.locator(`#${id}`).boundingBox();
+      assert(field && field.y >= 59 && field.y + field.height <= bottom, `${id} must be revealed by its own form scroller`);
+      assert.equal((await state(page)).y, bounds.y);
+    }
+    // Native/visual resize after the keyboard is shown must not subtract again.
+    await page.setViewportSize({ width: viewport.width, height: bottom });
+    await page.evaluate(() => window.fixtureKeyboard.show(300));
+    await frame(page); await frame(page);
+    assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue("--native-available-height")), `${bottom}px`);
+    await page.setViewportSize(viewport);
+    await page.evaluate(() => { document.documentElement.dataset.nativeKeyboard = "hidden"; window.fixtureKeyboard.hide(); });
+    await frame(page); await frame(page);
+    assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue("--native-available-height")), `${viewport.height}px`);
+    check(`keyboard body resize, focused form/Cancel, no double resize and hide recovery at ${viewport.width}`);
+    await page.screenshot({ path: path.join(outputDir, `${engine}-keyboard-recovered-${viewport.width}.png`) });
+  }
+
+  for (const [name, surface] of [["journal", fullscreen("journal")], ["dialog", fullscreen("primitive")], ["bottom-sheet", ordinarySheet]]) {
+    await load(page, { surface }); await lock(page);
+    await page.evaluate(() => {
+      document.documentElement.dataset.nativeKeyboard = "visible";
+      document.documentElement.style.setProperty("--native-available-height", "544px");
+    });
+    await frame(page);
+    const bounds = await state(page);
+    assert(bounds.top >= 59 && bounds.bottom <= 544, JSON.stringify(bounds));
+    check(`native ${name} stays above keyboard`, bounds);
   }
 
   for (const platform of ["web", "android"]) {
