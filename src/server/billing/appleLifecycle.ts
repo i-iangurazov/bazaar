@@ -1,28 +1,33 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type AppleServerNotification } from "@prisma/client";
-import { AutoRenewStatus, GetTransactionHistoryVersion, Order, type JWSRenewalInfoDecodedPayload } from "@apple/app-store-server-library";
+import { AutoRenewStatus, GetTransactionHistoryVersion, Order } from "@apple/app-store-server-library";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { appleBillingConfig } from "./appleConfig";
-import { appleApiClient, appleReceiptVerifier, type AppleReceiptVerifier } from "./appleVerification";
+import { appleApiClient, appleReceiptVerifier, assertVerifiedAppleRenewal, type AppleReceiptVerifier, type VerifiedAppleRenewal } from "./appleVerification";
 import { applyAppleTransaction, appleManagedOffer, recomputeAppleCoverage } from "./applePayments";
 import { lockAppleOrganization } from "./appleConcurrency";
+import { auditAppleSupportEvidence, type AppleSupportOperator } from "./appleSupportAuth";
 
 /** Renewal state is accepted only after the official verifier checks its JWS. */
-export async function applyAppleSignedRenewal(signedRenewalInfo: string, verifier: AppleReceiptVerifier) {
-  const renewal = await verifier.renewal(signedRenewalInfo);
-  if (!renewal.originalTransactionId || !renewal.environment || !renewal.signedDate || renewal.signedDate > Date.now() + 300_000 ||
-    ![AutoRenewStatus.ON, AutoRenewStatus.OFF].includes(renewal.autoRenewStatus as AutoRenewStatus))
-    throw new AppError("appleInvalidTransaction", "BAD_REQUEST", 400);
-  return applyVerifiedRenewal(renewal);
-}
-async function applyVerifiedRenewal(renewal: JWSRenewalInfoDecodedPayload) {
+export async function applyAppleSignedRenewal(signedRenewalInfo: string, verifier: AppleReceiptVerifier, operator?: AppleSupportOperator) {
+  const verified = await verifier.verifiedRenewal(signedRenewalInfo), renewal = verified.data;
   const seed = await prisma.appleSubscriptionChain.findUnique({ where: { environment_originalTransactionId: {
     environment: String(renewal.environment), originalTransactionId: renewal.originalTransactionId! } } });
   if (!seed) throw new AppError("appleIntentMissing", "CONFLICT", 409);
   return prisma.$transaction(async (db) => {
     await lockAppleOrganization(db, seed.organizationId);
-    const chain = await db.appleSubscriptionChain.findUniqueOrThrow({ where: { id: seed.id } });
+    if (operator) await auditAppleSupportEvidence(db, operator, seed.organizationId, verified.digest, "RENEWAL");
+    await applyAppleRenewalInTransaction(db, verified, seed.id);
+  });
+}
+/** Caller holds the chain's organization lock; only branded verified evidence enters. */
+export async function applyAppleRenewalInTransaction(db: Prisma.TransactionClient, verified: VerifiedAppleRenewal, chainId: string) {
+    assertVerifiedAppleRenewal(verified);
+    const renewal = verified.data;
+    const chain = await db.appleSubscriptionChain.findUniqueOrThrow({ where: { id: chainId } });
+    if (chain.originalTransactionId !== renewal.originalTransactionId || chain.environment !== renewal.environment)
+      throw new AppError("applePurchaseBindingMismatch", "CONFLICT", 409);
     if (renewal.appAccountToken && renewal.appAccountToken.toLowerCase() !== chain.appAccountToken)
       throw new AppError("applePurchaseOrganizationMismatch", "FORBIDDEN", 403);
     if (new Date(renewal.signedDate!) < chain.lastSignedAt) return;
@@ -37,17 +42,16 @@ async function applyVerifiedRenewal(renewal: JWSRenewalInfoDecodedPayload) {
       try { pendingChangeOffer = JSON.parse(JSON.stringify((await appleManagedOffer(db, chain, pendingProductId)).offer)) as Prisma.InputJsonValue; }
       catch (error) { if (!(error instanceof AppError)) throw error; issue = error.message; }
     }
-    // Signed future preference replaces expired local reservations; its frozen
-    // limits remain enforced until Apple confirms another preference or renewal.
-    await db.applePurchaseIntent.updateMany({ where: { organizationId: chain.organizationId, scope: "SUBSCRIPTION", action: "CHANGE",
-      authorizedAt: { not: null, lte: new Date(renewal.signedDate!) }, status: { in: ["PENDING", "REVIEW"] } }, data: { status: "COMPLETED", pendingSlot: null, lastIssue: null } });
+    // A signed renewal preference proves future product/limits, not the result
+    // of a particular final-authorized purchase. OFF, even after authorization,
+    // cannot prove that a delayed transaction did not charge. Keep each hold
+    // and financial REVIEW until its own verified outcome resolves it.
     await db.appleSubscriptionChain.update({ where: { id: chain.id }, data: {
       autoRenewEnabled: renewal.autoRenewStatus === AutoRenewStatus.ON,
       graceExpiresAt: grace ? new Date(grace) : null, lastSignedAt: new Date(renewal.signedDate!),
       pendingProductId, pendingChangeOffer, lastIssue: issue, nextCheckAt: new Date(Date.now() + 15 * 60_000),
     } });
     await recomputeAppleCoverage(db, chain.organizationId);
-  });
 }
 
 export async function acceptAppleServerNotification(signedPayload: string) {

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { Environment, Type } from "@apple/app-store-server-library";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db/prisma";
@@ -7,12 +8,14 @@ import { appleSubscriptionOffer, appleWhatsAppOffer } from "@/server/billing/app
 import { createApplePurchaseIntent, authorizeApplePurchase, applyAppleTransaction, getApplePurchasePreview, getAppleBillingState, restoreApplePurchases, cancelApplePurchaseIntent } from "@/server/billing/applePayments";
 import { applyAppleSignedRenewal, acceptAppleServerNotification, reconcileAppleBilling } from "@/server/billing/appleLifecycle";
 import { calculateSubscriptionQuote } from "@/server/billing/subscriptionQuotes";
-import { getSubscriptionPaymentState } from "@/server/billing/subscriptionPayments";
+import { createSubscriptionCheckout, getSubscriptionPaymentState } from "@/server/billing/subscriptionPayments";
 import { getOrganizationPlan, getCapacityLimits, assertFeatureCanBeConfigured, resolveOrganizationAccessState } from "@/server/services/planLimits";
 import { getSubscriptionUsage, withSubscriptionUsage } from "@/server/billing/subscriptionUsage";
 import * as verification from "@/server/billing/appleVerification";
 import { APPLE_WHATSAPP_OFFER_VERSION } from "@/server/billing/appleConfig";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import { deleteOwnAccount } from "@/server/services/accountDeletion";
+import { setUserActive, updateUser } from "@/server/services/users";
 import type { SubscriptionSelection } from "@/lib/billing/subscriptionPricing";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { syntheticAppleTransaction, syntheticAppleVerifier, signSyntheticApplePayload } from "../helpers/appleSignedFixture";
@@ -110,6 +113,121 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
     // Replaying the older deferred preference cannot reinstate a canceled change.
     await applyAppleSignedRenewal(renewal(first.appAccountToken, { autoRenewProductId: low.productId, signedDate: Date.now() + 1000 }), syntheticAppleVerifier());
     expect((await prisma.appleSubscriptionChain.findFirstOrThrow()).pendingProductId).toBeNull();
+  });
+
+  it.each(["DEACTIVATED", "DELETED", "DEMOTED"] as const)("retains a final-authorized change after OFF-before-transaction and %s payer departure, beyond the known term", async (departure) => {
+    const f = await seed(), [current, target] = configure(f.org.id, [business, enterprise]);
+    const first = await intentFor(f, current.offerKey), knownEnd = Date.now() + 5 * 60_000;
+    await apply(tx(first, { purchaseDate: Date.now() - 60_000, expiresDate: knownEnd }), f.org.id, first.intentId);
+    await withSubscriptionUsage({ organizationId: f.org.id, resource: "ai", units: 3, operationKey: "before-lost-upgrade" }, async () => true);
+    const change = await intentFor(f, target.offerKey, "CHANGE");
+    const authorized = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } });
+    // Apple charged this invocation, but its signed transaction arrives later
+    // than renewal-OFF. The renewal payload cannot stand in for its outcome.
+    const delayedCharge = tx(change, { transactionId: "100000000000002", expiresDate: knownEnd + 30 * 86400000 });
+    await applyAppleSignedRenewal(renewal(first.appAccountToken, { productId: target.productId, autoRenewProductId: target.productId,
+      autoRenewStatus: 0, signedDate: authorized.authorizedAt!.getTime() + 1000 }), syntheticAppleVerifier());
+    expect(await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } })).toEqual(authorized);
+    await prisma.user.update({ where: { id: f.managerUser.id }, data: { role: "ADMIN" } });
+    const successor = { id: f.managerUser.id, organizationId: f.org.id };
+    if (departure === "DELETED") {
+      const password = "Synthetic-departing-payer-2026";
+      await prisma.user.update({ where: { id: f.adminUser.id }, data: { passwordHash: await bcrypt.hash(password, 4) } });
+      await deleteOwnAccount({ userId: f.adminUser.id, organizationId: f.org.id, requestId: "synthetic-payer-deletion",
+        password, confirmation: "DELETE", successorUserId: f.managerUser.id });
+    } else if (departure === "DEACTIVATED") {
+      await setUserActive({ userId: f.adminUser.id, organizationId: f.org.id, actorId: successor.id,
+        isActive: false, requestId: "synthetic-payer-deactivation" });
+    } else {
+      await updateUser({ userId: f.adminUser.id, organizationId: f.org.id, actorId: successor.id,
+        email: f.adminUser.email, name: f.adminUser.name, role: "STAFF", preferredLocale: "ru", requestId: "synthetic-payer-demotion" });
+    }
+    await expect(cancelApplePurchaseIntent(f.actor, change.intentId, change.attemptId)).rejects.toThrow("forbidden");
+    await expect(cancelApplePurchaseIntent(successor, change.intentId, change.attemptId)).rejects.toThrow("recordNotFound");
+
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(knownEnd + 16 * 60_000);
+    vi.stubEnv("APPLE_IAP_PRIVATE_KEY", ""); // No Server API calls in this ordering regression.
+    await reconcileAppleBilling();
+    const held = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } });
+    expect(held).toMatchObject({ status: "REVIEW", lastIssue: "applePurchasePendingVerification", createdById: f.adminUser.id,
+      authorizedAt: authorized.authorizedAt, nativeAttemptId: change.attemptId });
+    expect(await getSubscriptionPaymentState(f.org.id)).toMatchObject({ canPurchase: false, purchaseBlockedReason: "applePaymentNeedsReview" });
+    for (const [key, value] of Object.entries({ BILLING_PAYMENTS_MODE: "sandbox", BILLING_PAYMENT_PROVIDER: "gopay",
+      GOPAY_API_KEY: "synthetic-gopay-key-123456", GOPAY_API_SECRET: "synthetic-gopay-secret-123456", GOPAY_WEBHOOK_SECRET: "synthetic-gopay-webhook-123456",
+      BILLING_PUBLIC_URL: "http://localhost:3120", BILLING_TERMS_URL: "http://localhost:3120/legal/offer", BILLING_TERMS_VERSION: LEGAL_TERMS_VERSION,
+      BILLING_SELLER_NAME: "SYNTHETIC SELLER", HARDENING_EXTERNAL_PROVIDER_MODE: "enabled", VERCEL_ENV: "development" })) vi.stubEnv(key, value);
+    const provider = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("This held purchase must never reach GoPay"));
+    await expect(createSubscriptionCheckout({ organizationId: f.org.id, actorId: successor.id, ...business, action: "RENEW",
+      idempotencyKey: randomUUID(), expectedAmountMinor: appleSubscriptionOffer(terms, business).serviceValue.amountMinor,
+      termsVersion: LEGAL_TERMS_VERSION, locale: "ru", requestId: "synthetic-held-upgrade" })).rejects.toThrow("applePaymentNeedsReview");
+    expect(provider).not.toHaveBeenCalled(); expect(await prisma.subscriptionInvoice.count()).toBe(0);
+
+    expect((await apply(delayedCharge, f.org.id)).status).toBe("GRANTED");
+    expect((await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } })).status).toBe("COMPLETED");
+    const active = await getOrganizationPlan(f.org.id);
+    expect(active.plan).toBe("ENTERPRISE"); expect(resolveOrganizationAccessState(active).hasAccess).toBe(true);
+    expect((await getAppleBillingState(successor)).organization.id).toBe(f.org.id);
+    expect((await getSubscriptionUsage(f.org.id)).find((row) => row.resource === "ai")?.used).toBe(3);
+    expect((await prisma.appleTransaction.findUniqueOrThrow({ where: { environment_transactionId: { environment: "Sandbox", transactionId: "100000000000002" } } })).intentId)
+      .toBe(change.intentId);
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("does not release a new chain's authorized change on a renewal event from an older same-organization chain", async () => {
+    const f = await seed(), [current, target] = configure(f.org.id, [business, enterprise]);
+    const old = await intentFor(f, current.offerKey);
+    await apply(tx(old, { purchaseDate: Date.now() - 120_000, expiresDate: Date.now() - 60_000 }), f.org.id);
+    await applyAppleSignedRenewal(renewal(old.appAccountToken, { autoRenewStatus: 0 }), syntheticAppleVerifier());
+    const currentIntent = await intentFor(f, current.offerKey);
+    await apply(tx(currentIntent, { transactionId: "100000000000050", originalTransactionId: "100000000000050" }), f.org.id, currentIntent.intentId);
+    const change = await intentFor(f, target.offerKey, "CHANGE");
+    const before = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } });
+    await applyAppleSignedRenewal(renewal(old.appAccountToken, { autoRenewStatus: 0, signedDate: before.authorizedAt!.getTime() + 1000 }), syntheticAppleVerifier());
+    expect(await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } })).toEqual(before);
+    expect((await prisma.appleSubscriptionChain.findUniqueOrThrow({ where: { environment_originalTransactionId: {
+      environment: "Sandbox", originalTransactionId: "100000000000050" } } })).autoRenewEnabled).toBeNull();
+    expect((await getAppleBillingState(f.actor)).pendingIntent?.intentId).toBe(change.intentId);
+  });
+
+  it("preserves an intent's recorded financial REVIEW when a matching deferred preference or OFF arrives", async () => {
+    const f = await seed(), [current, target] = configure(f.org.id, [enterprise, business]);
+    const first = await intentFor(f, current.offerKey); await apply(tx(first), f.org.id);
+    const change = await intentFor(f, target.offerKey, "CHANGE");
+    expect(await apply(tx(change, { transactionId: "100000000000002", quantity: 2 }), f.org.id, change.intentId))
+      .toMatchObject({ status: "REVIEW", reason: "appleQuantityMismatch" });
+    const before = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } });
+    const paid = await prisma.appleTransaction.findUniqueOrThrow({ where: { environment_transactionId: { environment: "Sandbox", transactionId: "100000000000002" } } });
+    await applyAppleSignedRenewal(renewal(first.appAccountToken, { productId: current.productId, autoRenewProductId: target.productId,
+      signedDate: before.authorizedAt!.getTime() + 1000 }), syntheticAppleVerifier());
+    expect((await getCapacityLimits(await getOrganizationPlan(f.org.id))).maxUsers).toBe(5);
+    await applyAppleSignedRenewal(renewal(first.appAccountToken, { autoRenewStatus: 0, signedDate: before.authorizedAt!.getTime() + 2000 }), syntheticAppleVerifier());
+    expect(await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } })).toEqual(before);
+    expect(await prisma.appleTransaction.findUniqueOrThrow({ where: { id: paid.id } })).toEqual(paid);
+    expect((await getSubscriptionPaymentState(f.org.id)).purchaseBlockedReason).toBe("applePaymentNeedsReview");
+  });
+
+  it("keeps matching deferred evidence and its limits without treating it as a terminal purchase result, then resolves on the real renewal", async () => {
+    const f = await seed(), [current, target] = configure(f.org.id, [enterprise, business]);
+    const first = await intentFor(f, current.offerKey), end = Date.now() + 5 * 60_000;
+    await apply(tx(first, { purchaseDate: Date.now() - 60_000, expiresDate: end }), f.org.id);
+    const change = await intentFor(f, target.offerKey, "CHANGE");
+    const before = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } });
+    await applyAppleSignedRenewal(renewal(first.appAccountToken, { productId: current.productId, autoRenewProductId: target.productId,
+      renewalDate: end, signedDate: before.authorizedAt!.getTime() + 1000 }), syntheticAppleVerifier());
+    expect(await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } })).toEqual(before);
+    expect((await prisma.appleSubscriptionChain.findFirstOrThrow()).pendingProductId).toBe(target.productId);
+    expect((await getCapacityLimits(await getOrganizationPlan(f.org.id))).maxUsers).toBe(5);
+    await expect(assertFeatureCanBeConfigured(f.org.id, "bundles")).rejects.toThrow("billingScheduledFeatureRestriction");
+    expect(await prisma.appleTransaction.count()).toBe(1); expect(await prisma.subscriptionPeriod.count()).toBe(1);
+
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(end + 16 * 60_000); vi.stubEnv("APPLE_IAP_PRIVATE_KEY", "");
+    await reconcileAppleBilling();
+    expect((await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } })).status).toBe("REVIEW");
+    const actualRenewal = tx(change, { transactionId: "100000000000002", purchaseDate: end, expiresDate: end + 30 * 86400000 });
+    expect((await apply(actualRenewal, f.org.id)).status).toBe("GRANTED");
+    expect((await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: change.intentId } })).status).toBe("COMPLETED");
+    expect((await prisma.appleSubscriptionChain.findFirstOrThrow()).pendingProductId).toBeNull();
+    expect((await getOrganizationPlan(f.org.id)).plan).toBe("BUSINESS");
   });
 
   it("uses Apple's signed grace period, not an extra automatic seven days", async () => {

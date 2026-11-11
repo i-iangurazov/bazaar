@@ -17,6 +17,7 @@ import {
   purchaseAppleProduct,
   requestAppleRefund,
   restoreApplePurchases,
+  retryAppleCompletions,
   showAppleSubscriptionManagement,
   type AppleStorefront,
 } from "@/lib/native/appleBilling";
@@ -259,6 +260,9 @@ export function ApplePayments({
     if (nativeCode === "APPLE_STOREFRONT_UNAVAILABLE") return t("storefrontUnavailable");
     if (nativeCode === "APPLE_STOREFRONT_CHANGED") return t("storefrontChanged");
     if (nativeCode === "APPLE_PRICE_CHANGED") return t("priceChanged");
+    if (nativeCode === "APPLE_COMPLETION_STORAGE_FAILED") return t("completionStorageFailed");
+    if (nativeCode === "APPLE_COMPLETION_KEY_UNAVAILABLE") return t("completionKeyUnavailable");
+    if (nativeCode === "APPLE_DEFERRED_OUTCOME_UNRESOLVED") return t("deferredPending");
     const key =
       error &&
       typeof error === "object" &&
@@ -345,7 +349,13 @@ export function ApplePayments({
       }
       setConsentOpen(false);
       setAccepted(false);
-      if (result.status === "cancelled" || result.status === "not_started") {
+      if (result.status === "deferred") {
+        requestKey.current = null;
+        setNotice(t(result.completionRecorded ? "deferredMoneyRecorded" : result.completionAcknowledged ? "deferredRecorded" : "deferredPending"));
+        // The current/scheduled plan comes only from the refreshed catalog. Do
+        // not confirm or finish the old SKU as a newly purchased target plan.
+        window.dispatchEvent(new Event("bazaar:apple-retry"));
+      } else if (result.status === "cancelled" || result.status === "not_started") {
         const acknowledged = result.cancellationAcknowledged;
         const recorded = result.cancellationRecorded;
         // Authorized cancellations belong to the native attempt. The website
@@ -358,6 +368,14 @@ export function ApplePayments({
       } else if (result.status === "pending") {
         setNotice(t("pending"));
       } else {
+        if (action === "CHANGE" && product.type === "AUTO_RENEWABLE" && result.transaction.productId !== product.id) {
+          // Older native builds lack exact deferred-outcome recovery. An old
+          // receipt cannot be presented as a newly purchased target plan.
+          setNotice(t("deferredPending"));
+          window.dispatchEvent(new Event("bazaar:apple-retry"));
+          await refresh();
+          return;
+        }
         let saved;
         try {
           saved = await confirm.mutateAsync({
@@ -398,7 +416,10 @@ export function ApplePayments({
   const restore = () =>
     run(async () => {
       let result;
+      let completionPending = false;
       try {
+        try { completionPending = (await retryAppleCompletions()).pendingCount > 0; }
+        catch { completionPending = true; }
         result = await restoreSession.resume({
           begin: restoreApplePurchases,
           next: getAppleTransactionHistory,
@@ -421,7 +442,7 @@ export function ApplePayments({
       } finally {
         await refresh();
       }
-      setNotice(t(result.review ? "review" : "restored"));
+      setNotice(t(result.review ? "review" : completionPending ? "completionPending" : "restored"));
     });
 
   const access = catalog.data?.access;

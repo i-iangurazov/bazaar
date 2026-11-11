@@ -44,6 +44,7 @@ vi.mock("@/components/page-header", () => ({
   ),
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/components/billing/apple-support-cases", () => ({ AppleSupportCases: () => null }));
 vi.mock("@/lib/trpc", () => {
   const paths = [
     "adminJobs.list",

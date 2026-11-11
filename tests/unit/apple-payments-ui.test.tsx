@@ -30,6 +30,7 @@ const mock = vi.hoisted(() => ({
   purchase: vi.fn(),
   finish: vi.fn(),
   restore: vi.fn(),
+  retryCompletions: vi.fn(),
   history: vi.fn(),
   manage: vi.fn(),
   refund: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@/lib/native/appleBilling", () => ({
   purchaseAppleProduct: mock.purchase,
   finishAppleTransaction: mock.finish,
   restoreApplePurchases: mock.restore,
+  retryAppleCompletions: mock.retryCompletions,
   getAppleTransactionHistory: mock.history,
   showAppleSubscriptionManagement: mock.manage,
   requestAppleRefund: mock.refund,
@@ -94,6 +96,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 const receipt = (transactionId = "9007199254740993123") => ({
   transactionId,
+  productId: "kg.bazaar.test.month",
   signedTransactionInfo: `signed.${transactionId}.receipt`,
 });
 const product = {
@@ -185,6 +188,16 @@ const configureTemporary = () => {
     products: [product, temporaryProduct].filter((entry) => productIds.includes(entry.id)), missingProductIds: [],
   }));
   mock.intent.mockResolvedValue({ intentId: "native-authorized-intent", productId: temporaryProduct.id });
+  mock.purchase.mockResolvedValue({ status: "purchased", transaction: { ...receipt(), productId: temporaryProduct.id } });
+  return data;
+};
+const configureAutomaticChange = () => {
+  const data = fixture();
+  Object.assign(data.offers[0], { productType: "AUTO_RENEWABLE", availableActions: ["CHANGE"],
+    renewUnavailableReason: "appleExistingAccessActive", changeUnavailableReason: null });
+  Object.assign(data.access, { source: "APPLE", appleAutoRenew: true, appleCoverageUntil: "2027-05-01T00:00:00Z" });
+  mock.data = data;
+  mock.products.mockResolvedValue({ products: [{ ...product, type: "AUTO_RENEWABLE", subscriptionPeriod: { unit: "month", value: 1 } }], missingProductIds: [] });
   return data;
 };
 const messages = { ru, kg, en };
@@ -249,6 +262,7 @@ beforeEach(() => {
     }),
   );
   mock.finish.mockResolvedValue({ finished: true });
+  mock.retryCompletions.mockResolvedValue({ pendingCount: 0, acknowledgedCount: 0, deferredCount: 0, recordedCount: 0 });
   mock.refetch.mockResolvedValue({ data: mock.data });
   mock.restore.mockResolvedValue({
     transactions: [],
@@ -275,6 +289,70 @@ afterEach(() => {
 });
 
 describe("iOS Apple checkout and recovery", () => {
+  it.each(["ru", "kg", "en"] as const)("keeps a deferred native result distinct from new paid access in %s", async (locale) => {
+    configureAutomaticChange();
+    mock.purchase.mockResolvedValueOnce({ status: "deferred", completionAcknowledged: true, completionRecorded: false,
+      scheduled: false, effectiveAt: "2027-05-01T00:00:00Z" });
+    const { container } = mount(locale);
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: messages[locale].billingApple.confirmPurchase }));
+    await screen.findByText(messages[locale].billingApple.deferredRecorded);
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.cancel).not.toHaveBeenCalled();
+    expect(mock.refetch).toHaveBeenCalled();
+    expect(container.querySelector("[data-apple-scheduled-change]")).toBeNull();
+    expect(screen.queryByText(messages[locale].billingApple.confirmed)).toBeNull();
+  });
+
+  it("retains a lost deferred acknowledgement without confirming or finishing the old transaction", async () => {
+    configureAutomaticChange();
+    mock.purchase.mockResolvedValueOnce({ status: "deferred", completionAcknowledged: false, completionRecorded: false, scheduled: false });
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.deferredPending);
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it("hands deferred money precedence to refreshed financial status without claiming a scheduled change", async () => {
+    configureAutomaticChange();
+    mock.purchase.mockResolvedValueOnce({ status: "deferred", completionAcknowledged: true, completionRecorded: true, scheduled: false });
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.deferredMoneyRecorded);
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.refetch).toHaveBeenCalled();
+  });
+
+  it("does not mistake an older native build's old-SKU success for the requested auto change", async () => {
+    configureAutomaticChange();
+    mock.purchase.mockResolvedValueOnce({ status: "purchased", transaction: { ...receipt(), productId: "kg.bazaar.testing.previous-term" } });
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.deferredPending);
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it("includes earned completion recovery in explicit restore without declaring all proofs resolved", async () => {
+    mock.retryCompletions.mockResolvedValueOnce({ pendingCount: 1, acknowledgedCount: 0, deferredCount: 0, recordedCount: 0 });
+    mount();
+    await screen.findByText(product.displayPrice);
+    fireEvent.click(screen.getByRole("button", { name: ru.billingApple.restore }));
+    await screen.findByText(ru.billingApple.completionPending);
+    expect(mock.retryCompletions).toHaveBeenCalledExactlyOnceWith();
+    expect(mock.restore).toHaveBeenCalledTimes(1);
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
   it.each(["ru", "kg", "en"] as const)("buys a direct current-term upgrade with exact Apple metadata and preserved coverage in %s", async (locale) => {
     configureTemporary();
     const { container } = mount(locale);

@@ -4443,12 +4443,17 @@ model ApplePurchaseIntent {
   expiresAt DateTime
   authorizedAt DateTime?
   nativeAttemptId String? @unique @db.Uuid
+  completionPublicKey String? @db.VarChar(200)
+  completionKeyFingerprint String? @unique @db.VarChar(64)
+  completionOrigin String?
   lastIssue String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   transactions AppleTransaction[]
   chains AppleSubscriptionChain[]
+  deferredOutcome AppleNativeDeferredOutcome?
+  nativeCompletion AppleNativeCompletion?
   @@unique([organizationId, idempotencyKey])
   @@unique([id, organizationId])
   @@index([status, expiresAt])
@@ -4478,6 +4483,7 @@ model AppleSubscriptionChain {
   updatedAt DateTime @updatedAt
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   initialIntent ApplePurchaseIntent @relation(fields: [initialIntentId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  deferredOutcomes AppleNativeDeferredOutcome[]
   @@unique([environment, originalTransactionId])
   @@unique([id, organizationId])
   @@index([nextCheckAt, processingUntil])
@@ -4520,6 +4526,7 @@ model AppleTransaction {
   observations AppleTransactionObservation[]
   subscriptionPeriod SubscriptionPeriod?
   whatsappCreditLot WhatsAppCreditLot?
+  deferredOutcomes AppleNativeDeferredOutcome[]
   @@unique([environment, transactionId])
   @@unique([id, organizationId])
   @@index([organizationId, purchaseDate])
@@ -4533,6 +4540,56 @@ model AppleTransactionObservation {
   signedPayload String @db.Text
   createdAt DateTime @default(now())
   transaction AppleTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+}
+
+// Earned native purchase-return evidence. This is not a charge or access grant.
+model AppleNativeDeferredOutcome {
+  id String @id @default(cuid())
+  intentId String @unique
+  organizationId String
+  nativeAttemptId String @db.Uuid
+  actorId String
+  chainId String
+  previousTransactionId String
+  environment String
+  originalTransactionId String
+  appAccountToken String @db.Uuid
+  currentProductId String
+  productId String
+  effectiveAt DateTime
+  renewalSignedAt DateTime
+  transactionDigest String @db.VarChar(64)
+  renewalDigest String @db.VarChar(64)
+  signedTransactionInfo String @db.Text
+  signedRenewalInfo String @db.Text
+  createdAt DateTime @default(now())
+  intent ApplePurchaseIntent @relation(fields: [intentId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  chain AppleSubscriptionChain @relation(fields: [chainId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  previousTransaction AppleTransaction @relation(fields: [previousTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleNativeDeferredOutcome_previous_org_fkey")
+  @@unique([intentId, organizationId])
+  @@index([organizationId, createdAt])
+}
+
+// Consumes a device-key challenge for an already earned terminal outcome only.
+model AppleNativeCompletion {
+  id String @id @default(cuid())
+  intentId String @unique
+  organizationId String
+  nativeAttemptId String @db.Uuid
+  keyFingerprint String @db.VarChar(64)
+  origin String
+  outcome String
+  transactionDigest String? @db.VarChar(64)
+  renewalDigest String? @db.VarChar(64)
+  challengeDigest String @unique @db.VarChar(64)
+  challenge String @db.Text
+  signature String @db.VarChar(100)
+  issuedAt DateTime
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  intent ApplePurchaseIntent @relation(fields: [intentId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([intentId, organizationId])
+  @@index([organizationId, createdAt])
 }
 
 model AppleServerNotification {

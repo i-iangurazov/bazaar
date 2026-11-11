@@ -10,6 +10,7 @@ import {
   getUnfinishedAppleTransactions,
   isAppleBillingAvailable,
   retryAppleCancellations,
+  retryAppleCompletions,
 } from "@/lib/native/appleBilling";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -25,9 +26,54 @@ export function ApplePurchaseRecovery() {
   const [needsRetry, setNeedsRetry] = useState(false);
   const [cancellationPending, setCancellationPending] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [completionNeedsRetry, setCompletionNeedsRetry] = useState(false);
+  const nativeReady = isAppleBillingAvailable();
+
+  // An already enrolled device may complete its earned result after logout,
+  // deletion or role loss. This path never reads money/history or uses a session.
+  useEffect(() => {
+    if (!nativeReady) return;
+    let active = true;
+    let busy = false;
+    let requested = false;
+    const drain = async () => {
+      if (!active || document.hidden || navigator.onLine === false) return;
+      if (busy) { requested = true; return; }
+      busy = true;
+      try {
+        const result = await retryAppleCompletions();
+        if (!active) return;
+        setCompletionNeedsRetry(result.pendingCount > 0);
+        if (result.acknowledgedCount > 0 || result.deferredCount > 0 || result.recordedCount > 0)
+          await queryClient.invalidateQueries();
+        if (active && result.recordedCount > 0)
+          window.dispatchEvent(new Event("bazaar:apple-receipt-retry"));
+      } catch {
+        if (active) setCompletionNeedsRetry(true);
+      } finally {
+        busy = false;
+        if (active && requested) { requested = false; void drain(); }
+      }
+    };
+    const resume = () => { void drain(); };
+    window.addEventListener("online", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("bazaar:apple-retry", resume);
+    document.addEventListener("visibilitychange", resume);
+    resume();
+    return () => {
+      active = false;
+      window.removeEventListener("online", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("bazaar:apple-retry", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, [nativeReady, status, session?.user?.id, session?.user?.organizationId, session?.user?.role, queryClient, attempt]);
 
   useEffect(() => {
-    if (status !== "authenticated" || session?.user?.role !== "ADMIN" || !isAppleBillingAvailable())
+    if (status !== "authenticated" || session?.user?.role !== "ADMIN" || !nativeReady)
       return;
     let active = true;
     let busy = false;
@@ -101,6 +147,7 @@ export function ApplePurchaseRecovery() {
     window.addEventListener("focus", resume);
     window.addEventListener("pageshow", resume);
     window.addEventListener("bazaar:apple-retry", resume);
+    window.addEventListener("bazaar:apple-receipt-retry", resume);
     document.addEventListener("visibilitychange", resume);
     resume();
     return () => {
@@ -110,6 +157,7 @@ export function ApplePurchaseRecovery() {
       window.removeEventListener("focus", resume);
       window.removeEventListener("pageshow", resume);
       window.removeEventListener("bazaar:apple-retry", resume);
+      window.removeEventListener("bazaar:apple-receipt-retry", resume);
       document.removeEventListener("visibilitychange", resume);
     };
   }, [
@@ -119,16 +167,18 @@ export function ApplePurchaseRecovery() {
     session?.user?.role,
     queryClient,
     attempt,
+    nativeReady,
   ]);
 
-  if (!needsRetry || status !== "authenticated" || session?.user?.role !== "ADMIN") return null;
+  const financialRetry = needsRetry && status === "authenticated" && session?.user?.role === "ADMIN";
+  if (!nativeReady || (!completionNeedsRetry && !financialRetry)) return null;
   return (
     <aside
       role="status"
       data-native-apple-recovery
       className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-[940] mx-auto max-w-md rounded-lg border border-warning/40 bg-background p-4 shadow-xl"
     >
-      <p className="text-sm">{t(cancellationPending ? "cancellationPending" : "recoveryHint")}</p>
+      <p className="text-sm">{t(financialRetry ? cancellationPending && !completionNeedsRetry ? "cancellationPending" : "recoveryHint" : "completionPending")}</p>
       <Button variant="secondary" className="mt-2" onClick={() => setAttempt((value) => value + 1)}>
         {t("retry")}
       </Button>

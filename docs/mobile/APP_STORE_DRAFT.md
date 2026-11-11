@@ -316,11 +316,21 @@ backgrounding or a lost final-auth response. It never labels that as cancellatio
 in the App Store. A different winning attempt and every ambiguous post-SDK outcome
 retain their payment protection; no timeout or missing-history auto-cancel exists.
 Money already recorded by the server requires receipt/status review rather than
-a cancelled message. The original intent creator and organization still govern
-authorization: after payer deletion, loss of ADMIN or departure, a different
-administrator cannot clear that proof. Keep this case in the support/reconciliation
-runbook and verify its resolution before enabling sales; do not weaken tenant
-binding, clear a money hold by timeout, or promise automatic reassignment.
+a cancelled message. The original intent and organization remain fixed. New
+attempts atomically enroll a per-attempt device public key at final authorization;
+that original device may later complete its already earned cancellation/deferred
+result after the payer's deletion, loss of ADMIN or departure. Its private key
+stays native, and a fresh signed challenge binds the exact attempt, origin and
+evidence. This permission cannot start another purchase, transfer access or
+establish that an absent transaction was unpaid. A signed read-only lookup can
+acknowledge money already recorded without inventing a terminal outcome.
+
+Older keyless attempts still require the original authorized administrator, and
+missing-key/unknown post-SDK outcomes retain their holds. A different administrator
+cannot clear those holds by assertion. The operator's actual case view supports
+known-reference recheck and independently verified Apple-signed evidence import;
+no timeout or empty-history release exists. Verify both cohorts, the native
+journal and the operator workflow on the real review build before enabling sales.
 This operational note is an internal release gate, not finished public listing
 copy or evidence that the device scenario has passed.
 

@@ -521,6 +521,7 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
       return { preview, purchase, intent };
     } finally { vi.useRealTimers(); } })();
     const payload = signed({ intentId: history.intent.id, productId: history.intent.productId, productType: history.intent.productType,
+      action: "CHANGE", subscriptionGroupId: null, deferredSource: null,
       appAccountToken: history.intent.purchaseAppAccountToken!, environment: history.intent.environment,
       expiresAt: history.intent.expiresAt.toISOString(), priceConstraint: history.preview.priceConstraint },
     { purchaseDate: historicalPurchase.getTime(), signedDate: Date.now() });
@@ -733,7 +734,7 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     const args = ["--url-env", "EXPLICIT_OWNED_TEMPORARY_UPGRADE_AUDIT_URL",
       "--expect-host", connection.hostname, "--expect-port", connection.port || "5432",
       "--expect-database", decodeURIComponent(connection.pathname.slice(1)),
-      "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_UPGRADES"];
+      "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_COMPLETION_UTC"];
     // The owned local runner pins its approved binary; ordinary Linux CI can
     // keep the existing psql-on-PATH convention. No implicit database is used.
     if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
@@ -754,7 +755,7 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     // Execute the actual SQL in a separate psql read-only transaction, without
     // a fake executor, fixture mutations, or disabling any financial guard.
     const report = await runIosBillingPreflight(options);
-    expect(report).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_UPGRADES", transactionReadOnly: true,
+    expect(report).toMatchObject({ ok: true, schemaStage: "POST_COMPLETION_UTC", transactionReadOnly: true,
       blockerChecks: 0, skippedChecks: 0 });
     for (const name of ["apple_intent_account_binding_invalid", "apple_transaction_account_binding_invalid",
       "apple_transaction_intent_binding_invalid", "temporary_upgrade_token_namespace_collisions",

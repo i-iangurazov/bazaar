@@ -14,6 +14,7 @@ const mock = vi.hoisted(() => ({
   },
   confirm: vi.fn(),
   retryCancellations: vi.fn(),
+  retryCompletions: vi.fn(),
   unfinished: vi.fn(),
   finish: vi.fn(),
   addListener: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 vi.mock("@/lib/native/appleBilling", () => ({
   isAppleBillingAvailable: () => mock.nativeReady,
   retryAppleCancellations: mock.retryCancellations,
+  retryAppleCompletions: mock.retryCompletions,
   getUnfinishedAppleTransactions: mock.unfinished,
   finishAppleTransaction: mock.finish,
   addAppleTransactionListener: mock.addListener,
@@ -57,6 +59,7 @@ beforeEach(() => {
   mock.listener = null;
   mock.confirm.mockResolvedValue({ acknowledged: true, status: "GRANTED" });
   mock.retryCancellations.mockResolvedValue({ pendingCount: 0, acknowledgedCount: 0, recordedCount: 0 });
+  mock.retryCompletions.mockResolvedValue({ pendingCount: 0, acknowledgedCount: 0, deferredCount: 0, recordedCount: 0 });
   mock.unfinished.mockResolvedValue(pending());
   mock.finish.mockResolvedValue({ finished: true });
   mock.removeListener.mockResolvedValue(undefined);
@@ -105,7 +108,7 @@ describe("interrupted Apple purchase recovery", () => {
     { status: "authenticated", role: "MANAGER", nativeReady: true },
     { status: "authenticated", role: "CASHIER", nativeReady: true },
     { status: "authenticated", role: "ADMIN", nativeReady: false },
-  ])("does not start recovery for $status/$role with native=$nativeReady", async (state) => {
+  ])("does not start session-dependent receipt recovery for $status/$role with native=$nativeReady", async (state) => {
     mock.status = state.status;
     mock.session.user.role = state.role;
     mock.nativeReady = state.nativeReady;
@@ -116,6 +119,62 @@ describe("interrupted Apple purchase recovery", () => {
     expect(mock.retryCancellations).not.toHaveBeenCalled();
     expect(mock.confirm).not.toHaveBeenCalled();
     expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.retryCompletions).toHaveBeenCalledTimes(state.nativeReady ? 1 : 0);
+  });
+
+  it("completes an already-earned cancellation after logout without reading or confirming money", async () => {
+    mock.status = "unauthenticated";
+    mock.retryCompletions.mockResolvedValueOnce({ pendingCount: 1, acknowledgedCount: 0, deferredCount: 0, recordedCount: 0 });
+    render(<ApplePurchaseRecovery />);
+    await screen.findByText("completionPending");
+    mock.retryCompletions.mockResolvedValueOnce({ pendingCount: 0, acknowledgedCount: 1, deferredCount: 0, recordedCount: 0 });
+    await act(async () => { fireEvent(window, new Event("online")); });
+    await waitFor(() => expect(screen.queryByText("completionPending")).toBeNull());
+    expect(mock.queryClient.invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(mock.addListener).not.toHaveBeenCalled();
+    expect(mock.retryCancellations).not.toHaveBeenCalled();
+    expect(mock.unfinished).not.toHaveBeenCalled();
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+  });
+
+  it("recovers an earned deferred result after role loss and refreshes authoritative state without granting locally", async () => {
+    mock.session.user.role = "STAFF";
+    mock.retryCompletions.mockResolvedValueOnce({ pendingCount: 0, acknowledgedCount: 0, deferredCount: 1, recordedCount: 0 });
+    render(<ApplePurchaseRecovery />);
+    await waitFor(() => expect(mock.queryClient.invalidateQueries).toHaveBeenCalledTimes(1));
+    expect(mock.unfinished).not.toHaveBeenCalled();
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(screen.queryByText("completionPending")).toBeNull();
+  });
+
+  it("retains a failed signed completion and retries on focus without reopening a purchase", async () => {
+    mock.status = "unauthenticated";
+    mock.retryCompletions.mockRejectedValueOnce(new Error("APPLE_NETWORK_ERROR"));
+    const view = render(<ApplePurchaseRecovery />);
+    await screen.findByText("completionPending");
+    await act(async () => { fireEvent(window, new Event("focus")); });
+    await waitFor(() => expect(screen.queryByText("completionPending")).toBeNull());
+    view.unmount();
+    const calls = mock.retryCompletions.mock.calls.length;
+    await act(async () => { fireEvent(window, new Event("online")); });
+    expect(mock.retryCompletions).toHaveBeenCalledTimes(calls);
+    expect(mock.unfinished).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+  });
+
+  it("hands a recorded-money completion to normal receipt confirmation before native finish", async () => {
+    mock.retryCompletions.mockResolvedValueOnce({ pendingCount: 0, acknowledgedCount: 0, deferredCount: 0, recordedCount: 1 });
+    mock.unfinished.mockResolvedValueOnce(pending("later-paid-receipt"));
+    let confirm: (() => void) | undefined;
+    mock.confirm.mockImplementationOnce(() => new Promise<void>((resolve) => { confirm = resolve; }));
+    render(<ApplePurchaseRecovery />);
+    await waitFor(() => expect(mock.confirm).toHaveBeenCalledWith({ signedTransactionInfo: transaction("later-paid-receipt").signedTransactionInfo }));
+    expect(mock.finish).not.toHaveBeenCalled();
+    await act(async () => { confirm!(); });
+    await waitFor(() => expect(mock.finish).toHaveBeenCalledWith("later-paid-receipt"));
+    expect(mock.confirm.mock.invocationCallOrder[0]).toBeLessThan(mock.finish.mock.invocationCallOrder[0]);
   });
 
   it("waits offline or hidden and resumes on connectivity, focus and visibility", async () => {

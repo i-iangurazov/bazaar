@@ -29,6 +29,17 @@ Approved automatic SKUs must belong to one subscription group. Tier, term, store
 
 A signed deferred renewal preference freezes the future offer on the chain. Both server and database capacity/feature guards retain future downgrade limits after the local intent's lifetime. A newer signed cancellation/renewal preference can release or replace them. Changes initiated in Apple's subscription management are recovered only through an explicitly approved SKU in the same frozen group and immutable organization binding; their recovery intents are labelled `APPLE_SUBSCRIPTION_MANAGEMENT`.
 
+Renewal information alone never completes a final-authorized local purchase. In
+particular, renewal-OFF is not proof that an immediate upgrade did not charge;
+its transaction may arrive later, even after the payer leaves. Each unrecorded
+authorization remains protected beyond the old known term. A legitimate deferred
+change can resolve promptly through the separate [earned native deferred-outcome
+protocol](APPLE_DEFERRED_OUTCOMES.md): the exact winning native invocation must
+actually return the existing verified transaction and supply a matching signed
+future preference. It records no new charge or access. Missing or ambiguous
+native outcome evidence retains the hold; this protocol does not manufacture it
+from a renewal notification, empty history, timeout or cold start.
+
 Apple grace follows signed renewal information. Generic web seven-day grace is not invented for Apple. Confirmed refund plus auto-renewal-off releases obsolete Apple coverage for provider switching; refund of an old superseded transaction does not erase a newer chain period.
 
 ## Durable lifecycle recovery

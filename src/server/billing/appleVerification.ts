@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import {
-  AppStoreServerAPIClient, Environment, SignedDataVerifier, Type,
+  AppStoreServerAPIClient, AutoRenewStatus, Environment, SignedDataVerifier, Type,
   type JWSTransactionDecodedPayload, type JWSRenewalInfoDecodedPayload, type ResponseBodyV2DecodedPayload,
 } from "@apple/app-store-server-library";
 import { z } from "zod";
@@ -9,6 +9,15 @@ import { APPLE_BUNDLE_ID, appleBillingConfig, type AppleProductType } from "./ap
 import { APPLE_ROOT_CERTIFICATES } from "./appleRootCertificates";
 
 const verified = Symbol("apple-signed-transaction");
+const verifiedRenewal = Symbol("apple-signed-renewal");
+export type VerifiedAppleRenewal = {
+  readonly [verifiedRenewal]: true; readonly data: JWSRenewalInfoDecodedPayload & {
+    originalTransactionId: string; signedDate: number; environment: "Production" | "Sandbox";
+  }; readonly signedRenewalInfo: string; readonly digest: string;
+};
+export const assertVerifiedAppleRenewal = (receipt: VerifiedAppleRenewal) => {
+  if (receipt?.[verifiedRenewal] !== true) throw new AppError("appleInvalidTransaction", "BAD_REQUEST", 400);
+};
 export type VerifiedAppleTransaction = {
   readonly [verified]: true;
   readonly signedTransactionInfo: string;
@@ -56,6 +65,17 @@ export class AppleReceiptVerifier {
   async renewal(signedRenewalInfo: string): Promise<JWSRenewalInfoDecodedPayload> {
     try { return await this.verifier.verifyAndDecodeRenewalInfo(signedRenewalInfo); }
     catch { throw new AppError("appleInvalidTransaction", "BAD_REQUEST", 400); }
+  }
+  async verifiedRenewal(signedRenewalInfo: string): Promise<VerifiedAppleRenewal> {
+    const data = await this.renewal(signedRenewalInfo);
+    if (signedRenewalInfo.length > 100_000 || !validId(data.originalTransactionId) || !safeTimestamp(data.signedDate) ||
+      data.signedDate > Date.now() + 300_000 || !["Production", "Sandbox"].includes(String(data.environment)) ||
+      ![AutoRenewStatus.ON, AutoRenewStatus.OFF].includes(data.autoRenewStatus as AutoRenewStatus) ||
+      (data.appAccountToken !== undefined && !z.string().uuid().safeParse(data.appAccountToken).success) ||
+      (data.gracePeriodExpiresDate !== undefined && !safeTimestamp(data.gracePeriodExpiresDate)))
+      throw new AppError("appleInvalidTransaction", "BAD_REQUEST", 400);
+    return { [verifiedRenewal]: true, data: { ...data, ...(data.appAccountToken ? { appAccountToken: data.appAccountToken.toLowerCase() } : {}) } as VerifiedAppleRenewal["data"],
+      signedRenewalInfo, digest: createHash("sha256").update(signedRenewalInfo).digest("hex") };
   }
   async notification(signedPayload: string): Promise<ResponseBodyV2DecodedPayload> {
     try {

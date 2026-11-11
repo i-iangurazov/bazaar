@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/server/services/errors";
 
-const mocks = vi.hoisted(() => ({ authorize: vi.fn(), cancel: vi.fn(), acknowledge: vi.fn(),
+const mocks = vi.hoisted(() => ({ authorize: vi.fn(), cancel: vi.fn(), acknowledge: vi.fn(), deferred: vi.fn(),
   token: vi.fn(), impersonating: false }));
 vi.mock("@/server/billing/applePayments", () => ({ authorizeApplePurchase: mocks.authorize,
   cancelApplePurchaseIntent: mocks.cancel, acknowledgeApplePurchase: mocks.acknowledge }));
+vi.mock("@/server/billing/appleDeferredOutcome", () => ({ recordAppleDeferredOutcome: mocks.deferred }));
 vi.mock("@/server/auth/token", () => ({ getServerAuthToken: mocks.token }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ has: () => mocks.impersonating }) }));
 import { appleNativeRoute } from "@/server/billing/appleNativeRoute";
@@ -47,6 +48,18 @@ describe("native purchase attempt REST boundary", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("forwards a completion public key only during final authorization and pins its origin from the request", async () => {
+    const body = { intentId, attemptId: randomUUID(), completionPublicKey: "A".repeat(124) };
+    mocks.authorize.mockResolvedValue({ intentId, attemptId: body.attemptId, completionKeyFingerprint: "a".repeat(64), authorizedAt: "2026-11-11T00:00:00Z" });
+    const response = await appleNativeRoute(request(body, "https://www.bazaar.kg:443"), "authorize");
+    expect(response.status).toBe(200);
+    expect(mocks.authorize).toHaveBeenCalledWith(actor, intentId, { prepareOnly: undefined, attemptId: body.attemptId,
+      completionPublicKey: body.completionPublicKey, completionOrigin: "https://www.bazaar.kg" });
+    mocks.authorize.mockClear();
+    expect((await appleNativeRoute(request({ intentId, prepareOnly: true, completionPublicKey: body.completionPublicKey }), "authorize")).status).toBe(400);
+    expect(mocks.authorize).not.toHaveBeenCalled();
+  });
+
   it("returns the mismatch conflict without disclosing the winning attempt or erasing its obligation", async () => {
     mocks.cancel.mockRejectedValue(new AppError("applePurchaseAttemptMismatch", "CONFLICT", 409));
     const response = await appleNativeRoute(request({ intentId, attemptId: randomUUID() }), "cancel");
@@ -62,5 +75,24 @@ describe("native purchase attempt REST boundary", () => {
     mocks.impersonating = true;
     expect((await appleNativeRoute(request({ intentId }), "cancel")).status).toBe(403);
     expect(mocks.cancel).not.toHaveBeenCalled();
+  });
+
+  it("accepts only attempt-bound dual-JWS deferred evidence and preserves recorded-money ACK semantics", async () => {
+    const body = { intentId, attemptId: randomUUID(), signedTransactionInfo: "synthetic-transaction-JWS".repeat(2),
+      signedRenewalInfo: "synthetic-renewal-JWS".repeat(2) };
+    mocks.deferred.mockResolvedValue({ acknowledged: true, deferred: false, recorded: true, intentId,
+      status: "REVIEW", reason: "appleQuantityMismatch" });
+    const response = await appleNativeRoute(request(body), "deferred");
+    expect(response.status).toBe(200);
+    expect(mocks.deferred).toHaveBeenCalledWith(actor, body);
+    expect(await response.json()).toMatchObject({ deferred: false, recorded: true, status: "REVIEW" });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    mocks.deferred.mockClear();
+    for (const invalid of [{ ...body, attemptId: undefined }, { ...body, signedRenewalInfo: undefined }, { ...body, canceled: true }])
+      expect((await appleNativeRoute(request(invalid), "deferred")).status).toBe(400);
+    expect((await appleNativeRoute(request(body, "https://foreign.invalid"), "deferred")).status).toBe(403);
+    mocks.impersonating = true;
+    expect((await appleNativeRoute(request(body), "deferred")).status).toBe(403);
+    expect(mocks.deferred).not.toHaveBeenCalled();
   });
 });

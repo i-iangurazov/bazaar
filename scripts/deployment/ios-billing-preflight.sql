@@ -10,9 +10,9 @@ DO $audit$
 DECLARE
   checks JSONB := '[]'::jsonb; spec JSONB; requirement JSONB; parts TEXT[];
   missing BOOLEAN; affected BIGINT; state TEXT; stage TEXT; report JSONB;
-  base_missing INTEGER := 0; privacy_present INTEGER := 0; lifecycle_present INTEGER := 0; attempt_present INTEGER := 0; temporary_present INTEGER := 0;
+  base_missing INTEGER := 0; privacy_present INTEGER := 0; lifecycle_present INTEGER := 0; attempt_present INTEGER := 0; temporary_present INTEGER := 0; deferred_present INTEGER := 0;
   privacy_expected INTEGER := 14; lifecycle_expected INTEGER := 3;
-  privacy_applied BIGINT := 0; lifecycle_applied BIGINT := 0; attempt_applied BIGINT := 0; temporary_applied BIGINT := 0; prerequisite_applied BIGINT := 0;
+  privacy_applied BIGINT := 0; lifecycle_applied BIGINT := 0; attempt_applied BIGINT := 0; temporary_applied BIGINT := 0; deferred_applied BIGINT := 0; utc_applied BIGINT := 0; prerequisite_applied BIGINT := 0;
   unfinished BIGINT := 0; bad_checksum BIGINT := 0;
   structural_issues INTEGER := 0; relation_name TEXT; column_name TEXT;
 BEGIN
@@ -39,12 +39,19 @@ BEGIN
       IF EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass(format('public.%I',spec->>'table')) AND attname=column_name AND NOT attisdropped) THEN temporary_present := temporary_present + 1; END IF;
     END LOOP;
   END LOOP;
+  FOREACH relation_name IN ARRAY ARRAY['AppleNativeCompletion','AppleNativeDeferredOutcome'] LOOP
+    IF to_regclass(format('public.%I',relation_name)) IS NOT NULL THEN deferred_present := deferred_present + 1; END IF;
+  END LOOP;
+  FOREACH column_name IN ARRAY ARRAY['completionPublicKey','completionKeyFingerprint','completionOrigin'] LOOP
+    IF EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public."ApplePurchaseIntent"') AND attname=column_name AND NOT attisdropped) THEN deferred_present := deferred_present + 1; END IF;
+  END LOOP;
   stage := CASE WHEN base_missing>0 THEN 'UNBASELINED'
-    WHEN privacy_present=0 AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 THEN 'PRE_APPLE'
-    WHEN privacy_present=privacy_expected AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 THEN 'POST_PRIVACY'
-    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=0 AND temporary_present=0 THEN 'POST_LIFECYCLE'
-    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 AND temporary_present=0 THEN 'POST_NATIVE_ATTEMPT'
-    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 AND temporary_present=4 THEN 'POST_TEMPORARY_UPGRADES'
+    WHEN privacy_present=0 AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 AND deferred_present=0 THEN 'PRE_APPLE'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 AND deferred_present=0 THEN 'POST_PRIVACY'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=0 AND temporary_present=0 AND deferred_present=0 THEN 'POST_LIFECYCLE'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 AND temporary_present=0 AND deferred_present=0 THEN 'POST_NATIVE_ATTEMPT'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 AND temporary_present=4 AND deferred_present=0 THEN 'POST_TEMPORARY_UPGRADES'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 AND temporary_present=4 AND deferred_present=5 THEN 'POST_DEFERRED_OUTCOMES'
     ELSE 'PARTIAL' END;
   checks := checks || jsonb_build_array(jsonb_build_object('name','baseline_required_tables_missing','severity','blocker','count',base_missing,'skipped',false));
   IF to_regclass('public._prisma_migrations') IS NOT NULL THEN
@@ -52,6 +59,8 @@ BEGIN
       count(*) FILTER(WHERE migration_name='20261111130000_apple_lifecycle_recovery' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111140000_apple_native_attempt_recovery' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111150000_apple_temporary_upgrades' AND finished_at IS NOT NULL),
+      count(*) FILTER(WHERE migration_name='20261111160000_apple_deferred_outcomes' AND finished_at IS NOT NULL),
+      count(*) FILTER(WHERE migration_name='20261111170000_apple_completion_utc_clock' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111020000_manual_subscription_refunds' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE finished_at IS NULL),
       count(*) FILTER(WHERE finished_at IS NOT NULL AND (
@@ -59,17 +68,22 @@ BEGIN
         (migration_name='20261111130000_apple_lifecycle_recovery' AND checksum<>'4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10') OR
         (migration_name='20261111140000_apple_native_attempt_recovery' AND checksum<>'1b3d22538c669d7f940e45dc14127842c25fe14accbe753c8a2b7e3efed32d0b') OR
         (migration_name='20261111150000_apple_temporary_upgrades' AND checksum<>'a13faf83ce11ad2c39480fbce1791299b82fd4fa58971bf3548f905c629a714f') OR
+        (migration_name='20261111160000_apple_deferred_outcomes' AND checksum<>'66437a9da6224b1cfcc3a3c7d4ddc3be695119c7a00547a1256fa76f7c14201e') OR
+        (migration_name='20261111170000_apple_completion_utc_clock' AND checksum<>'5b2bdce206b878ba9c616fbaf661c2c585acf81384de54ce2da334fd6f41016e') OR
         (migration_name='20261111020000_manual_subscription_refunds' AND checksum<>'800cd487fb2d4b0ecd5501e5edc7182c4a06b851f68b0b02c18e40d795370b87')))
-      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,temporary_applied,prerequisite_applied,unfinished,bad_checksum;
+      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,temporary_applied,deferred_applied,utc_applied,prerequisite_applied,unfinished,bad_checksum;
   ELSE structural_issues := structural_issues + 1;
   END IF;
-  IF privacy_applied>1 OR lifecycle_applied>1 OR attempt_applied>1 OR temporary_applied>1 OR (lifecycle_applied>0 AND privacy_applied=0) OR (attempt_applied>0 AND lifecycle_applied=0) OR (temporary_applied>0 AND attempt_applied=0) THEN structural_issues := structural_issues + 1; END IF;
+  IF utc_applied>0 AND stage='POST_DEFERRED_OUTCOMES' THEN stage := 'POST_COMPLETION_UTC'; END IF;
+  IF privacy_applied>1 OR lifecycle_applied>1 OR attempt_applied>1 OR temporary_applied>1 OR deferred_applied>1 OR utc_applied>1 OR (lifecycle_applied>0 AND privacy_applied=0) OR (attempt_applied>0 AND lifecycle_applied=0) OR (temporary_applied>0 AND attempt_applied=0) OR (deferred_applied>0 AND temporary_applied=0) OR (utc_applied>0 AND deferred_applied=0) THEN structural_issues := structural_issues + 1; END IF;
   IF (privacy_applied=0 AND privacy_present>0) OR (privacy_applied>0 AND privacy_present<>privacy_expected) OR
      (lifecycle_applied=0 AND lifecycle_present>0) OR (lifecycle_applied>0 AND lifecycle_present<>lifecycle_expected) OR
      (attempt_applied=0 AND attempt_present>0) OR (attempt_applied>0 AND attempt_present<>1) OR
-     (temporary_applied=0 AND temporary_present>0) OR (temporary_applied>0 AND temporary_present<>4) OR stage='PARTIAL' THEN structural_issues := structural_issues + 1; END IF;
+     (temporary_applied=0 AND temporary_present>0) OR (temporary_applied>0 AND temporary_present<>4) OR
+     (deferred_applied=0 AND deferred_present>0) OR (deferred_applied>0 AND deferred_present<>5) OR
+     (utc_applied>0 AND deferred_present<>5) OR stage='PARTIAL' THEN structural_issues := structural_issues + 1; END IF;
   checks := checks || jsonb_build_array(
-    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied+temporary_applied,'skipped',false),
+    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied+temporary_applied+deferred_applied+utc_applied,'skipped',false),
     jsonb_build_object('name','manual_refund_prerequisite_missing','severity','blocker','count',CASE WHEN prerequisite_applied=1 THEN 0 ELSE 1 END,'skipped',false),
     jsonb_build_object('name','unfinished_migrations','severity','blocker','count',unfinished,'skipped',false),
     jsonb_build_object('name','reviewed_migration_checksum_mismatches','severity','blocker','count',bad_checksum,'skipped',false),
@@ -430,7 +444,7 @@ BEGIN
     "requires": [
       "AppleTransaction"
     ],
-    "sql": "SELECT count(*) FROM (VALUES ('public.\"protectAppleBillingAccount\"()','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e'),('public.\"protectAppleIntent\"()','a2b71c63f15c7be726f8d3d42090ed56','a2b71c63f15c7be726f8d3d42090ed56','9706a471dcd7db0a400272f56d139950','e5824764ed973923bfa00f5d43161736'),('public.\"protectAppleChain\"()','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64'),('public.\"protectAppleTransaction\"()','8d2d58e95e8f7abdf41723580d3d6118','c0d1aa0c2d552bf7d0c6903d10c334df','c0d1aa0c2d552bf7d0c6903d10c334df','d5b8ad3944dd390d2bca199c1e5bf5fc'),('public.\"protectAppleEvidence\"()','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce'),('public.\"validateSubscriptionPeriodPurchase\"()','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8','bc99297825556f5315154b239f4e16e6'),('public.\"protectSubscriptionPeriodSource\"()','249ab5329614e549df495b8b578acbc7','0e25ad94de6eb2476d52c55b771153ce','0e25ad94de6eb2476d52c55b771153ce','5aaa87a5f4c5a789d5dbe6707e453ad5'),('public.\"protectWhatsAppCreditSource\"()','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb'),('public.\"protectDeletedUserIdentity\"()','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f'),('public.\"enforceSubscriptionCapacity\"()','045d31abb34abb69cd318592e35175c0','da4172d8d0001200163f24d4c34f6146','da4172d8d0001200163f24d4c34f6146','f3ec3ba91a1136ab203b6640574a5c3b'),('public.\"assertSubscriptionFeatureConfiguration\"(text,text)','46750b3c1edc7cd45a8be46629819179','161b96ade46fe7ee1d24f42a5a38c156','161b96ade46fe7ee1d24f42a5a38c156','f8c3a43fc0e4bc603c127918a1dd3848'),('public.\"enforceSubscriptionMarketplaceChannel\"()','f13db24fddd9405aacb634c58a8c7626','80e2425b0b5bf48838d6342e4b54421c','80e2425b0b5bf48838d6342e4b54421c','1abf4c09fd923d2bfecefe1e8cad9e18')) AS expected(signature,privacy_digest,lifecycle_digest,native_digest,temporary_digest) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR md5(p.prosrc) IS DISTINCT FROM CASE WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"SubscriptionPeriod\"'::regclass AND attname='parentPeriodId' AND NOT attisdropped) THEN expected.temporary_digest WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"ApplePurchaseIntent\"'::regclass AND attname='nativeAttemptId' AND NOT attisdropped) THEN expected.native_digest WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"AppleTransaction\"'::regclass AND attname='supersededAt' AND NOT attisdropped) THEN expected.lifecycle_digest ELSE expected.privacy_digest END"
+    "sql": "SELECT count(*) FROM (VALUES ('public.\"protectAppleBillingAccount\"()','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e'),('public.\"protectAppleIntent\"()','a2b71c63f15c7be726f8d3d42090ed56','a2b71c63f15c7be726f8d3d42090ed56','9706a471dcd7db0a400272f56d139950','e5824764ed973923bfa00f5d43161736'),('public.\"protectAppleChain\"()','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64'),('public.\"protectAppleTransaction\"()','8d2d58e95e8f7abdf41723580d3d6118','c0d1aa0c2d552bf7d0c6903d10c334df','c0d1aa0c2d552bf7d0c6903d10c334df','d5b8ad3944dd390d2bca199c1e5bf5fc'),('public.\"protectAppleEvidence\"()','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce'),('public.\"validateSubscriptionPeriodPurchase\"()','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8','bc99297825556f5315154b239f4e16e6'),('public.\"protectSubscriptionPeriodSource\"()','249ab5329614e549df495b8b578acbc7','0e25ad94de6eb2476d52c55b771153ce','0e25ad94de6eb2476d52c55b771153ce','5aaa87a5f4c5a789d5dbe6707e453ad5'),('public.\"protectWhatsAppCreditSource\"()','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb'),('public.\"protectDeletedUserIdentity\"()','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f'),('public.\"enforceSubscriptionCapacity\"()','045d31abb34abb69cd318592e35175c0','da4172d8d0001200163f24d4c34f6146','da4172d8d0001200163f24d4c34f6146','f3ec3ba91a1136ab203b6640574a5c3b'),('public.\"assertSubscriptionFeatureConfiguration\"(text,text)','46750b3c1edc7cd45a8be46629819179','161b96ade46fe7ee1d24f42a5a38c156','161b96ade46fe7ee1d24f42a5a38c156','f8c3a43fc0e4bc603c127918a1dd3848'),('public.\"enforceSubscriptionMarketplaceChannel\"()','f13db24fddd9405aacb634c58a8c7626','80e2425b0b5bf48838d6342e4b54421c','80e2425b0b5bf48838d6342e4b54421c','1abf4c09fd923d2bfecefe1e8cad9e18')) AS expected(signature,privacy_digest,lifecycle_digest,native_digest,temporary_digest) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE NOT (expected.signature='public.\"protectAppleIntent\"()' AND EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"ApplePurchaseIntent\"'::regclass AND attname='completionPublicKey' AND NOT attisdropped)) AND (p.oid IS NULL OR md5(p.prosrc) IS DISTINCT FROM CASE WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"SubscriptionPeriod\"'::regclass AND attname='parentPeriodId' AND NOT attisdropped) THEN expected.temporary_digest WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"ApplePurchaseIntent\"'::regclass AND attname='nativeAttemptId' AND NOT attisdropped) THEN expected.native_digest WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"AppleTransaction\"'::regclass AND attname='supersededAt' AND NOT attisdropped) THEN expected.lifecycle_digest ELSE expected.privacy_digest END)"
   },
   {
     "name": "required_native_attempt_constraint_missing",
@@ -602,10 +616,208 @@ BEGIN
       "AppleTransaction.storefrontId"
     ],
     "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" WHERE p.\"parentPeriodId\" IS NOT NULL AND p.\"dependencyRevokedAt\" IS NOT NULL AND p.\"revokedAt\" IS NULL AND p.\"endsAt\">CURRENT_TIMESTAMP AND t.status='GRANTED' AND t.\"revocationDate\" IS NULL AND t.\"supersededAt\" IS NULL"
+  },
+  {
+    "name": "native_outcome_columns_missing_or_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('ApplePurchaseIntent','completionPublicKey','character varying(200)',false),('ApplePurchaseIntent','completionKeyFingerprint','character varying(64)',false),('ApplePurchaseIntent','completionOrigin','text',false),('AppleNativeCompletion','id','text',true),('AppleNativeCompletion','intentId','text',true),('AppleNativeCompletion','organizationId','text',true),('AppleNativeCompletion','nativeAttemptId','uuid',true),('AppleNativeCompletion','keyFingerprint','character varying(64)',true),('AppleNativeCompletion','origin','text',true),('AppleNativeCompletion','outcome','text',true),('AppleNativeCompletion','transactionDigest','character varying(64)',false),('AppleNativeCompletion','renewalDigest','character varying(64)',false),('AppleNativeCompletion','challengeDigest','character varying(64)',true),('AppleNativeCompletion','challenge','text',true),('AppleNativeCompletion','signature','character varying(100)',true),('AppleNativeCompletion','issuedAt','timestamp(3) without time zone',true),('AppleNativeCompletion','expiresAt','timestamp(3) without time zone',true),('AppleNativeCompletion','createdAt','timestamp(3) without time zone',true),('AppleNativeDeferredOutcome','id','text',true),('AppleNativeDeferredOutcome','intentId','text',true),('AppleNativeDeferredOutcome','organizationId','text',true),('AppleNativeDeferredOutcome','nativeAttemptId','uuid',true),('AppleNativeDeferredOutcome','actorId','text',true),('AppleNativeDeferredOutcome','chainId','text',true),('AppleNativeDeferredOutcome','previousTransactionId','text',true),('AppleNativeDeferredOutcome','environment','text',true),('AppleNativeDeferredOutcome','originalTransactionId','text',true),('AppleNativeDeferredOutcome','appAccountToken','uuid',true),('AppleNativeDeferredOutcome','currentProductId','text',true),('AppleNativeDeferredOutcome','productId','text',true),('AppleNativeDeferredOutcome','effectiveAt','timestamp(3) without time zone',true),('AppleNativeDeferredOutcome','renewalSignedAt','timestamp(3) without time zone',true),('AppleNativeDeferredOutcome','transactionDigest','character varying(64)',true),('AppleNativeDeferredOutcome','renewalDigest','character varying(64)',true),('AppleNativeDeferredOutcome','signedTransactionInfo','text',true),('AppleNativeDeferredOutcome','signedRenewalInfo','text',true),('AppleNativeDeferredOutcome','createdAt','timestamp(3) without time zone',true)) expected(table_name,column_name,column_type,required) WHERE NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=to_regclass(format('public.%I',expected.table_name)) AND a.attname=expected.column_name AND NOT a.attisdropped AND format_type(a.atttypid,a.atttypmod)=expected.column_type AND a.attnotnull=expected.required AND a.attidentity='' AND a.attgenerated='' AND COALESCE((SELECT pg_get_expr(d.adbin,d.adrelid) FROM pg_attrdef d WHERE d.adrelid=a.attrelid AND d.adnum=a.attnum),'')=CASE WHEN expected.table_name IN ('AppleNativeCompletion','AppleNativeDeferredOutcome') AND expected.column_name='createdAt' THEN 'CURRENT_TIMESTAMP' ELSE '' END)"
+  },
+  {
+    "name": "native_outcome_indexes_missing_or_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('ApplePurchaseIntent','ApplePurchaseIntent_completionKeyFingerprint_key',true,false,ARRAY['completionKeyFingerprint']::text[]),('AppleNativeCompletion','AppleNativeCompletion_pkey',true,true,ARRAY['id']::text[]),('AppleNativeCompletion','AppleNativeCompletion_intentId_key',true,false,ARRAY['intentId']::text[]),('AppleNativeCompletion','AppleNativeCompletion_challengeDigest_key',true,false,ARRAY['challengeDigest']::text[]),('AppleNativeCompletion','AppleNativeCompletion_intentId_organizationId_key',true,false,ARRAY['intentId','organizationId']::text[]),('AppleNativeCompletion','AppleNativeCompletion_organizationId_createdAt_idx',false,false,ARRAY['organizationId','createdAt']::text[]),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_pkey',true,true,ARRAY['id']::text[]),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_intentId_key',true,false,ARRAY['intentId']::text[]),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_intentId_organizationId_key',true,false,ARRAY['intentId','organizationId']::text[]),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_organizationId_createdAt_idx',false,false,ARRAY['organizationId','createdAt']::text[])) expected(table_name,index_name,unique_key,primary_key,columns) WHERE NOT EXISTS(SELECT 1 FROM pg_index i JOIN pg_class x ON x.oid=i.indexrelid JOIN pg_namespace n ON n.oid=x.relnamespace WHERE i.indrelid=to_regclass(format('public.%I',expected.table_name)) AND n.nspname='public' AND x.relname=expected.index_name AND i.indisvalid AND i.indisready AND i.indisunique=expected.unique_key AND i.indisprimary=expected.primary_key AND i.indpred IS NULL AND i.indexprs IS NULL AND i.indnkeyatts=i.indnatts AND ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY k(attnum,position) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum ORDER BY k.position)=expected.columns)"
+  },
+  {
+    "name": "native_outcome_foreign_keys_missing_or_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleNativeCompletion','AppleNativeCompletion_intentId_organizationId_fkey',ARRAY['intentId','organizationId']::text[],'ApplePurchaseIntent',ARRAY['id','organizationId']::text[]),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_intentId_organizationId_fkey',ARRAY['intentId','organizationId']::text[],'ApplePurchaseIntent',ARRAY['id','organizationId']::text[]),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_chainId_organizationId_fkey',ARRAY['chainId','organizationId']::text[],'AppleSubscriptionChain',ARRAY['id','organizationId']::text[]),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_previous_org_fkey',ARRAY['previousTransactionId','organizationId']::text[],'AppleTransaction',ARRAY['id','organizationId']::text[])) expected(table_name,constraint_name,columns,target_table,target_columns) WHERE NOT EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid=to_regclass(format('public.%I',expected.table_name)) AND c.conname=expected.constraint_name AND c.contype='f' AND c.convalidated AND NOT c.condeferrable AND NOT c.condeferred AND c.confrelid=to_regclass(format('public.%I',expected.target_table)) AND c.confdeltype='r' AND c.confupdtype='r' AND c.confmatchtype='s' AND ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY k(attnum,position) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum ORDER BY k.position)=expected.columns AND ARRAY(SELECT a.attname::text FROM unnest(c.confkey) WITH ORDINALITY k(attnum,position) JOIN pg_attribute a ON a.attrelid=c.confrelid AND a.attnum=k.attnum ORDER BY k.position)=expected.target_columns)"
+  },
+  {
+    "name": "native_outcome_check_definitions_changed",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('ApplePurchaseIntent','ApplePurchaseIntent_completion_key_shape','474bdf290d7bf62dbde70e4584344846'),('AppleNativeCompletion','AppleNativeCompletion_shape_check','15d16ff32144100b8ab1283d0bd9ddee'),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_shape_check','079be7c5368389d1dc3d88ada13749dc')) expected(table_name,constraint_name,digest) WHERE NOT EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid=to_regclass(format('public.%I',expected.table_name)) AND c.conname=expected.constraint_name AND c.contype='c' AND c.convalidated AND NOT c.connoinherit AND md5(pg_get_constraintdef(c.oid,true))=expected.digest)"
+  },
+  {
+    "name": "native_outcome_triggers_missing_or_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('ApplePurchaseIntent','ApplePurchaseIntent_snapshot_guard','public.\"protectAppleIntent\"()',31),('AppleNativeCompletion','AppleNativeCompletion_append_only','public.\"protectAppleNativeCompletion\"()',31),('AppleNativeDeferredOutcome','AppleNativeDeferredOutcome_append_only','public.\"protectAppleNativeDeferredOutcome\"()',31),('AppleTransaction','AppleTransaction_deferred_outcome_lock','public.\"lockAppleFinancialOutcomeOrganization\"()',7)) expected(table_name,trigger_name,signature,event_type) WHERE NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=to_regclass(format('public.%I',expected.table_name)) AND t.tgname=expected.trigger_name AND NOT t.tgisinternal AND t.tgenabled IN ('O','A') AND t.tgtype=expected.event_type AND t.tgfoid=to_regprocedure(expected.signature) AND t.tgqual IS NULL AND t.tgnargs=0 AND t.tgattr::text='')"
+  },
+  {
+    "name": "native_outcome_function_definitions_changed",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('public.\"protectAppleIntent\"()','95718ad9eca8fcc3b355b172de516364'),('public.\"protectAppleNativeCompletion\"()','a11a911fc46a1e70baca4ccd36592553'),('public.\"protectAppleNativeDeferredOutcome\"()','9eed5957fe77453c9b64cb09e8993651'),('public.\"lockAppleFinancialOutcomeOrganization\"()','c61c595c66069a7b8ba4f1d7460afb74')) expected(signature,digest) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR p.prorettype<>'trigger'::regtype OR p.prosecdef OR p.proconfig IS NOT NULL OR p.prokind<>'f' OR p.provolatile<>'v' OR p.pronargs<>0 OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM CASE WHEN expected.signature='public.\"protectAppleNativeCompletion\"()' AND EXISTS(SELECT 1 FROM public._prisma_migrations WHERE migration_name='20261111170000_apple_completion_utc_clock' AND finished_at IS NOT NULL AND rolled_back_at IS NULL) THEN 'a1cfda9b9960dd2031aafeca4e51a581' ELSE expected.digest END"
+  },
+  {
+    "name": "native_completion_enrollment_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"ApplePurchaseIntent\" i WHERE NOT ((\"completionPublicKey\" IS NULL AND \"completionKeyFingerprint\" IS NULL AND \"completionOrigin\" IS NULL) OR (\"completionPublicKey\" IS NOT NULL AND \"completionKeyFingerprint\" IS NOT NULL AND \"completionOrigin\" IS NOT NULL AND \"nativeAttemptId\" IS NOT NULL AND \"authorizedAt\" IS NOT NULL AND \"completionKeyFingerprint\" ~ '^[a-f0-9]{64}$' AND \"completionOrigin\" ~ '^https://[^/?#[:space:]]+$' AND \"completionKeyFingerprint\"=encode(sha256(decode(\"completionPublicKey\",'base64')),'hex')))"
+  },
+  {
+    "name": "legacy_authorized_intents_without_completion_key",
+    "severity": "info",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"ApplePurchaseIntent\" WHERE \"authorizedAt\" IS NOT NULL AND \"completionPublicKey\" IS NULL"
+  },
+  {
+    "name": "native_completion_immutable_binding_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleNativeCompletion\" c LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=c.\"intentId\" WHERE i.id IS NULL OR c.\"organizationId\" IS DISTINCT FROM i.\"organizationId\" OR c.\"nativeAttemptId\" IS DISTINCT FROM i.\"nativeAttemptId\" OR i.\"authorizedAt\" IS NULL OR i.\"completionPublicKey\" IS NULL OR c.\"keyFingerprint\" IS DISTINCT FROM i.\"completionKeyFingerprint\" OR c.origin IS DISTINCT FROM i.\"completionOrigin\" OR c.\"issuedAt\"<i.\"authorizedAt\""
+  },
+  {
+    "name": "native_completion_proof_shape_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleNativeCompletion\" c WHERE c.\"keyFingerprint\" !~ '^[a-f0-9]{64}$' OR c.\"challengeDigest\" IS DISTINCT FROM encode(sha256(convert_to(c.challenge,'UTF8')),'hex') OR length(c.challenge) NOT BETWEEN 30 AND 3000 OR octet_length(decode(c.signature,'base64'))<>64 OR c.\"expiresAt\"<>c.\"issuedAt\"+interval '5 minutes' OR NOT ((c.outcome IN ('CANCELED','NOT_STARTED') AND c.\"transactionDigest\" IS NULL AND c.\"renewalDigest\" IS NULL) OR (c.outcome='DEFERRED' AND c.\"transactionDigest\" IS NOT NULL AND c.\"renewalDigest\" IS NOT NULL AND c.\"transactionDigest\" ~ '^[a-f0-9]{64}$' AND c.\"renewalDigest\" ~ '^[a-f0-9]{64}$'))"
+  },
+  {
+    "name": "native_deferred_immutable_source_binding_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleNativeDeferredOutcome\" d LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=d.\"intentId\" LEFT JOIN public.\"AppleSubscriptionChain\" c ON c.id=d.\"chainId\" LEFT JOIN public.\"AppleTransaction\" t ON t.id=d.\"previousTransactionId\" LEFT JOIN public.\"SubscriptionPeriod\" p ON p.\"appleTransactionId\"=t.id WHERE i.id IS NULL OR c.id IS NULL OR t.id IS NULL OR p.id IS NULL OR d.\"organizationId\" IS DISTINCT FROM i.\"organizationId\" OR d.\"organizationId\" IS DISTINCT FROM c.\"organizationId\" OR d.\"organizationId\" IS DISTINCT FROM t.\"organizationId\" OR d.\"organizationId\" IS DISTINCT FROM p.\"organizationId\" OR d.\"actorId\" IS DISTINCT FROM i.\"createdById\" OR d.\"nativeAttemptId\" IS DISTINCT FROM i.\"nativeAttemptId\" OR i.\"authorizedAt\" IS NULL OR i.scope<>'SUBSCRIPTION' OR i.action<>'CHANGE' OR i.\"productType\"<>'AUTO_RENEWABLE' OR i.\"purchaseAppAccountToken\" IS NOT NULL OR t.\"productType\"<>'AUTO_RENEWABLE' OR d.environment IS DISTINCT FROM i.environment OR d.environment IS DISTINCT FROM c.environment OR d.environment IS DISTINCT FROM t.environment OR d.\"appAccountToken\" IS DISTINCT FROM i.\"appAccountToken\" OR d.\"appAccountToken\" IS DISTINCT FROM c.\"appAccountToken\" OR d.\"appAccountToken\" IS DISTINCT FROM t.\"appAccountToken\" OR d.\"originalTransactionId\" IS DISTINCT FROM c.\"originalTransactionId\" OR d.\"originalTransactionId\" IS DISTINCT FROM t.\"originalTransactionId\" OR d.\"currentProductId\" IS DISTINCT FROM t.\"productId\" OR d.\"productId\" IS DISTINCT FROM i.\"productId\" OR d.\"currentProductId\"=d.\"productId\" OR d.\"effectiveAt\" IS DISTINCT FROM t.\"expiresDate\" OR d.\"effectiveAt\" IS DISTINCT FROM p.\"endsAt\" OR t.\"createdAt\">i.\"authorizedAt\" OR t.\"purchaseDate\">i.\"authorizedAt\" OR p.\"startsAt\">i.\"authorizedAt\" OR d.\"renewalSignedAt\"<i.\"authorizedAt\" OR d.\"renewalSignedAt\">=d.\"effectiveAt\""
+  },
+  {
+    "name": "native_deferred_frozen_quote_binding_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleNativeDeferredOutcome\" d JOIN public.\"ApplePurchaseIntent\" i ON i.id=d.\"intentId\" LEFT JOIN public.\"AppleTransaction\" t ON t.id=d.\"previousTransactionId\" WHERE jsonb_typeof(i.\"offerSnapshot\"->'appleChangeSource') IS DISTINCT FROM 'object' OR i.\"offerSnapshot\"->'appleChangeSource'->>'version' IS DISTINCT FROM '1' OR i.\"offerSnapshot\"->'appleChangeSource'->>'chainId' IS DISTINCT FROM d.\"chainId\" OR i.\"offerSnapshot\"->'appleChangeSource'->>'transactionRowId' IS DISTINCT FROM d.\"previousTransactionId\" OR i.\"offerSnapshot\"->'appleChangeSource'->>'transactionId' IS DISTINCT FROM t.\"transactionId\" OR i.\"offerSnapshot\"->'appleChangeSource'->>'originalTransactionId' IS DISTINCT FROM d.\"originalTransactionId\" OR i.\"offerSnapshot\"->'appleChangeSource'->>'productId' IS DISTINCT FROM d.\"currentProductId\" OR i.\"offerSnapshot\"->'appleChangeSource'->>'environment' IS DISTINCT FROM d.environment OR i.\"offerSnapshot\"->'appleChangeSource'->>'subscriptionGroupId' IS NULL OR i.\"offerSnapshot\"->'appleChangeSource'->>'subscriptionGroupId' IS DISTINCT FROM i.\"offerSnapshot\"->'appleProduct'->>'subscriptionGroupId' OR ((i.\"offerSnapshot\"->'appleChangeSource'->>'expiresAt')::timestamptz AT TIME ZONE 'UTC') IS DISTINCT FROM d.\"effectiveAt\""
+  },
+  {
+    "name": "native_deferred_evidence_digests_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleNativeDeferredOutcome\" d WHERE d.environment NOT IN ('Production','Sandbox') OR d.\"originalTransactionId\" !~ '^[0-9]{1,40}$' OR d.\"transactionDigest\" !~ '^[a-f0-9]{64}$' OR d.\"renewalDigest\" !~ '^[a-f0-9]{64}$' OR length(d.\"signedTransactionInfo\") NOT BETWEEN 30 AND 100000 OR length(d.\"signedRenewalInfo\") NOT BETWEEN 30 AND 100000 OR d.\"transactionDigest\" IS DISTINCT FROM encode(sha256(convert_to(d.\"signedTransactionInfo\",'UTF8')),'hex') OR d.\"renewalDigest\" IS DISTINCT FROM encode(sha256(convert_to(d.\"signedRenewalInfo\",'UTF8')),'hex')"
+  },
+  {
+    "name": "native_deferred_completion_binding_invalid",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleNativeDeferredOutcome\" d JOIN public.\"ApplePurchaseIntent\" i ON i.id=d.\"intentId\" LEFT JOIN public.\"AppleNativeCompletion\" c ON c.\"intentId\"=d.\"intentId\" WHERE i.\"completionPublicKey\" IS NOT NULL AND (c.id IS NULL OR c.outcome<>'DEFERRED' OR c.\"organizationId\" IS DISTINCT FROM d.\"organizationId\" OR c.\"nativeAttemptId\" IS DISTINCT FROM d.\"nativeAttemptId\" OR c.\"keyFingerprint\" IS DISTINCT FROM i.\"completionKeyFingerprint\" OR c.origin IS DISTINCT FROM i.\"completionOrigin\" OR c.\"transactionDigest\" IS DISTINCT FROM d.\"transactionDigest\" OR c.\"renewalDigest\" IS DISTINCT FROM d.\"renewalDigest\")"
+  },
+  {
+    "name": "native_completion_deferred_outcome_missing",
+    "severity": "blocker",
+    "afterDeferred": true,
+    "requires": [
+      "AppleNativeCompletion",
+      "AppleNativeDeferredOutcome",
+      "ApplePurchaseIntent.completionPublicKey",
+      "ApplePurchaseIntent.completionKeyFingerprint",
+      "ApplePurchaseIntent.completionOrigin"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleNativeCompletion\" c WHERE c.outcome='DEFERRED' AND NOT EXISTS(SELECT 1 FROM public.\"AppleNativeDeferredOutcome\" d WHERE d.\"intentId\"=c.\"intentId\") AND NOT EXISTS(SELECT 1 FROM public.\"AppleTransaction\" t WHERE t.\"intentId\"=c.\"intentId\")"
   }
 ]
 $checks$::jsonb)
   LOOP
+    -- Older reviewed stages retain their existing report/check set. A partial
+    -- 144 schema still executes these checks and blocks instead of hiding it.
+    IF spec->>'afterDeferred'='true' AND deferred_present=0 AND deferred_applied=0 THEN CONTINUE; END IF;
     missing := false;
     FOR requirement IN SELECT value FROM jsonb_array_elements(spec->'requires') LOOP
       parts := string_to_array(requirement#>>'{}','.');

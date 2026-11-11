@@ -15,7 +15,7 @@ const audit = async () => {
   const { databaseUrl } = assertSafeTestDatabaseReset();
   const connection = new URL(databaseUrl);
   const args = ["--url-env", "EXPLICIT_OWNED_CI_AUDIT_URL", "--expect-host", connection.hostname, "--expect-port", connection.port || "5432",
-    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_UPGRADES"];
+    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_COMPLETION_UTC"];
   if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
   return runIosBillingPreflight(parsePreflightTarget(args, { EXPLICIT_OWNED_CI_AUDIT_URL: databaseUrl }));
 };
@@ -58,7 +58,7 @@ describeDb("named Apple migration aggregate preflight on explicitly owned Postgr
     await prisma.subscriptionContract.create({ data: { organizationId: lifetime.id, catalogVersion: "2026-11", lifetimeAccess: true, termsSnapshot: createContractTerms("2026-11") } });
     const before = await accountingSnapshot();
     const result = await audit();
-    expect(result).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_UPGRADES", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
+    expect(result).toMatchObject({ ok: true, schemaStage: "POST_COMPLETION_UTC", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
     for (const name of ["legacy_contracts_total", "lifetime_contracts_preserved", "future_web_periods_preserved", "legacy_invoices_without_purchase_snapshot"])
       expect(result.checks.find((check) => check.name === name)?.count).toBe(1);
     expect(result.checks.find((check) => check.name === "current_contracts_total")?.count).toBe(2);
@@ -68,7 +68,12 @@ describeDb("named Apple migration aggregate preflight on explicitly owned Postgr
       "temporary_upgrade_constraints_missing_or_unvalidated", "temporary_upgrade_indexes_missing_or_invalid", "temporary_upgrade_triggers_missing_or_disabled",
       "temporary_upgrade_function_bodies_changed", "temporary_upgrade_token_namespace_collisions", "temporary_upgrade_intent_shape_invalid",
       "temporary_upgrade_period_binding_invalid", "temporary_upgrade_standalone_period_invalid", "temporary_upgrade_dependency_state_invalid",
-      "temporary_upgrade_ancestry_invalid", "temporary_upgrade_unserved_dependency_unreviewed"])
+      "temporary_upgrade_ancestry_invalid", "temporary_upgrade_unserved_dependency_unreviewed",
+      "native_outcome_columns_missing_or_invalid", "native_outcome_indexes_missing_or_invalid", "native_outcome_foreign_keys_missing_or_invalid",
+      "native_outcome_check_definitions_changed", "native_outcome_triggers_missing_or_invalid", "native_outcome_function_definitions_changed",
+      "native_completion_enrollment_invalid", "native_completion_immutable_binding_invalid", "native_completion_proof_shape_invalid",
+      "native_deferred_immutable_source_binding_invalid", "native_deferred_frozen_quote_binding_invalid", "native_deferred_evidence_digests_invalid",
+      "native_deferred_completion_binding_invalid", "native_completion_deferred_outcome_missing"])
       expect(result.checks.find((check) => check.name === name)?.count).toBe(0);
     expect(await accountingSnapshot()).toEqual(before);
     for (const privateValue of [f.org.id, f.adminUser.id, f.adminUser.email, invoice.id, f.lot.id, "SYNTHETIC"])

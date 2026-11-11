@@ -5,6 +5,7 @@ const native = vi.hoisted(() => ({
   getStorefront: vi.fn(),
   purchase: vi.fn(),
   retryCancellations: vi.fn(),
+  retryCompletions: vi.fn(),
   getUnfinishedTransactions: vi.fn(),
   getTransactionHistory: vi.fn(),
   restorePurchases: vi.fn(),
@@ -31,6 +32,7 @@ import {
   requestAppleRefund,
   restoreApplePurchases,
   retryAppleCancellations,
+  retryAppleCompletions,
   showAppleSubscriptionManagement,
   type AppleSignedTransaction,
 } from "@/lib/native/appleBilling";
@@ -62,10 +64,12 @@ describe("Apple native billing boundary", () => {
     await expect(getAppleProducts([transaction.productId])).rejects.toBeInstanceOf(AppleBillingError);
     await expect(finishAppleTransaction(transaction.transactionId)).rejects.toMatchObject({ code: "APPLE_BILLING_UNAVAILABLE" });
     await expect(retryAppleCancellations()).rejects.toMatchObject({ code: "APPLE_BILLING_UNAVAILABLE" });
+    await expect(retryAppleCompletions()).rejects.toMatchObject({ code: "APPLE_BILLING_UNAVAILABLE" });
     await expect(getAppleStorefront()).rejects.toMatchObject({ code: "APPLE_BILLING_UNAVAILABLE" });
     expect(native.getProducts).not.toHaveBeenCalled();
     expect(native.finishTransaction).not.toHaveBeenCalled();
     expect(native.retryCancellations).not.toHaveBeenCalled();
+    expect(native.retryCompletions).not.toHaveBeenCalled();
     expect(native.getStorefront).not.toHaveBeenCalled();
   });
 
@@ -121,6 +125,32 @@ describe("Apple native billing boundary", () => {
     native.purchase.mockRejectedValueOnce({ code: "APPLE_CANCELLED" });
     await expect(purchaseAppleProduct("intent")).rejects.toMatchObject({ code: "APPLE_CANCELLED" });
     expect(native.finishTransaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps an observed deferred outcome distinct from purchased money or a new grant", async () => {
+    const result = { status: "deferred", completionAcknowledged: true, completionRecorded: false,
+      scheduled: false, effectiveAt: "2027-05-11T10:00:00Z" };
+    native.purchase.mockResolvedValueOnce(result);
+    expect(await purchaseAppleProduct("deferred-intent")).toEqual(result);
+    expect(native.purchase).toHaveBeenCalledWith({ intentId: "deferred-intent" });
+    expect(native.finishTransaction).not.toHaveBeenCalled();
+  });
+
+  it("retries only earned device proofs without exposing a signing key, nonce or evidence to JavaScript", async () => {
+    const result = { pendingCount: 1, acknowledgedCount: 2, deferredCount: 3, recordedCount: 4 };
+    native.retryCompletions.mockResolvedValueOnce(result);
+    expect(await retryAppleCompletions()).toEqual(result);
+    expect(native.retryCompletions).toHaveBeenCalledExactlyOnceWith();
+    expect(native.purchase).not.toHaveBeenCalled();
+    expect(native.finishTransaction).not.toHaveBeenCalled();
+    expect(native.getUnfinishedTransactions).not.toHaveBeenCalled();
+  });
+
+  it("keeps older native builds usable without concealing real completion storage/network failures", async () => {
+    native.retryCompletions.mockRejectedValueOnce({ code: "UNIMPLEMENTED" });
+    await expect(retryAppleCompletions()).resolves.toMatchObject({ supported: false, pendingCount: 0, deferredCount: 0 });
+    native.retryCompletions.mockRejectedValueOnce({ code: "APPLE_COMPLETION_STORAGE_FAILED" });
+    await expect(retryAppleCompletions()).rejects.toMatchObject({ code: "APPLE_COMPLETION_STORAGE_FAILED" });
   });
 
   it("retries only the native journal and preserves pending, canceled and recorded counts", async () => {

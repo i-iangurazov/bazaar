@@ -65,7 +65,9 @@ transaction in StoreKit's queue for recovery.
 
 ## Recovery and Apple account actions
 
-- A definite StoreKit cancellation (the `.userCancelled` result or thrown
+- The following cancellation-file protocol is retained for **legacy keyless
+  attempts**. New enrolled attempts use the earned-completion protocol below.
+  A definite StoreKit cancellation (the `.userCancelled` result or thrown
   `StoreKitError.userCancelled` from `Product.purchase`) or caught pre-SDK abort
   is synchronously written
   to `Application Support/AppleBillingRecovery/cancelled-intents.json` before the
@@ -127,15 +129,46 @@ transaction in StoreKit's queue for recovery.
   transaction, then opens Apple's refund request flow. `submitted` means a
   request was sent; verified server notifications determine refund/revocation.
 
-### Operational cancellation recovery limit
+### Earned completion and operational recovery limits
 
-The server requires the original intent creator, current organization and ADMIN
-role. If that payer is deleted, loses the role or leaves before a cancellation
-ACK, another administrator cannot claim or clear the local proof. Preserve the
-journal and the organization's authorized pending/review record for server/support
-reconciliation. A role change, account deletion, missing local entry, elapsed time
-or failed request is not evidence that Apple did not charge. Do not clear money
-holds, reassign the intent or open another payment solely to remove a warning.
+New native attempts persist a device-only P256 private key in Keychain before
+final authorization; the server immutably enrolls its public key with the winning
+attempt and trusted origin. A separate protected/no-backup earned-completion
+journal is written only after definite OS cancellation, a caught pre-SDK abort,
+or actual verified old-SKU success for a frozen auto-renewable CHANGE. No private
+key, password or session cookie is stored in that file or returned to JavaScript.
+
+The signed completion challenge protocol can resolve that exact earned result
+after logout, role loss or deletion of its original payer. It cannot open another
+sheet, create a session, transfer ownership, grant access or request a refund.
+Recorded money always takes precedence, including unresolved REVIEW money. A
+read-only RECORDED_ONLY probe can acknowledge later durable money without
+fabricating a missing renewal proof or a cancellation. The app retains every
+unresolved/inaccessible proof and key; another actor's session cannot adopt it.
+
+The original fresh ADMIN endpoint remains only for **keyless legacy** cancellation
+journals. A missing enrolled key, unknown/hard-crash SDK outcome with no earned
+proof, or ambiguous signed evidence still requires support/reconciliation. Neither
+elapsed time, empty history nor a changed role proves absence of a charge.
+Preserve the authorized pending/review record; do not reassign it or open a second
+payment to remove a warning. Details and operator boundaries are in
+[APPLE_DEFERRED_OUTCOMES.md](APPLE_DEFERRED_OUTCOMES.md) and
+[APPLE_SUPPORT_RECOVERY.md](APPLE_SUPPORT_RECOVERY.md).
+
+For a deferred change, native synchronously stores the actually returned verified
+old transaction before awaiting subscription status, then captures a verified
+same-chain/group/token renewal JWS for the exact target and authorized interval.
+Once captured, both payloads remain immutable for offline replay. The UI receives
+only a separate `deferred` outcome and acknowledgement flags, never signing keys
+or stored renewal evidence. It refreshes authoritative current/scheduled access;
+historical acceptance (`scheduled:false`) is not a currently scheduled plan.
+The old transaction is not confirmed/finished as a newly purchased target.
+
+`retryAppleCompletions()` runs on login/logout, role changes, focus/online and
+visibility without reading payment history or requiring a session. Paid receipt
+confirmation/finish and legacy cancellation recovery remain authenticated ADMIN
+operations. Earlier native builds with no new method keep that legacy path;
+UNIMPLEMENTED is not misreported as a known pending device proof.
 Review operations must distinguish this case from a currently authorized
 administrator whose journal will retry normally. This limitation still requires
 a verified support/reconciliation procedure before commercial release.
@@ -184,6 +217,17 @@ an independently enforced application/server requirement.
 localized prices, intent-only purchase, journaled cancellation/retry, exact IDs, ACK
 refusal/retry, background recovery versus explicit sync, pagination, listeners and
 Apple management/refund responses. Run with the repository's isolated test runner.
+
+The new `scripts/mobile/test-apple-completion.swift` compiles production crypto,
+challenge, source-binding and protected-journal code directly. It checks canonical
+P256 SPKI/P1363 encoding, exact challenge scope, lost-response/restart recovery,
+strict money/deferred ACKs, immutable evidence, source and renewal exclusions,
+backup/permissions, corruption and storage failure. It performs no Keychain,
+StoreKit, account, network or provider operations. Compile it with
+`BazaarBillingOrigin.swift` and `BazaarAppleCompletion.swift`, using the same SDK
+and private output directory as the policy command below. The current completion
+source and its updated bridge/UI tests still require the coordinated run and a
+fresh native compile; previous archives do not verify this addition.
 
 `scripts/mobile/test-apple-cancellation-journal.swift` compiles the production
 journal with the production origin policy. It covers restart/lost-response

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        BAA000000000000000000071 /* BazaarAppleCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000072 /* BazaarAppleCompletion.swift */; };
         BAA000000000000000000061 /* BazaarApplePricePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000062 /* BazaarApplePricePolicy.swift */; };
         BAA000000000000000000041 /* BazaarAppleCancellationJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000042 /* BazaarAppleCancellationJournal.swift */; };
         BAA000000000000000000017 /* BazaarAppleTransactionFinisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAA000000000000000000018 /* BazaarAppleTransactionFinisher.swift */; };
@@ -38,6 +39,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+        BAA000000000000000000072 /* BazaarAppleCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarAppleCompletion.swift; sourceTree = "<group>"; };
         BAA000000000000000000062 /* BazaarApplePricePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarApplePricePolicy.swift; sourceTree = "<group>"; };
         BAA000000000000000000042 /* BazaarAppleCancellationJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarAppleCancellationJournal.swift; sourceTree = "<group>"; };
         BAA000000000000000000018 /* BazaarAppleTransactionFinisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BazaarAppleTransactionFinisher.swift; sourceTree = "<group>"; };
@@ -108,6 +110,7 @@
                 BAA000000000000000000018 /* BazaarAppleTransactionFinisher.swift */,
                 BAA000000000000000000012 /* BazaarBillingOrigin.swift */,
                 BAA000000000000000000062 /* BazaarApplePricePolicy.swift */,
+                BAA000000000000000000072 /* BazaarAppleCompletion.swift */,
                 BAA000000000000000000014 /* BazaarBridgeViewController.swift */,
                 BAA000000000000000000016 /* BazaarAppleBillingPlugin.swift */,
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
@@ -274,6 +277,7 @@
                 BAA000000000000000000017 /* BazaarAppleTransactionFinisher.swift in Sources */,
                 BAA000000000000000000011 /* BazaarBillingOrigin.swift in Sources */,
                 BAA000000000000000000061 /* BazaarApplePricePolicy.swift in Sources */,
+                BAA000000000000000000071 /* BazaarAppleCompletion.swift in Sources */,
                 BAA000000000000000000013 /* BazaarBridgeViewController.swift in Sources */,
                 BAA000000000000000000015 /* BazaarAppleBillingPlugin.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,

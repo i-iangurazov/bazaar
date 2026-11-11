@@ -39,6 +39,14 @@ export type AppleStorefront = { id: string; countryCode: string };
 export type ApplePurchaseResult =
   | { status: "purchased"; transaction: AppleSignedTransaction }
   | { status: "pending" }
+  | {
+    /** Actual verified old-SKU success; this never grants the requested plan. */
+    status: "deferred";
+    completionAcknowledged: boolean;
+    completionRecorded: boolean;
+    scheduled: boolean;
+    effectiveAt?: string;
+  }
   | { status: "cancelled"; cancellationAcknowledged: boolean; cancellationRecorded: boolean }
   | {
     /** This invocation never called StoreKit; this does not assert no prior payment. */
@@ -52,6 +60,7 @@ export type AppleCancellationRetryResult = {
   acknowledgedCount: number;
   recordedCount: number;
 };
+export type AppleCompletionRetryResult = AppleCancellationRetryResult & { deferredCount: number; supported?: boolean };
 export type AppleUnfinishedTransactions = {
   transactions: AppleSignedTransaction[];
   unverifiedTransactionIds: string[];
@@ -67,6 +76,7 @@ interface BazaarAppleBillingPlugin {
   // Native resolves the SKU and appAccountToken through the authenticated server.
   purchase(options: { intentId: string }): Promise<ApplePurchaseResult>;
   retryCancellations(): Promise<AppleCancellationRetryResult>;
+  retryCompletions(): Promise<AppleCompletionRetryResult>;
   getUnfinishedTransactions(): Promise<AppleUnfinishedTransactions>;
   getTransactionHistory(options: { cursor?: string }): Promise<AppleTransactionHistory>;
   restorePurchases(): Promise<AppleTransactionHistory>;
@@ -140,6 +150,18 @@ export const getAppleStorefront = () => invoke(() => AppleBilling.getStorefront(
 
 /** Retry only native-journaled definite cancellations with the current session. */
 export const retryAppleCancellations = () => invoke(() => AppleBilling.retryCancellations());
+
+/** Existing earned proofs only. Native holds the device key; no session is needed. */
+export const retryAppleCompletions = async (): Promise<AppleCompletionRetryResult> => {
+  try { return await invoke(() => AppleBilling.retryCompletions()); }
+  catch (error) {
+    // Earlier app versions cannot have created this new capability journal.
+    // Keep their separate legacy cancellation/paid-receipt recovery working.
+    if (error instanceof AppleBillingError && error.code === "UNIMPLEMENTED")
+      return { supported: false, pendingCount: 0, acknowledgedCount: 0, deferredCount: 0, recordedCount: 0 };
+    throw error;
+  }
+};
 
 /** Safe background recovery: unlike restore, this never asks for an Apple login. */
 export const getUnfinishedAppleTransactions = () =>

@@ -87,6 +87,39 @@ describe("explicit read-only iOS migration preflight", () => {
     expect(parsePreflightReport(report(), parsed.expectedStage).ok).toBe(false);
   });
 
+  it("recognizes the deferred capability stage while keeping every earlier reviewed stage distinct", () => {
+    const parsed = parsePreflightTarget([...args, "--expect-stage", "POST_DEFERRED_OUTCOMES"], { EXPLICIT_AUDIT_URL: url });
+    expect(parsed.expectedStage).toBe("POST_DEFERRED_OUTCOMES");
+    expect(parsePreflightReport(report({ schemaStage: "POST_DEFERRED_OUTCOMES" }), parsed.expectedStage))
+      .toMatchObject({ ok: true, schemaStage: "POST_DEFERRED_OUTCOMES" });
+    for (const schemaStage of ["PRE_APPLE", "POST_PRIVACY", "POST_LIFECYCLE", "POST_NATIVE_ATTEMPT", "POST_TEMPORARY_UPGRADES"]) {
+      expect(parsePreflightReport(report({ schemaStage }), schemaStage).ok).toBe(true);
+      expect(parsePreflightReport(report({ schemaStage }), parsed.expectedStage).ok).toBe(false);
+    }
+    expect(() => parsePreflightTarget([...args, "--expect-stage", "POST_UNKNOWN"], { EXPLICIT_AUDIT_URL: url }))
+      .toThrow("PREFLIGHT_STAGE_INVALID");
+  });
+
+  it("requires the separate UTC correction stage when requested and still recognizes exact migration144 history", () => {
+    const parsed = parsePreflightTarget([...args, "--expect-stage", "POST_COMPLETION_UTC"], { EXPLICIT_AUDIT_URL: url });
+    expect(parsed.expectedStage).toBe("POST_COMPLETION_UTC");
+    expect(parsePreflightReport(report({ schemaStage: "POST_COMPLETION_UTC" }), parsed.expectedStage))
+      .toMatchObject({ ok: true, schemaStage: "POST_COMPLETION_UTC" });
+    expect(parsePreflightReport(report({ schemaStage: "POST_DEFERRED_OUTCOMES" }), parsed.expectedStage).ok).toBe(false);
+    expect(parsePreflightReport(report({ schemaStage: "POST_DEFERRED_OUTCOMES" }), "POST_DEFERRED_OUTCOMES").ok).toBe(true);
+    expect(parsePreflightReport(report({ schemaStage: "POST_COMPLETION_UTC" }), "POST_DEFERRED_OUTCOMES").ok).toBe(false);
+  });
+
+  it("never forwards native completion keys, challenges, signatures or signed Apple evidence", () => {
+    const privateProof = { completionPublicKey: "synthetic-private-public-key", challenge: "synthetic-secret-challenge",
+      signature: "synthetic-device-signature", signedTransactionInfo: "synthetic-apple-jws", signedRenewalInfo: "synthetic-renewal-jws" };
+    const parsed = parsePreflightReport(report({ schemaStage: "POST_DEFERRED_OUTCOMES", ...privateProof, checks: [{
+      name: "native_completion_immutable_binding_invalid", severity: "blocker", count: 1, skipped: false, ...privateProof,
+    }] }));
+    expect(parsed).toMatchObject({ ok: false, blockerChecks: 1, skippedChecks: 0 });
+    for (const value of Object.values(privateProof)) expect(JSON.stringify(parsed)).not.toContain(value);
+  });
+
   it("emits only approved report fields and rejects malformed counts or row-shaped output", () => {
     const parsed = parsePreflightReport(report({ extraCustomerData: "person@example.com", checks: [
       { name: "source_binding_invalid", severity: "blocker", count: 0, skipped: false, customerEmail: "person@example.com" },

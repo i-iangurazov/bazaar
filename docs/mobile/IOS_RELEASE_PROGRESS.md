@@ -623,3 +623,66 @@ insufficient to explain the failure. Its exact platform cause is still unknown;
 neither global Xcode selection nor application entitlements were changed on
 that speculation. Apple Sandbox, signed phone/TestFlight and publication gates
 remain open; the full release goal is not complete.
+
+### Enrolled completion, deferred changes and support — local145 checkpoint
+
+The server no longer completes every authorized plan-change intent merely
+because a later renewal preference arrived. Exact earned deferred outcomes keep
+the original attempt/source/organization binding, with two independently verified
+signed objects and append-only evidence; they create no charge or extra access.
+An enrolled per-attempt P256 device key can complete an already earned result
+after the original administrator leaves or deletes their account. Unknown
+post-SDK outcomes and older keyless attempts retain their unresolved obligations.
+Recorded money, including REVIEW, takes precedence. A signed RECORDED_ONLY query
+changes no intent/hold and never treats absent history as proof of no payment.
+
+The platform operator now has actual paginated case lookup, selected-reference
+recheck and signed-evidence import with fresh permission checks at financial
+commit. It exposes no absence-clear action. The native bridge keeps private keys
+in device-only Keychain and signed proof in a protected local journal; the new
+global retry does not require a login or transfer rights to a different account.
+
+Reviewed additive SQL144 is
+`66437a9da6224b1cfcc3a3c7d4ddc3be695119c7a00547a1256fa76f7c14201e`.
+Its first real PG run exposed a source bug: UTC-naive proof expiry was compared
+with a time-zone-aware clock in an actual Asia/Bishkek session, rejecting valid
+completion. A read-only predicate reproduction confirmed implicit-expired=true
+and explicit-UTC-expired=false with every binding predicate valid. Applied144
+was preserved; SQL145 (`5b2bdce206b878ba9c616fbaf661c2c585acf81384de54ce2da334fd6f41016e`)
+changes only those two comparisons. The existing five-minute and future bounds
+remain enforced in real UTC/Bishkek/Los Angeles tests.
+
+Both migrations were applied only to the owned local CI at this checkpoint.
+Original rows/history were unchanged across24 tables for144 and26 for145,
+including enrolled keys. A separate real139-through145 upgrade audited all seven
+schema boundaries, preserved all43 original rows exactly and passed16 checks;
+its extra database and temporary source were removed. The read-only preflight
+keeps distinct exact144/145 function/checksum pins.
+
+Verification is explicitly multiple bounded runs: the first13-file/211-case
+group had199 passes and12 completion-related failures; after the clock fix the
+selected9-file/158-case group passed149 cases, then the corrected timezone
+fixture's nine cases passed. The final three files affected by fixture typing
+and the support cleanup's stable ref capture passed52 cases. Original failed
+logs remain. Standalone typecheck passed; final lint, translations and production
+web build passed, including the build's final type validation.
+
+The production Swift crypto/journal executable passed72 checks without Keychain
+writes/network/StoreKit. Current `AppStaging/ReleaseStaging` Simulator build
+`1.0.0/111116` compiled and passed bundle inspection with unchanged native inputs,
+iOS15 minimum, all11 plugins, white presentation and no detected secret/test
+markers. This build has not been installed on a physical device or uploaded.
+The new support/deferred/recovery rendering matrix passed58 desktop/mobile
+checks in RU/KG/EN with zero page/console errors, overflow or unexpected network.
+Its tRPC/native/session boundaries are explicitly synthetic; no payment/provider
+operation is inferred. Browser and renderer were closed afterward.
+
+Local signing/device discovery still reports zero valid signing identities and
+zero available physical iPhones. A fresh narrow Apps-page browser attempt was
+rejected because a saved permission/managed policy denies the App Store Connect
+origin. No CDP/cookie/API or alternate-browser workaround was attempted. The
+owner changed the per-site setting, but the next same-origin attempt was still
+denied. The exact saved rule is being checked from the owner's screenshot; the
+app also refuses automation of its own settings. Actual products/prices, signing, Apple Sandbox, TestFlight
+and iPhone acceptance remain required. The isolated Preview is still on143 until
+the separately guarded remote upgrade/deployment is observed.

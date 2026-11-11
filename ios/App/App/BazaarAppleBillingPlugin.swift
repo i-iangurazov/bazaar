@@ -22,6 +22,18 @@ private struct AppleCancellationRetrySummary: Sendable {
 
 private enum AppleCancellationOutcome: Equatable { case acknowledged, recorded, inaccessible, noSession, unresolved }
 
+private struct AppleCompletionRetrySummary: Sendable {
+    var pendingCount = 0
+    var acknowledgedCount = 0
+    var deferredCount = 0
+    var recordedCount = 0
+    var data: [String: Any] { ["pendingCount": pendingCount, "acknowledgedCount": acknowledgedCount, "deferredCount": deferredCount, "recordedCount": recordedCount] }
+}
+private enum AppleCompletionOutcome: Equatable {
+    case canceled, recorded, inaccessible, unresolved
+    case deferred(scheduled: Bool, effectiveAt: String)
+}
+
 /// No redirects, shared cookie storage, or credentials can escape the compiled origin.
 private final class AppleBillingHTTPDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask,
@@ -40,6 +52,11 @@ private struct ApplePurchaseAuthorization: Decodable {
     let environment: String
     let attemptId: UUID?
     let priceConstraint: BazaarApplePriceConstraint?
+    let action: String?
+    let subscriptionGroupId: String?
+    let deferredSource: BazaarAppleDeferredSource?
+    let authorizedAt: String?
+    let completionKeyFingerprint: String?
 
     func isValid(for intentId: String) -> Bool {
         let formatter = ISO8601DateFormatter()
@@ -59,6 +76,7 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getStorefront", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "purchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "retryCancellations", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "retryCompletions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getUnfinishedTransactions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getTransactionHistory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise),
@@ -72,6 +90,8 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
     private var showingStoreSheet = false
     private let httpDelegate = AppleBillingHTTPDelegate()
     @MainActor private static var cancellationRetryTasks: [String: Task<AppleCancellationRetrySummary, Error>] = [:]
+    @MainActor private static var completionRetryTasks: [String: Task<AppleCompletionRetrySummary, Error>] = [:]
+    private let completionKeys = BazaarAppleCompletionKeychain()
 
     public override func load() {
         // Start immediately, including before the hosted page has loaded. StoreKit
@@ -143,23 +163,35 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
             if let expectedType = authorization.productType, try self.productType(product.type) != expectedType {
                 throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
             }
+            if let expectedGroup = authorization.subscriptionGroupId, product.subscription?.subscriptionGroupID != expectedGroup {
+                throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
+            }
             try await self.requireSubscriptionAccountOwnership(product, token: authorization.appAccountToken)
             let attemptId = UUID()
+            // The private key is durably device-only BEFORE final HTTP can bind
+            // this attempt. It is never a purchase/session/grant capability.
+            let credential = try self.completionKeys.create()
             return try await BazaarApplePreSheetAttempt.perform(
                 authorize: {
                     // Check actual StoreKit metadata before consuming the one-use
                     // authorization. No C constraint is taken from JavaScript.
                     _ = try await self.productMatchingPrice(product, constraint: authorization.priceConstraint)
-                    return try await self.authorize(intentId, attemptId: attemptId)
+                    return try await self.authorize(intentId, attemptId: attemptId, completionCredential: credential)
                 },
                 prepare: { current in
                     guard current.productId == authorization.productId,
                           current.appAccountToken == authorization.appAccountToken,
-                          current.priceConstraint == authorization.priceConstraint else {
+                          current.priceConstraint == authorization.priceConstraint,
+                          current.action == authorization.action,
+                          current.subscriptionGroupId == authorization.subscriptionGroupId,
+                          current.deferredSource == authorization.deferredSource else {
                         throw AppleBillingFailure(code: "APPLE_AUTHORIZATION_CHANGED")
                     }
                     let purchaseProduct = try await self.productMatchingPrice(product, constraint: current.priceConstraint)
                     if let expectedType = current.productType, try self.productType(purchaseProduct.type) != expectedType {
+                        throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
+                    }
+                    if let expectedGroup = current.subscriptionGroupId, purchaseProduct.subscription?.subscriptionGroupID != expectedGroup {
                         throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
                     }
                     // Auth HTTP may finish after backgrounding or navigation.
@@ -173,13 +205,13 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                         let authorizedStorefront = constraint.storefrontId
                         options.insert(.onStorefrontChange { $0.id == authorizedStorefront })
                     }
-                    return (purchaseProduct, scene, options)
+                    return (purchaseProduct, scene, options, current)
                 },
                 invoke: { prepared in
                     // No await or fallible preflight separates this boundary
                     // from the SDK call. Every unknown error from here is paid-
                     // outcome recovery, never a caught pre-sheet cancellation.
-                    let (purchaseProduct, scene, options) = prepared
+                    let (purchaseProduct, scene, options, current) = prepared
                     let result: Product.PurchaseResult
                     do {
                         if #available(iOS 17.0, *) {
@@ -188,7 +220,7 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                             result = try await purchaseProduct.purchase(options: options)
                         }
                     } catch StoreKitError.userCancelled {
-                        return try await self.terminalCancellation(intentId, origin: purchaseOrigin, attemptId: attemptId)
+                        return try await self.terminalCancellation(intentId, origin: purchaseOrigin, attemptId: attemptId, credential: credential)
                     }
                     switch result {
                     case .success(let verification):
@@ -198,19 +230,40 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                         guard self.permitsTransaction(transaction, signed: verification.jwsRepresentation) else {
                             throw AppleBillingFailure(code: "APPLE_ENVIRONMENT_MISMATCH")
                         }
+                        if purchaseProduct.type == .autoRenewable, current.action == "CHANGE", transaction.productID != current.productId {
+                            // Capture an actually returned verified old transaction
+                            // synchronously before querying any asynchronous status.
+                            let entry = try self.earnedDeferred(intentId, attemptId: attemptId, origin: purchaseOrigin,
+                                credential: credential, authorization: current, transaction: transaction, signed: verification.jwsRepresentation)
+                            let outcome = try await self.acknowledgeCompletion(entry, captureImmediately: true)
+                            return self.deferredResult(outcome)
+                        }
                         return ["status": "purchased", "transaction": self.transactionData(transaction, signed: verification.jwsRepresentation)]
                     case .pending:
                         return ["status": "pending"]
                     case .userCancelled:
-                        return try await self.terminalCancellation(intentId, origin: purchaseOrigin, attemptId: attemptId)
+                        return try await self.terminalCancellation(intentId, origin: purchaseOrigin, attemptId: attemptId, credential: credential)
                     @unknown default:
                         throw AppleBillingFailure(code: "APPLE_UNKNOWN_PURCHASE_RESULT")
                     }
                 },
                 abort: { error in
-                    try await self.preSheetAbort(intentId, origin: purchaseOrigin, attemptId: attemptId, error: error)
+                    try await self.preSheetAbort(intentId, origin: purchaseOrigin, attemptId: attemptId, credential: credential, error: error)
                 }
             )
+        }
+    }
+
+    /// Safe even after logout/departure. This retries existing earned proofs only;
+    /// it cannot construct a result, reopen StoreKit or obtain account access.
+    @objc public func retryCompletions(_ call: CAPPluginCall) {
+        run(call) {
+            let origin = try self.trustedOrigin().url.absoluteString
+            if let task = Self.completionRetryTasks[origin] { return try await task.value.data }
+            let task = Task { @MainActor in try await self.retryCompletionJournal() }
+            Self.completionRetryTasks[origin] = task
+            defer { Self.completionRetryTasks[origin] = nil }
+            return try await task.value.data
         }
     }
 
@@ -310,6 +363,10 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("APPLE_TRANSACTION_NOT_FOUND", "APPLE_TRANSACTION_NOT_FOUND")
             } catch is BazaarAppleCancellationJournal.Failure {
                 call.reject("APPLE_CANCELLATION_STORAGE_FAILED", "APPLE_CANCELLATION_STORAGE_FAILED")
+            } catch is BazaarAppleCompletionJournal.Failure {
+                call.reject("APPLE_COMPLETION_STORAGE_FAILED", "APPLE_COMPLETION_STORAGE_FAILED")
+            } catch is BazaarAppleCompletionKeychain.Failure {
+                call.reject("APPLE_COMPLETION_KEY_UNAVAILABLE", "APPLE_COMPLETION_KEY_UNAVAILABLE")
             } catch let error as StoreKitError {
                 switch error {
                 case .userCancelled: call.reject("APPLE_CANCELLED", "APPLE_CANCELLED")
@@ -403,17 +460,21 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         return id
     }
 
-    @MainActor private func authorize(_ intentId: String, prepareOnly: Bool = false, attemptId: UUID? = nil) async throws -> ApplePurchaseAuthorization {
+    @MainActor private func authorize(_ intentId: String, prepareOnly: Bool = false, attemptId: UUID? = nil,
+        completionCredential: BazaarAppleCompletionCredential? = nil
+    ) async throws -> ApplePurchaseAuthorization {
         var body: [String: Any] = ["intentId": intentId]
         if prepareOnly { body["prepareOnly"] = true }
         else {
-            guard let attemptId else { throw AppleBillingFailure(code: "APPLE_INVALID_ARGUMENT") }
+            guard let attemptId, let completionCredential, completionCredential.isValid else { throw AppleBillingFailure(code: "APPLE_INVALID_ARGUMENT") }
             body["attemptId"] = attemptId.uuidString.lowercased()
+            body["completionPublicKey"] = completionCredential.publicKey
         }
         let data = try await post(path: "/api/billing/apple/native/authorize", body: body)
         guard let authorization = try? JSONDecoder().decode(ApplePurchaseAuthorization.self, from: data),
               authorization.isValid(for: intentId),
-              prepareOnly || authorization.attemptId == attemptId else {
+              prepareOnly || (authorization.attemptId == attemptId && authorization.completionKeyFingerprint == completionCredential?.fingerprint &&
+                authorization.authorizedAt.flatMap(BazaarAppleCompletionPolicy.date) != nil) else {
             throw AppleBillingFailure(code: "APPLE_AUTHORIZATION_INVALID")
         }
         guard BazaarNativeBuildChannel.compiled.permitsTransactionEnvironment(authorization.environment) else {
@@ -422,25 +483,29 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         return authorization
     }
 
-    @MainActor private func terminalCancellation(_ intentId: String, origin: BazaarBillingOrigin, attemptId: UUID) async throws -> [String: Any] {
-        let journal = try BazaarAppleCancellationJournal()
+    @MainActor private func terminalCancellation(_ intentId: String, origin: BazaarBillingOrigin, attemptId: UUID,
+        credential: BazaarAppleCompletionCredential
+    ) async throws -> [String: Any] {
+        let journal = try BazaarAppleCompletionJournal()
         // Persist BEFORE any promise resolves. A lost cancel response or app
         // termination cannot turn this definite OS outcome into an endless hold.
-        let entry = try journal.record(intentId: intentId, origin: origin, attemptId: attemptId)
-        let outcome = try await acknowledgeCancellation(entry, journal: journal)
+        let entry = try journal.record(intentId: intentId, attemptId: attemptId, origin: origin, credential: credential, outcome: .canceled)
+        let outcome = try await acknowledgeCompletion(entry)
         return [
             "status": "cancelled",
-            "cancellationAcknowledged": outcome == .acknowledged,
+            "cancellationAcknowledged": outcome == .canceled,
             "cancellationRecorded": outcome == .recorded,
         ]
     }
 
-    @MainActor private func preSheetAbort(_ intentId: String, origin: BazaarBillingOrigin, attemptId: UUID, error: Error) async throws -> [String: Any] {
-        let journal = try BazaarAppleCancellationJournal()
+    @MainActor private func preSheetAbort(_ intentId: String, origin: BazaarBillingOrigin, attemptId: UUID,
+        credential: BazaarAppleCompletionCredential, error: Error
+    ) async throws -> [String: Any] {
+        let journal = try BazaarAppleCompletionJournal()
         // Called only by the caught pre-SDK boundary. A different device's
         // winning attempt cannot be cancelled with this UUID on the server.
-        let entry = try journal.record(intentId: intentId, origin: origin, attemptId: attemptId)
-        let outcome = try await acknowledgeCancellation(entry, journal: journal)
+        let entry = try journal.record(intentId: intentId, attemptId: attemptId, origin: origin, credential: credential, outcome: .notStarted)
+        let outcome = try await acknowledgeCompletion(entry)
         let failure = (error as? AppleBillingFailure) ?? AppleBillingFailure(
             code: error is URLError ? "APPLE_NETWORK_ERROR" : "APPLE_STORE_ERROR"
         )
@@ -448,9 +513,151 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         if let serverCode = failure.serverCode { detail["serverCode"] = serverCode }
         return [
             "status": "not_started", "error": detail,
-            "cancellationAcknowledged": outcome == .acknowledged,
+            "cancellationAcknowledged": outcome == .canceled,
             "cancellationRecorded": outcome == .recorded,
         ]
+    }
+
+    @MainActor private func earnedDeferred(_ intentId: String, attemptId: UUID, origin: BazaarBillingOrigin,
+        credential: BazaarAppleCompletionCredential, authorization: ApplePurchaseAuthorization,
+        transaction: StoreKit.Transaction, signed: String
+    ) throws -> BazaarAppleCompletionJournal.Entry {
+        guard authorization.action == "CHANGE", authorization.productType == "AUTO_RENEWABLE",
+              let source = authorization.deferredSource, let group = authorization.subscriptionGroupId,
+              let authorizedAt = authorization.authorizedAt,
+              BazaarAppleCompletionPolicy.environment(ofVerifiedJWS: signed) == authorization.environment else {
+            throw AppleBillingFailure(code: "APPLE_DEFERRED_OUTCOME_UNRESOLVED")
+        }
+        let context = BazaarAppleDeferredContext(productId: authorization.productId, subscriptionGroupId: group,
+            appAccountToken: authorization.appAccountToken, environment: authorization.environment, authorizedAt: authorizedAt,
+            source: source, signedTransactionInfo: signed, signedRenewalInfo: nil)
+        guard matchesDeferredSource(context, transaction: transaction) else {
+            throw AppleBillingFailure(code: "APPLE_DEFERRED_OUTCOME_UNRESOLVED")
+        }
+        // This method is called only directly after .success(.verified(old)).
+        // No await, history lookup, timeout or cold-start inference precedes it.
+        return try BazaarAppleCompletionJournal().record(intentId: intentId, attemptId: attemptId, origin: origin,
+            credential: credential, outcome: .deferred, deferred: context)
+    }
+
+    private func matchesDeferredSource(_ context: BazaarAppleDeferredContext, transaction: StoreKit.Transaction) -> Bool {
+        BazaarAppleCompletionPolicy.matchesSource(context, transactionId: String(transaction.id), originalTransactionId: String(transaction.originalID),
+            productId: transaction.productID, groupId: transaction.subscriptionGroupID, token: transaction.appAccountToken,
+            expiresAt: transaction.expirationDate, purchaseDate: transaction.purchaseDate, revoked: transaction.revocationDate != nil,
+            upgraded: transaction.isUpgraded, purchasedOwnership: transaction.ownershipType == .purchased)
+    }
+
+    @MainActor private func attachVerifiedRenewal(to entry: BazaarAppleCompletionJournal.Entry,
+        journal: BazaarAppleCompletionJournal
+    ) async throws -> BazaarAppleCompletionJournal.Entry {
+        guard let context = entry.deferred, context.signedRenewalInfo == nil else { return entry }
+        let statuses = try await Product.SubscriptionInfo.status(for: context.subscriptionGroupId)
+        for status in statuses {
+            guard case .verified(let transaction) = status.transaction, case .verified(let renewal) = status.renewalInfo,
+                  matchesDeferredSource(context, transaction: transaction),
+                  BazaarAppleCompletionPolicy.environment(ofVerifiedJWS: status.transaction.jwsRepresentation) == context.environment,
+                  BazaarAppleCompletionPolicy.environment(ofVerifiedJWS: status.renewalInfo.jwsRepresentation) == context.environment,
+                  BazaarAppleCompletionPolicy.matchesRenewal(context, originalTransactionId: String(renewal.originalTransactionID),
+                    currentProductId: renewal.currentProductID, nextProductId: renewal.autoRenewPreference, token: renewal.appAccountToken,
+                    willAutoRenew: renewal.willAutoRenew, renewalDate: renewal.renewalDate, signedDate: renewal.signedDate) else { continue }
+            return try journal.attachRenewal(status.renewalInfo.jwsRepresentation, to: entry)
+        }
+        return entry
+    }
+
+    private func deferredResult(_ outcome: AppleCompletionOutcome) -> [String: Any] {
+        var data: [String: Any] = ["status": "deferred", "completionAcknowledged": false, "completionRecorded": false, "scheduled": false]
+        switch outcome {
+        case .deferred(let scheduled, let effectiveAt):
+            data["completionAcknowledged"] = true; data["scheduled"] = scheduled; data["effectiveAt"] = effectiveAt
+        case .recorded:
+            data["completionAcknowledged"] = true; data["completionRecorded"] = true
+        default: break
+        }
+        return data
+    }
+
+    @MainActor private func retryCompletionJournal() async throws -> AppleCompletionRetrySummary {
+        let origin = try trustedOrigin(), journal = try BazaarAppleCompletionJournal()
+        let entries = try journal.entries(for: origin)
+        var summary = AppleCompletionRetrySummary(), inaccessible = Set<String>()
+        for entry in entries {
+            switch try await acknowledgeCompletion(entry) {
+            case .canceled: summary.acknowledgedCount += 1
+            case .deferred: summary.deferredCount += 1
+            case .recorded: summary.recordedCount += 1
+            case .inaccessible: inaccessible.insert(entry.sameInvocationKey)
+            case .unresolved: break
+            }
+        }
+        summary.pendingCount = try journal.entries(for: origin).filter { !inaccessible.contains($0.sameInvocationKey) }.count
+        return summary
+    }
+
+    @MainActor private func acknowledgeCompletion(_ original: BazaarAppleCompletionJournal.Entry, captureImmediately: Bool = false) async throws -> AppleCompletionOutcome {
+        guard original.origin == (try trustedOrigin()).url.absoluteString else { return .inaccessible }
+        let journal = try BazaarAppleCompletionJournal()
+        var entry = original
+        if captureImmediately && entry.outcome == .deferred && entry.deferred?.signedRenewalInfo == nil {
+            do { entry = try await attachVerifiedRenewal(to: entry, journal: journal) }
+            catch is BazaarAppleCompletionJournal.Failure { throw BazaarAppleCompletionJournal.Failure.unavailable }
+            catch { /* Capture may be retried only for this already-earned result. */ }
+        }
+        if entry.outcome == .deferred {
+            // Probe before any status/JWS work on retries: known money must not
+            // be trapped behind an unavailable or superseded old Apple proof.
+            let money = try await submitCompletion(entry, journal: journal, recordedOnly: true)
+            if money == .recorded || money == .inaccessible { return money }
+        }
+        if entry.outcome == .deferred, entry.deferred?.signedRenewalInfo == nil {
+            do { entry = try await attachVerifiedRenewal(to: entry, journal: journal) }
+            catch is BazaarAppleCompletionJournal.Failure { throw BazaarAppleCompletionJournal.Failure.unavailable }
+            catch { /* The already-earned SDK result survives a status/network failure. */ }
+            if entry.deferred?.signedRenewalInfo == nil { return .unresolved }
+        }
+        return try await submitCompletion(entry, journal: journal)
+    }
+
+    @MainActor private func submitCompletion(_ entry: BazaarAppleCompletionJournal.Entry,
+        journal: BazaarAppleCompletionJournal, recordedOnly: Bool = false
+    ) async throws -> AppleCompletionOutcome {
+        do {
+            var body: [String: Any] = ["intentId": entry.intentId, "attemptId": entry.attemptId.uuidString.lowercased(),
+                "keyFingerprint": entry.credential.fingerprint, "outcome": recordedOnly ? "RECORDED_ONLY" : entry.outcome.rawValue]
+            if entry.outcome == .deferred && !recordedOnly {
+                guard let proof = entry.deferred, let renewal = proof.signedRenewalInfo else { return .unresolved }
+                body["transactionDigest"] = BazaarAppleCompletionCrypto.digest(proof.signedTransactionInfo)
+                body["renewalDigest"] = BazaarAppleCompletionCrypto.digest(renewal)
+            }
+            let data = try await post(path: "/api/billing/apple/native/completion/challenge", body: body, withSession: false)
+            struct Challenge: Decodable { let challenge: String; let expiresAt: String }
+            guard let challenge = try? JSONDecoder().decode(Challenge.self, from: data),
+                  BazaarAppleCompletionChallenge.permits(challenge.challenge, expiresAt: challenge.expiresAt, entry: entry, recordedOnly: recordedOnly) else {
+                return .unresolved
+            }
+            let signature = try completionKeys.sign(challenge.challenge, with: entry.credential)
+            var submission: [String: Any] = ["challenge": challenge.challenge, "signature": signature]
+            if entry.outcome == .deferred && !recordedOnly {
+                submission["signedTransactionInfo"] = entry.deferred?.signedTransactionInfo
+                submission["signedRenewalInfo"] = entry.deferred?.signedRenewalInfo
+            }
+            let response = try await post(path: "/api/billing/apple/native/completion", body: submission, withSession: false)
+            switch try journal.applyAcknowledgement(response, to: entry) {
+            case .canceled:
+                try? completionKeys.remove(entry.credential); return .canceled
+            case .deferred(let scheduled, let effectiveAt):
+                try? completionKeys.remove(entry.credential); return .deferred(scheduled: scheduled, effectiveAt: effectiveAt)
+            case .recorded:
+                try? completionKeys.remove(entry.credential); return .recorded
+            case .unresolved: return .unresolved
+            }
+        } catch let error as AppleBillingFailure {
+            if error.httpStatus == 403 || error.httpStatus == 404 ||
+                (error.httpStatus == 409 && ["appleCompletionUnavailable", "applePurchaseAttemptMismatch"].contains(error.serverCode ?? "")) { return .inaccessible }
+            if error.code == "APPLE_UNTRUSTED_ORIGIN" { throw error }
+            return .unresolved
+        } catch is BazaarAppleCompletionKeychain.Failure { return .unresolved }
+        catch is URLError { return .unresolved }
     }
 
     @MainActor private func retryCancellationJournal() async throws -> AppleCancellationRetrySummary {
@@ -516,20 +723,22 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    @MainActor private func post(path: String, body: [String: Any]) async throws -> Data {
+    @MainActor private func post(path: String, body: [String: Any], withSession: Bool = true) async throws -> Data {
         let origin = try trustedOrigin()
-        guard let store = webView?.configuration.websiteDataStore.httpCookieStore else {
-            throw AppleBillingFailure(code: "APPLE_SESSION_REQUIRED")
+        var cookieHeader: String?
+        if withSession {
+            guard let store = webView?.configuration.websiteDataStore.httpCookieStore else { throw AppleBillingFailure(code: "APPLE_SESSION_REQUIRED") }
+            let allCookies = await withCheckedContinuation { continuation in store.getAllCookies { continuation.resume(returning: $0) } }
+            // Do not hide an impersonation session by forwarding only auth cookies.
+            guard !origin.hasImpersonationSession(allCookies) else { throw AppleBillingFailure(code: "APPLE_FORBIDDEN", serverCode: "forbidden") }
+            let cookies = origin.sessionCookies(allCookies)
+            guard !cookies.isEmpty else { throw AppleBillingFailure(code: "APPLE_SESSION_REQUIRED") }
+            cookieHeader = HTTPCookie.requestHeaderFields(with: cookies)["Cookie"]
+        } else {
+            guard ["/api/billing/apple/native/completion/challenge", "/api/billing/apple/native/completion"].contains(path) else {
+                throw AppleBillingFailure(code: "APPLE_FORBIDDEN")
+            }
         }
-        let allCookies = await withCheckedContinuation { continuation in
-            store.getAllCookies { continuation.resume(returning: $0) }
-        }
-        // Do not hide an impersonation session by forwarding only auth cookies.
-        guard !origin.hasImpersonationSession(allCookies) else {
-            throw AppleBillingFailure(code: "APPLE_FORBIDDEN", serverCode: "forbidden")
-        }
-        let cookies = origin.sessionCookies(allCookies)
-        guard !cookies.isEmpty else { throw AppleBillingFailure(code: "APPLE_SESSION_REQUIRED") }
         let url = origin.url.appendingPathComponent(String(path.dropFirst()))
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -539,7 +748,7 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(origin.url.absoluteString, forHTTPHeaderField: "Origin")
         request.setValue("kg.bazaar.app", forHTTPHeaderField: "X-Bazaar-Native-App")
-        request.setValue(HTTPCookie.requestHeaderFields(with: cookies)["Cookie"], forHTTPHeaderField: "Cookie")
+        if let cookieHeader { request.setValue(cookieHeader, forHTTPHeaderField: "Cookie") }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
