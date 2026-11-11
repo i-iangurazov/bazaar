@@ -77,6 +77,30 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
 }
 
+/* Radix locks BODY with overflow:hidden. In WKWebView that creates a new
+   scrolling ancestor and detaches the app's sticky header from the viewport.
+   Keep the real document lock on HTML; clip BODY without making it scrollable.
+   The lock attribute also accounts for nested dialogs and is removed by Radix. */
+html.native-ios:has(body[data-scroll-locked]) {
+  overflow: hidden !important;
+}
+
+html.native-ios body[data-scroll-locked] {
+  overflow: clip !important;
+}
+
+@media (max-width: 639px) {
+  /* Only the existing full-viewport dialog variants reach the status bar.
+     Insetting the whole surface also protects sticky headers/absolute close
+     buttons after scrolling; ordinary dialogs and bottom sheets stay as they are. */
+  html.native-ios [role="dialog"][class~="h-[100dvh]"] {
+    top: var(--mobile-top-safe-area) !important;
+    height: calc(100dvh - var(--mobile-top-safe-area)) !important;
+    max-height: calc(100dvh - var(--mobile-top-safe-area)) !important;
+    --tw-translate-y: 0px;
+  }
+}
+
 @media (min-width: 768px) {
   html:not(.native-app) .pwa-desktop-hidden {
     display: none;

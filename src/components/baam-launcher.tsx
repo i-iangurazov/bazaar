@@ -2,6 +2,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
 import { ExternalLinkIcon as ArrowUpRight } from "@/components/icons";
 import {
@@ -16,12 +17,11 @@ import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
 import { baamCopy } from "@/lib/baam/copy";
 import { BaamIcon } from "@/components/icons";
 import { Button } from "./ui/button";
-import { normalizeLocale } from "@/lib/locales";
+import { isIOS } from "@/lib/native/platform";
+import { baamPathname, nativeBaamWorkspaceHref } from "@/lib/baam/workspaceNavigation";
 
 export const canShowBaamLauncher = (access: RoleAccess, pathname: string) => {
-  const segments = pathname.split(/[?#]/, 1)[0].split("/");
-  if (normalizeLocale(segments[1])) segments.splice(1, 1);
-  const path = segments.join("/").replace(/\/+$/, "") || "/";
+  const path = baamPathname(pathname);
   return (
     hasPermission(access, "viewReports") && path !== "/pos/sell" && !path.startsWith("/printing/")
   );
@@ -37,6 +37,7 @@ export function BaamLauncher({
   children: ReactNode;
 }) {
   const locale = useLocale();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
@@ -65,6 +66,7 @@ export function BaamLauncher({
     };
   }, [mounted, pathname]);
   if (!mounted || !headerSlot || !canShowBaamLauncher(access, pathname)) return null;
+  const inWorkspace = baamPathname(pathname) === "/baam";
   const launcher = (
     <Button
       type="button"
@@ -73,18 +75,21 @@ export function BaamLauncher({
       aria-label={baamCopy(locale, "open")}
       title={baamCopy(locale, "open")}
       className="h-11 w-11 shrink-0 gap-1.5 p-0 md:h-9 md:w-full md:px-0 lg:px-3"
-      onClick={
-        pathname === "/baam"
-          ? () => {
-              const input = document.querySelector<HTMLTextAreaElement>(
-                "[data-baam-input]:not(:disabled)",
-              );
-              const target = input ?? document.querySelector<HTMLElement>("[data-baam-workspace]");
-              target?.focus({ preventScroll: true });
-              target?.scrollIntoView({ block: "nearest" });
-            }
-          : undefined
-      }
+      onClick={(event) => {
+        if (inWorkspace) {
+          const input = document.querySelector<HTMLTextAreaElement>(
+            "[data-baam-input]:not(:disabled)",
+          );
+          const target = input ?? document.querySelector<HTMLElement>("[data-baam-workspace]");
+          target?.focus({ preventScroll: true });
+          target?.scrollIntoView({ block: "nearest" });
+        } else if (isIOS()) {
+          // A native tap opens the existing full workspace directly. Prevent
+          // Radix's trigger as well if the bridge became ready after rendering.
+          event.preventDefault();
+          router.push(nativeBaamWorkspaceHref(window.location));
+        }
+      }}
     >
       <BaamIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
       <span className="hidden text-sm font-medium lg:inline">
@@ -92,7 +97,7 @@ export function BaamLauncher({
       </span>
     </Button>
   );
-  if (pathname === "/baam") return createPortal(launcher, headerSlot);
+  if (inWorkspace || isIOS()) return createPortal(launcher, headerSlot);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {createPortal(<DialogTrigger asChild>{launcher}</DialogTrigger>, headerSlot)}

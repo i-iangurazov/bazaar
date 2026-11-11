@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { AuthBrand } from "@/components/auth-brand";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -34,7 +35,13 @@ const InviteEntryPage = () => {
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
       <div className="flex justify-center"><AuthBrand /></div>
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/login"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary/80"
+        >
+          {t("goToLogin")}
+        </Link>
         <LanguageSwitcher />
       </div>
       <Card>

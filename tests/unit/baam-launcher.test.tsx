@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { BaamLauncher, canShowBaamLauncher } from "@/components/baam-launcher";
+import { baamCopy } from "@/lib/baam/copy";
 
-const launcher = (role = "ADMIN", pathname = "/dashboard") => (
+const native = vi.hoisted(() => ({ platform: "web", push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: native.push }) }));
+vi.mock("@/lib/native/platform", () => ({ isIOS: () => native.platform === "ios" }));
+
+const launcher = (role = "ADMIN", pathname = "/dashboard", locale = "en") => (
   <NextIntlClientProvider
-    locale="en"
+    locale={locale}
     messages={{
       baam: { title: messages.baam.title, assistant: messages.baam.assistant },
       common: { close: messages.common.close },
@@ -28,7 +33,8 @@ vi.stubGlobal(
     disconnect() {}
   },
 );
-afterEach(cleanup);
+beforeEach(() => { native.platform = "web"; native.push.mockReset(); });
+afterEach(() => { cleanup(); window.history.replaceState(null, "", "/"); });
 
 it("keeps a single launcher in its reserved header slot at mobile and desktop widths", async () => {
   const previousWidth = window.innerWidth;
@@ -52,6 +58,64 @@ it("keeps a single launcher in its reserved header slot at mobile and desktop wi
 });
 
 describe("BAAM assistant launcher", () => {
+  it.each(["ru", "kg", "en"])("opens the full iOS workspace on the first tap in %s without mounting the popup", (locale) => {
+    native.platform = "ios";
+    window.history.replaceState(null, "", "/inventory?storeId=chosen-store&stock=available#items");
+    render(launcher("ADMIN", "/inventory", locale));
+    fireEvent.click(screen.getByRole("button", { name: baamCopy(locale, "open") }));
+    expect(native.push).toHaveBeenCalledTimes(1);
+    const destination = new URL(native.push.mock.calls[0][0], "https://bazaar.invalid");
+    expect(destination.pathname).toBe("/baam");
+    expect(destination.searchParams.get("storeId")).toBe("chosen-store");
+    expect(destination.searchParams.get("returnTo")).toBe("/inventory?storeId=chosen-store&stock=available#items");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ask a supported question" })).toBeNull();
+  });
+
+  it("also opens directly when the iOS bridge becomes available after the trigger rendered", () => {
+    render(launcher("MANAGER", "/products"));
+    native.platform = "ios";
+    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+    expect(native.push).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it.each(["STAFF", "CASHIER"])("keeps the iOS launcher unavailable to %s", (role) => {
+    native.platform = "ios";
+    render(launcher(role));
+    expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
+    expect(native.push).not.toHaveBeenCalled();
+  });
+
+  it.each(["/pos/sell?registerId=one", "/printing/receipt"])("keeps the iOS launcher hidden at %s", (pathname) => {
+    native.platform = "ios";
+    render(launcher("ADMIN", pathname));
+    expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
+    expect(native.push).not.toHaveBeenCalled();
+  });
+
+  it("focuses the current iOS workspace draft without adding another navigation", () => {
+    native.platform = "ios";
+    render(<><section data-baam-workspace tabIndex={-1}>
+      <textarea data-baam-input aria-label="Saved BAAM draft" defaultValue="Keep this question" />
+    </section>{launcher("MANAGER", "/kg/baam/?storeId=one")}</>);
+    const question = screen.getByRole("textbox", { name: "Saved BAAM draft" });
+    question.scrollIntoView = vi.fn();
+    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+    expect(document.activeElement).toBe(question);
+    expect((question as HTMLTextAreaElement).value).toBe("Keep this question");
+    expect(native.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("preserves the compact assistant entry on Android", () => {
+    native.platform = "android";
+    render(launcher());
+    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+    expect(screen.getByRole("dialog", { name: "BAAM" })).toBeTruthy();
+    expect(native.push).not.toHaveBeenCalled();
+  });
+
   it.each(["ADMIN", "MANAGER"])(
     "lets %s open an accessible assistant dialog and full workspace link",
     (role) => {
