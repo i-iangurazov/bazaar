@@ -144,7 +144,7 @@ struct AppleCancellationJournalChecks {
         let migratedEntries = try legacyJournal.entries(for: production)
         check(migrated["version"] as? Int == 2 && migratedEntries.contains(legacyEntries[0]), "Version migration preserves legacy evidence alongside new attempt-bound proof")
 
-        enum AttemptFailure: Error, Equatable { case backgrounded, sdkUnknown, persistence }
+        enum AttemptFailure: Error, Equatable { case backgrounded, priceChanged, sdkUnknown, persistence }
         let phaseFile = root.appendingPathComponent("phase-proof.json")
         let phaseJournal = BazaarAppleCancellationJournal(fileURL: phaseFile)
         var events: [String] = []
@@ -176,6 +176,24 @@ struct AppleCancellationJournalChecks {
             }
         )
         check(background == "not_started" && events == ["authorize", "foreground", "abort"], "Backgrounding after auth is caught before any SDK invocation")
+
+        events = []
+        let repriced: String = try await BazaarApplePreSheetAttempt.perform(
+            authorize: { events.append("authorize"); return "authorization" },
+            prepare: { (_: String) async throws -> String in
+                events.append("price-fetch")
+                await Task.yield()
+                throw AttemptFailure.priceChanged
+            },
+            invoke: { _ in events.append("invoke"); return "purchased" },
+            abort: { error in
+                check(error as? AttemptFailure == .priceChanged, "Preserve the asynchronous post-auth price failure")
+                events.append("abort")
+                _ = try phaseJournal.record(intentId: "price-after-auth", origin: production, attemptId: secondAttempt)
+                return "not_started"
+            }
+        )
+        check(repriced == "not_started" && events == ["authorize", "price-fetch", "abort"], "A fresh price check after final auth must never escape into the SDK on failure")
 
         let sdkFailures: [Error] = [URLError(.networkConnectionLost), AttemptFailure.sdkUnknown]
         for failure in sdkFailures {

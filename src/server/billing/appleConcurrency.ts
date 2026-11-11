@@ -35,7 +35,7 @@ export async function lockAppleOrganization(db: Prisma.TransactionClient, organi
   // WhatsApp quota/refund paths already use this advisory lock. Always acquire
   // it before the shared row lock so gateway checkout and Apple cannot deadlock.
   await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`whatsapp:${organizationId}`}, 0))`;
-  await db.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+  await db.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR NO KEY UPDATE`;
 }
 
 

@@ -15,6 +15,14 @@ const mock = vi.hoisted(() => ({
   nativeReady: true,
   data: {} as Record<string, unknown>,
   products: vi.fn(),
+  storefront: vi.fn(),
+  temporaryData: {} as Record<string, unknown>,
+  temporaryPreview: vi.fn(),
+  temporaryRequest: vi.fn(),
+  temporaryRefetch: vi.fn(),
+  temporaryCatalogRefetch: vi.fn(),
+  temporaryError: null as unknown,
+  temporaryFetching: false,
   intent: vi.fn(),
   confirm: vi.fn(),
   restoreBatch: vi.fn(),
@@ -33,6 +41,7 @@ vi.mock("@/lib/native/platform", () => ({ getNativePlatform: () => mock.platform
 vi.mock("@/lib/native/appleBilling", () => ({
   isAppleBillingAvailable: () => mock.nativeReady,
   getAppleProducts: mock.products,
+  getAppleStorefront: mock.storefront,
   purchaseAppleProduct: mock.purchase,
   finishAppleTransaction: mock.finish,
   restoreApplePurchases: mock.restore,
@@ -44,6 +53,17 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     billing: {
       apple: {
+        temporaryUpgradeCatalog: {
+          useQuery: () => ({ data: mock.temporaryData, isLoading: false, isError: false, refetch: mock.temporaryCatalogRefetch }),
+        },
+        previewTemporaryUpgrade: {
+          useQuery: (input: TemporaryRequest, options: { enabled: boolean }) => {
+            mock.temporaryRequest(input, options);
+            return { data: options.enabled && !mock.temporaryError ? mock.temporaryPreview(input) : undefined,
+              isFetching: options.enabled && mock.temporaryFetching,
+              isError: options.enabled && Boolean(mock.temporaryError), error: mock.temporaryError, refetch: mock.temporaryRefetch };
+          },
+        },
         preview: {
           useQuery: () => ({
             data: {
@@ -108,6 +128,7 @@ const fixture = () => ({
   termsUrl: "https://example.invalid/terms",
   pendingIntent: null,
   recentTransactions: [] as unknown[],
+  temporaryUpgrades: [] as unknown[],
   access: {
     plan: "STARTER",
     extras: { stores: 0, productPacks: 0, userPacks: 0 },
@@ -120,6 +141,52 @@ const fixture = () => ({
     appleScheduledChange: null as { productId: string; startsAt: string | null; offer: unknown } | null,
   },
 });
+type TemporaryRequest = {
+  expectedOrganizationId: string;
+  selection: { plan: string; months: number; extras: { stores: number; productPacks: number; userPacks: number } };
+  storefrontId: string;
+  currency: string;
+};
+const temporaryProduct = {
+  ...product, id: "kg.bazaar.testing.temporary", displayName: "Temporary plan upgrade",
+  displayPrice: "$2.99", price: "2.99", priceMillis: "2990", storefrontId: "123456",
+};
+const temporaryCatalogFixture = (ready = false) => ({
+  ready, unavailableReason: ready ? null : "appleTemporaryUpgradePolicyUnavailable", policyVersion: "synthetic-policy",
+  organization: { id: "synthetic-organization", name: "Synthetic organization" },
+  currentSelection: { plan: "STARTER", months: 6, extras: { stores: 0, productPacks: 0, userPacks: 0 } },
+  currentTermOnly: true, futureCoverageUnchanged: true,
+  products: ready ? [{ productId: temporaryProduct.id, productType: "NON_RENEWING" }] : [],
+  markets: ready ? [{ storefrontId: "123456", currency: "USD" }] : [],
+});
+const temporaryQuoteFixture = (input: TemporaryRequest) => ({
+  offerKey: "temporary-upgrade:synthetic-policy:band-one", action: "CHANGE", quoteToken: "temporary-signed-quote",
+  organization: { id: "synthetic-organization", name: "Synthetic organization" },
+  productId: temporaryProduct.id, productType: "NON_RENEWING", selection: { ...input.selection, months: 6 },
+  target: { selection: { ...input.selection, months: 6 }, entitlements: { limits: { maxStores: 3 + input.selection.extras.stores, maxProducts: 10_000, maxActiveUsers: 5 } } },
+  source: { id: "synthetic-gopay-period", plan: "STARTER", extras: { stores: 0, productPacks: 0, userPacks: 0 }, months: 6,
+    provider: "GOPAY", startsAt: "2026-11-01T00:00:00Z", endsAt: "2027-05-01T00:00:00Z" },
+  timing: { startsAt: "2026-11-11T00:00:00Z", endsAt: "2027-05-01T00:00:00Z", validUntil: "2027-01-01T00:00:00Z" },
+  priceConstraint: { storefrontId: "123456", currency: "USD", priceMillis: "2990" },
+  serviceValue: { currency: "KGS", incrementalMinor: 20_000, chargedServiceMinor: 19_000, ownerDiscountMinor: 1000 },
+  currentTermOnly: true, futureCoverageUnchanged: true, parentDependent: true,
+});
+const configureTemporary = () => {
+  const data = fixture();
+  data.access.paidUntil = "2027-11-01T00:00:00Z";
+  for (const stores of [0, 1]) for (const reserve of [0, 1]) data.offers.push({
+    ...offer(), offerKey: `business-next-term-${stores}-${reserve}`,
+    selection: { plan: "BUSINESS", months: 1, extras: { stores, productPacks: reserve, userPacks: 0 } },
+  });
+  mock.data = data;
+  mock.temporaryData = temporaryCatalogFixture(true);
+  mock.temporaryPreview.mockImplementation(temporaryQuoteFixture);
+  mock.products.mockImplementation(async (productIds: string[]) => ({
+    products: [product, temporaryProduct].filter((entry) => productIds.includes(entry.id)), missingProductIds: [],
+  }));
+  mock.intent.mockResolvedValue({ intentId: "native-authorized-intent", productId: temporaryProduct.id });
+  return data;
+};
 const messages = { ru, kg, en };
 const mount = (locale: keyof typeof messages = "ru", wrapper = false) =>
   render(
@@ -140,11 +207,34 @@ const openConsent = async () => {
   fireEvent.click(dialog.getByRole("checkbox"));
   return dialog;
 };
+const choose = async (label: string, option: string) => {
+  fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "Enter" });
+  fireEvent.click(await screen.findByRole("option", { name: option }));
+};
+const chooseTemporary = async (locale: keyof typeof messages = "ru", target: "business" | "enterprise" = "business") => {
+  await screen.findByRole("combobox", { name: messages[locale].billingApple.action });
+  await choose(messages[locale].billingApple.action, messages[locale].billingApple.temporaryChange);
+  await choose(messages[locale].billingApple.plan, messages[locale].billing.plans[target].name);
+  await screen.findByText(temporaryProduct.displayPrice);
+};
+const openTemporaryConsent = async () => {
+  fireEvent.click(screen.getByRole("button", { name: /\$2\.99/ }));
+  const dialog = within(screen.getByRole("dialog"));
+  fireEvent.click(dialog.getByRole("checkbox"));
+  return dialog;
+};
+const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   mock.platform = "ios";
   mock.nativeReady = true;
   mock.data = fixture();
+  mock.temporaryData = temporaryCatalogFixture();
+  mock.temporaryError = null;
+  mock.temporaryFetching = false;
+  mock.storefront.mockResolvedValue({ id: "123456", countryCode: "KGZ" });
+  mock.temporaryRefetch.mockResolvedValue(undefined);
+  mock.temporaryCatalogRefetch.mockImplementation(async () => ({ data: mock.temporaryData }));
   mock.products.mockResolvedValue({ products: [product], missingProductIds: [] });
   mock.intent.mockResolvedValue({ intentId: "native-authorized-intent" });
   mock.purchase.mockResolvedValue({ status: "purchased", transaction: receipt() });
@@ -176,13 +266,267 @@ beforeEach(() => {
       disconnect() {}
     },
   );
+  Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 describe("iOS Apple checkout and recovery", () => {
+  it.each(["ru", "kg", "en"] as const)("buys a direct current-term upgrade with exact Apple metadata and preserved coverage in %s", async (locale) => {
+    configureTemporary();
+    const { container } = mount(locale);
+    await chooseTemporary(locale);
+    expect(screen.queryByRole("combobox", { name: messages[locale].billingApple.months })).toBeNull();
+    const details = container.querySelector("[data-apple-temporary-details]")!;
+    expect(details.textContent).toContain(messages[locale].billingApple.temporaryDependency);
+    expect(details.textContent).toContain(messages[locale].billingApple.temporaryPreserved);
+    expect(details.textContent).toContain("2027");
+    expect(details.textContent).not.toContain("KGS");
+    expect(container.querySelector("[data-apple-price]")?.textContent).not.toContain(product.displayPrice);
+    expect(mock.products.mock.calls.at(-1)?.[0]).toEqual([temporaryProduct.id]);
+    const dialog = await openTemporaryConsent();
+    expect(dialog.getByText(messages[locale].billingApple.temporaryTerms)).toBeTruthy();
+    expect(dialog.getByText(messages[locale].billingApple.temporaryDependency)).toBeTruthy();
+    fireEvent.click(dialog.getByRole("button", { name: messages[locale].billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.finish).toHaveBeenCalledWith(receipt().transactionId));
+    expect(mock.intent).toHaveBeenCalledWith(expect.objectContaining({
+      offerKey: "temporary-upgrade:synthetic-policy:band-one", action: "CHANGE", quoteToken: "temporary-signed-quote",
+      expectedOrganizationId: "synthetic-organization", acceptedTerms: true,
+    }));
+    expect(mock.purchase).toHaveBeenCalledWith("native-authorized-intent");
+    expect(mock.webGet).not.toHaveBeenCalled();
+    await screen.findByText(messages[locale].billingApple.temporaryRecorded);
+  });
+
+  it("preserves selected paid additions when the temporary target plan changes", async () => {
+    const data = configureTemporary();
+    data.access.plan = "BUSINESS";
+    data.access.extras.stores = 1;
+    data.access.extras.productPacks = 1;
+    data.offers.push({ ...offer(), offerKey: "enterprise-current-term-target",
+      selection: { plan: "ENTERPRISE", months: 1, extras: { stores: 1, productPacks: 1, userPacks: 0 } } });
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => ({
+      ...temporaryQuoteFixture(input), source: { ...temporaryQuoteFixture(input).source,
+        plan: "BUSINESS", extras: { stores: 1, productPacks: 1, userPacks: 0 } },
+    }));
+    mount();
+    await chooseTemporary("ru", "enterprise");
+    expect(screen.getByRole("combobox", { name: ru.billingApple.additionalStores }).textContent).toContain("1");
+    expect(screen.getByRole("combobox", { name: ru.billingApple.reserve }).textContent).toContain(ru.billingApple.reserveIncluded);
+    expect(mock.temporaryRequest).toHaveBeenCalledWith(expect.objectContaining({
+      selection: { plan: "ENTERPRISE", months: 1, extras: { stores: 1, productPacks: 1, userPacks: 0 } },
+    }), expect.objectContaining({ enabled: true }));
+    expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
+  it("keeps unapproved temporary sales disabled without substituting a renewal", async () => {
+    configureTemporary();
+    mock.temporaryData = temporaryCatalogFixture(false);
+    mount();
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await screen.findByText(ru.errors.appleTemporaryUpgradePolicyUnavailable);
+    expect((screen.getByRole("button", { name: /Продолжить с Apple/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(product.displayPrice)).toBeNull();
+    expect(mock.storefront).not.toHaveBeenCalled();
+    expect(mock.intent).not.toHaveBeenCalled();
+  });
+
+  it("can quote an approved C band independently of unavailable full-period product mappings", async () => {
+    const data = configureTemporary();
+    data.ready = false;
+    for (const entry of data.offers) Object.assign(entry, { productId: null, available: false, availableActions: [] });
+    mount();
+    await chooseTemporary();
+    expect((screen.getByRole("button", { name: /\$2\.99/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect(mock.products.mock.calls.at(-1)?.[0]).toEqual([temporaryProduct.id]);
+    expect(screen.queryByText(product.displayPrice)).toBeNull();
+  });
+
+  it("keeps temporary checkout disabled while a fresh quote is loading", async () => {
+    configureTemporary();
+    mock.temporaryFetching = true;
+    const view = mount();
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await choose(ru.billingApple.plan, ru.billing.plans.business.name);
+    await waitFor(() => expect(mock.temporaryRequest).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ enabled: true })));
+    expect(screen.getAllByText(ru.common.loading).length).toBeGreaterThan(0);
+    expect((screen.getByRole("button", { name: /\$2\.99/ }) as HTMLButtonElement).disabled).toBe(true);
+    mock.temporaryFetching = false;
+    view.rerender(<NextIntlClientProvider locale="ru" messages={ru} timeZone="Asia/Bishkek"><TooltipProvider><ApplePayments kind="SUBSCRIPTION" onUpdated={mock.updated} /></TooltipProvider></NextIntlClientProvider>);
+    await screen.findByText(temporaryProduct.displayPrice);
+    expect((screen.getByRole("button", { name: /\$2\.99/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("blocks changed C price metadata without buying a full-period renewal", async () => {
+    configureTemporary();
+    mock.products.mockImplementation(async (productIds: string[]) => ({
+      products: [product, { ...temporaryProduct, priceMillis: "3990", displayPrice: "$3.99" }].filter((entry) => productIds.includes(entry.id)), missingProductIds: [],
+    }));
+    mount();
+    await screen.findByText(product.displayPrice);
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await choose(ru.billingApple.plan, ru.billing.plans.business.name);
+    await screen.findByText("$3.99");
+    expect((screen.getByRole("button", { name: /\$3\.99/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(ru.billingApple.productMismatch)).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: ru.billingApple.months })).toBeNull();
+    expect(mock.intent).not.toHaveBeenCalled();
+  });
+
+  it("keeps C blocked while storefront is unavailable and recovers with an explicit retry", async () => {
+    configureTemporary();
+    mock.storefront.mockRejectedValueOnce(new Error("APPLE_STOREFRONT_UNAVAILABLE"));
+    mount();
+    await screen.findByText(product.displayPrice);
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await screen.findByText(ru.billingApple.storefrontUnavailable);
+    expect(mock.purchase).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: ru.billingApple.retry }));
+    await choose(ru.billingApple.plan, ru.billing.plans.business.name);
+    await screen.findByText(temporaryProduct.displayPrice);
+    expect(mock.storefront).toHaveBeenCalledTimes(2);
+    expect((screen.getByRole("button", { name: /\$2\.99/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not convert price or offer renewal when the storefront market is unsupported", async () => {
+    configureTemporary();
+    mock.storefront.mockResolvedValue({ id: "999999", countryCode: "GBR" });
+    mount();
+    await screen.findByText(product.displayPrice);
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await screen.findByText(ru.billingApple.temporaryMarketUnavailable);
+    expect(screen.getByRole("combobox", { name: ru.billingApple.action }).textContent).toContain(ru.billingApple.temporaryChange);
+    expect(mock.intent).not.toHaveBeenCalled();
+    expect(mock.webGet).not.toHaveBeenCalled();
+  });
+
+  it("closes stale consent without switching CHANGE to RENEW after the source changes", async () => {
+    configureTemporary();
+    const view = mount();
+    await chooseTemporary();
+    await openTemporaryConsent();
+    mock.temporaryError = new Error("appleTemporaryUpgradeSourceChanged");
+    view.rerender(<NextIntlClientProvider locale="ru" messages={ru} timeZone="Asia/Bishkek"><TooltipProvider><ApplePayments kind="SUBSCRIPTION" onUpdated={mock.updated} /></TooltipProvider></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("combobox", { name: ru.billingApple.action }).textContent).toContain(ru.billingApple.temporaryChange);
+    expect(screen.queryByRole("combobox", { name: ru.billingApple.months })).toBeNull();
+    expect(mock.intent).not.toHaveBeenCalled();
+  });
+
+  it("requires fresh consent when the exact temporary dates change", async () => {
+    configureTemporary();
+    const view = mount();
+    await chooseTemporary();
+    await openTemporaryConsent();
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => {
+      const quote = temporaryQuoteFixture(input);
+      return { ...quote, timing: { ...quote.timing, endsAt: "2027-04-01T00:00:00Z" } };
+    });
+    view.rerender(<NextIntlClientProvider locale="ru" messages={ru} timeZone="Asia/Bishkek"><TooltipProvider><ApplePayments kind="SUBSCRIPTION" onUpdated={mock.updated} /></TooltipProvider></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(mock.intent).not.toHaveBeenCalled();
+  });
+
+  it("blocks an expired temporary quote and labels its refresh", async () => {
+    configureTemporary();
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => {
+      const quote = temporaryQuoteFixture(input);
+      return { ...quote, timing: { ...quote.timing, validUntil: "2020-01-01T00:00:00Z" } };
+    });
+    mount();
+    await chooseTemporary();
+    await screen.findByText(ru.billingApple.temporaryQuoteExpired);
+    expect((screen.getByRole("button", { name: /\$2\.99/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
+  it("refuses a changed temporary intent SKU before invoking the native purchase", async () => {
+    configureTemporary();
+    mock.intent.mockResolvedValue({ intentId: "soft-mismatched-intent", productId: product.id });
+    mount();
+    await chooseTemporary();
+    const dialog = await openTemporaryConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.cancel).toHaveBeenCalledWith({ intentId: "soft-mismatched-intent" }));
+    expect(mock.purchase).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+  });
+
+  it("retains a lost temporary confirmation for receipt recovery without claiming or finishing the grant", async () => {
+    configureTemporary();
+    mock.confirm.mockRejectedValueOnce(new Error("network lost"));
+    mount();
+    await chooseTemporary();
+    const dialog = await openTemporaryConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.temporaryConfirmationPending.replace("{reason}", ru.billingApple.operationFailed));
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(screen.queryByText(ru.billingApple.temporaryRecorded)).toBeNull();
+  });
+
+  it("reports a native price abort through its attempt acknowledgement without a second cancellation", async () => {
+    configureTemporary();
+    mock.purchase.mockResolvedValueOnce({ status: "not_started", cancellationAcknowledged: true, cancellationRecorded: false,
+      error: { code: "APPLE_PRICE_CHANGED" } });
+    mount();
+    await chooseTemporary();
+    const dialog = await openTemporaryConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.purchaseNotStarted.replace("{reason}", ru.billingApple.priceChanged));
+    expect(mock.cancel).not.toHaveBeenCalled();
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+  });
+
+  it("keeps a recorded temporary grant visible when the native finish acknowledgement is lost", async () => {
+    configureTemporary();
+    mock.finish.mockRejectedValueOnce(new Error("offline"));
+    mount();
+    await chooseTemporary();
+    const dialog = await openTemporaryConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.temporaryRecoveryPending);
+    expect(mock.confirm).toHaveBeenCalledTimes(1);
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it("renders a suspended temporary grant separately and restores its receipt without local rights or balance changes", async () => {
+    const data = configureTemporary();
+    data.temporaryUpgrades.push({ id: "temporary-period", sourcePeriodId: "gopay-base", plan: "BUSINESS",
+      extras: { stores: 1, productPacks: 1, userPacks: 0 }, startsAt: "2026-11-01T00:00:00Z", endsAt: "2027-05-01T00:00:00Z",
+      status: "SUSPENDED", parentDependent: true, currentTermOnly: true });
+    mock.restore.mockResolvedValue({ transactions: [receipt("temporary-receipt")], unverifiedTransactionIds: [], nextCursor: null });
+    const { container } = mount();
+    await screen.findByText(product.displayPrice);
+    expect(container.querySelector("[data-apple-temporary-history]")?.textContent).toContain(ru.billingApple.temporaryStatuses.SUSPENDED);
+    expect(screen.getByText(ru.billingApple.noRepurchase)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: ru.billingApple.restore }));
+    await waitFor(() => expect(mock.finish).toHaveBeenCalledWith("temporary-receipt"));
+    expect(mock.purchase).not.toHaveBeenCalled();
+    expect(container.querySelector("[data-apple-temporary-history]")?.textContent).toContain(ru.billingApple.temporaryStatuses.SUSPENDED);
+  });
+
+  it("preserves the existing same-group automatic change without requiring C storefront metadata", async () => {
+    const data = fixture();
+    Object.assign(data.offers[0], { productType: "AUTO_RENEWABLE", availableActions: ["CHANGE"], renewUnavailableReason: "appleExistingAccessActive", changeUnavailableReason: null });
+    Object.assign(data.access, { appleAutoRenew: true, appleCoverageUntil: "2027-02-01T00:00:00Z" });
+    mock.data = data;
+    mock.products.mockResolvedValue({ products: [{ ...product, type: "AUTO_RENEWABLE", subscriptionPeriod: { unit: "month", value: 1 } }], missingProductIds: [] });
+    mount();
+    await screen.findByText(ru.billingApple.changeTiming);
+    expect(screen.getByRole("combobox", { name: ru.billingApple.months })).toBeTruthy();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.purchase).toHaveBeenCalled());
+    expect(mock.intent).toHaveBeenCalledWith(expect.objectContaining({ action: "CHANGE" }));
+    expect(mock.storefront).not.toHaveBeenCalled();
+  });
+
   it.each(["ru", "kg", "en"] as const)(
     "uses localized Apple prices and explicit organization consent in %s",
     async (locale) => {

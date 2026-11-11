@@ -4,6 +4,7 @@ import { PLAN_CODES } from "@/lib/billing/plans";
 import { subscriptionExtrasSchema } from "@/lib/billing/subscriptionPricing";
 import { AppError } from "@/server/services/errors";
 import { planDefinitionSchema } from "./contractTerms";
+import { temporaryUpgradeContextSchema } from "./appleTemporaryUpgradePolicy";
 
 export const purchaseSnapshotSchema = z.object({
   version: z.literal(1),
@@ -30,6 +31,7 @@ export const purchaseSnapshotSchema = z.object({
   issuedAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
   entitlements: planDefinitionSchema.optional(),
+  appleTemporaryUpgrade: temporaryUpgradeContextSchema.optional(),
 });
 export type PurchaseSnapshot = z.infer<typeof purchaseSnapshotSchema>;
 export const readPurchaseSnapshot = (value: unknown): PurchaseSnapshot | null => {

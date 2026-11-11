@@ -12,12 +12,15 @@ import {
   finishAppleTransaction,
   getAppleTransactionHistory,
   getAppleProducts,
+  getAppleStorefront,
   isAppleBillingAvailable,
   purchaseAppleProduct,
   requestAppleRefund,
   restoreApplePurchases,
   showAppleSubscriptionManagement,
+  type AppleStorefront,
 } from "@/lib/native/appleBilling";
+import { AppleTemporaryUpgradeDetails, AppleTemporaryUpgradeHistory } from "@/components/billing/apple-temporary-upgrade";
 import { QueryErrorState } from "@/components/query-error-state";
 import { RestoreIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +60,11 @@ export function ApplePayments({
   const plans = useTranslations("billing.plans");
   const errors = useTranslations("errors");
   const locale = useLocale();
+  const nativeReady = isAppleBillingAvailable();
   const catalog = trpc.billing.apple.catalog.useQuery(undefined, { retry: false });
+  const temporaryCatalog = trpc.billing.apple.temporaryUpgradeCatalog.useQuery(undefined, {
+    enabled: nativeReady && kind === "SUBSCRIPTION", retry: false,
+  });
   const intent = trpc.billing.apple.intent.useMutation();
   const confirm = trpc.billing.apple.confirm.useMutation();
   const restoreBatch = trpc.billing.apple.restore.useMutation();
@@ -72,18 +79,24 @@ export function ApplePayments({
   const [reserve, setReserve] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [action, setAction] = useState<"RENEW" | "CHANGE">("RENEW");
+  const [storefront, setStorefront] = useState<AppleStorefront | null>(null);
+  const [storefrontBusy, setStorefrontBusy] = useState(false);
+  const [storefrontIssue, setStorefrontIssue] = useState(false);
+  const [quoteExpired, setQuoteExpired] = useState(false);
+  const actionSelected = useRef(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const running = useRef(false);
   const requestKey = useRef<{ selection: string; key: string } | null>(null);
-  const nativeReady = isAppleBillingAvailable();
   const restoreSession = useMemo(() => new AppleRestoreSession(catalog.data?.organization.id ?? null), [catalog.data?.organization.id]);
   const restoreRef = useRef(restoreSession);
   restoreRef.current = restoreSession;
   const allOffers = catalog.data?.offers ?? [];
   const offers = allOffers.filter((offer) => offer.kind === kind);
+  const managedApple = Boolean(catalog.data?.access.appleAutoRenew || catalog.data?.access.appleCoverageUntil);
+  const temporaryChange = kind === "SUBSCRIPTION" && action === "CHANGE" && !managedApple;
   const selected = offers.find((offer) =>
     offer.kind === "SUBSCRIPTION"
       ? offer.selection?.plan === (selectedPlan ?? plan) &&
@@ -92,8 +105,7 @@ export function ApplePayments({
         offer.selection.extras.productPacks === reserve
       : offer.quantity === quantity,
   );
-  const product = products.find((item) => item.id === selected?.productId);
-  const needsQuote = selected?.kind === "SUBSCRIPTION" && selected.productType === "NON_RENEWING";
+  const needsQuote = !temporaryChange && selected?.kind === "SUBSCRIPTION" && selected.productType === "NON_RENEWING";
   const preview = trpc.billing.apple.preview.useQuery(
     {
       expectedOrganizationId: catalog.data?.organization.id ?? "",
@@ -106,12 +118,44 @@ export function ApplePayments({
       staleTime: 30_000,
     },
   );
+  const temporaryProductIds = (temporaryCatalog.data?.products ?? []).map((entry) => entry.productId).sort().join("\n");
+  const currencyProduct = products.find((item) => item.storefrontId === storefront?.id &&
+    temporaryProductIds.split("\n").includes(item.id) && item.type === "NON_RENEWING");
+  const temporaryCurrency = currencyProduct?.currencyCode ?? "";
+  const supportedMarket = Boolean(storefront && temporaryCatalog.data?.markets.some((market) =>
+    market.storefrontId === storefront.id && market.currency === temporaryCurrency));
+  const temporaryPreview = trpc.billing.apple.previewTemporaryUpgrade.useQuery({
+    expectedOrganizationId: catalog.data?.organization.id ?? "",
+    selection: { plan: selectedPlan ?? plan, months: 1, extras: { stores, productPacks: reserve, userPacks: 0 } },
+    storefrontId: storefront?.id ?? "",
+    currency: temporaryCurrency,
+  }, {
+    enabled: Boolean(temporaryChange && nativeReady && temporaryCatalog.data?.ready && supportedMarket && !productsBusy && !storefrontBusy),
+    retry: false, staleTime: 30_000,
+  });
+  const temporaryQuote = temporaryChange ? temporaryPreview.data : undefined;
+  const product = products.find((item) => item.id === (temporaryChange ? temporaryQuote?.productId : selected?.productId));
+  const constraint = temporaryQuote?.priceConstraint;
+  const temporaryProductMatches = Boolean(product && constraint && product.id === temporaryQuote?.productId && product.type === "NON_RENEWING" &&
+    product.priceMillis === constraint.priceMillis && product.currencyCode === constraint.currency &&
+    product.storefrontId === constraint.storefrontId && storefront?.id === constraint.storefrontId && supportedMarket);
+  const temporarySelectionMatches = Boolean(temporaryQuote && temporaryQuote.organization.id === catalog.data?.organization.id &&
+    temporaryCatalog.data?.organization.id === catalog.data?.organization.id && temporaryQuote.selection.plan === (selectedPlan ?? plan) &&
+    temporaryQuote.selection.extras.stores === stores && temporaryQuote.selection.extras.productPacks === reserve &&
+    temporaryQuote.selection.extras.userPacks === 0);
   const productIds = [
-    ...new Set(offers.flatMap((offer) => (offer.productId ? [offer.productId] : []))),
+    ...new Set(temporaryChange ? (temporaryCatalog.data?.ready ? temporaryCatalog.data.products.map((entry) => entry.productId) : [])
+      : offers.flatMap((offer) => (offer.productId ? [offer.productId] : []))),
   ]
     .sort()
     .join("\n");
-  const selectionKey = `${catalog.data?.organization.id ?? ""}:${selected?.offerKey ?? ""}:${action}:${catalog.data?.termsVersion ?? ""}:${product?.displayPrice ?? ""}:${needsQuote ? (preview.data?.quoteToken ?? "") : ""}`;
+  const selectionKey = JSON.stringify([catalog.data?.organization.id, temporaryChange ? temporaryQuote?.offerKey : selected?.offerKey,
+    action, selectedPlan ?? plan, temporaryChange ? null : months, stores, reserve, catalog.data?.termsVersion,
+    product?.id, product?.displayPrice, product?.priceMillis, product?.currencyCode, product?.storefrontId,
+    temporaryChange ? temporaryQuote?.quoteToken : needsQuote ? preview.data?.quoteToken : null,
+    temporaryChange ? temporaryCatalog.data?.policyVersion : null,
+    temporaryChange ? [temporaryCatalog.data?.ready, temporaryCatalog.isError, temporaryPreview.isError, storefront?.id] : null,
+    temporaryChange ? [temporaryQuote?.timing, temporaryQuote?.source, temporaryQuote?.target, constraint] : null]);
   const consentKey = useRef("");
   const initialized = useRef(false);
   useEffect(() => {
@@ -124,8 +168,39 @@ export function ApplePayments({
   const actionsKey = selected?.availableActions.join(",") ?? "";
   useEffect(() => {
     const actions = actionsKey.split(",");
-    if (actionsKey && !actions.includes(action)) setAction(actions[0] as "RENEW" | "CHANGE");
-  }, [actionsKey, action]);
+    // Keep automatic same-group initialization. A chosen temporary CHANGE must
+    // never silently become a full next-period purchase when eligibility changes.
+    if (!actionSelected.current && managedApple && actionsKey && !actions.includes(action)) setAction(actions[0] as "RENEW" | "CHANGE");
+  }, [actionsKey, action, managedApple]);
+
+  useEffect(() => {
+    let active = true;
+    setStorefront(null);
+    setStorefrontIssue(false);
+    if (!temporaryChange || !nativeReady || !temporaryCatalog.data?.ready) {
+      setStorefrontBusy(false);
+      return;
+    }
+    setStorefrontBusy(true);
+    void getAppleStorefront().then((value) => {
+      if (active) {
+        if (/^[0-9]+$/.test(value.id)) setStorefront(value);
+        else setStorefrontIssue(true);
+      }
+    }).catch(() => { if (active) setStorefrontIssue(true); })
+      .finally(() => { if (active) setStorefrontBusy(false); });
+    return () => { active = false; };
+  }, [temporaryChange, nativeReady, temporaryCatalog.data?.ready, catalog.data?.organization.id, reloadProducts]);
+
+  const temporaryValidUntil = temporaryQuote?.timing.validUntil;
+  useEffect(() => {
+    if (!temporaryChange || !temporaryValidUntil) { setQuoteExpired(false); return; }
+    const delay = new Date(temporaryValidUntil).getTime() - Date.now();
+    if (!Number.isFinite(delay) || delay <= 0) { setQuoteExpired(true); return; }
+    setQuoteExpired(false);
+    const timer = window.setTimeout(() => { setQuoteExpired(true); setAccepted(false); setConsentOpen(false); }, Math.min(delay, 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [temporaryChange, temporaryValidUntil, temporaryQuote?.quoteToken]);
 
   useEffect(() => {
     setAccepted(false);
@@ -180,6 +255,10 @@ export function ApplePayments({
   }, [nativeReady, busy]);
 
   const messageFor = (error: unknown) => {
+    const nativeCode = error && typeof error === "object" && "code" in error ? error.code : null;
+    if (nativeCode === "APPLE_STOREFRONT_UNAVAILABLE") return t("storefrontUnavailable");
+    if (nativeCode === "APPLE_STOREFRONT_CHANGED") return t("storefrontChanged");
+    if (nativeCode === "APPLE_PRICE_CHANGED") return t("priceChanged");
     const key =
       error &&
       typeof error === "object" &&
@@ -195,7 +274,10 @@ export function ApplePayments({
   };
   const refresh = async () => {
     await catalog.refetch();
-    if (needsQuote && selected?.available && catalog.data?.ready) await preview.refetch();
+    if (temporaryChange) {
+      await temporaryCatalog.refetch();
+      if (supportedMarket && temporaryCatalog.data?.ready) await temporaryPreview.refetch();
+    } else if (needsQuote && selected?.available && catalog.data?.ready) await preview.refetch();
     onUpdated();
   };
   const run = async (operation: () => Promise<void>) => {
@@ -214,8 +296,15 @@ export function ApplePayments({
   };
   const buy = () =>
     run(async () => {
+      const offerKey = temporaryChange ? temporaryQuote?.offerKey : selected?.offerKey;
+      if (temporaryChange && temporaryQuote && new Date(temporaryQuote.timing.validUntil).getTime() <= Date.now()) {
+        setQuoteExpired(true); setAccepted(false); setConsentOpen(false); setNotice(t("temporaryQuoteExpired")); return;
+      }
       if (
-        !selected?.available ||
+        !offerKey ||
+        (temporaryChange ? !temporaryQuote || !temporaryCatalog.data?.ready || quoteExpired || temporaryPreview.isFetching || temporaryPreview.isError ||
+          !temporaryProductMatches || !temporarySelectionMatches
+          : !selected?.available) ||
         !product ||
         !accepted ||
         consentKey.current !== selectionKey ||
@@ -224,15 +313,24 @@ export function ApplePayments({
         return;
       requestKey.current ??= { selection: selectionKey, key: crypto.randomUUID() };
       const authorization = await intent.mutateAsync({
-        offerKey: selected.offerKey,
+        offerKey,
         action,
         idempotencyKey: requestKey.current.key,
         expectedOrganizationId: catalog.data.organization.id,
         termsVersion: catalog.data.termsVersion,
-        ...(needsQuote && preview.data?.quoteToken ? { quoteToken: preview.data.quoteToken } : {}),
+        ...(temporaryChange && temporaryQuote ? { quoteToken: temporaryQuote.quoteToken }
+          : needsQuote && preview.data?.quoteToken ? { quoteToken: preview.data.quoteToken } : {}),
         acceptedTerms: true,
         storeId,
       });
+      if (temporaryChange && authorization.productId !== product.id) {
+        // This fresh intent has not been handed to native. The server's soft
+        // cancellation still refuses any already-authorized winning attempt.
+        try { await cancel.mutateAsync({ intentId: authorization.intentId }); } catch { /* Reconciliation remains server-owned. */ }
+        requestKey.current = null;
+        await refresh();
+        throw new Error("appleTemporaryUpgradePriceChanged");
+      }
       let result;
       try { result = await purchaseAppleProduct(authorization.intentId); }
       catch (error) {
@@ -260,15 +358,26 @@ export function ApplePayments({
       } else if (result.status === "pending") {
         setNotice(t("pending"));
       } else {
-        const saved = await confirm.mutateAsync({
-          signedTransactionInfo: result.transaction.signedTransactionInfo,
-          intentId: authorization.intentId,
-        });
+        let saved;
+        try {
+          saved = await confirm.mutateAsync({
+            signedTransactionInfo: result.transaction.signedTransactionInfo,
+            intentId: authorization.intentId,
+          });
+        } catch (error) {
+          if (!temporaryChange) throw error;
+          setNotice(t("temporaryConfirmationPending", { reason: messageFor(error) }));
+          window.dispatchEvent(new Event("bazaar:apple-retry"));
+          // A paid outcome may already be durable despite a lost response. Keep
+          // the same intent key and let signed-receipt recovery decide access.
+          try { await refresh(); } catch { /* The recovery notice remains visible offline. */ }
+          return;
+        }
         requestKey.current = null;
         setNotice(
           t(
             saved.status === "GRANTED"
-              ? "confirmed"
+              ? temporaryChange ? "temporaryRecorded" : "confirmed"
               : saved.status === "REVOKED"
                 ? "revoked"
                 : "review",
@@ -279,7 +388,7 @@ export function ApplePayments({
         await refresh();
         try { await finishAppleTransaction(result.transaction.transactionId); }
         catch {
-          if (saved.status === "GRANTED") setNotice(t("confirmedRecoveryPending"));
+          if (saved.status === "GRANTED") setNotice(t(temporaryChange ? "temporaryRecoveryPending" : "confirmedRecoveryPending"));
           window.dispatchEvent(new Event("bazaar:apple-retry"));
         }
         return;
@@ -323,7 +432,7 @@ export function ApplePayments({
       : undefined,
   );
   const period = product?.subscriptionPeriod;
-  const productMatches = Boolean(
+  const productMatches = temporaryChange ? temporaryProductMatches : Boolean(
     product &&
     selected?.productType === product.type &&
     (product.type !== "AUTO_RENEWABLE" ||
@@ -331,13 +440,17 @@ export function ApplePayments({
         ((period.unit === "month" && period.value === months) ||
           (period.unit === "year" && period.value * 12 === months)))),
   );
-  const actionAllowed = selected?.availableActions.includes(action) ?? false;
+  const actionAllowed = temporaryChange ? Boolean(temporaryCatalog.data?.ready) : selected?.availableActions.includes(action) ?? false;
+  const visibleEntitlements = temporaryChange ? temporaryQuote?.target.entitlements
+    : selected?.kind === "SUBSCRIPTION" ? selected.entitlements : undefined;
   const blocked =
     !nativeReady ||
-    !catalog.data?.ready ||
-    !selected?.available ||
+    !(temporaryChange ? temporaryCatalog.data?.ready : catalog.data?.ready) ||
+    !(temporaryChange ? temporaryQuote : selected?.available) ||
     !actionAllowed ||
+    (temporaryChange && catalog.data?.pendingIntent?.scope === "SUBSCRIPTION") ||
     (needsQuote && (!preview.data?.quoteToken || preview.isFetching || preview.isError)) ||
+    (temporaryChange && (!temporaryQuote || !temporarySelectionMatches || temporaryPreview.isFetching || temporaryPreview.isError || quoteExpired || storefrontBusy || storefrontIssue)) ||
     !productMatches ||
     productsBusy ||
     busy ||
@@ -420,7 +533,8 @@ export function ApplePayments({
                 ) : null}
               </div>
             ) : null}
-            {!nativeReady || !catalog.data.ready ? (
+            {kind === "SUBSCRIPTION" ? <AppleTemporaryUpgradeHistory upgrades={catalog.data.temporaryUpgrades ?? []} /> : null}
+            {!nativeReady || !(temporaryChange ? temporaryCatalog.data?.ready : catalog.data.ready) ? (
               <p role="status" className="rounded-md bg-muted p-3 text-sm">
                 {t("unavailable")}
               </p>
@@ -442,8 +556,7 @@ export function ApplePayments({
                     const next = value as PlanCode;
                     setPlan(next);
                     onPlanSelected?.(next);
-                    setStores(0);
-                    setReserve(0);
+                    if (!temporaryChange) { setStores(0); setReserve(0); }
                   }}
                   options={PLAN_CODES.map((code) => ({
                     value: code,
@@ -451,7 +564,7 @@ export function ApplePayments({
                   }))}
                   disabled={busy}
                 />
-                <AppleChoice
+                {!temporaryChange ? <AppleChoice
                   label={t("months")}
                   value={String(months)}
                   onChange={(value) => setMonths(Number(value))}
@@ -460,7 +573,7 @@ export function ApplePayments({
                     label: t("monthCount", { count: value }),
                   }))}
                   disabled={busy}
-                />
+                /> : null}
                 <AppleChoice
                   label={t("additionalStores")}
                   value={String(stores)}
@@ -484,10 +597,10 @@ export function ApplePayments({
                 <AppleChoice
                   label={t("action")}
                   value={action}
-                  onChange={(value) => setAction(value as "RENEW" | "CHANGE")}
+                  onChange={(value) => { actionSelected.current = true; setAction(value as "RENEW" | "CHANGE"); }}
                   options={[
                     { value: "RENEW", label: t("renew") },
-                    { value: "CHANGE", label: t("change") },
+                    { value: "CHANGE", label: t(managedApple ? "change" : "temporaryChange") },
                   ]}
                   disabled={busy}
                 />
@@ -511,7 +624,7 @@ export function ApplePayments({
               />
             )}
             <div className="space-y-2 rounded-md bg-muted/50 p-4" data-apple-price>
-              {productsBusy ? (
+              {productsBusy || (temporaryChange && (temporaryCatalog.isLoading || storefrontBusy || temporaryPreview.isFetching)) ? (
                 <p role="status">{common("loading")}</p>
               ) : product ? (
                 <>
@@ -519,7 +632,7 @@ export function ApplePayments({
                   <p className="text-xl font-semibold tabular-nums">{product.displayPrice}</p>
                   <p className="text-sm text-muted-foreground">{product.description}</p>
                   <p className="text-sm">
-                    {t(
+                    {temporaryChange ? t("temporaryTerms") : t(
                       product.type === "AUTO_RENEWABLE"
                         ? "recurringTerms"
                         : kind === "WHATSAPP_PACK"
@@ -532,19 +645,19 @@ export function ApplePayments({
               ) : (
                 <p className="text-sm text-muted-foreground">{t("priceUnavailable")}</p>
               )}
-              {selected?.kind === "SUBSCRIPTION" && selected.entitlements ? (
+              {visibleEntitlements ? (
                 <p className="text-sm" data-apple-limits>
                   {t("limits", {
-                    stores: selected.entitlements.limits.maxStores,
-                    products: selected.entitlements.limits.maxProducts,
-                    users: selected.entitlements.limits.maxActiveUsers,
+                    stores: visibleEntitlements.limits.maxStores,
+                    products: visibleEntitlements.limits.maxProducts,
+                    users: visibleEntitlements.limits.maxActiveUsers,
                   })}
                 </p>
               ) : null}
-              {selected?.unavailableReason && errors.has(selected.unavailableReason) ? (
+              {!temporaryChange && selected?.unavailableReason && errors.has(selected.unavailableReason) ? (
                 <p className="text-sm">{errors(selected.unavailableReason)}</p>
               ) : null}
-              {!actionAllowed &&
+              {!temporaryChange && !actionAllowed &&
               selected &&
               (action === "CHANGE"
                 ? selected.changeUnavailableReason
@@ -564,7 +677,7 @@ export function ApplePayments({
                   {t("productMismatch")}
                 </p>
               ) : null}
-              {action === "CHANGE" && kind === "SUBSCRIPTION" ? (
+              {action === "CHANGE" && kind === "SUBSCRIPTION" && !temporaryChange ? (
                 <p className="text-sm">{t("changeTiming")}</p>
               ) : null}
               {needsQuote && preview.data?.timing ? (
@@ -577,6 +690,21 @@ export function ApplePayments({
               ) : null}
               {needsQuote && preview.isError ? (
                 <QueryErrorState error={preview.error} onRetry={() => void preview.refetch()} />
+              ) : null}
+              {temporaryChange ? (
+                <div className="space-y-2" data-apple-temporary-checkout>
+                  {temporaryQuote ? <AppleTemporaryUpgradeDetails quote={temporaryQuote} /> : null}
+                  {temporaryCatalog.isError ? <QueryErrorState error={temporaryCatalog.error} onRetry={() => void temporaryCatalog.refetch()} /> : null}
+                  {temporaryCatalog.data && !temporaryCatalog.data.ready ? (
+                    <p role="status">{messageFor(new Error(temporaryCatalog.data.unavailableReason ?? "appleTemporaryUpgradePolicyUnavailable"))}</p>
+                  ) : null}
+                  {storefrontIssue ? <p role="status">{t("storefrontUnavailable")}</p> : null}
+                  {temporaryCatalog.data?.ready && storefront && !productsBusy && !storefrontBusy && !supportedMarket ? (
+                    <p role="status">{t("temporaryMarketUnavailable")}</p>
+                  ) : null}
+                  {temporaryPreview.isError ? <QueryErrorState error={temporaryPreview.error} onRetry={() => void temporaryPreview.refetch()} /> : null}
+                  {quoteExpired ? <p role="status">{t("temporaryQuoteExpired")}</p> : null}
+                </div>
               ) : null}
             </div>
             <Button
@@ -722,8 +850,9 @@ export function ApplePayments({
                 })}
               </p>
             ) : null}
+            {temporaryQuote ? <AppleTemporaryUpgradeDetails quote={temporaryQuote} /> : null}
             <p className="text-sm">
-              {t(
+              {temporaryChange ? t("temporaryTerms") : t(
                 product?.type === "AUTO_RENEWABLE"
                   ? "recurringTerms"
                   : kind === "WHATSAPP_PACK"

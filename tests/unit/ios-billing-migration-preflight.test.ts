@@ -79,6 +79,14 @@ describe("explicit read-only iOS migration preflight", () => {
     expect(parsePreflightReport(report({ checks: [{ name: "query_failed", severity: "blocker", count: null, skipped: false, errorCode: "22003" }] })).ok).toBe(false);
   });
 
+  it("recognizes the named temporary-upgrade stage while retaining older staged audits", () => {
+    const parsed = parsePreflightTarget([...args, "--expect-stage", "POST_TEMPORARY_UPGRADES"], { EXPLICIT_AUDIT_URL: url });
+    expect(parsed.expectedStage).toBe("POST_TEMPORARY_UPGRADES");
+    expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_UPGRADES" }), parsed.expectedStage)).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_UPGRADES" });
+    expect(parsePreflightReport(report(), "POST_NATIVE_ATTEMPT").ok).toBe(true);
+    expect(parsePreflightReport(report(), parsed.expectedStage).ok).toBe(false);
+  });
+
   it("emits only approved report fields and rejects malformed counts or row-shaped output", () => {
     const parsed = parsePreflightReport(report({ extraCustomerData: "person@example.com", checks: [
       { name: "source_binding_invalid", severity: "blocker", count: 0, skipped: false, customerEmail: "person@example.com" },

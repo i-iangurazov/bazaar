@@ -115,6 +115,12 @@ describe("confirmed paid MRR from current verified contracts", () => {
     expect(summarizeConfirmedPaidMrr([org(), org("other-paid-org"), org("refunded-org")],
       [period(), apple, independent, bankRefund], now)).toEqual({ organizationsPaid: 1, confirmedPaidMrrKgs: 4250 });
   });
+  it("does not count a dependent Apple temporary target or its source credit as newly paid KGS revenue", () => {
+    const temporary = { ...period("temporary-target"), startsAt: new Date("2027-06-15T00:00:00Z"), invoice: null };
+    Object.assign(temporary.purchaseSnapshot as object, { kind: "UPGRADE", sourcePeriodId: "period-1", serviceValueMinor: 200000,
+      creditMinor: 150000, amountMinor: 50000, monthlyMinor: 900000 });
+    expect(summarizeConfirmedPaidMrr([org()], [period(), temporary], now)).toEqual({ organizationsPaid: 0, confirmedPaidMrrKgs: 0 });
+  });
   it.each([
     { status: "REVIEW" },
     { status: "RESOLVED" },

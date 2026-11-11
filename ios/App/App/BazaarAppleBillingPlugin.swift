@@ -34,17 +34,19 @@ private final class AppleBillingHTTPDelegate: NSObject, URLSessionTaskDelegate, 
 private struct ApplePurchaseAuthorization: Decodable {
     let intentId: String
     let productId: String
+    let productType: String?
     let appAccountToken: UUID
     let expiresAt: String
     let environment: String
     let attemptId: UUID?
+    let priceConstraint: BazaarApplePriceConstraint?
 
     func isValid(for intentId: String) -> Bool {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let date = formatter.date(from: expiresAt) ?? ISO8601DateFormatter().date(from: expiresAt)
         return self.intentId == intentId && !productId.isEmpty && productId.utf8.count <= 255 &&
-            (date.map { $0 > Date() } ?? false)
+            (date.map { $0 > Date() } ?? false) && (priceConstraint?.isValid ?? true)
     }
 }
 
@@ -54,6 +56,7 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "BazaarAppleBilling"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "getProducts", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getStorefront", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "purchase", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "retryCancellations", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getUnfinishedTransactions", returnType: CAPPluginReturnPromise),
@@ -99,12 +102,24 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                 throw AppleBillingFailure(code: "APPLE_INVALID_ARGUMENT")
             }
             let requested = Array(Set(ids)).sorted()
+            let before = await Storefront.current
             let products = try await Product.products(for: requested)
+            let after = await Storefront.current
+            let storefrontId = before?.id == after?.id ? after?.id : nil
             let returned = Set(products.map(\.id))
             return [
-                "products": try products.sorted { $0.id < $1.id }.map(self.productData),
+                "products": try products.sorted { $0.id < $1.id }.map { try self.productData($0, storefrontId: storefrontId) },
                 "missingProductIds": requested.filter { !returned.contains($0) },
             ]
+        }
+    }
+
+    @objc public func getStorefront(_ call: CAPPluginCall) {
+        run(call) {
+            guard let storefront = await Storefront.current else {
+                throw AppleBillingFailure(code: "APPLE_STOREFRONT_UNAVAILABLE")
+            }
+            return ["id": storefront.id, "countryCode": storefront.countryCode]
         }
     }
 
@@ -125,14 +140,27 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
             guard let product = try await Product.products(for: [authorization.productId]).first else {
                 throw AppleBillingFailure(code: "APPLE_PRODUCT_UNAVAILABLE")
             }
+            if let expectedType = authorization.productType, try self.productType(product.type) != expectedType {
+                throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
+            }
             try await self.requireSubscriptionAccountOwnership(product, token: authorization.appAccountToken)
             let attemptId = UUID()
             return try await BazaarApplePreSheetAttempt.perform(
-                authorize: { try await self.authorize(intentId, attemptId: attemptId) },
+                authorize: {
+                    // Check actual StoreKit metadata before consuming the one-use
+                    // authorization. No C constraint is taken from JavaScript.
+                    _ = try await self.productMatchingPrice(product, constraint: authorization.priceConstraint)
+                    return try await self.authorize(intentId, attemptId: attemptId)
+                },
                 prepare: { current in
                     guard current.productId == authorization.productId,
-                          current.appAccountToken == authorization.appAccountToken else {
+                          current.appAccountToken == authorization.appAccountToken,
+                          current.priceConstraint == authorization.priceConstraint else {
                         throw AppleBillingFailure(code: "APPLE_AUTHORIZATION_CHANGED")
+                    }
+                    let purchaseProduct = try await self.productMatchingPrice(product, constraint: current.priceConstraint)
+                    if let expectedType = current.productType, try self.productType(purchaseProduct.type) != expectedType {
+                        throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
                     }
                     // Auth HTTP may finish after backgrounding or navigation.
                     // Keep the original origin for a caught no-SDK abort proof.
@@ -140,20 +168,24 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
                         throw AppleBillingFailure(code: "APPLE_UNTRUSTED_ORIGIN")
                     }
                     let scene = try self.foregroundScene()
-                    let options: Set<Product.PurchaseOption> = [.appAccountToken(current.appAccountToken)]
-                    return (scene, options)
+                    var options: Set<Product.PurchaseOption> = [.appAccountToken(current.appAccountToken)]
+                    if let constraint = current.priceConstraint {
+                        let authorizedStorefront = constraint.storefrontId
+                        options.insert(.onStorefrontChange { $0.id == authorizedStorefront })
+                    }
+                    return (purchaseProduct, scene, options)
                 },
                 invoke: { prepared in
                     // No await or fallible preflight separates this boundary
                     // from the SDK call. Every unknown error from here is paid-
                     // outcome recovery, never a caught pre-sheet cancellation.
-                    let (scene, options) = prepared
+                    let (purchaseProduct, scene, options) = prepared
                     let result: Product.PurchaseResult
                     do {
                         if #available(iOS 17.0, *) {
-                            result = try await product.purchase(confirmIn: scene, options: options)
+                            result = try await purchaseProduct.purchase(confirmIn: scene, options: options)
                         } else {
-                            result = try await product.purchase(options: options)
+                            result = try await purchaseProduct.purchase(options: options)
                         }
                     } catch StoreKitError.userCancelled {
                         return try await self.terminalCancellation(intentId, origin: purchaseOrigin, attemptId: attemptId)
@@ -344,6 +376,25 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         return scene
     }
 
+    @MainActor private func productMatchingPrice(_ original: Product, constraint: BazaarApplePriceConstraint?) async throws -> Product {
+        guard let constraint else { return original }
+        let before = await Storefront.current
+        guard let product = try await Product.products(for: [original.id]).first else {
+            throw AppleBillingFailure(code: "APPLE_PRODUCT_UNAVAILABLE")
+        }
+        guard product.type == .nonRenewable else { throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED") }
+        let after = await Storefront.current
+        guard let before, let after else { throw AppleBillingFailure(code: "APPLE_STOREFRONT_UNAVAILABLE") }
+        guard before.id == after.id, after.id == constraint.storefrontId else {
+            throw AppleBillingFailure(code: "APPLE_STOREFRONT_CHANGED")
+        }
+        guard BazaarApplePricePolicy.permits(constraint, storefrontId: after.id,
+            currency: product.priceFormatStyle.currencyCode, price: product.price) else {
+            throw AppleBillingFailure(code: "APPLE_PRICE_CHANGED")
+        }
+        return product
+    }
+
     private func transactionId(_ call: CAPPluginCall) throws -> UInt64 {
         guard let raw = call.getString("transactionId"), !raw.isEmpty, raw.utf8.count <= 20,
               raw.allSatisfy({ $0.isASCII && $0.isNumber }), let id = UInt64(raw), id > 0 else {
@@ -512,7 +563,7 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         return data
     }
 
-    private func productData(_ product: Product) throws -> [String: Any] {
+    private func productData(_ product: Product, storefrontId: String?) throws -> [String: Any] {
         var data: [String: Any] = [
             "id": product.id,
             "displayName": product.displayName,
@@ -523,6 +574,8 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
             "currencyCode": product.priceFormatStyle.currencyCode,
             "type": try productType(product.type),
         ]
+        if let millis = BazaarApplePricePolicy.priceMillis(product.price) { data["priceMillis"] = millis }
+        if let storefrontId { data["storefrontId"] = storefrontId }
         if let subscription = product.subscription {
             let period = subscription.subscriptionPeriod
             let unit: String

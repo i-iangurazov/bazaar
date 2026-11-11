@@ -151,14 +151,14 @@ final class BazaarAppleCancellationJournal {
 enum BazaarApplePreSheetAttempt {
     @MainActor static func perform<Authorization, Prepared, Result>(
         authorize: @MainActor () async throws -> Authorization,
-        prepare: @MainActor (Authorization) throws -> Prepared,
+        prepare: @MainActor (Authorization) async throws -> Prepared,
         invoke: @MainActor (Prepared) async throws -> Result,
         abort: @MainActor (Error) async throws -> Result
     ) async throws -> Result {
         let prepared: Prepared
         do {
             let authorization = try await authorize()
-            prepared = try prepare(authorization)
+            prepared = try await prepare(authorization)
         } catch {
             return try await abort(error)
         }

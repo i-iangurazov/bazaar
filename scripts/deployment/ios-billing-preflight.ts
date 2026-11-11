@@ -9,6 +9,7 @@ export const IOS_BILLING_MIGRATIONS = {
   "20261111120000_ios_apple_billing_privacy": "734e62c89a76aaedb153eb0b8029021f7713074b4526ca5501dac9abd41e2f38",
   "20261111130000_apple_lifecycle_recovery": "4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10",
   "20261111140000_apple_native_attempt_recovery": "1b3d22538c669d7f940e45dc14127842c25fe14accbe753c8a2b7e3efed32d0b",
+  "20261111150000_apple_temporary_upgrades": "a13faf83ce11ad2c39480fbce1791299b82fd4fa58971bf3548f905c629a714f",
 } as const;
 export const IOS_BILLING_MIGRATION_PREREQUISITES = {
   "20261111020000_manual_subscription_refunds": "800cd487fb2d4b0ecd5501e5edc7182c4a06b851f68b0b02c18e40d795370b87",
@@ -28,7 +29,7 @@ export type PreflightOptions = { target: PreflightTarget; psql: string; expected
 export type PreflightCheck = { name: string; severity: "blocker" | "warning" | "info"; count: number | null; skipped: boolean; errorCode?: string };
 export type PreflightReport = {
   reportVersion: 1; transactionReadOnly: true;
-  schemaStage: "PRE_APPLE" | "POST_PRIVACY" | "POST_LIFECYCLE" | "POST_NATIVE_ATTEMPT" | "PARTIAL" | "UNBASELINED";
+  schemaStage: "PRE_APPLE" | "POST_PRIVACY" | "POST_LIFECYCLE" | "POST_NATIVE_ATTEMPT" | "POST_TEMPORARY_UPGRADES" | "PARTIAL" | "UNBASELINED";
   checks: PreflightCheck[]; blockerChecks: number; warningChecks: number; skippedChecks: number; ok: boolean;
 };
 
@@ -65,7 +66,7 @@ export function parsePreflightTarget(args: string[], env: Record<string, string 
     const channelBinding = url.searchParams.get("channel_binding") || "prefer";
     if (!["disable", "prefer", "require"].includes(channelBinding)) throw new PreflightError("PREFLIGHT_TARGET_OPTIONS_UNSUPPORTED");
     const expectedStage = values.get("--expect-stage");
-    if (expectedStage && !["PRE_APPLE", "POST_PRIVACY", "POST_LIFECYCLE", "POST_NATIVE_ATTEMPT"].includes(expectedStage)) throw new PreflightError("PREFLIGHT_STAGE_INVALID");
+    if (expectedStage && !["PRE_APPLE", "POST_PRIVACY", "POST_LIFECYCLE", "POST_NATIVE_ATTEMPT", "POST_TEMPORARY_UPGRADES"].includes(expectedStage)) throw new PreflightError("PREFLIGHT_STAGE_INVALID");
     return { target: { host, port, database, user, password: decodeURIComponent(url.password), sslmode, channelBinding },
       psql: values.get("--psql") || "psql", ...(expectedStage ? { expectedStage } : {}) };
   } catch (error) {
@@ -102,7 +103,7 @@ export function parsePreflightReport(stdout: string, expectedStage?: string): Pr
   try {
     const input = JSON.parse(stdout.trim()) as PreflightReport;
     if (!input || input.reportVersion !== 1 || input.transactionReadOnly !== true || !Array.isArray(input.checks) || input.checks.length < 1 || input.checks.length > 100 ||
-      !["PRE_APPLE", "POST_PRIVACY", "POST_LIFECYCLE", "POST_NATIVE_ATTEMPT", "PARTIAL", "UNBASELINED"].includes(input.schemaStage) ||
+      !["PRE_APPLE", "POST_PRIVACY", "POST_LIFECYCLE", "POST_NATIVE_ATTEMPT", "POST_TEMPORARY_UPGRADES", "PARTIAL", "UNBASELINED"].includes(input.schemaStage) ||
       input.checks.some((c) => !c || !/^[a-z][a-z0-9_]{1,100}$/.test(c.name) || !["blocker", "warning", "info"].includes(c.severity) ||
         typeof c.skipped !== "boolean" || (c.count !== null && (!Number.isSafeInteger(c.count) || c.count < 0)) ||
         (c.errorCode !== undefined && !/^[0-9A-Z]{5}$/.test(c.errorCode))))

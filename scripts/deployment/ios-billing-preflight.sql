@@ -10,9 +10,9 @@ DO $audit$
 DECLARE
   checks JSONB := '[]'::jsonb; spec JSONB; requirement JSONB; parts TEXT[];
   missing BOOLEAN; affected BIGINT; state TEXT; stage TEXT; report JSONB;
-  base_missing INTEGER := 0; privacy_present INTEGER := 0; lifecycle_present INTEGER := 0; attempt_present INTEGER := 0;
+  base_missing INTEGER := 0; privacy_present INTEGER := 0; lifecycle_present INTEGER := 0; attempt_present INTEGER := 0; temporary_present INTEGER := 0;
   privacy_expected INTEGER := 14; lifecycle_expected INTEGER := 3;
-  privacy_applied BIGINT := 0; lifecycle_applied BIGINT := 0; attempt_applied BIGINT := 0; prerequisite_applied BIGINT := 0;
+  privacy_applied BIGINT := 0; lifecycle_applied BIGINT := 0; attempt_applied BIGINT := 0; temporary_applied BIGINT := 0; prerequisite_applied BIGINT := 0;
   unfinished BIGINT := 0; bad_checksum BIGINT := 0;
   structural_issues INTEGER := 0; relation_name TEXT; column_name TEXT;
 BEGIN
@@ -34,33 +34,42 @@ BEGIN
     END LOOP;
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public."ApplePurchaseIntent"') AND attname='nativeAttemptId' AND NOT attisdropped) THEN attempt_present := 1; END IF;
+  FOR spec IN SELECT value FROM jsonb_array_elements('[{"table":"ApplePurchaseIntent","columns":["purchaseAppAccountToken"]},{"table":"AppleTransaction","columns":["storefrontId"]},{"table":"SubscriptionPeriod","columns":["parentPeriodId","dependencyRevokedAt"]}]'::jsonb) LOOP
+    FOR column_name IN SELECT jsonb_array_elements_text(spec->'columns') LOOP
+      IF EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass(format('public.%I',spec->>'table')) AND attname=column_name AND NOT attisdropped) THEN temporary_present := temporary_present + 1; END IF;
+    END LOOP;
+  END LOOP;
   stage := CASE WHEN base_missing>0 THEN 'UNBASELINED'
-    WHEN privacy_present=0 AND lifecycle_present=0 AND attempt_present=0 THEN 'PRE_APPLE'
-    WHEN privacy_present=privacy_expected AND lifecycle_present=0 AND attempt_present=0 THEN 'POST_PRIVACY'
-    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=0 THEN 'POST_LIFECYCLE'
-    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 THEN 'POST_NATIVE_ATTEMPT'
+    WHEN privacy_present=0 AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 THEN 'PRE_APPLE'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 THEN 'POST_PRIVACY'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=0 AND temporary_present=0 THEN 'POST_LIFECYCLE'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 AND temporary_present=0 THEN 'POST_NATIVE_ATTEMPT'
+    WHEN privacy_present=privacy_expected AND lifecycle_present=lifecycle_expected AND attempt_present=1 AND temporary_present=4 THEN 'POST_TEMPORARY_UPGRADES'
     ELSE 'PARTIAL' END;
   checks := checks || jsonb_build_array(jsonb_build_object('name','baseline_required_tables_missing','severity','blocker','count',base_missing,'skipped',false));
   IF to_regclass('public._prisma_migrations') IS NOT NULL THEN
     EXECUTE $history$SELECT count(*) FILTER(WHERE migration_name='20261111120000_ios_apple_billing_privacy' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111130000_apple_lifecycle_recovery' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111140000_apple_native_attempt_recovery' AND finished_at IS NOT NULL),
+      count(*) FILTER(WHERE migration_name='20261111150000_apple_temporary_upgrades' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111020000_manual_subscription_refunds' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE finished_at IS NULL),
       count(*) FILTER(WHERE finished_at IS NOT NULL AND (
         (migration_name='20261111120000_ios_apple_billing_privacy' AND checksum<>'734e62c89a76aaedb153eb0b8029021f7713074b4526ca5501dac9abd41e2f38') OR
         (migration_name='20261111130000_apple_lifecycle_recovery' AND checksum<>'4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10') OR
         (migration_name='20261111140000_apple_native_attempt_recovery' AND checksum<>'1b3d22538c669d7f940e45dc14127842c25fe14accbe753c8a2b7e3efed32d0b') OR
+        (migration_name='20261111150000_apple_temporary_upgrades' AND checksum<>'a13faf83ce11ad2c39480fbce1791299b82fd4fa58971bf3548f905c629a714f') OR
         (migration_name='20261111020000_manual_subscription_refunds' AND checksum<>'800cd487fb2d4b0ecd5501e5edc7182c4a06b851f68b0b02c18e40d795370b87')))
-      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,prerequisite_applied,unfinished,bad_checksum;
+      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,temporary_applied,prerequisite_applied,unfinished,bad_checksum;
   ELSE structural_issues := structural_issues + 1;
   END IF;
-  IF privacy_applied>1 OR lifecycle_applied>1 OR attempt_applied>1 OR (lifecycle_applied>0 AND privacy_applied=0) OR (attempt_applied>0 AND lifecycle_applied=0) THEN structural_issues := structural_issues + 1; END IF;
+  IF privacy_applied>1 OR lifecycle_applied>1 OR attempt_applied>1 OR temporary_applied>1 OR (lifecycle_applied>0 AND privacy_applied=0) OR (attempt_applied>0 AND lifecycle_applied=0) OR (temporary_applied>0 AND attempt_applied=0) THEN structural_issues := structural_issues + 1; END IF;
   IF (privacy_applied=0 AND privacy_present>0) OR (privacy_applied>0 AND privacy_present<>privacy_expected) OR
      (lifecycle_applied=0 AND lifecycle_present>0) OR (lifecycle_applied>0 AND lifecycle_present<>lifecycle_expected) OR
-     (attempt_applied=0 AND attempt_present>0) OR (attempt_applied>0 AND attempt_present<>1) OR stage='PARTIAL' THEN structural_issues := structural_issues + 1; END IF;
+     (attempt_applied=0 AND attempt_present>0) OR (attempt_applied>0 AND attempt_present<>1) OR
+     (temporary_applied=0 AND temporary_present>0) OR (temporary_applied>0 AND temporary_present<>4) OR stage='PARTIAL' THEN structural_issues := structural_issues + 1; END IF;
   checks := checks || jsonb_build_array(
-    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied,'skipped',false),
+    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied+temporary_applied,'skipped',false),
     jsonb_build_object('name','manual_refund_prerequisite_missing','severity','blocker','count',CASE WHEN prerequisite_applied=1 THEN 0 ELSE 1 END,'skipped',false),
     jsonb_build_object('name','unfinished_migrations','severity','blocker','count',unfinished,'skipped',false),
     jsonb_build_object('name','reviewed_migration_checksum_mismatches','severity','blocker','count',bad_checksum,'skipped',false),
@@ -308,7 +317,7 @@ BEGIN
       "AppleTransaction",
       "AppleBillingAccount"
     ],
-    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" t LEFT JOIN public.\"AppleBillingAccount\" a ON a.\"organizationId\"=t.\"organizationId\" WHERE a.\"organizationId\" IS NULL OR t.\"appAccountToken\" IS DISTINCT FROM a.\"appAccountToken\""
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" t LEFT JOIN public.\"AppleBillingAccount\" a ON a.\"organizationId\"=t.\"organizationId\" WHERE a.\"organizationId\" IS NULL OR (t.\"appAccountToken\" IS DISTINCT FROM a.\"appAccountToken\" AND NOT EXISTS(SELECT 1 FROM public.\"ApplePurchaseIntent\" i WHERE i.\"organizationId\"=t.\"organizationId\" AND (to_jsonb(i)->>'purchaseAppAccountToken')::uuid=t.\"appAccountToken\" AND (i.id=t.\"intentId\" OR (t.\"intentId\" IS NULL AND t.status='REVIEW'))))"
   },
   {
     "name": "apple_transaction_intent_binding_invalid",
@@ -317,7 +326,7 @@ BEGIN
       "AppleTransaction",
       "ApplePurchaseIntent"
     ],
-    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" t LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE t.\"intentId\" IS NOT NULL AND (i.id IS NULL OR i.\"organizationId\" IS DISTINCT FROM t.\"organizationId\" OR i.\"appAccountToken\" IS DISTINCT FROM t.\"appAccountToken\" OR i.environment IS DISTINCT FROM t.environment OR i.\"productId\" IS DISTINCT FROM t.\"productId\" OR i.\"productType\" IS DISTINCT FROM t.\"productType\" OR i.\"offerSnapshot\" IS DISTINCT FROM t.\"offerSnapshot\")"
+    "sql": "SELECT count(*) FROM public.\"AppleTransaction\" t LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE t.\"intentId\" IS NOT NULL AND (i.id IS NULL OR i.\"organizationId\" IS DISTINCT FROM t.\"organizationId\" OR COALESCE((to_jsonb(i)->>'purchaseAppAccountToken')::uuid,i.\"appAccountToken\") IS DISTINCT FROM t.\"appAccountToken\" OR i.environment IS DISTINCT FROM t.environment OR i.\"productId\" IS DISTINCT FROM t.\"productId\" OR i.\"productType\" IS DISTINCT FROM t.\"productType\" OR i.\"offerSnapshot\" IS DISTINCT FROM t.\"offerSnapshot\")"
   },
   {
     "name": "apple_signed_price_pair_invalid",
@@ -360,7 +369,7 @@ BEGIN
       "ApplePurchaseIntent",
       "SubscriptionPeriod.appleTransactionId"
     ],
-    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE i.id IS NULL OR i.\"authorizedAt\" IS NULL OR i.\"purchaseSnapshot\" IS NULL OR EXISTS(SELECT 1 FROM unnest(ARRAY['plan','months','extras','amountMinor','monthlyMinor','discountBps','fullAmountMinor','serviceValueMinor','creditMinor','catalogVersion','organizationId','entitlements']) AS f(key) WHERE p.\"purchaseSnapshot\"->f.key IS DISTINCT FROM i.\"purchaseSnapshot\"->f.key)"
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE i.id IS NULL OR i.\"authorizedAt\" IS NULL OR i.\"purchaseSnapshot\" IS NULL OR EXISTS(SELECT 1 FROM unnest(ARRAY['plan','months','extras','amountMinor','monthlyMinor','discountBps','fullAmountMinor','serviceValueMinor','creditMinor','catalogVersion','organizationId','entitlements','appleTemporaryUpgrade']) AS f(key) WHERE p.\"purchaseSnapshot\"->f.key IS DISTINCT FROM i.\"purchaseSnapshot\"->f.key)"
   },
   {
     "name": "apple_consumable_lot_binding_invalid",
@@ -421,7 +430,7 @@ BEGIN
     "requires": [
       "AppleTransaction"
     ],
-    "sql": "SELECT count(*) FROM (VALUES ('public.\"protectAppleBillingAccount\"()','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e'),('public.\"protectAppleIntent\"()','a2b71c63f15c7be726f8d3d42090ed56','a2b71c63f15c7be726f8d3d42090ed56','9706a471dcd7db0a400272f56d139950'),('public.\"protectAppleChain\"()','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64'),('public.\"protectAppleTransaction\"()','8d2d58e95e8f7abdf41723580d3d6118','c0d1aa0c2d552bf7d0c6903d10c334df','c0d1aa0c2d552bf7d0c6903d10c334df'),('public.\"protectAppleEvidence\"()','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce'),('public.\"validateSubscriptionPeriodPurchase\"()','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8'),('public.\"protectSubscriptionPeriodSource\"()','249ab5329614e549df495b8b578acbc7','0e25ad94de6eb2476d52c55b771153ce','0e25ad94de6eb2476d52c55b771153ce'),('public.\"protectWhatsAppCreditSource\"()','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb'),('public.\"protectDeletedUserIdentity\"()','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f'),('public.\"enforceSubscriptionCapacity\"()','045d31abb34abb69cd318592e35175c0','da4172d8d0001200163f24d4c34f6146','da4172d8d0001200163f24d4c34f6146'),('public.\"assertSubscriptionFeatureConfiguration\"(text,text)','46750b3c1edc7cd45a8be46629819179','161b96ade46fe7ee1d24f42a5a38c156','161b96ade46fe7ee1d24f42a5a38c156'),('public.\"enforceSubscriptionMarketplaceChannel\"()','f13db24fddd9405aacb634c58a8c7626','80e2425b0b5bf48838d6342e4b54421c','80e2425b0b5bf48838d6342e4b54421c')) AS expected(signature,privacy_digest,lifecycle_digest,native_digest) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR md5(p.prosrc) IS DISTINCT FROM CASE WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"ApplePurchaseIntent\"'::regclass AND attname='nativeAttemptId' AND NOT attisdropped) THEN expected.native_digest WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"AppleTransaction\"'::regclass AND attname='supersededAt' AND NOT attisdropped) THEN expected.lifecycle_digest ELSE expected.privacy_digest END"
+    "sql": "SELECT count(*) FROM (VALUES ('public.\"protectAppleBillingAccount\"()','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e','4904d780da38a5efbff724bb0d32bc4e'),('public.\"protectAppleIntent\"()','a2b71c63f15c7be726f8d3d42090ed56','a2b71c63f15c7be726f8d3d42090ed56','9706a471dcd7db0a400272f56d139950','e5824764ed973923bfa00f5d43161736'),('public.\"protectAppleChain\"()','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64','3634b6c5f2c0955fc580d2ad017d8d64'),('public.\"protectAppleTransaction\"()','8d2d58e95e8f7abdf41723580d3d6118','c0d1aa0c2d552bf7d0c6903d10c334df','c0d1aa0c2d552bf7d0c6903d10c334df','d5b8ad3944dd390d2bca199c1e5bf5fc'),('public.\"protectAppleEvidence\"()','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce','d3d80c29afbef01e6bbebf0adac8fdce'),('public.\"validateSubscriptionPeriodPurchase\"()','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8','4516cb685f2d33cd0b58ff1e9f4d6df8','bc99297825556f5315154b239f4e16e6'),('public.\"protectSubscriptionPeriodSource\"()','249ab5329614e549df495b8b578acbc7','0e25ad94de6eb2476d52c55b771153ce','0e25ad94de6eb2476d52c55b771153ce','5aaa87a5f4c5a789d5dbe6707e453ad5'),('public.\"protectWhatsAppCreditSource\"()','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb','3bf9077d0608e9b09ed4043935a1a6fb'),('public.\"protectDeletedUserIdentity\"()','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f','33f7de835b228f8414800d6633cf803f'),('public.\"enforceSubscriptionCapacity\"()','045d31abb34abb69cd318592e35175c0','da4172d8d0001200163f24d4c34f6146','da4172d8d0001200163f24d4c34f6146','f3ec3ba91a1136ab203b6640574a5c3b'),('public.\"assertSubscriptionFeatureConfiguration\"(text,text)','46750b3c1edc7cd45a8be46629819179','161b96ade46fe7ee1d24f42a5a38c156','161b96ade46fe7ee1d24f42a5a38c156','f8c3a43fc0e4bc603c127918a1dd3848'),('public.\"enforceSubscriptionMarketplaceChannel\"()','f13db24fddd9405aacb634c58a8c7626','80e2425b0b5bf48838d6342e4b54421c','80e2425b0b5bf48838d6342e4b54421c','1abf4c09fd923d2bfecefe1e8cad9e18')) AS expected(signature,privacy_digest,lifecycle_digest,native_digest,temporary_digest) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR md5(p.prosrc) IS DISTINCT FROM CASE WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"SubscriptionPeriod\"'::regclass AND attname='parentPeriodId' AND NOT attisdropped) THEN expected.temporary_digest WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"ApplePurchaseIntent\"'::regclass AND attname='nativeAttemptId' AND NOT attisdropped) THEN expected.native_digest WHEN EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='public.\"AppleTransaction\"'::regclass AND attname='supersededAt' AND NOT attisdropped) THEN expected.lifecycle_digest ELSE expected.privacy_digest END"
   },
   {
     "name": "required_native_attempt_constraint_missing",
@@ -472,6 +481,127 @@ BEGIN
       "SubscriptionInvoice"
     ],
     "sql": "SELECT count(*) FROM (SELECT r.\"invoiceId\" FROM public.\"ManualSubscriptionRefund\" r JOIN public.\"SubscriptionInvoice\" i ON i.id=r.\"invoiceId\" GROUP BY r.\"invoiceId\",i.\"amountMinor\" HAVING sum(r.\"amountMinor\")>i.\"amountMinor\") invalid_totals"
+  },
+  {
+    "name": "temporary_upgrade_constraints_missing_or_unvalidated",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('SubscriptionPeriod_parentPeriodId_organizationId_fkey'),('SubscriptionPeriod_temporary_parent_check')) expected(name) WHERE NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.\"SubscriptionPeriod\"'::regclass AND conname=expected.name AND convalidated)"
+  },
+  {
+    "name": "temporary_upgrade_indexes_missing_or_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('ApplePurchaseIntent','ApplePurchaseIntent_purchaseAppAccountToken_key'),('SubscriptionPeriod','SubscriptionPeriod_id_organizationId_key')) expected(table_name,index_name) WHERE NOT EXISTS(SELECT 1 FROM pg_index i JOIN pg_class r ON r.oid=i.indrelid JOIN pg_class x ON x.oid=i.indexrelid JOIN pg_namespace n ON n.oid=r.relnamespace WHERE n.nspname='public' AND r.relname=expected.table_name AND x.relname=expected.index_name AND i.indisunique AND i.indisvalid AND i.indisready)"
+  },
+  {
+    "name": "temporary_upgrade_triggers_missing_or_disabled",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleBillingAccount','AppleBillingAccount_token_namespace_guard'),('SubscriptionPeriod','SubscriptionPeriod_dependency_refresh')) expected(table_name,trigger_name) WHERE NOT EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname=expected.table_name AND t.tgname=expected.trigger_name AND NOT t.tgisinternal AND t.tgenabled IN ('O','A'))"
+  },
+  {
+    "name": "temporary_upgrade_function_bodies_changed",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('public.\"subscriptionPeriodDependencyInvalidAt\"(text,text)','8d845506ed3c40fd0bcb9b7a3c1d102d'),('public.\"validateAppleAccountTokenNamespace\"()','c19486b4dc1b894beb320004fe0ca287'),('public.\"refreshSubscriptionPeriodDependencies\"()','dc89994b27d1b5a2539e646fd7221fc1')) expected(signature,digest) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR md5(p.prosrc) IS DISTINCT FROM expected.digest"
+  },
+  {
+    "name": "temporary_upgrade_token_namespace_collisions",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"ApplePurchaseIntent\" i JOIN public.\"AppleBillingAccount\" a ON a.\"appAccountToken\"=i.\"purchaseAppAccountToken\""
+  },
+  {
+    "name": "temporary_upgrade_intent_shape_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"ApplePurchaseIntent\" i WHERE ((i.\"purchaseAppAccountToken\" IS NOT NULL) <> COALESCE(jsonb_typeof(i.\"purchaseSnapshot\"->'appleTemporaryUpgrade')='object',false)) OR (i.\"purchaseAppAccountToken\" IS NOT NULL AND (i.scope<>'SUBSCRIPTION' OR i.action<>'CHANGE' OR i.\"productType\"<>'NON_RENEWING' OR i.\"purchaseSnapshot\"->>'kind' IS DISTINCT FROM 'UPGRADE' OR i.\"purchaseSnapshot\"->>'sourcePeriodId' IS NULL))"
+  },
+  {
+    "name": "temporary_upgrade_period_binding_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p LEFT JOIN public.\"SubscriptionPeriod\" b ON b.id=p.\"parentPeriodId\" LEFT JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE p.\"parentPeriodId\" IS NOT NULL AND (b.id IS NULL OR b.\"organizationId\" IS DISTINCT FROM p.\"organizationId\" OR p.id=b.id OR p.\"invoiceId\" IS NOT NULL OR t.\"productType\" IS DISTINCT FROM 'NON_RENEWING' OR i.\"purchaseAppAccountToken\" IS NULL OR t.\"appAccountToken\" IS DISTINCT FROM i.\"purchaseAppAccountToken\" OR p.\"purchaseSnapshot\"->>'kind' IS DISTINCT FROM 'UPGRADE' OR p.\"purchaseSnapshot\"->>'sourcePeriodId' IS DISTINCT FROM b.id OR p.\"startsAt\"<b.\"startsAt\" OR p.\"endsAt\" IS DISTINCT FROM b.\"endsAt\" OR p.\"startsAt\" IS DISTINCT FROM ((i.\"purchaseSnapshot\"->>'startsAt')::timestamptz AT TIME ZONE 'UTC') OR p.\"endsAt\" IS DISTINCT FROM ((i.\"purchaseSnapshot\"->>'endsAt')::timestamptz AT TIME ZONE 'UTC') OR EXISTS(SELECT 1 FROM unnest(ARRAY['sourcePeriodId','startsAt','endsAt','cycleStartsAt','cycleEndsAt','anchorDay','expectedPlan','expectedPeriodEnd','appleTemporaryUpgrade']) f(key) WHERE p.\"purchaseSnapshot\"->f.key IS DISTINCT FROM i.\"purchaseSnapshot\"->f.key) OR t.\"priceMillis\" IS DISTINCT FROM (i.\"purchaseSnapshot\"->'appleTemporaryUpgrade'->'price'->>'priceMillis')::bigint OR t.currency IS DISTINCT FROM i.\"purchaseSnapshot\"->'appleTemporaryUpgrade'->'price'->>'currency' OR t.\"storefrontId\" IS DISTINCT FROM i.\"purchaseSnapshot\"->'appleTemporaryUpgrade'->'price'->>'storefrontId')"
+  },
+  {
+    "name": "temporary_upgrade_standalone_period_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" WHERE i.\"purchaseAppAccountToken\" IS NOT NULL AND p.\"parentPeriodId\" IS NULL"
+  },
+  {
+    "name": "temporary_upgrade_dependency_state_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p WHERE p.\"parentPeriodId\" IS NOT NULL AND p.\"dependencyRevokedAt\" IS DISTINCT FROM public.\"subscriptionPeriodDependencyInvalidAt\"(p.\"parentPeriodId\",p.\"organizationId\")"
+  },
+  {
+    "name": "temporary_upgrade_ancestry_invalid",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "WITH RECURSIVE paths AS (SELECT p.id AS root,p.id,p.\"parentPeriodId\",ARRAY[p.id] AS seen,0 AS depth,false AS cycle FROM public.\"SubscriptionPeriod\" p WHERE p.\"parentPeriodId\" IS NOT NULL UNION ALL SELECT w.root,p.id,p.\"parentPeriodId\",w.seen||p.id,w.depth+1,p.id=ANY(w.seen) FROM paths w JOIN public.\"SubscriptionPeriod\" p ON p.id=w.\"parentPeriodId\" WHERE NOT w.cycle AND w.depth<64) SELECT count(DISTINCT root) FROM paths WHERE cycle OR depth>=64"
+  },
+  {
+    "name": "temporary_upgrade_unserved_dependency_unreviewed",
+    "severity": "blocker",
+    "requires": [
+      "SubscriptionPeriod.parentPeriodId",
+      "SubscriptionPeriod.dependencyRevokedAt",
+      "ApplePurchaseIntent.purchaseAppAccountToken",
+      "AppleTransaction.storefrontId"
+    ],
+    "sql": "SELECT count(*) FROM public.\"SubscriptionPeriod\" p JOIN public.\"AppleTransaction\" t ON t.id=p.\"appleTransactionId\" WHERE p.\"parentPeriodId\" IS NOT NULL AND p.\"dependencyRevokedAt\" IS NOT NULL AND p.\"revokedAt\" IS NULL AND p.\"endsAt\">CURRENT_TIMESTAMP AND t.status='GRANTED' AND t.\"revocationDate\" IS NULL AND t.\"supersededAt\" IS NULL"
   }
 ]
 $checks$::jsonb)

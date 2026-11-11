@@ -304,6 +304,42 @@ sandbox/real iPhone and TestFlight evidence remain required. Local StoreKit evid
 cannot substitute for server JWS verification with Apple's production/sandbox
 certificates or for approved App Store Connect products and signing.
 
+## Direct current-term upgrade candidate
+
+The current candidate adds the separate, default-disabled model C described in
+[APPLE_TEMPORARY_UPGRADES.md](APPLE_TEMPORARY_UPGRADES.md). It uses a configured
+non-renewing band product for additions to an existing paid GoPay or non-renewing
+Apple term. The purchase bridge still accepts only an opaque intent ID; JavaScript
+cannot provide its price, storefront or account token.
+
+`getStorefront()` returns Apple's numeric storefront ID and separate three-letter
+country code. Product metadata includes exact Decimal-derived `priceMillis` and a
+storefront ID only when that ID remained stable during the request. Unavailable
+storefront metadata blocks C while unconstrained existing renewal products retain
+their previous behavior. No currency conversion is performed in the bridge.
+
+For a server-provided `priceConstraint`, native re-fetches the actual product and
+requires NON_RENEWING type, identical storefront ID/currency and exact milliunits
+before final one-use authorization. It repeats this check using the fresh final
+authorization immediately before invoking StoreKit. A constrained purchase also
+refuses a new storefront through StoreKit's `onStorefrontChange` option. These
+APIs are declared available at the existing iOS 15 minimum in the installed SDK;
+the app minimum and privacy manifest are unchanged.
+
+A caught failure before the StoreKit invocation uses the existing attempt-bound
+`not_started` journal. An unknown failure after invocation remains receipt/review
+recovery, without inferring cancellation. The UI displays actual localized Apple
+price, source and target configurations, exact source/upgrade intervals, preserved
+future coverage, and dependency on the original paid access. Changed conditions
+invalidate consent. Recorded money, active/suspended access, and lost server/finish
+acknowledgements have separate states. C never falls back to a full-period renewal.
+
+The earlier archived app described above predates this extension. Source-level
+checks, an updated native compile, registered product/price review and actual
+Sandbox/device scenarios must be recorded separately before treating C as verified.
+Neither its implementation nor synthetic price fixtures approve commercial sales,
+below-minimum blocking, FX equivalence or complete offer parity.
+
 ## Primary references
 
 - [StoreKit unfinished transactions](https://developer.apple.com/documentation/storekit/transaction/unfinished)

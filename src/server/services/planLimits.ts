@@ -135,11 +135,12 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
   const lifetimeAccess = Boolean(org.subscriptionContract?.lifetimeAccess || LIFETIME_ORGANIZATION_IDS.has(org.id));
   const latestStartedPeriod = org.subscriptionBillingMode === "SELF_SERVE" && !lifetimeAccess
     ? await db.subscriptionPeriod.findFirst({
-        where: { organizationId, revokedAt: null, startsAt: { lte: new Date() } },
+        where: { organizationId, revokedAt: null, dependencyRevokedAt: null, startsAt: { lte: new Date() },
+          OR: [{ parentPeriodId: null }, { endsAt: { gt: new Date() } }] },
         orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       }) : null;
   const [currentCoverage, revokedCoverage, preserved] = org.subscriptionBillingMode === "SELF_SERVE" && !lifetimeAccess ? await Promise.all([
-    db.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: null, startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
+    db.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: null, dependencyRevokedAt: null, startsAt: { lte: new Date() }, endsAt: { gt: new Date() } },
       orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }, { id: "desc" }] }),
     db.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: { not: null }, appleTransactionId: { not: null },
       startsAt: { lte: new Date() }, endsAt: { gt: new Date() } }, select: { id: true } }),
@@ -154,7 +155,7 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     environment: appleTransaction.environment, originalTransactionId: appleTransaction.originalTransactionId } } }) : null;
   const initialTrialPurchase = !latestPeriod && org.subscriptionBillingMode === "SELF_SERVE" && org.trialEndsAt && org.trialEndsAt >= new Date()
     ? await db.subscriptionPeriod.findFirst({
-        where: { organizationId, revokedAt: null, startsAt: org.trialEndsAt }, orderBy: { startsAt: "asc" },
+        where: { organizationId, revokedAt: null, dependencyRevokedAt: null, startsAt: org.trialEndsAt }, orderBy: { startsAt: "asc" },
       }) : null;
   // A new trial remains the same preview until its original end, even when a
   // future paid period has already been purchased. This matches database guards
@@ -279,7 +280,7 @@ export const getCapacityLimits = async (org: Awaited<ReturnType<typeof getOrgani
   const limits = getOrganizationLimits(org);
   if (org.lifetimeAccess || org.billingCatalogVersion === LEGACY_CATALOG_VERSION) return limits;
   const scheduled = await db.subscriptionPeriod.findMany({
-    where: { organizationId: org.id, revokedAt: null, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
+    where: { organizationId: org.id, revokedAt: null, dependencyRevokedAt: null, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
   });
   for (const period of scheduled) {
     const purchase = readPurchaseSnapshot(period.purchaseSnapshot);
@@ -330,7 +331,7 @@ export const assertFeatureCanBeConfigured = async (organizationId: string, featu
   if (!resolveOrganizationAccessState(org).hasAccess) throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   if (!org.entitlements.features[feature]) throw new AppError(getFeatureLockedErrorKey(feature), "FORBIDDEN", 403);
   const scheduled = await db.subscriptionPeriod.findMany({
-    where: { organizationId, revokedAt: null, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
+    where: { organizationId, revokedAt: null, dependencyRevokedAt: null, startsAt: { gt: new Date() } }, select: { plan: true, purchaseSnapshot: true },
   });
   for (const period of scheduled) {
     const purchase = readPurchaseSnapshot(period.purchaseSnapshot);

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const native = vi.hoisted(() => ({
   getProducts: vi.fn(),
+  getStorefront: vi.fn(),
   purchase: vi.fn(),
   retryCancellations: vi.fn(),
   getUnfinishedTransactions: vi.fn(),
@@ -22,6 +23,7 @@ import {
   AppleBillingError,
   finishAppleTransaction,
   getAppleProducts,
+  getAppleStorefront,
   getAppleTransactionHistory,
   getUnfinishedAppleTransactions,
   isAppleBillingAvailable,
@@ -60,9 +62,11 @@ describe("Apple native billing boundary", () => {
     await expect(getAppleProducts([transaction.productId])).rejects.toBeInstanceOf(AppleBillingError);
     await expect(finishAppleTransaction(transaction.transactionId)).rejects.toMatchObject({ code: "APPLE_BILLING_UNAVAILABLE" });
     await expect(retryAppleCancellations()).rejects.toMatchObject({ code: "APPLE_BILLING_UNAVAILABLE" });
+    await expect(getAppleStorefront()).rejects.toMatchObject({ code: "APPLE_BILLING_UNAVAILABLE" });
     expect(native.getProducts).not.toHaveBeenCalled();
     expect(native.finishTransaction).not.toHaveBeenCalled();
     expect(native.retryCancellations).not.toHaveBeenCalled();
+    expect(native.getStorefront).not.toHaveBeenCalled();
   });
 
   it("preserves Apple's localized display price and decimal metadata", async () => {
@@ -80,6 +84,18 @@ describe("Apple native billing boundary", () => {
     const result = await getAppleProducts(ids);
     expect(result.products.map((product) => product.id)).toEqual(ids);
     expect(native.getProducts.mock.calls.map(([argument]) => argument.productIds.length)).toEqual([100, 100, 3]);
+  });
+
+  it("returns actual storefront identity and exact product milliunits without currency conversion", async () => {
+    const storefront = { id: "123456", countryCode: "KGZ" };
+    native.getStorefront.mockResolvedValueOnce(storefront);
+    expect(await getAppleStorefront()).toEqual(storefront);
+    const metadata = { products: [{ id: transaction.productId, displayPrice: "$2.99", price: "2.99", currencyCode: "USD", priceMillis: "2990", storefrontId: storefront.id }], missingProductIds: [] };
+    native.getProducts.mockResolvedValueOnce(metadata);
+    expect(await getAppleProducts([transaction.productId])).toEqual(metadata);
+    native.getStorefront.mockRejectedValueOnce({ code: "APPLE_STOREFRONT_UNAVAILABLE" });
+    await expect(getAppleStorefront()).rejects.toMatchObject({ code: "APPLE_STOREFRONT_UNAVAILABLE" });
+    expect(native.purchase).not.toHaveBeenCalled();
   });
 
   it("sends only the purchase intent and does not finish or grant a native success", async () => {

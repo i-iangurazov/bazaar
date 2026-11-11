@@ -10,6 +10,10 @@ export type AppleProduct = {
   /** Storefront decimal metadata. Server-verified transactions determine money. */
   price: string;
   currencyCode: string;
+  /** Exact milliunit metadata when representable, never a charged amount. */
+  priceMillis?: string;
+  /** Present only when the storefront stayed stable while loading this product. */
+  storefrontId?: string;
   type: "AUTO_RENEWABLE" | "NON_RENEWING" | "CONSUMABLE" | "NON_CONSUMABLE";
   subscriptionPeriod?: { value: number; unit: "day" | "week" | "month" | "year" };
   subscriptionGroupId?: string;
@@ -31,6 +35,7 @@ export type AppleSignedTransaction = {
 };
 
 export type AppleProductResult = { products: AppleProduct[]; missingProductIds: string[] };
+export type AppleStorefront = { id: string; countryCode: string };
 export type ApplePurchaseResult =
   | { status: "purchased"; transaction: AppleSignedTransaction }
   | { status: "pending" }
@@ -58,6 +63,7 @@ export type AppleTransactionUpdate =
 
 interface BazaarAppleBillingPlugin {
   getProducts(options: { productIds: string[] }): Promise<AppleProductResult>;
+  getStorefront(): Promise<AppleStorefront>;
   // Native resolves the SKU and appAccountToken through the authenticated server.
   purchase(options: { intentId: string }): Promise<ApplePurchaseResult>;
   retryCancellations(): Promise<AppleCancellationRetryResult>;
@@ -128,6 +134,9 @@ export const getAppleProducts = async (productIds: string[]): Promise<AppleProdu
 /** A purchased result must be confirmed by the server before access is refreshed. */
 export const purchaseAppleProduct = (intentId: string): Promise<ApplePurchaseResult> =>
   invoke(() => AppleBilling.purchase({ intentId }));
+
+/** C quotes use the actual Apple storefront; no country is supplied to purchase. */
+export const getAppleStorefront = () => invoke(() => AppleBilling.getStorefront());
 
 /** Retry only native-journaled definite cancellations with the current session. */
 export const retryAppleCancellations = () => invoke(() => AppleBilling.retryCancellations());

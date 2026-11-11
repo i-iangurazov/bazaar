@@ -163,6 +163,10 @@ export type UpdateUserInput = {
 
 export const updateUser = async (input: UpdateUserInput) =>
   prisma.$transaction(async (tx) => {
+    // Authorization-changing writes use the same organization → user order as
+    // account deletion and native purchase authorization. Do not hold a user
+    // while a later assignment/audit insert waits for this organization's FK.
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
     const before = await tx.user.findUnique({ where: { id: input.userId } });
     if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
@@ -215,6 +219,7 @@ export type SetUserActiveInput = {
 
 export const setUserActive = async (input: SetUserActiveInput) =>
   prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR UPDATE`;
     const before = await tx.user.findUnique({ where: { id: input.userId } });
     if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);

@@ -56,13 +56,18 @@ export const usageWindow = (input: {
   return { startsAt, endsAt: paidEnd && paidEnd < endsAt ? paidEnd : endsAt };
 };
 
-const windowFor = (org: Organization, resource: UsageResource, now: Date) => usageWindow({
-  resource, now, origin: new Date(org.activePurchase?.cycleStartsAt ?? org.createdAt),
-  anchorDay: org.activePurchase?.anchorDay,
-  paidEnd: org.activePurchase ? new Date(org.activePurchase.cycleEndsAt)
-    : org.trialOffer ? org.trialEndsAt : null,
-  trialOrigin: org.createdAt,
-});
+/** Freeze the effective quota origin separately from financial proration. Old
+ * gateway periods can legitimately have no snapshot and use organization time. */
+export const subscriptionUsageContext = (org: Organization) => {
+  const preserved = org.activePurchase?.appleTemporaryUpgrade?.usageContext;
+  if (preserved) return { origin: new Date(preserved.origin), anchorDay: preserved.anchorDay,
+    paidEnd: preserved.paidEnd ? new Date(preserved.paidEnd) : null, trialOrigin: new Date(preserved.trialOrigin) };
+  const origin = new Date(org.activePurchase?.cycleStartsAt ?? org.createdAt);
+  return { origin, anchorDay: org.activePurchase?.anchorDay ?? origin.getUTCDate(),
+    paidEnd: org.activePurchase ? new Date(org.activePurchase.cycleEndsAt) : org.trialOffer ? org.trialEndsAt : null,
+    trialOrigin: org.createdAt };
+};
+const windowFor = (org: Organization, resource: UsageResource, now: Date) => usageWindow({ resource, now, ...subscriptionUsageContext(org) });
 const keyDigest = (key: string) => createHash("sha256").update(key).digest("hex");
 const lock = (tx: Prisma.TransactionClient, organizationId: string) =>
   tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;

@@ -41,9 +41,10 @@ export function appleBillingConfig(env: Record<string, string | undefined> = pro
   const termsVersion = env.APPLE_BILLING_TERMS_VERSION?.trim() ?? "";
   const termsUrl = "https://www.bazaar.kg/legal/offer";
   const termsReady = termsVersion === LEGAL_TERMS_VERSION && env.APPLE_BILLING_TERMS_APPROVED === "true";
-  const ready = mode !== "off" && catalogValid && apiReady && termsReady && env.APPLE_BILLING_SALES_APPROVED === "true";
+  const foundationReady = mode !== "off" && apiReady && termsReady && env.APPLE_BILLING_SALES_APPROVED === "true";
+  const ready = foundationReady && catalogValid;
   return { mode, environment, catalog: catalogValid ? catalog : [], catalogValid, appAppleId: appId,
-    keyId, issuerId, privateKey, apiReady, termsVersion, termsUrl, ready,
+    keyId, issuerId, privateKey, apiReady, termsVersion, termsUrl, ready, foundationReady,
     unavailableReason: ready ? null : "appleUnavailable",
     sandboxOrganizations: new Set((env.APPLE_BILLING_SANDBOX_ORGANIZATION_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean)),
   };

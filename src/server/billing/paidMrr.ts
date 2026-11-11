@@ -101,7 +101,7 @@ export async function getConfirmedPaidMrr(
   now = new Date(),
 ) {
   const periods = await db.subscriptionPeriod.findMany({
-    where: { revokedAt: null, startsAt: { lte: now }, endsAt: { gt: now } },
+    where: { revokedAt: null, dependencyRevokedAt: null, startsAt: { lte: now }, endsAt: { gt: now } },
     select: {
       id: true,
       organizationId: true,

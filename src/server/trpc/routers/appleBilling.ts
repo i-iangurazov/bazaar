@@ -4,12 +4,20 @@ import { adminProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { appleIntentInputSchema, cancelApplePurchaseIntent, confirmApplePurchase, createApplePurchaseIntent,
   getAppleBillingState, getApplePurchasePreview, restoreApplePurchases } from "@/server/billing/applePayments";
+import { getAppleTemporaryUpgradeCatalog, previewAppleTemporaryUpgrade, temporaryUpgradePreviewInputSchema } from "@/server/billing/appleTemporaryUpgrades";
 const appleProcedure = adminProcedure.use(({ ctx, next }) => {
   if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
   return next();
 });
 const signedInfo = z.string().min(30).max(100_000);
 export const appleBillingRouter = router({
+  temporaryUpgradeCatalog: appleProcedure.query(async ({ ctx }) => {
+    try { return await getAppleTemporaryUpgradeCatalog(ctx.user); } catch (e) { throw toTRPCError(e); }
+  }),
+  previewTemporaryUpgrade: appleProcedure.use(rateLimit({ max: 30, windowMs: 60_000, prefix: "apple-temporary-preview" }))
+    .input(temporaryUpgradePreviewInputSchema).query(async ({ ctx, input }) => {
+      try { return await previewAppleTemporaryUpgrade(ctx.user, input); } catch (e) { throw toTRPCError(e); }
+    }),
   catalog: appleProcedure.query(async ({ ctx }) => {
     try { return await getAppleBillingState(ctx.user); } catch (e) { throw toTRPCError(e); }
   }),

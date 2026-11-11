@@ -103,9 +103,9 @@ export const getSubscriptionPaymentState = async (organizationId: string) => {
       orderBy: { createdAt: "desc" },
       include: { period: true },
     }),
-    prisma.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: null }, orderBy: { endsAt: "desc" } }),
+    prisma.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: null, dependencyRevokedAt: null }, orderBy: { endsAt: "desc" } }),
     prisma.subscriptionPeriod.findFirst({
-      where: { organizationId, revokedAt: null, startsAt: { gt: now } },
+      where: { organizationId, revokedAt: null, dependencyRevokedAt: null, startsAt: { gt: now } },
       orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     }),
     appleWebPurchaseBlock(prisma, organizationId, now),
@@ -534,7 +534,7 @@ export const applySubscriptionReceipt = async (input: {
       // Pre-v2 invoices keep their original one-month grant semantics.
       if (!purchase) {
         const anyPeriod = await tx.subscriptionPeriod.findFirst({
-          where: { organizationId: org.id, revokedAt: null },
+          where: { organizationId: org.id, revokedAt: null, dependencyRevokedAt: null },
           select: { id: true },
         });
         if (
@@ -583,7 +583,7 @@ export const applySubscriptionReceipt = async (input: {
           }
         : undefined;
       const hasPriorPeriod = await tx.subscriptionPeriod.findFirst({
-        where: { organizationId: org.id, revokedAt: null },
+        where: { organizationId: org.id, revokedAt: null, dependencyRevokedAt: null },
         select: { id: true },
       });
       await tx.subscriptionPeriod.create({
@@ -841,7 +841,7 @@ export const verifyInvoiceCanBePaid = async (invoiceId: string, fields: SignedFi
       throw new AppError("billingQuoteChanged", "CONFLICT", 409);
     if (!purchase) {
       const prior = await tx.subscriptionPeriod.findFirst({
-        where: { organizationId: org.id, revokedAt: null },
+        where: { organizationId: org.id, revokedAt: null, dependencyRevokedAt: null },
         select: { id: true },
       });
       if (

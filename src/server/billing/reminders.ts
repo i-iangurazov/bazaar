@@ -14,7 +14,7 @@ import {
 const organizationInclude = {
   subscriptionContract: true,
   subscriptionPeriods: {
-    where: { revokedAt: null },
+    where: { revokedAt: null, dependencyRevokedAt: null },
     orderBy: [{ endsAt: "desc" }, { startsAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     take: 1,
     include: {

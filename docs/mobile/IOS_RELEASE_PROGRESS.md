@@ -65,13 +65,13 @@ synthetic fixture, or browser screenshot is not a verified native release.
 | --- | --- | --- | --- |
 | R01 | Current application, accounts, roles, stores, commercial catalog, integrations and native capabilities audited | Source inventory, account observations, baseline builds/tests, recorded limitations | In progress |
 | R02 | One authoritative organization entitlement model for Apple and GoPay | Real-DB tests showing identical effective access across web/iOS and eligible roles | Server/isolated PostgreSQL checks pass; actual Apple/device acceptance remains |
-| R03 | Existing paid, future prepaid, trial, manual, free/lifetime and legacy catalog rights preserved | Migration review and regression tests for all entitlement sources and monthly usage | Owned migration rehearsal preserves 43 rows; nine checks pass; customer preflight not authorized/run |
+| R03 | Existing paid, future prepaid, trial, manual, free/lifetime and legacy catalog rights preserved | Migration review and regression tests for all entitlement sources and monthly usage | Owned 139-to-143 migration rehearsal preserves 43 rows; ten checks pass; customer preflight not authorized/run |
 | R04 | No duplicate sale for the same covered period or capabilities | Server purchase checks, organization locks, durable pending intents and concurrent DB tests | Implemented; isolated concurrency/recovery tests pass; actual Sandbox acceptance remains |
 | R05 | Safe provider switching and recovery | Tests for prepaid GoPay remainder, Apple renewal states, pending/stale payments, cancellation and out-of-app renewals | Open |
 | R06 | Purchases cannot move between organizations or unauthorized users | Tests for account/device changes, restore, several organizations, role changes and departing payers | Open |
-| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 unapproved draft mappings; actual products/prices and immediate prorated upgrade/addition implementation remain open |
+| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 unapproved base/pack mappings plus implemented temporary upgrades; actual band products/prices, below-minimum handling and commercial/device acceptance remain open |
 | R08 | Website GoPay and historical reconciliation continue working | Existing and new DB/protocol regressions; provider-specific amounts and histories preserved | Open |
-| R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Compiles; 57 journal/boundary checks pass; four of five StoreKitTest cases fail; real Sandbox/TestFlight remain unrun |
+| R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Current iPhoneOS staging archive compiles; price policy 35 and journal/boundary 59 checks pass; four of five earlier StoreKitTest cases fail; real Sandbox/TestFlight remain unrun |
 | R10 | Signed transaction verification, Server API and Notifications V2 are complete | Certificate/app/environment/product/ownership checks, replay/order/missed-event tests, reconciliation | Open |
 | R11 | Renewals, expiry, grace/retry, plan changes, refund and revocation update only the correct rights | DB lifecycle tests with independent Apple and GoPay grants | Open |
 | R12 | Physical-store customer payments stay separate from Bazaar digital sales | Source and UI review; POS/payment regressions | Open |
@@ -456,3 +456,60 @@ purchase or publication is claimed. The commercial appendix now also describes
 an unapproved direct-upgrade option C without a retained wallet; it is a design
 proposal, not implementation or Apple approval. The owner has requested an
 explanation and has not selected/approved any changed commercial model.
+
+### Direct temporary upgrade implementation checkpoint
+
+The implementation now extends option C beyond that earlier proposal: current
+GoPay or non-renewing Apple access can fund a direct, parent-dependent current-term
+upgrade with a frozen quote and exact StoreKit price/storefront checks. There is
+no retained wallet. Registration, actual prices, rational commercial valuation,
+discount limits and below-minimum handling remain unapproved; sales stay off.
+See [the implementation and remaining terms](APPLE_TEMPORARY_UPGRADES.md).
+
+- The isolated PostgreSQL/preflight/usage group passed six files / 59 tests,
+  including 26 new C cases. The localized Apple UI/bridge/recovery group passed
+  four files / 78 tests. A subsequently found refund-reversal ordering defect
+  has a bounded service fix and an additional real-DB case; its verification is
+  recorded separately rather than retroactively included in those counts.
+- Typecheck, lint and translation validation passed after correcting two test
+  argument types. Pure Swift production-source executables passed 35 Decimal
+  price/storefront checks and 59 cancellation-journal/boundary checks.
+- The complete changed native application archived successfully for iPhoneOS
+  arm64 with `AppStaging` / `ReleaseStaging`. The unsigned local rehearsal is
+  `Bazaar-Staging-DIRECT-UPGRADE-LOCAL-REHEARSAL-unsigned.xcarchive`, version/build
+  1.0.0/111113, under the ignored local evidence directory. Inspection verified
+  the exact isolated Preview, 11 plugins, 18 privacy categories and localized
+  permission text; no secret markers or synthetic StoreKit assets were found.
+  This is not an installable, signed, uploaded or TestFlight-tested artifact.
+- The owned extra-database preservation exercise now covers 139 through 143:
+  all 43 original rows matched exactly, ten checks passed, old periods remained
+  independent, and its extra database/temporary paths were removed.
+- Only the independently pinned isolated Preview database received migration
+  143. All original rows across 15 access/financial/usage tables were unchanged.
+  Its real final read-only audit reports POST_TEMPORARY_UPGRADES with zero
+  blockers, warnings or skipped checks. The customer database and production
+  migration allowlist were not changed. Actual app deployment follows separately.
+
+No new actual Apple transaction, product price, Sandbox result, signing identity,
+App Store Connect upload, phone installation or publication is claimed here.
+
+The bounded refund-order correction then passed with all **27 C PostgreSQL
+cases**, six policy cases and 28 confirmed-MRR cases: three files / **61 tests**.
+Reversing a child's own refund while its paid parent is still revoked now retains
+the dependent receipt/intent in REVIEW and keeps new checkout blocked. Restoring
+the parent resolves only that dependency, preserving unrelated review obligations
+and the original consumed usage. No applied SQL was edited for this service fix.
+
+Actual desktop/mobile browser rendering of the current Apple components and app
+styles passed **19 checks**: ready/scrollable-consent states in all three locales,
+loading, missing market/storefront, price/source/expiry refusal and suspended
+history. No page errors, unexpected external/API/write requests or horizontal
+overflow occurred. Metadata, queries and the native boundary in this local
+rendering harness are explicitly synthetic; these screenshots do not prove
+StoreKit, server purchase or TestFlight behavior. The browser and QA server were
+closed after inspection.
+
+Final typecheck, lint and translation validation all passed again after the
+bounded reversal correction. Whole-application regression and the immutable
+cloud Preview rebuild follow this checkpoint; their older baseline results are
+not claimed as verification of this latest source.

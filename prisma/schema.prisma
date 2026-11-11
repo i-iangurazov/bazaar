@@ -756,6 +756,8 @@ model SubscriptionPeriod {
   invoiceId        String?             @unique
   appleTransactionId String?           @unique
   revokedAt        DateTime?
+  parentPeriodId   String?
+  dependencyRevokedAt DateTime?
   plan             OrganizationPlan
   startsAt         DateTime
   endsAt           DateTime
@@ -764,10 +766,14 @@ model SubscriptionPeriod {
   organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   invoice          SubscriptionInvoice? @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
   appleTransaction AppleTransaction? @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  parentPeriod SubscriptionPeriod? @relation("TemporaryUpgradeFunding", fields: [parentPeriodId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  dependentPeriods SubscriptionPeriod[] @relation("TemporaryUpgradeFunding")
 
   @@unique([appleTransactionId, organizationId])
+  @@unique([id, organizationId])
   @@unique([invoiceId, organizationId])
   @@index([organizationId, endsAt])
+  @@index([parentPeriodId, organizationId])
 }
 
 // A platform operator records an already executed bank transfer. This is not
@@ -4427,6 +4433,7 @@ model ApplePurchaseIntent {
   productType String
   environment String
   appAccountToken String @db.Uuid
+  purchaseAppAccountToken String? @unique @db.Uuid
   offerSnapshot Json
   purchaseSnapshot Json?
   storeId String?
@@ -4494,6 +4501,7 @@ model AppleTransaction {
   priceMillis BigInt?
   currency String?
   storefront String?
+  storefrontId String?
   ownershipType String?
   offerSnapshot Json
   signedTransactionInfo String @db.Text

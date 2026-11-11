@@ -218,3 +218,16 @@ connected physical device** (`staging-signing-identities.log` and
 upload/processing, Sandbox purchase or iPhone TestFlight installation has yet
 been verified. Account/Xcode GUI permission denials remain in force; no alternate
 account-access route was used.
+
+The current direct-upgrade Swift source also produced a successful complete
+unsigned iPhoneOS arm64 archive on 2026-11-11:
+`Bazaar-Staging-DIRECT-UPGRADE-LOCAL-REHEARSAL-unsigned.xcarchive`, local rehearsal
+1.0.0/111113 under `.local/ios-release-20261111/`. The independent archive scanner
+again verified the fixed Preview/channel/distribution, iOS 15, all 11 plugins,
+three purpose-text locales and the exact 18-category source privacy manifest,
+with zero secret-marker findings or synthetic test assets. Production-source
+Decimal price/storefront and cancellation-boundary executables passed 35 and
+59 checks respectively. This supersedes the older archive as compilation
+evidence for the changed native code; signing, Apple processing and real-device
+purchase acceptance remain unverified. Its build number is not an account-verified
+unused upload number.

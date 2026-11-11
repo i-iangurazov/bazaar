@@ -20,7 +20,7 @@ export async function captureApplePreservedAccess(db: Prisma.TransactionClient, 
   entitlements: z.infer<typeof planDefinitionSchema>;
 }) {
   if (org.subscriptionBillingMode !== "SELF_SERVE" || !org.currentPeriodEndsAt || org.currentPeriodEndsAt <= new Date()) return null;
-  const backed = await db.subscriptionPeriod.findFirst({ where: { organizationId: org.id, revokedAt: null, endsAt: org.currentPeriodEndsAt }, select: { id: true } });
+  const backed = await db.subscriptionPeriod.findFirst({ where: { organizationId: org.id, revokedAt: null, dependencyRevokedAt: null, endsAt: org.currentPeriodEndsAt }, select: { id: true } });
   if (backed) return null;
   return preservedSchema.parse({ version: 1, plan: org.plan, endsAt: org.currentPeriodEndsAt.toISOString(), entitlements: org.entitlements });
 }

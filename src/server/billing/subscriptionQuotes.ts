@@ -33,6 +33,7 @@ async function calculateSubscriptionQuoteDetails(
   input: SubscriptionQuoteInput,
   db: Prisma.TransactionClient = prisma,
   now = new Date(),
+  allowTemporaryAppleBase = false,
 ) {
   const org = await getOrganizationPlan(organizationId, db);
   if (org.lifetimeAccess) throw new AppError("billingLifetimeProtected", "FORBIDDEN", 403);
@@ -99,10 +100,9 @@ async function calculateSubscriptionQuoteDetails(
   )
     throw new AppError("billingDowngradeNextPeriod", "CONFLICT", 409);
   await assertScheduledSubscriptionCompatibility(org, selectedTerms, db, now);
-  if (!period.invoiceId) throw new AppError("appleSubscriptionManagedByApple", "CONFLICT", 409);
-  const invoice = await db.subscriptionInvoice.findUniqueOrThrow({
-    where: { id: period.invoiceId },
-  });
+  if (!period.invoiceId && !allowTemporaryAppleBase) throw new AppError("appleSubscriptionManagedByApple", "CONFLICT", 409);
+  const invoice = period.invoiceId ? await db.subscriptionInvoice.findUniqueOrThrow({ where: { id: period.invoiceId } }) : null;
+  if (!prior && !invoice) throw new AppError("appleTemporaryUpgradeSourceInvalid", "CONFLICT", 409);
   const months = prior?.months ?? 1;
   const cycleStart = new Date(prior?.cycleStartsAt ?? period.startsAt);
   const cycleEnd = new Date(prior?.cycleEndsAt ?? period.endsAt);
@@ -114,7 +114,7 @@ async function calculateSubscriptionQuoteDetails(
     cycleEnd.getTime() - cycleStart.getTime(),
   );
   const creditMinor = prorate(
-    prior?.serviceValueMinor ?? invoice.amountMinor,
+    prior?.serviceValueMinor ?? invoice!.amountMinor,
     remaining,
     period.endsAt.getTime() - period.startsAt.getTime(),
   );
@@ -138,6 +138,11 @@ async function calculateSubscriptionQuoteDetails(
     anchorDay: prior?.anchorDay ?? org.billingAnchorDay ?? cycleStart.getUTCDate(),
   };
   return { snapshot, organization: org };
+}
+
+export async function calculateTemporaryUpgradeBaseQuote(organizationId: string, input: SubscriptionQuoteInput,
+  db: Prisma.TransactionClient = prisma, now = new Date()) {
+  return (await calculateSubscriptionQuoteDetails(organizationId, { ...input, action: "CHANGE" }, db, now, true)).snapshot;
 }
 
 export async function calculateSubscriptionQuote(

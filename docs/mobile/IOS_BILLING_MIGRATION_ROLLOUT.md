@@ -1,19 +1,24 @@
 # iOS billing migration preflight and rollout
 
-Coordinator verification: the owned disposable baseline139-to142 exercise passed
+Coordinator verification: the owned disposable baseline139-to143 exercise passed
 on 2026-11-11. All 43 seeded financial/access/usage/auth/bank-refund/audit rows
-were preserved exactly; nine checks passed, and the extra database/temporary
-files were removed. Detailed aggregate evidence stays outside Git. This is
+were preserved exactly; ten checks passed, and the extra database/temporary
+files were removed. The before/after hashes match; the final read-only audit
+reports `POST_TEMPORARY_UPGRADES`, zero blockers, zero warnings and no skipped
+checks. Detailed aggregate evidence is kept outside Git at
+`.local/ios-release-20261111/migration-preservation-evidence.json`. This is
 synthetic migration evidence, not permission to inspect or migrate customers.
 
-This playbook covers exactly these three named Apple migrations, in this order. It prepares a
-reviewable operational procedure; it does not authorize a production deployment.
+This playbook covers exactly these four named Apple migrations, in this order.
+It prepares a reviewable operational procedure; it does not authorize a
+production deployment.
 
 | Purpose | Migration | SHA-256 |
 | --- | --- | --- |
 | Privacy/source separation | `20261111120000_ios_apple_billing_privacy` | `734e62c89a76aaedb153eb0b8029021f7713074b4526ca5501dac9abd41e2f38` |
 | Lifecycle recovery | `20261111130000_apple_lifecycle_recovery` | `4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10` |
 | Native attempt recovery | `20261111140000_apple_native_attempt_recovery` | `1b3d22538c669d7f940e45dc14127842c25fe14accbe753c8a2b7e3efed32d0b` |
+| Dependent temporary upgrades | `20261111150000_apple_temporary_upgrades` | `a13faf83ce11ad2c39480fbce1791299b82fd4fa58971bf3548f905c629a714f` |
 
 The merged-main prerequisite is
 `20261111020000_manual_subscription_refunds`, SHA-256
@@ -21,9 +26,9 @@ The merged-main prerequisite is
 It remains separate GoPay bank-transfer accounting and is included in the
 pre-Apple baseline. Migration names, rather than changing ordinal positions,
 define this audit. The current reviewed manifest has 139 baseline migrations
-and 142 total migrations.
+and 143 total migrations.
 
-All three contain explicit transactions. The privacy migration adds the separate Apple
+All four contain explicit transactions. The privacy migration adds the separate Apple
 financial journal, immutable organization/token/intent bindings, Apple source
 references, account tombstones and consent fields, and private asset erasure
 queue. It makes gateway invoice references nullable only alongside exactly one
@@ -33,9 +38,15 @@ preferences, then updates the affected access and financial guards. The native
 attempt migration adds an immutable UUID bound atomically to first sheet
 authorization. A terminal native cancellation must match that UUID; a missing
 historical UUID cannot be retroactively claimed by another device.
+The temporary-upgrade migration adds an immutable same-organization parent for
+new C grants, derived dependency revocation, per-purchase token isolation and
+signed storefront/price binding. It updates shared access/capacity/feature guards
+without reinterpreting old grants. Its dependency triggers preserve a child's
+own refund while propagating ancestor revocation/reversal.
 
-The SQL files must remain unchanged after application. Remedial work belongs in
-a new reviewed migration. There is no down migration for this chain.
+The SQL files, including the applied 143rd migration, must remain unchanged
+after application. Remedial work belongs in a new reviewed migration. There is
+no down migration for this chain.
 
 ## Current rollout boundary
 
@@ -46,17 +57,25 @@ or the existing requirement for explicit human authorization before production.
 The branch must also be verified against the then-current main branch before
 an eventual merge.
 
-`APPLE_BILLING_MODE=off` and both approval flags remaining false prevent new
-Apple sales. They do **not** make the new application compatible with a database
+Keep `APPLE_BILLING_MODE=off`, `APPLE_BILLING_TERMS_APPROVED=false`,
+`APPLE_BILLING_SALES_APPROVED=false` and
+`APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED=false`, with no unreviewed catalog or
+temporary-upgrade policy enabled. These gates prevent new Apple sales. They do
+**not** make the new application compatible with a database
 at the pre-Apple baseline: authentication, privacy and existing billing/access paths
 already reference the new fields and tables. Apply the complete chain before
-serving this application version. Never serve the final application from an intermediate privacy-only or
-lifecycle-only schema; it expects native attempt recovery as well.
+serving this application version. This compatibility requirement does not
+authorize applying migrations to customer or production databases. Never serve
+the final application from an intermediate privacy, lifecycle or native-attempt
+schema; it expects temporary-upgrade fields and guards as well.
 
 Commercial choices for all plan/store/reserve combinations, Apple-specific
-credit expiry terms, and cross-provider prorated changes remain release gates;
+non-expiring WhatsApp terms, and C's actual price bands, storefront valuations,
+discounts and below-minimum/zero policy remain release gates;
 see [the server billing scope](APPLE_SERVER_BILLING.md) and
-[the catalog proposal](APPLE_CATALOG_PROPOSAL.md). Passing a database audit does
+[the catalog proposal](APPLE_CATALOG_PROPOSAL.md). C is a reviewable implementation
+with sales off; its proposed BLOCK policy is not approval or complete commercial
+parity. See [temporary upgrades](APPLE_TEMPORARY_UPGRADES.md). Passing a database audit does
 not approve a product mapping or establish real Apple purchase validation.
 
 ## Read-only preflight
@@ -89,10 +108,21 @@ pnpm exec tsx scripts/deployment/ios-billing-preflight.ts \
   --expect-stage PRE_APPLE
 ```
 
-Use `--psql /absolute/path/to/psql` when it is not on the operator's PATH. After
-the complete chain, run the same audit with `--expect-stage POST_NATIVE_ATTEMPT`.
-`POST_PRIVACY` and `POST_LIFECYCLE` exist only to diagnose an interrupted rollout; neither is an approved
-application serving state. `PARTIAL` and `UNBASELINED` are blockers. The script
+The optional `--psql /absolute/path/to/psql` pins the operator's approved binary;
+otherwise the existing PATH selection applies. After the complete chain, run
+the same audit with `--expect-stage POST_TEMPORARY_UPGRADES`.
+The tool retains historical stage support:
+
+| Stage | Reviewed boundary | Use with this application version |
+| --- | --- | --- |
+| `PRE_APPLE` | 139 baseline migrations | Before/after audit baseline; cannot serve final code |
+| `POST_PRIVACY` | 140 migrations | Diagnostic intermediate only |
+| `POST_LIFECYCLE` | 141 migrations | Diagnostic intermediate only |
+| `POST_NATIVE_ATTEMPT` | 142 migrations | Diagnostic intermediate only |
+| `POST_TEMPORARY_UPGRADES` | All four Apple migrations; 143 total | Required final schema; other release gates still apply |
+
+An intermediate stage is not an approved application serving state. `PARTIAL`
+and `UNBASELINED` are blockers. The script
 also refuses altered local migration checksums.
 
 The report contains static check names, counts, severity, skip indicators and
@@ -101,7 +131,7 @@ invoice amounts, signed payloads, keys or raw database error messages. Exit 0
 means no blocking check was found; exit 2 means a blocker or audit failure.
 Retain the report with the release evidence. Do not interpret skipped checks
 as passing: Apple checks are expected to be skipped at `PRE_APPLE`, while a fully
-applied `POST_NATIVE_ATTEMPT` should have none skipped.
+applied `POST_TEMPORARY_UPGRADES` should have none skipped.
 
 The audit checks these assumptions:
 
@@ -117,9 +147,17 @@ The audit checks these assumptions:
   the shape of signed pending changes, and immutable one-use native attempt
   authorization/cancellation binding. Historical authorized intents without a
   UUID remain recoverable through signed receipts and are reported separately.
+- Temporary purchase tokens must be unique within the account/purchase token
+  namespace and bind the exact original C quote. Each C period must depend on
+  its same-organization parent, end with it and preserve the authorized dates,
+  cycle and frozen storefront/currency/price. It cannot become standalone
+  coverage. Ancestor chains, dependency state and still-unserved blocked-money
+  review must agree; an independent GoPay grant or child's own refund remains
+  separate. The aggregate checks do not verify actual Apple product registration
+  or approve commercial configuration.
 - Exact named migration history/checksums; unfinished migrations; new validated
   constraints and valid unique indexes; enabled financial/privacy triggers;
-  and the reviewed bodies of every function added/replaced by the named Apple chain.
+  and all 15 reviewed guard-function bodies across the named Apple chain.
 
 Historical missing snapshots and overdrawn credit counters are warnings for
 explicit review, not an instruction to rewrite accounting. Review/unbound Apple
@@ -137,42 +175,50 @@ maintenance/write-control procedure and again after application.
 
 ## Authorized rollout sequence
 
-1. Finish the disposable preservation exercise below and record the final
-   application checks, exact SQL digests and compatible recovery build. Verify
+1. Confirm the disposable preservation evidence below for the exact migration
+   chain and record the final application checks, SQL digests and compatible
+   recovery build. Verify
    backups and a restore exercise using the hosting operator's established
    procedure. Do not test a restore against a customer database.
-2. Keep Apple sales off, both approvals false, and the catalog unapproved.
+2. Keep Apple sales off, both foundation approvals and the separate temporary-
+   upgrade approval false, and all unreviewed catalog/policy configuration disabled.
    Confirm the deployed web GoPay merchant configuration separately. Freeze
    deployment and financial writes for the brief audited migration window, or
    document another reviewed procedure that closes the preflight/write race.
 3. On the independently verified target, collect the `PRE_APPLE` report. If the
-   chain is already applied, require `POST_NATIVE_ATTEMPT` and matching history instead of
+   chain is already applied, require `POST_TEMPORARY_UPGRADES` and matching history instead of
    replaying SQL. Stop on blockers, unfinished history or unexpected skips.
 4. Only after production authorization and separate migration review may the
    exact named Apple chain be added to the production allowlist. Apply through the normal
    guarded deployment path in migration order. Do not manually mark a failed
    migration applied, bypass checksum checks, or remove transaction statements.
-5. Before traffic reaches the new code, require `POST_NATIVE_ATTEMPT`, zero blockers and no
+5. Before traffic reaches the new code, require `POST_TEMPORARY_UPGRADES`, zero blockers and no
    skipped checks. Check auth, existing approved/manual/lifetime access, GoPay
    history and callbacks, future prepayment timing, quota continuity, and web
-   lot expiry. Verify that no synthetic journal or invoice was created in the
-   target during deployment. These checks use existing state; provider test
+   lot expiry. Check C token/parent bindings, dependency/refund propagation,
+   unchanged future prepayments and legacy quota origins as well. Verify that
+   no synthetic journal or invoice was created in the target during deployment.
+   These checks use existing state; provider test
    transactions belong only to dedicated test environments.
 6. Enable approved Apple mappings only after actual Apple keys, products,
    notifications, sandbox/device recovery and storefront materials have been
-   verified, and commercial terms approved. Allowlist only dedicated synthetic
-   review/test organizations for Sandbox, including App Review on a live
+   verified, and commercial terms approved. Enable C separately only after its
+   actual band prices, valuation/discount/minimum policy and device recovery
+   evidence are approved; passing migration checks does not turn that gate on.
+   Allowlist only dedicated synthetic review/test organizations for Sandbox,
+   including App Review on a live
    deployment. Never add a real customer's organization as a test workaround.
 7. Observe durable notification/reconciliation jobs and retained receipt review
    counts, with existing operational monitoring. Audit again if a recovery
    anomaly or an unexpected grant appears. Do not use the audit as a recurring
    customer-data export.
 
-Each migration is a separate transaction. If a later step fails after privacy
-or lifecycle completes, the database may be at `POST_PRIVACY` or
-`POST_LIFECYCLE`. Keep the final application unserved, inspect the failed
-migration through the established operator procedure, and recover forward to
-the exact reviewed native-attempt stage. An application deployment failure
+Each migration is a separate transaction. If a later step fails after privacy,
+lifecycle or native-attempt recovery completes, the database may be at
+`POST_PRIVACY`, `POST_LIFECYCLE` or `POST_NATIVE_ATTEMPT`. Keep the final
+application unserved, inspect the failed migration through the established
+operator procedure, and recover forward to
+the exact reviewed temporary-upgrade stage. An application deployment failure
 after commit does not roll back database state.
 
 ## Recovery and rollback
@@ -196,6 +242,10 @@ exists, old code assumptions become unsafe:
 - Apple periods can be revoked/superseded while independent current or future
   GoPay periods remain. An older latest-period query can resurrect revoked
   access, grant a future period early or reset a quota window.
+- C periods additionally require a valid ancestor and an unexpired temporary
+  interval. Older code can treat a full target snapshot as unconditional access,
+  ignore a per-purchase token, or reset a legacy quota origin. Its compatibility
+  must not be inferred from support for ordinary Apple periods alone.
 - Deleted users remain irreversible financial-reference tombstones. An older
   auth/reset/invite path that ignores `deletedAt` must not serve them.
 - Signed review receipts, pending changes and auto-renewing chains remain
@@ -215,7 +265,15 @@ application without a supported provider cancellation mechanism. Server
 Apple obligations before every in-app redirect; callbacks and reconciliation
 must still retain and review any late external charge.
 
-## Disposable before/after preservation exercise — prepared, not executed
+## Coordinator-run disposable preservation exercise
+
+The 139-to143 run described at the start of this document is complete and its
+ten checks passed. The following procedure remains the repeatable template;
+changed migration inputs, guards or preservation logic require fresh evidence.
+That result proves the schema transition and original-row preservation. A
+compatible recovery build, backup/restore rehearsal and actual Apple/device
+acceptance need separate evidence. No customer/production migration or
+production audit is authorized or claimed by that result.
 
 Provisioning/running this exercise is reserved for the coordinating agent or an
 authorized operator. It requires an **additional explicitly owned disposable
@@ -231,7 +289,7 @@ not broaden it to include customer databases.
    tree or production history to simulate an older schema.
 2. Apply only that baseline. Seed synthetic data using that baseline schema (raw
    parameterized SQL or a separately generated baseline client). The current Prisma
-   client already expects native attempt recovery and must not be used to claim baseline
+   client already expects temporary-upgrade fields and must not be used to claim baseline
    compatibility. Include manual/free approval, legacy terms, current terms,
    lifetime, active and expired periods, future GoPay prepayments, unpaid/review/
    paid invoices, used/reserved/expired web WhatsApp lots, quotas, and financial
@@ -240,7 +298,7 @@ not broaden it to include customer databases.
    periods, contract snapshots, entitlement timing, user references, credit
    counters/expiries and quota operation identities. Keep only synthetic output.
    Require `PRE_APPLE` with the expected populations and reviewed warnings.
-4. Apply the exact three named Apple migrations. Require `POST_NATIVE_ATTEMPT`, matching digests/history,
+4. Apply the exact four named Apple migrations. Require `POST_TEMPORARY_UPGRADES`, matching digests/history,
    valid guards, zero blockers and no skipped checks. Compare all original
    rows with the before snapshot: no invoice amount/currency/source, grant
    interval, contract, approval, expiry, counter or quota identity may change.
@@ -249,7 +307,10 @@ not broaden it to include customer databases.
    same-chain replacement, manual/lifetime access, non-expiring Apple lots,
    unchanged web expiry, preserved manual bank refund records, tombstone auth,
    wrong-device/legacy/lost-response native attempt recovery and stale unpaid
-   checkout recovery. Attempt forbidden tenant/money/source rewrites and require
+   checkout recovery. Include current-term C upgrades from GoPay/non-renewing
+   Apple, unchanged future prepay, ancestor/own-refund independence, per-intent
+   token replay, expired C fallback and snapshot-free legacy quota continuity.
+   Attempt forbidden tenant/money/source rewrites and require
    real database rejections.
 6. Run the proposed compatibility recovery build against this synthetic final
    database both before and after Apple grants/tombstones exist. Verify auth,
@@ -258,14 +319,18 @@ not broaden it to include customer databases.
    keep a compatible build or fix forward. Do not weaken guards.
 7. Record results and remaining gates. Remove only the separately owned
    disposable resources when the coordinating operator is finished. No part of
-   this document states that the preservation exercise or a production audit
-   has already passed.
+   this procedure substitutes for the specific coordinator evidence or claims
+   that a production audit has passed.
 
-Prepared tests for the coordinating runner are
+Regression tests for the coordinating runner are
 `tests/unit/ios-billing-migration-preflight.test.ts` (target isolation, redaction,
 CLI/process policy and report validation) and
 `tests/integration/ios-billing-migration-preflight.test.ts` (real read-only audit,
 unchanged synthetic accounting, historical warnings and duplicate fulfillment
 detection). The integration runner uses the explicitly guarded
 `DATABASE_TEST_URL`; set `IOS_MIGRATION_PREFLIGHT_PSQL` when a non-PATH binary is
-needed. These checks do not replace the separate baseline-to-native-attempt preservation run.
+needed. `tests/integration/apple-temporary-upgrades.test.ts` also runs the real
+read-only preflight against a legitimate per-intent C purchase and checks
+aggregate-only output and unchanged token/parent/financial rows. These checks
+do not replace the separate baseline-to-temporary-upgrade preservation run,
+actual Apple Sandbox/device evidence, or production authorization.
