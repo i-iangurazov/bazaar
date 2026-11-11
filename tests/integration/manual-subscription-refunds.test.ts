@@ -11,6 +11,10 @@ import {
   recordManualSubscriptionRefund,
 } from "@/server/billing/manualSubscriptionRefunds";
 import { goPayMerchantId } from "@/server/billing/paymentConfig";
+import { calculateSubscriptionQuote } from "@/server/billing/subscriptionQuotes";
+import type { PurchaseSnapshot } from "@/server/billing/purchaseSnapshot";
+import { extendSubscriptionMonths } from "@/server/billing/paymentMath";
+import { EMPTY_SUBSCRIPTION_EXTRAS } from "@/lib/billing/subscriptionPricing";
 import { handleGoPayNotification } from "@/server/billing/goPayWebhook";
 import {
   GOPAY_FIXTURE_API_KEY,
@@ -26,7 +30,7 @@ const describeDb = shouldRunDbTests ? describe : describe.skip;
 // the real clock rather than pretending PostgreSQL shares a distant fake date.
 const now = new Date();
 const paidAt = new Date(now.getTime() - 2 * 86_400_000);
-const endsAt = new Date(now.getTime() + 28 * 86_400_000);
+const endsAt = extendSubscriptionMonths(paidAt, paidAt.getUTCDate(), 1);
 const day = (date: Date) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bishkek",
@@ -62,6 +66,46 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
   let operator: User;
   let owner: ReturnType<typeof createTestCaller>;
   let network: ReturnType<typeof vi.fn>;
+  const purchases = new Map<string, PurchaseSnapshot>();
+
+  const agreedPurchase = async (organizationId: string) => {
+    // Protected identities exercise already-existing, pre-contract invoices.
+    // The current checkout builder must not issue a new quote to those accounts.
+    if (LIFETIME_ORGANIZATION_IDS.has(organizationId)) return null;
+    const existing = purchases.get(organizationId);
+    if (existing) return existing;
+    await prisma.subscriptionContract.upsert({
+      where: { organizationId },
+      create: { organizationId, catalogVersion: "2026-11" },
+      update: {},
+    });
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        subscriptionBillingMode: "SELF_SERVE",
+        subscriptionStatus: "ACTIVE",
+        trialEndsAt: null,
+        currentPeriodEndsAt: null,
+      },
+    });
+    const purchase = await calculateSubscriptionQuote(
+      organizationId,
+      {
+        plan: "STARTER",
+        months: 1,
+        extras: EMPTY_SUBSCRIPTION_EXTRAS,
+        action: "RENEW",
+      },
+      prisma,
+      paidAt,
+    );
+    purchases.set(organizationId, purchase);
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { currentPeriodEndsAt: new Date(purchase.endsAt) },
+    });
+    return purchase;
+  };
 
   const paidInvoice = async (
     options: {
@@ -74,6 +118,7 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
     const organizationId = options.organizationId ?? f.org.id;
     const status = options.changes?.status ?? "PAID";
     const id = randomUUID().replace(/-/g, "");
+    const purchase = await agreedPurchase(organizationId);
     return prisma.subscriptionInvoice.create({
       data: {
         id,
@@ -81,7 +126,8 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
         createdById: f.adminUser.id,
         idempotencyKey: randomUUID(),
         plan: "STARTER",
-        amountMinor: 200_000,
+        amountMinor: purchase?.amountMinor ?? 200_000,
+        ...(purchase ? { purchaseSnapshot: purchase } : {}),
         currency: "KGS",
         status,
         pendingSlot: status === "PENDING" || status === "CREATING" ? organizationId : null,
@@ -117,6 +163,7 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
                   plan: "STARTER",
                   startsAt: paidAt,
                   endsAt,
+                  ...(purchase ? { purchaseSnapshot: purchase } : {}),
                 },
               },
             }),
@@ -146,6 +193,7 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
 
   beforeEach(async () => {
     await resetDatabase();
+    purchases.clear();
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(now);
     vi.stubEnv("BILLING_PAYMENTS_MODE", "disabled");
@@ -155,6 +203,10 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
     });
     vi.stubGlobal("fetch", network);
     f = await seedBase();
+    await prisma.user.updateMany({
+      where: { organizationId: f.org.id, id: { not: f.adminUser.id } },
+      data: { isActive: false },
+    });
     await prisma.organization.update({
       where: { id: f.org.id },
       data: {
@@ -566,11 +618,11 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
         "billingLifetimeProtected",
       );
     }
+    const invoice = await paidInvoice();
     await prisma.subscriptionContract.update({
       where: { organizationId: f.org.id },
       data: { lifetimeAccess: true },
     });
-    const invoice = await paidInvoice();
     await expect(recordManualSubscriptionRefund(request(invoice.id))).rejects.toHaveProperty(
       "message",
       "billingLifetimeProtected",
