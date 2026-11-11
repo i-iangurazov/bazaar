@@ -12,6 +12,7 @@ import { legalCopy } from "@/content/legal";
 import { legalDocumentIds } from "@/content/legal/types";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { MarketingPricing } from "./MarketingPricing";
+import { MarketingPurchaseFaqAnswer } from "./MarketingPurchaseFaqAnswer";
 
 import { FeatureShowcase } from "./FeatureShowcase";
 import { MarketingMotion } from "./MarketingMotion";
@@ -390,7 +391,9 @@ export const MarketingLanding = async () => {
                 {item.question}
                 <span aria-hidden="true">+</span>
               </summary>
-              <p>{item.answer}</p>
+              {item.iosAnswer && item.pendingAnswer ? (
+                <MarketingPurchaseFaqAnswer answer={item.answer} iosAnswer={item.iosAnswer} pendingAnswer={item.pendingAnswer} />
+              ) : <p>{item.answer}</p>}
             </details>
           ))}
         </div>
