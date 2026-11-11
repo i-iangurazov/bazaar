@@ -1,4 +1,8 @@
 import { getServerAuthToken } from "@/server/auth/token";
+import { prisma } from "@/server/db/prisma";
+import { AppError } from "@/server/services/errors";
+import { assertUserCanAccessProduct } from "@/server/services/productAccess";
+import { getBlobStoragePath, getBlobStoreBaseUrl } from "@/server/services/vercelBlobStorage";
 import {
   fetchPublicProductImage,
   parseProductImageHttpUrl,
@@ -115,10 +119,45 @@ const inferImageMimeTypeFromBytes = (bytes: Uint8Array) => {
   return "";
 };
 
-const resolveManagedSourceUrl = (rawSourceUrl: string, requestUrl: URL) => {
+type ManagedSource = {
+  url: URL;
+  allowUrl: (url: URL) => boolean;
+  isLocalUpload: boolean;
+  blobProductId?: string;
+};
+
+const resolveManagedSourceUrl = (rawSourceUrl: string, requestUrl: URL, organizationId: string): ManagedSource | null => {
   const sourceUrl = rawSourceUrl.trim();
   if (!sourceUrl) {
     return null;
+  }
+
+  if (process.env.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() === "vercel-blob") {
+    let base: string;
+    try { base = getBlobStoreBaseUrl("images"); } catch { return null; }
+    const candidate = parseProductImageHttpUrl(sourceUrl);
+    if (candidate?.origin === base) {
+      const prefix = `retails/${organizationId}/products/`;
+      let path: string;
+      try { path = getBlobStoragePath("images", sourceUrl); } catch { return null; }
+      if (!path.startsWith(prefix)) return null;
+      const match = /^([A-Za-z0-9_-]+)\/([a-f0-9]{40}\.(?:png|jpe?g|webp|avif|heic|heif|gif|bmp|tiff?))$/.exec(path.slice(prefix.length));
+      if (!match) return null;
+      const productId = match[1];
+      const productPrefix = `${prefix}${productId}/`;
+      const imageFile = /^[a-f0-9]{40}\.(?:png|jpe?g|webp|avif|heic|heif|gif|bmp|tiff?)$/;
+      return {
+        url: candidate,
+        isLocalUpload: false,
+        blobProductId: productId === "unassigned" ? undefined : productId,
+        allowUrl: (url) => {
+          try {
+            const next = getBlobStoragePath("images", url.href);
+            return next.startsWith(productPrefix) && imageFile.test(next.slice(productPrefix.length));
+          } catch { return false; }
+        },
+      };
+    }
   }
 
   const appUrls = [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXTAUTH_URL]
@@ -168,12 +207,18 @@ export const GET = async (request: Request) => {
     return Response.json({ message: "invalidInput" }, { status: 400 });
   }
 
-  const managedSourceUrl = resolveManagedSourceUrl(rawSourceUrl, requestUrl);
+  const managedSourceUrl = resolveManagedSourceUrl(rawSourceUrl, requestUrl, String(token.organizationId));
   if (!managedSourceUrl) {
     return Response.json({ message: "forbidden" }, { status: 403 });
   }
 
   try {
+    if (managedSourceUrl.blobProductId) {
+      await assertUserCanAccessProduct(prisma, {
+        id: String(token.sub ?? ""), organizationId: String(token.organizationId), role: String(token.role),
+        isOrgOwner: Boolean(token.isOrgOwner), isPlatformOwner: Boolean(token.isPlatformOwner),
+      }, managedSourceUrl.blobProductId);
+    }
     const configuredMaxBytes = Number(process.env.PRODUCT_IMAGE_MAX_BYTES);
     const maxBytes = Number.isFinite(configuredMaxBytes) && configuredMaxBytes > 0
       ? configuredMaxBytes
@@ -217,7 +262,10 @@ export const GET = async (request: Request) => {
         "Cache-Control": "private, no-store, max-age=0",
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof AppError && error.code === "FORBIDDEN") {
+      return Response.json({ message: "forbidden" }, { status: 403 });
+    }
     return Response.json({ message: "imageReadFailed" }, { status: 500 });
   }
 };

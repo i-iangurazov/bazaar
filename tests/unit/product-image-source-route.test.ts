@@ -4,13 +4,14 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockProductImageHttpResponse } from "../helpers/product-image-http";
 
-const { mockGetServerAuthToken, lookupMock, requestMock } = vi.hoisted(() => ({
-  mockGetServerAuthToken: vi.fn(), lookupMock: vi.fn(), requestMock: vi.fn(),
+const { mockGetServerAuthToken, lookupMock, requestMock, productCount, storeAccess } = vi.hoisted(() => ({
+  mockGetServerAuthToken: vi.fn(), lookupMock: vi.fn(), requestMock: vi.fn(), productCount: vi.fn(), storeAccess: vi.fn(),
 }));
 vi.mock("@/server/auth/token", () => ({ getServerAuthToken: mockGetServerAuthToken }));
 vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 vi.mock("node:http", () => ({ request: requestMock }));
 vi.mock("node:https", () => ({ request: requestMock }));
+vi.mock("@/server/db/prisma", () => ({ prisma: { product: { count: productCount }, userStoreAccess: { findMany: storeAccess } } }));
 
 import { GET } from "@/app/api/product-images/source/route";
 
@@ -31,6 +32,9 @@ describe("product image source route", () => {
     lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
     requestMock.mockImplementation((_url, _options, callback) => mockProductImageHttpResponse(callback));
     vi.stubEnv("R2_PUBLIC_BASE_URL", "https://images.example.com/assets");
+    vi.stubEnv("IMAGE_STORAGE_PROVIDER", "local");
+    productCount.mockResolvedValue(1);
+    storeAccess.mockResolvedValue([{ store: { id: "assigned-store" } }]);
   });
   afterEach(() => vi.unstubAllEnvs());
 
@@ -118,5 +122,50 @@ describe("product image source route", () => {
     mockGetServerAuthToken.mockResolvedValue(token);
     expect([401, 403]).toContain((await requestImage(`${uploadPath}/photo.jpg`)).status);
     expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("reads the configured public Blob image for an accessible organization product", async () => {
+    vi.stubEnv("IMAGE_STORAGE_PROVIDER", "vercel-blob");
+    vi.stubEnv("BLOB_IMAGE_STORE_ID", "store_testImages");
+    const source = `https://testimages.public.blob.vercel-storage.com/retails/org-1/products/prod-1/${"a".repeat(40)}.png`;
+    const response = await requestImage(source);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("private, no-store");
+    expect(productCount).toHaveBeenCalledWith({ where: { id: { in: ["prod-1"] }, organizationId: "org-1", isDeleted: false } });
+    expect(requestMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    `https://testimages.public.blob.vercel-storage.com/retails/foreign-org/products/prod-1/${"a".repeat(40)}.png`,
+    `https://testexports.private.blob.vercel-storage.com/exports/org-1/job/${"a".repeat(40)}.png`,
+    `https://foreign.public.blob.vercel-storage.com/retails/org-1/products/prod-1/${"a".repeat(40)}.png`,
+    `https://testimages.public.blob.vercel-storage.com/retails/org-1/products/prod-1/${"a".repeat(40)}.svg`,
+    `https://testimages.public.blob.vercel-storage.com/retails/org-1/products/prod-1/${"a".repeat(40)}.png?other=1`,
+  ])("rejects a Blob URL outside the public organization image contract before any request: %s", async (source) => {
+    vi.stubEnv("IMAGE_STORAGE_PROVIDER", "vercel-blob");
+    vi.stubEnv("BLOB_IMAGE_STORE_ID", "store_testImages");
+    expect((await requestImage(source)).status).toBe(403);
+    expect(requestMock).not.toHaveBeenCalled();
+    expect(lookupMock).not.toHaveBeenCalled();
+  });
+
+  it("does not follow a Blob redirect into another product's path", async () => {
+    vi.stubEnv("IMAGE_STORAGE_PROVIDER", "vercel-blob");
+    vi.stubEnv("BLOB_IMAGE_STORE_ID", "store_testImages");
+    requestMock.mockImplementationOnce((_url, _options, callback) => mockProductImageHttpResponse(callback, {
+      status: 302, headers: { location: `/retails/org-1/products/other-product/${"b".repeat(40)}.png` },
+    }));
+    expect((await requestImage(`https://testimages.public.blob.vercel-storage.com/retails/org-1/products/prod-1/${"a".repeat(40)}.png`)).status).toBe(502);
+    expect(requestMock).toHaveBeenCalledOnce();
+  });
+
+  it("preserves Blob MIME and response byte limits", async () => {
+    vi.stubEnv("IMAGE_STORAGE_PROVIDER", "vercel-blob");
+    vi.stubEnv("BLOB_IMAGE_STORE_ID", "store_testImages");
+    vi.stubEnv("PRODUCT_IMAGE_MAX_BYTES", "3");
+    requestMock.mockImplementation((_url, _options, callback) => mockProductImageHttpResponse(callback, {
+      body: new Uint8Array([1, 2, 3, 4]), headers: { "content-type": "image/png" },
+    }));
+    expect((await requestImage(`https://testimages.public.blob.vercel-storage.com/retails/org-1/products/prod-1/${"a".repeat(40)}.png`)).status).toBe(502);
   });
 });
