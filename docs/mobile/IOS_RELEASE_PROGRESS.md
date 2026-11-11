@@ -416,3 +416,43 @@ tests, including real PostgreSQL and per-operation token freshness/absence and
 log-redaction cases. The production dependency audit again reports zero known
 findings. The updated cloud build and real HTTP image/CSV/ZIP retry follow this
 checkpoint; a mocked SDK test remains insufficient cloud acceptance evidence.
+
+### Verified cloud storage and prepaid-access follow-up
+
+The updated source `5db9c6333ec2ede9e9363953f37b106afdaff6a6` built successfully
+in the same dedicated Preview project. Deployment
+`dpl_8BcjCLX9DUtQfL5JG3VVuzHyLwvh` is READY, with Preview OIDC and the exact stable
+alias binding verified again. Latest typecheck, lint and translations all pass.
+
+- Actual cloud HTTP smoke passed **16 checks**: normal login/fresh role/tenant,
+  synthetic photo upload and attachment, later exact byte read, private CSV
+  background job/download, image ZIP containing the saved bytes, single-use ZIP
+  retrieval, and anonymous/staff access denials. The earlier upload failure is
+  resolved on this source. No customer data or payment/AI provider call was used.
+- A bounded browser follow-up passed **eight checks** on desktop/mobile products
+  and the closed-shift POS empty state. Persisted public images fully loaded
+  with their original 32-pixel dimensions on both sizes. No JavaScript error or
+  document overflow occurred. Two expected 401s followed deliberate cookie
+  removal. This is not a completed POS-sale, native camera or real-iPhone test;
+  the demo still needs register/price/stock preparation before retail acceptance.
+- A separate run-labelled synthetic fixture A now has current plus future
+  GoPay-test periods, a store addition/reserve pack and consumed monthly units.
+  The guarded seed made zero provider calls and preserved the original demo and
+  B/C organizations/configuration. These PAID test-ledger rows are explicitly
+  synthetic, not proof of a GoPay charge. A's Sandbox allowlist was not changed.
+- Normal HTTP verification of A passed **seven checks** over two independent
+  logins: active BUSINESS access, two-store/6,000-product/seven-user limits,
+  current and six-month future test periods, provider history and unchanged
+  consumption of AI 17/images 1/marketing emails 23. No checkout/check/resume,
+  cancellation or provider endpoint was invoked. Real iPhone/provider proof is
+  still absent.
+- All automation-owned browser instances were closed. The owned local PostgreSQL
+  and Redis test services were verified and stopped; database and useful build
+  caches remain for a later controlled restart. Obsolete owned source exports
+  were removed. The cloud Preview stays available without local servers.
+
+No full Apple-enabled candidate, signed upload, TestFlight installation, Sandbox
+purchase or publication is claimed. The commercial appendix now also describes
+an unapproved direct-upgrade option C without a retained wallet; it is a design
+proposal, not implementation or Apple approval. The owner has requested an
+explanation and has not selected/approved any changed commercial model.

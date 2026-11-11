@@ -73,7 +73,8 @@ reference](https://developer.apple.com/help/app-store-connect/reference/in-app-p
 **Owner decision prepared on 2026-11-11; neither alternative is approved or
 enabled.** Recommend **A** if next-period paid changes and separately approved
 early access are acceptable. If immediate paid changes must match the web at
-launch, choose **B** and keep that requirement open until implemented and tested.
+launch, compare **B** with the later **C** proposal below and keep that requirement
+open until the selected behavior is implemented and tested.
 
 An identified IAP product has configured storefront prices; a time-sensitive
 web KGS quote is not an amount argument Bazaar can pass to StoreKit for that
@@ -150,7 +151,41 @@ New ledger/quote/refund tests and Sandbox/App Review evidence must include
 partially spent and multiply funded upgrades. Do not repurpose existing
 subscription or WhatsApp balances as this wallet.
 
-**Reviewable choice:** A's commercial change/goodwill policy, or B's new products,
-economics and implementation. Both need actual prices/terms, transition tests
+**Reviewable choices:** A's commercial change/goodwill policy, B's new products
+and credit economics, or C's direct temporary-upgrade products below. All need actual prices/terms, transition tests
 and owner access gates. Renewal-only support does not complete the full goal.
 This appendix changes no code, draft products, paid access or release status.
+
+### C: direct temporary upgrade, without a retained balance
+
+**Unapproved design proposal; not implemented or registered.** The owner asked
+for a simpler explanation of the earlier A/B question and has not approved a
+wallet or changed commercial terms. A retained balance is not inherently
+necessary: a clearly described non-renewing product could fund a temporary
+upgrade fixed by an immutable organization/rights/interval/source-grant quote.
+This is an inference from Apple's app-managed non-renewing subscription model,
+not an approval of generic money-value products. See
+[Apple's non-renewing guidance](https://developer.apple.com/documentation/StoreKit/handling-subscriptions-billing).
+
+The proposal uses reviewed fixed-price upgrade bands and owner-funded downward
+rounding. Hypothetical same-currency example: an approved cap of 3.20 with a
+registered price of 2.99 charges 2.99 for the agreed upgrade; the difference is
+a discount, with no retained customer balance. No real price or exchange rate is
+established by that example. KGS reference valuation, Apple localized price and
+seller proceeds remain separate. Price changes and other storefront currencies
+need an approved comparison/refresh rule; fixed USD bands do not establish it.
+
+Implementation would still require non-renewing CHANGE quotes/intents,
+version-bound current/future base segments, dependent incremental grants in
+shared entitlement and SQL-capacity checks, preserved usage anchors, restore,
+stale-paid recovery and refund/reversal handling. Refund of an increment removes
+only its rights; a revoked base cannot leave an unfunded full target. Existing
+manual GoPay bank-refund attestations do not themselves revoke access and must
+not be reinterpreted as base revocation.
+
+Before sales, approve the affected intervals, discount ceiling, below-minimum
+behavior, storefront/currency rule, base/increment refund consequences, meaningful
+product descriptions and actual prices. More bands reduce the discount gap but
+increase product/price maintenance. Actual Sandbox and App Review evidence remain
+required. No new products, balances, access or payment collection are enabled by
+this proposal.
