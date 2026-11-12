@@ -10,6 +10,7 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_GA4_MEASUREMENT_ID", measurementId);
   vi.stubEnv("NEXT_PUBLIC_GA4_ENABLED", "true");
   localStorage.clear();
+  sessionStorage.clear();
   document.head.innerHTML = "";
   document.body.innerHTML = "";
   for (const cookie of document.cookie.split(";"))
@@ -267,10 +268,10 @@ describe("optional marketing analytics", () => {
         window.history.replaceState({}, "", "/register-business/private-token");
         analytics.synchronizeMarketingAnalytics(window.location.pathname);
       }
-      const before = commands().length;
+      const before = commands().filter(command => command[0] === "event").length;
       const timersBefore = vi.getTimerCount();
       await analytics.trackSignupBeforeNavigation();
-      expect(commands()).toHaveLength(before);
+      expect(commands().filter(command => command[0] === "event")).toHaveLength(before);
       expect(vi.getTimerCount()).toBe(timersBefore);
     },
   );
@@ -316,10 +317,13 @@ describe("optional marketing analytics", () => {
     document.cookie = "_ga=google-cookie; Path=/";
     document.cookie = "_ga_TEST123456=stream-cookie; Path=/";
     document.cookie = "bazaar_acquisition=first-party-labels; Path=/";
-    const before = commands().length;
+    const before = commands().filter(command => command[0] === "event").length;
     analytics.writeAnalyticsConsent("denied");
     analytics.trackMarketingEvent("contact_whatsapp_click");
-    expect(commands()).toHaveLength(before);
+    expect(commands().filter(command => command[0] === "event")).toHaveLength(before);
+    expect(commands().filter(command => command[0] === "consent").at(-1)?.[2]).toEqual({
+      analytics_storage: "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied",
+    });
     expect(document.querySelector("script")).toBeNull();
     expect(document.cookie).not.toMatch(/_ga=/);
     expect(document.cookie).not.toMatch(/_ga_TEST123456=/);
@@ -331,12 +335,12 @@ describe("optional marketing analytics", () => {
     const analytics = await import("@/lib/marketingAnalytics");
     analytics.writeAnalyticsConsent("granted");
     analytics.synchronizeMarketingAnalytics("/");
-    const before = commands().length;
-    localStorage.removeItem("bazaar_analytics_consent_v1");
+    const before = commands().filter(command => command[0] === "event").length;
+    localStorage.removeItem("bazaar_marketing_consent_v2");
     expect(analytics.readAnalyticsConsent()).toBeNull();
     analytics.synchronizeMarketingAnalytics("/");
     analytics.trackMarketingEvent("contact_whatsapp_click");
-    expect(commands()).toHaveLength(before);
+    expect(commands().filter(command => command[0] === "event")).toHaveLength(before);
     expect(document.querySelector("script")).toBeNull();
     expect((window as unknown as Record<string, unknown>)[`ga-disable-${measurementId}`]).toBe(true);
   });
@@ -345,12 +349,12 @@ describe("optional marketing analytics", () => {
     const analytics = await import("@/lib/marketingAnalytics");
     analytics.writeAnalyticsConsent("granted");
     analytics.synchronizeMarketingAnalytics("/");
-    const before = commands().length;
+    const before = commands().filter(command => command[0] === "event").length;
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Storage blocked", "SecurityError"); });
     analytics.writeAnalyticsConsent("denied");
     expect(analytics.readAnalyticsConsent()).toBe("denied");
     analytics.synchronizeMarketingAnalytics("/");
-    expect(commands()).toHaveLength(before);
+    expect(commands().filter(command => command[0] === "event")).toHaveLength(before);
     expect(document.querySelector("script")).toBeNull();
   });
 

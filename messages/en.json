@@ -7681,13 +7681,15 @@
     "readOnly": "Read-only. Editing is available to ADMIN and MANAGER."
   },
   "analyticsConsent": {
-    "title": "Allow Google Analytics?",
-    "description": "It helps us understand which pages lead to registration. Google uses cookies. We do not send information entered in forms. You can continue without analytics.",
-    "allow": "Allow",
+    "title": "Which measurement would you allow?",
+    "description": "Google helps us understand which pages lead to registration and uses cookies. Choose statistics only, or continue without measurement.",
+    "allow": "Statistics only",
     "decline": "Without analytics",
     "privacy": "About your data",
     "settings": "Analytics settings",
-    "browserChoice": "Your browser requests no analytics. We respect that choice."
+    "browserChoice": "Your browser requests no analytics. We respect that choice.",
+    "advertisingDescription": "You can separately allow advertising measurement: Google uses click identifiers and advertising cookies to connect an ad visit with registration. Ad personalization stays off. We do not send form contents.",
+    "allowAdvertising": "Statistics and ad measurement"
   },
   "privacy": {
     "metaTitle": "Privacy policy — Bazaar",
@@ -7696,13 +7698,13 @@
     "eyebrow": "Privacy",
     "title": "Bazaar privacy policy",
     "intro": "This policy describes data processing in the Bazaar web application, PWA and supported mobile versions. Processing depends on the features your organization uses.",
-    "updated": "Updated: November 11, 2026",
+    "updated": "Updated: November 12, 2026",
     "dataTitle": "Data Bazaar uses",
     "dataBody": "Account, organization and location information; products, photographs, stock, documents, sales, orders and contacts entered by authorized users; security and diagnostic events. Voice, images and other attachments are processed when you submit them to the relevant feature. Device information and push tokens support selected notifications.",
     "acquisitionTitle": "Acquisition source",
     "analyticsTitle": "Optional Google Analytics",
-    "analyticsBody": "If Google Analytics is configured on the site, it loads only after you allow it. It helps measure public page visits, WhatsApp link clicks and successful registration steps. Google receives technical connection data and uses its own analytics cookies. Campaign information is limited to reviewed source, medium, campaign, creative and keyword-group labels. Unrecognized labels are not sent. We do not send form contents, names, email addresses, phone numbers, legal or store details, registration tokens or full referral URLs. The private application is not tracked. Advertising personalization is disabled. Your choice is stored in your browser for up to 180 days and can be changed using Analytics settings on public pages. Declining prevents the Google script from loading; withdrawing consent disables new events and removes analytics cookies. Do Not Track and Global Privacy Control override consent. The acquisition-source measurement described above operates separately.",
-    "acquisitionBody": "When you follow a campaign-tagged link, Bazaar may keep the first source in the bazaar_acquisition cookie for 30 days and attach it to a submitted access request or a new account. Only source, medium, campaign, content and keyword labels and the visit time are stored. Full page URLs and advertising click identifiers are not collected. Labels must not contain personal data. Do Not Track and Global Privacy Control signals disable storage. You can delete the cookie in your browser; contact support to remove a stored acquisition source.",
+    "analyticsBody": "Google Analytics loads only after you allow it and measures public page visits, WhatsApp link clicks and successful registration steps. Google receives technical connection data and uses analytics cookies. You can allow statistics alone or additionally advertising measurement. Only with separate advertising-measurement permission does Google receive validated gclid, gbraid, wbraid and gad_source parameters present in the landing link, and may use _gcl_* advertising cookies and its own storage to connect a click with registration. Bazaar keeps these parameters in the current tab's session storage for no longer than 30 minutes to carry them between public pages; Google determines the lifetime of its own cookies. Ad personalization, Google Signals and form-data sharing for enhanced conversions stay disabled. Campaign information is limited to reviewed source, medium, campaign, creative and keyword-group labels; unrecognized labels are not sent. We do not send form contents, names, email addresses, phone numbers, legal or store details, registration tokens or full referral URLs. The private application is not tracked. Your choice is stored in your browser for up to 180 days and can be changed using Analytics settings. Earlier statistics permission does not authorize advertising measurement. Declining prevents the Google script from loading; withdrawal stops further measurement of the relevant type and removes its accessible cookies and stored parameters. Do Not Track and Global Privacy Control override permission. Acquisition-source measurement operates separately.",
+    "acquisitionBody": "When you follow a campaign-tagged link, Bazaar may keep the first source in the bazaar_acquisition cookie for 30 days and attach it to a submitted access request or a new account. This cookie and source record contain only source, medium, campaign, content and keyword labels and the visit time; full page URLs and advertising click identifiers are not written there. Labels must not contain personal data. Do Not Track and Global Privacy Control disable storage. You can delete the cookie in your browser; contact support to remove a stored acquisition source. Separate, consented advertising measurement is described below.",
     "purposeTitle": "Why the data is needed",
     "purposeBody": "Data supports authentication and access management, authorized business operations, record storage and synchronization, payment for Bazaar, selected notifications and integrations, requested AI features, service security and troubleshooting.",
     "permissionsTitle": "Camera and notifications",

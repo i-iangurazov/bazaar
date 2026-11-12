@@ -57,8 +57,8 @@ export function MarketingAnalytics() {
 
   if (!configured || !ready || !publicMarketingPage(pathname)) return null;
 
-  const choose = (next: AnalyticsConsent) => {
-    writeAnalyticsConsent(next);
+  const choose = (next: AnalyticsConsent, advertising: AnalyticsConsent = "denied") => {
+    writeAnalyticsConsent(next, advertising);
     setEditing(false);
   };
 
@@ -84,9 +84,11 @@ export function MarketingAnalytics() {
       className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-2xl rounded-xl border border-border bg-card p-5 text-foreground shadow-xl sm:p-6">
       <p className="text-base font-semibold">{t("title")}</p>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">{t("description")}</p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{t("advertisingDescription")}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button type="button" className="min-h-11" onClick={() => choose("granted")}>{t("allow")}</Button>
-        <Button type="button" className="min-h-11" variant="secondary" onClick={() => choose("denied")}>{t("decline")}</Button>
+        <Button type="button" className="h-auto min-h-11 max-w-full whitespace-normal py-2 text-left" variant="secondary" onClick={() => choose("granted")}>{t("allow")}</Button>
+        <Button type="button" className="h-auto min-h-11 max-w-full whitespace-normal py-2 text-left" variant="secondary" onClick={() => choose("granted", "granted")}>{t("allowAdvertising")}</Button>
+        <Button type="button" className="h-auto min-h-11 max-w-full whitespace-normal py-2 text-left" variant="secondary" onClick={() => choose("denied")}>{t("decline")}</Button>
         <Link href="/privacy" className="inline-flex min-h-11 items-center text-sm underline underline-offset-4">{t("privacy")}</Link>
       </div>
     </aside>

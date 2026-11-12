@@ -1,14 +1,18 @@
 // Optional marketing measurement. Never pass form values, account/business IDs,
-// arbitrary parameters, URL queries, referrers or registration tokens to Google.
+// arbitrary parameters, referrers or registration tokens to Google. Only a
+// separately consented, validated Google click-ID query may leave this module.
 import { marketingCampaignOverrides } from "@/lib/marketingCampaigns";
+import { clearMarketingClickIds, marketingClickQuery } from "@/lib/marketingClickIds";
 
-const consentKey = "bazaar_analytics_consent_v1";
+const legacyConsentKey = "bazaar_analytics_consent_v1";
+const consentKey = "bazaar_marketing_consent_v2";
 const consentLifetime = 180 * 24 * 60 * 60 * 1000;
 const scriptId = "bazaar-marketing-analytics";
 const origin = "https://www.bazaar.kg";
 const signupEventTimeout = 1000;
 
 export type AnalyticsConsent = "granted" | "denied";
+type ConsentChoice = { analytics: AnalyticsConsent; advertising: AnalyticsConsent };
 export type MarketingEvent =
   | "contact_whatsapp_click"
   | "access_request_submitted"
@@ -19,8 +23,10 @@ type AnalyticsWindow = Window & {
   gtag?: (...args: unknown[]) => void;
 };
 
-let sessionConsent: AnalyticsConsent | null = null;
+let sessionConsent: ConsentChoice | null = null;
 let initializedId: string | null = null;
+let initializedAnalytics: AnalyticsConsent | null = null;
+let initializedAdvertising: AnalyticsConsent | null = null;
 let lastPage: string | null = null;
 // A private page can enter the public site through client navigation. Loading
 // Google into that document would also load it into its private Back history.
@@ -41,33 +47,52 @@ export function analyticsPrivacyOptOut() {
   return browser.globalPrivacyControl === true || ["1", "yes"].includes(browser.doNotTrack ?? "");
 }
 
-export function readAnalyticsConsent(now = Date.now()): AnalyticsConsent | null {
+function readConsent(now = Date.now()): ConsentChoice | null {
   if (typeof window === "undefined") return null;
   // An explicit choice still applies in this document if persistence failed.
   if (sessionConsent !== null) return sessionConsent;
   try {
-    const raw = localStorage.getItem(consentKey);
+    const current = localStorage.getItem(consentKey);
+    const raw = current ?? localStorage.getItem(legacyConsentKey);
     if (!raw) return null;
     const saved = JSON.parse(raw);
-    if (saved?.version !== 1 || !["granted", "denied"].includes(saved.choice) ||
-      !Number.isFinite(saved.at) || saved.at > now || now - saved.at >= consentLifetime)
+    if (!Number.isFinite(saved.at) || saved.at > now || now - saved.at >= consentLifetime)
       return null;
-    return saved.choice;
+    if (current !== null) {
+      if (saved?.version !== 2 || !["granted", "denied"].includes(saved.analytics) ||
+        !["granted", "denied"].includes(saved.advertising) ||
+        (saved.analytics === "denied" && saved.advertising === "granted")) return null;
+      return { analytics: saved.analytics, advertising: saved.advertising };
+    }
+    // Prior permission was for statistics only. It never authorizes Ads data.
+    return saved?.version === 1 && ["granted", "denied"].includes(saved.choice)
+      ? { analytics: saved.choice, advertising: "denied" } : null;
   } catch {
     return sessionConsent;
   }
 }
 
-export function writeAnalyticsConsent(choice: AnalyticsConsent) {
-  sessionConsent = choice;
+export function readAnalyticsConsent(now = Date.now()): AnalyticsConsent | null {
+  return readConsent(now)?.analytics ?? null;
+}
+
+export function readAdvertisingConsent(now = Date.now()): AnalyticsConsent | null {
+  return readConsent(now)?.advertising ?? null;
+}
+
+export function writeAnalyticsConsent(choice: AnalyticsConsent, advertising: AnalyticsConsent = "denied") {
+  const next = { analytics: choice, advertising: choice === "granted" ? advertising : "denied" } as const;
+  sessionConsent = next;
   try {
-    localStorage.setItem(consentKey, JSON.stringify({ version: 1, choice, at: Date.now() }));
+    localStorage.setItem(consentKey, JSON.stringify({ version: 2, ...next, at: Date.now() }));
+    localStorage.removeItem(legacyConsentKey);
     // Clearing a successfully saved choice must never revive an old permission.
     sessionConsent = null;
   } catch {
     // Registration and the current choice still work with blocked storage.
   }
   if (choice === "denied") stopMarketingAnalytics();
+  else if (next.advertising === "denied") clearAdvertisingMeasurement();
   window.dispatchEvent(new Event("bazaar:analytics-consent"));
 }
 
@@ -132,14 +157,24 @@ export function interceptPrivateMarketingLink(
 
 export function stopMarketingAnalytics() {
   if (typeof window === "undefined") return;
+  clearMarketingClickIds();
   // A disabled/unconfigured feature must not alter cookies from another setup.
   // A known ID can still have cookies from an earlier consented visit.
   if (!initializedId && !marketingMeasurementId()) return;
   pauseMarketingAnalytics();
-  // Remove only GA cookies, never authentication or first-party source cookies.
+  if (initializedId && initializedAnalytics !== "denied") {
+    resetPublicContext();
+    safeConsentCommand("consent", "update", {
+      analytics_storage: "denied", ad_storage: "denied",
+      ad_user_data: "denied", ad_personalization: "denied",
+    });
+    initializedAdvertising = "denied";
+    initializedAnalytics = "denied";
+  }
+  // Remove only Google measurement cookies, never auth or first-party source.
   for (const entry of document.cookie.split(";")) {
     const name = entry.trim().split("=")[0];
-    if (!/^_ga(?:_|$)/.test(name)) continue;
+    if (!/^_(?:ga(?:_|$)|gcl_)/.test(name)) continue;
     const expires = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
     document.cookie = expires;
     const hostname = window.location.hostname;
@@ -147,10 +182,56 @@ export function stopMarketingAnalytics() {
     if (hostname === "bazaar.kg" || hostname.endsWith(".bazaar.kg"))
       document.cookie = `${expires}; Domain=bazaar.kg`;
   }
+  try { localStorage.removeItem("_gcl_ls"); } catch { /* Optional Google storage. */ }
 }
 
 function consentAllowsAnalytics() {
   return !analyticsPrivacyOptOut() && readAnalyticsConsent() === "granted";
+}
+
+function consentAllowsAdvertising() {
+  return consentAllowsAnalytics() && readAdvertisingConsent() === "granted";
+}
+
+function safeConsentCommand(...args: unknown[]) {
+  try { (window as AnalyticsWindow).gtag?.(...args); }
+  catch { /* A blocked third-party SDK must never prevent a privacy choice. */ }
+}
+
+function resetPublicContext() {
+  const page = publicMarketingPage(window.location.pathname);
+  safeConsentCommand("set", {
+    send_page_view: false, page_location: origin + (page?.path ?? "/"),
+    page_referrer: "", page_title: page?.title ?? "BAZAAR",
+  });
+}
+
+function clearAdvertisingMeasurement() {
+  clearMarketingClickIds();
+  if (!initializedId && !marketingMeasurementId()) return;
+  if (initializedId && initializedAdvertising !== "denied") {
+    resetPublicContext();
+    safeConsentCommand("consent", "update", {
+      ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied",
+    });
+    initializedAdvertising = "denied";
+  }
+  for (const entry of document.cookie.split(";")) {
+    const name = entry.trim().split("=")[0];
+    if (!/^_gcl_/.test(name)) continue;
+    const expires = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
+    document.cookie = expires;
+    document.cookie = `${expires}; Domain=${window.location.hostname}`;
+    if (window.location.hostname === "bazaar.kg" || window.location.hostname.endsWith(".bazaar.kg"))
+      document.cookie = `${expires}; Domain=bazaar.kg`;
+  }
+  try { localStorage.removeItem("_gcl_ls"); } catch { /* Optional Google storage. */ }
+}
+
+function publicPageLocation(path: string) {
+  const query = consentAllowsAdvertising()
+    ? marketingClickQuery(new URLSearchParams(window.location.search)) : "";
+  return origin + path + (query ? `?${query}` : "");
 }
 
 export function synchronizeMarketingAnalytics(
@@ -182,8 +263,10 @@ export function synchronizeMarketingAnalytics(
   }
   setDisabled(false);
   const analytics = window as AnalyticsWindow;
+  const advertising = consentAllowsAdvertising() ? "granted" : "denied";
+  if (advertising === "denied") clearAdvertisingMeasurement();
   const pageContext = {
-    page_location: origin + page.path, page_referrer: "", page_title: page.title,
+    page_location: publicPageLocation(page.path), page_referrer: "", page_title: page.title,
   };
   if (initializedId !== id) {
     analytics.dataLayer = analytics.dataLayer ?? [];
@@ -196,8 +279,8 @@ export function synchronizeMarketingAnalytics(
     // that known choice before config, without a denied-to-granted reconfiguration
     // that can produce another automatic page_view in the real SDK.
     analytics.gtag("consent", "default", {
-      analytics_storage: "granted", ad_storage: "denied",
-      ad_user_data: "denied", ad_personalization: "denied",
+      analytics_storage: "granted", ad_storage: advertising,
+      ad_user_data: advertising, ad_personalization: "denied",
     });
     // Safe global defaults also cover automatic engagement/session parameters.
     analytics.gtag("set", {
@@ -212,10 +295,20 @@ export function synchronizeMarketingAnalytics(
       allow_ad_personalization_signals: false,
     });
     initializedId = id;
+    initializedAnalytics = "granted";
+    initializedAdvertising = advertising;
   } else {
     // Engagement uses global context too. Update only from the exact public
     // allowlist, before the manual view, without re-running config or leaking URL data.
     analytics.gtag?.("set", { send_page_view: false, ...pageContext });
+    if (initializedAnalytics !== "granted" || initializedAdvertising !== advertising) {
+      analytics.gtag?.("consent", "update", {
+        analytics_storage: "granted", ad_storage: advertising,
+        ad_user_data: advertising, ad_personalization: "denied",
+      });
+      initializedAdvertising = advertising;
+      initializedAnalytics = "granted";
+    }
   }
   if (!document.getElementById(scriptId) && page) {
     const script = document.createElement("script");
@@ -227,7 +320,7 @@ export function synchronizeMarketingAnalytics(
   }
   if (page && lastPage !== pathname) {
     analytics.gtag?.("event", "page_view", {
-      send_to: id, page_location: origin + page.path,
+      send_to: id, page_location: pageContext.page_location,
       page_referrer: "", page_title: page.title,
     });
     lastPage = pathname;
@@ -248,9 +341,10 @@ function sendMarketingEvent(event: MarketingEvent, onProcessed?: () => void) {
   const signupEvent = event === "sign_up" || event === "access_request_submitted";
   if (signupEvent && path !== "/signup") return false;
   if (event === "contact_whatsapp_click" && !publicMarketingPage(path)) return false;
+  if (!consentAllowsAdvertising()) clearAdvertisingMeasurement();
   gtag("event", event, {
     send_to: id,
-    page_location: origin + (event === "contact_whatsapp_click" ? publicMarketingPage(path)!.path : "/signup"),
+    page_location: publicPageLocation(event === "contact_whatsapp_click" ? publicMarketingPage(path)!.path : "/signup"),
     page_referrer: "", page_title: "BAZAAR",
     ...(event === "sign_up" ? { method: "email" } : {}),
     ...(onProcessed ? { event_callback: onProcessed, event_timeout: signupEventTimeout } : {}),

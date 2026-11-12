@@ -24,8 +24,8 @@ vi.mock("@/lib/marketingAnalytics", () => ({
   synchronizeMarketingAnalytics: state.synchronize,
   trackMarketingEvent: state.track,
   interceptPrivateMarketingLink: vi.fn(),
-  writeAnalyticsConsent: (choice: "granted" | "denied") => {
-    state.write(choice); state.choice = choice;
+  writeAnalyticsConsent: (choice: "granted" | "denied", advertising: "granted" | "denied") => {
+    state.write(choice, advertising); state.choice = choice;
     window.dispatchEvent(new Event("bazaar:analytics-consent"));
   },
 }));
@@ -47,10 +47,29 @@ describe("human-readable optional analytics choice", () => {
     expect(screen.getByRole("link", { name: copy.privacy }).getAttribute("href")).toBe("/privacy");
     expect(state.write).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: copy.decline }));
-    expect(state.write).toHaveBeenCalledWith("denied");
+    expect(state.write).toHaveBeenCalledWith("denied", "denied");
     fireEvent.click(screen.getByRole("button", { name: copy.settings }));
     fireEvent.click(screen.getByRole("button", { name: copy.allow }));
-    expect(state.write).toHaveBeenLastCalledWith("granted");
+    expect(state.write).toHaveBeenLastCalledWith("granted", "denied");
+    fireEvent.click(screen.getByRole("button", { name: copy.settings }));
+    fireEvent.click(screen.getByRole("button", { name: copy.allowAdvertising }));
+    expect(state.write).toHaveBeenLastCalledWith("granted", "granted");
+    fireEvent.click(screen.getByRole("button", { name: copy.settings }));
+    fireEvent.click(screen.getByRole("button", { name: copy.allow }));
+    expect(state.write).toHaveBeenLastCalledWith("granted", "denied");
+  });
+
+  it("does not expand an existing statistics permission without a separate selection", () => {
+    state.choice = "granted";
+    render(<><input aria-label="Unsubmitted value" defaultValue="Synthetic form value" /><MarketingAnalytics /></>);
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(state.write).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: ru.analyticsConsent.settings }));
+    expect(screen.getByText(ru.analyticsConsent.advertisingDescription)).toBeTruthy();
+    expect(state.write).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: ru.analyticsConsent.allowAdvertising }));
+    expect(state.write).toHaveBeenCalledExactlyOnceWith("granted", "granted");
+    expect((screen.getByLabelText("Unsubmitted value") as HTMLInputElement).value).toBe("Synthetic form value");
   });
 
   it("does not prompt for an unconfigured stream or inside the private app", () => {
@@ -67,6 +86,7 @@ describe("human-readable optional analytics choice", () => {
     render(<MarketingAnalytics />);
     expect(screen.getByText(ru.analyticsConsent.browserChoice)).toBeTruthy();
     expect(screen.queryByRole("button", { name: ru.analyticsConsent.allow })).toBeNull();
+    expect(screen.queryByRole("button", { name: ru.analyticsConsent.allowAdvertising })).toBeNull();
   });
 
   it("resynchronizes a restored public document without remounting or clearing form state", () => {
