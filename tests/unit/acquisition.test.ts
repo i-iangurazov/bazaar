@@ -7,6 +7,23 @@ import { acquisitionCookieName, acquisitionFromSearch, parseAcquisition } from "
 const tagged =
   "utm_source=instagram&utm_medium=organic_social&utm_campaign=kg_store_launch_202611&utm_content=r01_ru";
 describe("campaign acquisition", () => {
+  it("retains the reviewed Take 6 RU landing source through a bare header signup link", async () => {
+    const query = "utm_source=instagram&utm_medium=paid_social&utm_campaign=bishkek_take6&utm_content=take6_landing&fbclid=Synthetic-Meta-Click";
+    const landing = await middleware(new NextRequest(`https://www.bazaar.kg/ru?${query}`));
+    const cookie = landing.cookies.get(acquisitionCookieName)!;
+    const captured = parseAcquisition(cookie.value);
+    expect(captured).toMatchObject({
+      utm_source: "instagram", utm_medium: "paid_social", utm_campaign: "bishkek_take6", utm_content: "take6_landing",
+    });
+    expect(captured).not.toHaveProperty("fbclid");
+    const signupRequest = new NextRequest("https://www.bazaar.kg/signup", {
+      headers: { cookie: `${acquisitionCookieName}=${encodeURIComponent(cookie.value)}` },
+    });
+    const signup = await middleware(signupRequest);
+    expect(signup.cookies.get(acquisitionCookieName)).toBeUndefined(); // Keep first touch.
+    expect(parseAcquisition(signupRequest.cookies.get(acquisitionCookieName)?.value)).toEqual(captured);
+  });
+
   it("accepts only campaign labels and strips personal data, URLs and click IDs", () => {
     const value = acquisitionFromSearch(
       new URLSearchParams(`${tagged}&utm_term=a@example.com&fbclid=private&email=private`),

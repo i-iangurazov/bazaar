@@ -30,6 +30,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { TRIAL_DAYS } from "@/lib/billing/trial";
 import { replaceAfterMarketingSuccess, trackMarketingEvent, trackSignupBeforeNavigation } from "@/lib/marketingAnalytics";
+import { trackMetaSignupBeforeNavigation } from "@/lib/metaMarketing";
 
 type RequestValues = {
   email: string;
@@ -146,7 +147,8 @@ const SignupPage = () => {
     onSuccess: async (result, variables) => {
       // Resuming an existing registration must not create another conversion.
       // Run alongside locale persistence, then wait only at the document boundary.
-      const measurement = result.accountCreated ? trackSignupBeforeNavigation() : undefined;
+      const measurement = result.accountCreated
+        ? Promise.all([trackSignupBeforeNavigation(), trackMetaSignupBeforeNavigation()]) : undefined;
       setFormError(null);
       if (result.nextPath) {
         setRedirectingToBusiness(true);

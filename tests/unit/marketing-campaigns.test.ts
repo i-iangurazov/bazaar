@@ -11,6 +11,14 @@ const labels = (content: string, term?: string) => new URLSearchParams({
 });
 
 describe("controlled GA4 campaign export", () => {
+  it.each(["take6_signup", "take6_landing"])("exports the reviewed Take 6 destination %s", content => {
+    expect(marketingCampaignOverrides(new URLSearchParams({
+      utm_source: "instagram", utm_medium: "paid_social", utm_campaign: "bishkek_take6", utm_content: content,
+    }))).toEqual({
+      campaign_source: "instagram", campaign_medium: "paid_social", campaign_name: "bishkek_take6", campaign_content: content,
+    });
+  });
+
   it.each(["bio", "highlight_start"])("exports the approved organic profile link %s", (content) => {
     expect(marketingCampaignOverrides(new URLSearchParams({
       utm_source: "instagram", utm_medium: "organic_social",

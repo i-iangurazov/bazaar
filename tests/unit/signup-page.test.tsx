@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   signupError: null as ((error: { message: string }) => void) | null,
   track: vi.fn(),
   trackSignup: vi.fn(() => Promise.resolve()),
+  trackMetaSignup: vi.fn(() => Promise.resolve()),
   navigate: vi.fn((path: string, replace: (path: string) => void) => replace(path)),
   replace: vi.fn(),
   toast: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("@/lib/marketingAnalytics", () => ({
   trackMarketingEvent: mocks.track, trackSignupBeforeNavigation: mocks.trackSignup,
   replaceAfterMarketingSuccess: mocks.navigate,
 }));
+vi.mock("@/lib/metaMarketing", () => ({ trackMetaSignupBeforeNavigation: mocks.trackMetaSignup }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     publicAuth: {
@@ -67,6 +69,7 @@ describe("signup mode transitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.trackSignup.mockResolvedValue(undefined);
+    mocks.trackMetaSignup.mockResolvedValue(undefined);
     mocks.locale = "ru";
     mocks.localizeErrors = false;
     mocks.modeQuery.data = undefined;
@@ -84,12 +87,30 @@ describe("signup mode transitions", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
     render(<SignupPage />);
     expect(mocks.trackSignup).not.toHaveBeenCalled();
+    expect(mocks.trackMetaSignup).not.toHaveBeenCalled();
     await act(async () => mocks.signupSuccess?.({ accountCreated: false, nextPath: "/register-business/resume-token" }, { preferredLocale: "ru" }));
     expect(mocks.trackSignup).not.toHaveBeenCalled();
+    expect(mocks.trackMetaSignup).not.toHaveBeenCalled();
     await act(async () => mocks.signupSuccess?.({ accountCreated: true, nextPath: "/register-business/new-token" }, { preferredLocale: "ru" }));
     expect(mocks.trackSignup).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.trackMetaSignup).toHaveBeenCalledExactlyOnceWith();
     expect(mocks.track).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenLastCalledWith("/register-business/new-token", expect.any(Function));
+  });
+
+  it("waits for the bounded Meta event independently of Google and never repeats the signup write", async () => {
+    mocks.modeQuery.isLoading = false;
+    mocks.modeQuery.data = { mode: "open" };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    let complete!: () => void;
+    mocks.trackMetaSignup.mockReturnValueOnce(new Promise(resolve => { complete = resolve; }));
+    render(<SignupPage />);
+    let result!: Promise<void>;
+    await act(async () => { result = mocks.signupSuccess!({ accountCreated: true, nextPath: "/register-business/private-token" }, { preferredLocale: "ru" }); });
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    await act(async () => { complete(); await result; });
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/register-business/private-token", expect.any(Function));
+    expect(mocks.signupMutate).not.toHaveBeenCalled();
   });
 
   it.each([true, false])("awaits event processing before the private business redirect, including locale failure: %s", async localeSucceeds => {

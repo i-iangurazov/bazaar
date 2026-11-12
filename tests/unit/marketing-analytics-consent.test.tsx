@@ -9,7 +9,18 @@ import en from "../../messages/en.json";
 const state = vi.hoisted(() => ({
   path: "/ru", id: "G-TEST123456" as string | null, locale: "ru" as "ru" | "kg" | "en",
   choice: null as "granted" | "denied" | null, blocked: false,
+  metaId: null as string | null, metaChoice: null as "granted" | "denied" | null,
   synchronize: vi.fn(), track: vi.fn(), write: vi.fn(),
+  synchronizeMeta: vi.fn(), writeMeta: vi.fn(),
+}));
+vi.mock("@/lib/metaMarketing", () => ({
+  metaMeasurementId: () => state.metaId,
+  readMetaConsent: () => state.metaChoice,
+  synchronizeMetaMeasurement: state.synchronizeMeta,
+  writeMetaConsent: (choice: "granted" | "denied") => {
+    state.writeMeta(choice); state.metaChoice = choice;
+    window.dispatchEvent(new Event("bazaar:meta-consent"));
+  },
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => {
@@ -34,11 +45,35 @@ import { MarketingAnalytics } from "@/components/analytics/marketing-analytics";
 beforeEach(() => {
   vi.clearAllMocks(); state.path = "/ru"; state.id = "G-TEST123456";
   state.locale = "ru"; state.choice = null; state.blocked = false;
+  state.metaId = null; state.metaChoice = null;
   window.history.replaceState({}, "", "/ru");
 });
 afterEach(cleanup);
 
 describe("human-readable optional analytics choice", () => {
+  it.each(["ru", "kg", "en"] as const)("offers an independent Meta choice with Google disabled in %s", locale => {
+    state.locale = locale; state.id = null; state.metaId = "1635457884748007";
+    const copy = { ru, kg, en }[locale].analyticsConsent;
+    render(<MarketingAnalytics />);
+    expect(screen.getByRole("complementary", { name: copy.metaTitle })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: copy.allowAdvertising })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: copy.metaAllow }));
+    expect(state.writeMeta).toHaveBeenCalledExactlyOnceWith("granted");
+    expect(state.write).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: copy.settings }));
+    fireEvent.click(screen.getByRole("button", { name: copy.metaDecline }));
+    expect(state.writeMeta).toHaveBeenLastCalledWith("denied");
+  });
+
+  it("does not reuse or overwrite an existing Google permission when choosing Meta", () => {
+    state.choice = "granted"; state.metaId = "1635457884748007";
+    render(<><input aria-label="Unsubmitted value" defaultValue="Synthetic form value" /><MarketingAnalytics /></>);
+    expect(screen.getByText(ru.analyticsConsent.metaDescription)).toBeTruthy();
+    expect(state.writeMeta).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: ru.analyticsConsent.metaDecline }));
+    expect(state.writeMeta).toHaveBeenCalledWith("denied"); expect(state.write).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("Unsubmitted value") as HTMLInputElement).value).toBe("Synthetic form value");
+  });
   it.each(["ru", "kg", "en"] as const)("offers refusal and a reversible choice in %s", locale => {
     state.locale = locale;
     const copy = { ru, kg, en }[locale].analyticsConsent;

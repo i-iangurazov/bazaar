@@ -19,6 +19,10 @@ const campaigns: readonly {
     contents: ["page"],
   },
   {
+    source: "instagram", medium: "paid_social", campaign: "bishkek_take6",
+    contents: ["take6_signup", "take6_landing"],
+  },
+  {
     source: "instagram", medium: "paid_social", campaign: "kg_store_launch_202611",
     contents: ["ad01_ru", "ad02_ru", "ad01_ru_direct", "ad02_ru_direct"],
   },

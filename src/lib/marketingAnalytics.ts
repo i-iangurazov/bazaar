@@ -3,6 +3,9 @@
 // separately consented, validated Google click-ID query may leave this module.
 import { marketingCampaignOverrides } from "@/lib/marketingCampaigns";
 import { clearMarketingClickIds, marketingClickQuery } from "@/lib/marketingClickIds";
+import { analyticsPrivacyOptOut, publicMarketingPage } from "@/lib/marketingPrivacy";
+import { metaHasInitialized, metaMeasurementId, pauseMetaMeasurement } from "@/lib/metaMarketing";
+export { analyticsPrivacyOptOut, publicMarketingPage } from "@/lib/marketingPrivacy";
 
 const legacyConsentKey = "bazaar_analytics_consent_v1";
 const consentKey = "bazaar_marketing_consent_v2";
@@ -39,12 +42,6 @@ export function marketingMeasurementId() {
   if (process.env.NEXT_PUBLIC_GA4_ENABLED !== "true") return null;
   const value = process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID ?? "";
   return /^G-[A-Z0-9]{6,20}$/.test(value) ? value : null;
-}
-
-export function analyticsPrivacyOptOut() {
-  if (typeof window === "undefined") return true;
-  const browser = navigator as Navigator & { globalPrivacyControl?: boolean };
-  return browser.globalPrivacyControl === true || ["1", "yes"].includes(browser.doNotTrack ?? "");
 }
 
 function readConsent(now = Date.now()): ConsentChoice | null {
@@ -96,16 +93,6 @@ export function writeAnalyticsConsent(choice: AnalyticsConsent, advertising: Ana
   window.dispatchEvent(new Event("bazaar:analytics-consent"));
 }
 
-// Exact public routes only. Business registration has a secret token in its URL
-// and is measured only by the first-party database report, never by this SDK.
-export function publicMarketingPage(pathname: string) {
-  if (["/", "/ru", "/kg", "/en"].includes(pathname))
-    return { path: pathname, title: "BAZAAR" };
-  if (pathname === "/signup") return { path: pathname, title: "BAZAAR — Sign up" };
-  if (pathname === "/privacy") return { path: pathname, title: "BAZAAR — Privacy" };
-  return null;
-}
-
 function setDisabled(value: boolean) {
   const id = initializedId ?? marketingMeasurementId();
   if (id) (window as unknown as Record<string, unknown>)[`ga-disable-${id}`] = value;
@@ -127,8 +114,9 @@ export function replaceAfterMarketingSuccess(
   documentReplace: (url: string) => void = url => window.location.replace(url),
 ) {
   const target = new URL(path, window.location.origin);
-  if (initializedId && target.origin === window.location.origin && !publicMarketingPage(target.pathname)) {
+  if ((initializedId || metaHasInitialized()) && target.origin === window.location.origin && !publicMarketingPage(target.pathname)) {
     pauseMarketingAnalytics();
+    pauseMetaMeasurement();
     documentReplace(target.href);
     return;
   }
@@ -139,7 +127,7 @@ export function interceptPrivateMarketingLink(
   event: MouseEvent,
   documentAssign: (url: string) => void = url => window.location.assign(url),
 ) {
-  if ((!marketingMeasurementId() && !initializedId) || event.defaultPrevented ||
+  if ((!marketingMeasurementId() && !initializedId && !metaMeasurementId() && !metaHasInitialized()) || event.defaultPrevented ||
     event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
   if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute("download") ||
@@ -147,11 +135,12 @@ export function interceptPrivateMarketingLink(
     anchor.origin !== window.location.origin) return;
   const fromPublic = Boolean(publicMarketingPage(window.location.pathname));
   const toPublic = Boolean(publicMarketingPage(anchor.pathname));
-  if (fromPublic === toPublic || (fromPublic && !initializedId)) return;
+  if (fromPublic === toPublic || (fromPublic && !initializedId && !metaHasInitialized())) return;
   // Ctrl/meta/target navigations above already create a separate document and
   // must retain their normal browser behavior. Only replace the same-tab SPA hop.
   event.preventDefault();
   pauseMarketingAnalytics();
+  pauseMetaMeasurement();
   documentAssign(anchor.href);
 }
 
