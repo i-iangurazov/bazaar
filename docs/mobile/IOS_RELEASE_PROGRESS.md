@@ -5,11 +5,13 @@ Status: **in progress; not ready for submission or release**.
 
 ## Owner-facing App Store readiness
 
-At the owner's request on 13 November, every progress update includes this
-fixed ten-gate readiness measure. **30% = three fully completed gates of ten**;
-it measures submission readiness, not code volume, elapsed time or a predicted
-completion date. Partial implementation does not close a gate. Apple approval
-and publication are tracked separately after the owner's submission approval.
+On 13 November the owner requested a readiness percentage. The earlier 70–80%
+estimate was not supported by complete acceptance evidence. The subsequent 30%
+label used a different, equally weighted ten-item checklist and was also
+withdrawn as a misleading overall completion estimate. There is no validated
+numeric estimate. The checklist below records concrete acceptance conditions;
+three are fully closed and the remaining seven contain partial implementation.
+Apple approval and publication are tracked separately after owner approval.
 
 | Gate | Acceptance condition | Status |
 | --- | --- | --- |
