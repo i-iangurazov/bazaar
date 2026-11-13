@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { DeliveryStatus, type ConsumptionRequest } from "@apple/app-store-server-library";
-import { Prisma, type AppleConsumptionConsent, type AppleConsumptionRequest, type AppleServerNotification } from "@prisma/client";
+import type { Prisma, AppleConsumptionConsent, AppleConsumptionRequest, AppleServerNotification } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
