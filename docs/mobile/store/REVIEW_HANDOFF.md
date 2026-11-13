@@ -68,12 +68,19 @@ Remaining verification after internal TestFlight installation:
 
 On 13 November the owner's updated Chrome access was verified through the same
 browser integration, and the owner completed the fresh Apple login. The owner
-accepted the API access request and created the App Manager catalog key; its
-private file is held in protected local storage outside Git. The first current
-non-renewing product was created as a draft with Russian and English (U.K.)
-metadata. Its price and availability remain unset. Catalog registration and
-actual Sandbox purchases remain work in progress. Public App Review and release
-retain their separate authorization.
+accepted the API access request and created separate catalog and purchase-server
+keys; their private files are held in protected local storage outside Git.
+All 145 base/pack products are now registered as unpriced drafts, with 290
+Russian/English (U.K.) localization bindings verified during creation. The final
+correct-app inventory check found no missing, foreign or conflicting IDs. All
+parent states remain `MISSING_METADATA`; no commercial sales or review submission
+was enabled. Thirty-four proposed configurations exceed the current price limit;
+the actual higher-price form requires consumption-information capability, whose
+consent-aware implementation remains in progress. The Sandbox notification URL
+was saved, and an actual signed TEST delivery was verified and durably processed
+once in the isolated Preview. This is not a real purchase or refund. Actual
+prices, commission eligibility, commercial terms and Sandbox purchase testing
+remain open. Public App Review and release retain their separate authorization.
 
 Google: the owner's **personal Chrome profile** successfully opened the Ilias Iangurazov Personal developer account. Bazaar was absent from its app list. The Create app form confirmed **Package name available** for `kg.bazaar.app`; name Bazaar, Russian default language, App and Free were prepared. The owner then checked both declarations and explicitly confirmed creation. Bazaar app record `4973851578570693264` now exists; a signed version 1.0.0/build 1 AAB was uploaded into internal release 1. The Bazaar dashboard explicitly requires 12 closed-test participants for 14 consecutive days before applying for production access. Internal release 1.0.0/build 1 is now published, track Active, with the owner as the sole eligible tester. The invite link opens successfully; installation/real device checks remain outstanding. The initial check in an unrelated work profile was discarded. No Play service account or upload keystore settings were supplied locally. The existing Android debug keystore is not a protected upload identity.
 

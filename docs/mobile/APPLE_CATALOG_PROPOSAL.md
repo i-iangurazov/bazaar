@@ -1,6 +1,7 @@
 # Apple catalog proposal — owner review required
 
-Status: draft; prices/products are not registered or approved and sales stay off.
+Status: commercial draft; 145 base/pack products are registered as unpriced
+metadata drafts. Prices/terms are unapproved and sales stay off.
 This does not replace the complete release goal or claim all plan-change paths
 are ready.
 
@@ -26,7 +27,43 @@ replace their saved terms.
   before enabling that offer, and existing connection/worker/privacy gates stay.
 - Actual Apple localized prices are loaded from StoreKit. The KGS amounts in the
   artifact are service valuations, not a promised Apple charge or exchange rate.
-  All proposed Apple price points and storefront availability remain unverified.
+  Per-product price points and approved storefront availability remain open.
+
+## Actual registration and commission checkpoint — 13 November 2026
+
+All 145 base/pack product IDs and their draft versions are registered under
+Bazaar POS, Apple ID `6833508529`, bundle `kg.bazaar.app`. The 290 RU/en-GB
+localization bindings were read back during creation; the final two-GET inventory
+check found all 145 products without missing, foreign or conflicting IDs. Their
+parent states remain `MISSING_METADATA`. Registration did not configure prices,
+availability or review submission and does not establish sellable offers.
+
+The actual KGZ control-product price lookup offers 800 positive USD levels from
+USD 0.29 to USD 1000. A private worksheet proposes the nearest gross price to
+each frozen KGS service valuation, using the dated 13 November NBKR reference
+USD rate of 87.4489 KGS. This is a comparison, not an exchange-rate guarantee.
+111 proposed configurations fit that range; 34 Enterprise six-/twelve-month
+configurations exceed it. They are preserved as unresolved, without clamping
+their prices to USD 1000 or reusing another product's price-point identifiers.
+The actual higher-price request displays a mandatory consumption-information
+capability when No is selected. Its consent-aware implementation is in progress;
+no higher-price request has been submitted.
+
+Under the standard Paid Apps terms the commission is 30%. An approved eligible
+Small Business Program participant receives the 15% program rate; Developer
+membership alone does not enroll the account. Eligibility includes associated
+developer accounts, and Apple's published effective date follows approval rather
+than the act of applying. No 15% effective rate is established for this account.
+See the [Paid Apps agreement, Schedule 2 section 3.4](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/)
+and [Small Business Program](https://developer.apple.com/app-store/small-business-program/).
+
+For a simple USD 100 tax-exclusive illustration, a 30% commission leaves USD 70
+and a 15% commission leaves USD 85, before other applicable adjustments. Preserving
+that same gross reference amount after commission alone would require dividing
+by 0.70 or 0.85, not merely adding 30% or 15%. Actual net proceeds require each
+offer's Apple schedule and tax treatment; the control-product proceeds are not
+proof of this account's program enrollment or final payout. The owner's question
+about commission is not approval to increase or configure prices.
 
 Current base service valuations (KGS, additions excluded):
 
@@ -66,7 +103,8 @@ An arbitrary prorated KGS quote is still not a StoreKit charge argument.
 Before sales, confirm the exact registered IDs, prices in Kyrgyzstan and other
 approved storefronts, applicable commission/Small Business eligibility, tax and
 net payout treatment, legal offer version, refunds and the whole allowed upgrade
-matrix. App Store Connect access and Sandbox verification are still needed.
+matrix. App Store Connect access is restored; actual Sandbox purchase/lifecycle
+verification remains open.
 Product IDs in the artifact obey Apple's 100-character limit; see [Apple's IAP
 reference](https://developer.apple.com/help/app-store-connect/reference/in-app-purchases-and-subscriptions/in-app-purchase-information/).
 

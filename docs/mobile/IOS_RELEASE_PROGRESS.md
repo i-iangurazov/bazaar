@@ -22,23 +22,49 @@ role, real Apple purchases, or complete iPhone acceptance. See the
 [physical-device record](IPHONE_ACCEPTANCE.md) and separate
 [actual Simulator/page checks](IOS_NATIVE_PAGE_QA.md).
 
-The complete Apple-enabled candidate is still unfinished. The
-[commercial proposal](APPLE_CATALOG_PROPOSAL.md) retains 145 unapproved draft
-products, with no verified actual prices/storefronts. A private registration
-worksheet now preserves every draft ID/right and provides 435 RU/EN/KY text rows;
-it does not itself register or approve offers. On 13 November the original Chrome
-access was restored and the owner completed Apple login, accepted API access and
-created the App Manager catalog key. The first current prepaid Starter product
-was created as a non-renewing draft with RU/en-GB metadata. A read-only API pass
-then verified its exact app/product/version/localizations, and the first bounded
-API creation registered the next product, draft version and two localizations.
-The remaining catalog is being registered separately without prices, availability
-or review submission. Kyrgyz remains in-app copy because ASC does not offer that
-localization. These are actual metadata operations, not approved sellable offers.
-Actual temporary-upgrade band IDs/prices,
-commercial decisions, server keys/notifications and real Sandbox lifecycle
-checks remain open. Production/main, normal App Store Release, submission and
-publication still require their separate authorizations.
+The complete Apple-enabled candidate is still unfinished. On 13 November the
+original Chrome access was restored and the owner completed Apple login,
+accepted API access, and created separate catalog and purchase-server keys.
+Both private keys are held locally in protected storage outside Git; this does
+not establish their deployment into the server environment.
+
+Actual catalog registration is now complete for all 145 base/pack drafts:
+126 current configurations, nine legacy configurations and ten WhatsApp packs;
+135 non-renewing products and ten consumables. Product/version ownership and
+290 Russian/English (U.K.) localization bindings were read back during creation.
+The final bounded two-GET inventory check found 145 unique products for the
+correct app, with no missing, foreign or conflicting IDs and no pending writes.
+All parent states remained `MISSING_METADATA`; no prices, availability, sales
+approval or review submission were configured by this registration. Kyrgyz
+remains in-app copy because ASC does not offer that localization.
+
+The private USD proposal contains 111 configurations within the observed
+800-point KGZ price range and 34 above its current USD 1000 maximum. It uses a
+dated NBKR reference rate, not a promised Apple exchange rate or payout. Prices,
+per-product price points, territories, Small Business commission eligibility and
+other commercial terms are unapproved. The owner asked to understand commission
+before deciding; that reply is not price approval. The actual higher-price form
+explicitly requires consumption-information capability when its No answer is
+selected. A consent-aware response workflow is being implemented; the request
+has not been submitted and no capability is falsely declared complete.
+
+The app's Sandbox notification URL was saved to the isolated Preview endpoint;
+the production notification URL remains unset. Apple reported one successful
+TEST delivery. The official verifier then passed online certificate/OCSP and
+signed TEST checks in a bounded local IPv4-only process. An independent read-only
+transaction in the pinned isolated Preview database found exactly that payload
+once as `Sandbox / TEST / PROCESSED`, attempt count one, without an issue, and
+zero Sandbox purchases/intents since the request. The initial local dual-stack
+OCSP timeout is retained as evidence; no shipping verifier or OS setting was
+weakened. This proves TEST delivery and durable processing, not a purchase,
+refund, reconciliation, or the complete lifecycle.
+
+Actual temporary-upgrade band products/prices, remaining commercial decisions,
+protected server configuration and real Sandbox lifecycle checks remain open.
+The combined UI Preview at `44bf43c3` passed its production build and actual
+native cutout/keyboard/focus recovery checks described in the page QA record.
+Production/main, normal App Store Release, submission and publication still
+require their separate authorizations.
 
 Earlier entries below are chronological evidence at their named checkpoints.
 Initial missing-signature/device observations and pre-upload statements must not
@@ -111,10 +137,10 @@ synthetic fixture, or browser screenshot is not a verified native release.
 | R04 | No duplicate sale for the same covered period or capabilities | Server purchase checks, organization locks, durable pending intents and concurrent DB tests | Implemented; isolated concurrency/recovery tests pass; actual Sandbox acceptance remains |
 | R05 | Safe provider switching and recovery | Tests for prepaid GoPay remainder, Apple renewal states, pending/stale payments, cancellation and out-of-app renewals | Open |
 | R06 | Purchases cannot move between organizations or unauthorized users | Tests for account/device changes, restore, several organizations, role changes and departing payers | Open |
-| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 unapproved base/pack mappings plus implemented temporary upgrades; actual band products/prices, below-minimum handling and commercial/device acceptance remain open |
+| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 base/pack draft products and 290 RU/en-GB localization bindings registered; all remain unpriced/unapproved. 34 proposed configurations need higher price points and the required consumption-response capability; actual upgrade band products, below-minimum policy and commercial/device acceptance remain open |
 | R08 | Website GoPay and historical reconciliation continue working | Existing and new DB/protocol regressions; provider-specific amounts and histories preserved | Open |
 | R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Signed staging build installed through TestFlight; prior price-policy 35 and journal/boundary 59 checks passed; four earlier local StoreKit purchase cases failed; real Sandbox and physical-device purchase lifecycle remain unrun |
-| R10 | Signed transaction verification, Server API and Notifications V2 are complete | Certificate/app/environment/product/ownership checks, replay/order/missed-event tests, reconciliation | Open |
+| R10 | Signed transaction verification, Server API and Notifications V2 are complete | Certificate/app/environment/product/ownership checks, replay/order/missed-event tests, reconciliation | Actual Sandbox TEST delivered, online signature checks passed, exact payload durably PROCESSED once in isolated Preview; no actual purchase/refund/reconciliation acceptance yet. Consent-aware consumption response remains in progress |
 | R11 | Renewals, expiry, grace/retry, plan changes, refund and revocation update only the correct rights | DB lifecycle tests with independent Apple and GoPay grants | Open |
 | R12 | Physical-store customer payments stay separate from Bazaar digital sales | Source and UI review; POS/payment regressions | Open |
 | R13 | Signed, reproducible iOS archive and app registration are ready | Registered intended bundle ID, team/capabilities/profiles, archive/IPA validation and upload processing | Signed internal staging archive/IPA inspected; intended app record created; owner confirmed Delivered, processed Internal/Ready to Test and installation of `111120`. Final normal App Store Release remains open |

@@ -392,6 +392,21 @@ offline cases, zero page errors and no network requests. Combined typecheck,
 lint and translation checks passed. This does not prove actual WK focus-zoom
 recovery; the immutable build and native recheck for the follow-up remain open.
 
+The combined `44bf43c3e733cfb120f309bdcd1d5bdda462a5aa` follow-up subsequently
+passed its production build (41-second compilation, 133 static pages), was
+verified Ready as `dpl_8qUN79B2c7jxw3uTiH4AsyA6wfPH`, and received the exact
+dedicated Preview alias. After a cold native launch, synthetic prepaid A's login
+was retained. The actual landscape CommandPalette and its autofocus remained
+inside the safe area at normal scale. With the real software keyboard open, a
+single unsent `Q` remained visible through rotation to the opposite landscape;
+search and close controls fit outside both cutouts and above the keyboard.
+The single character was cleared without triggering a search/provider request,
+then the visible close control dismissed the modal and keyboard. Home returned
+at its original scale. The before/after screenshots preserve the original
+focus-enlargement defect and this actual recovery. No native binary was rebuilt
+for these hosted UI changes. The owned Simulator was then shut down with its
+data retained; the dedicated local PostgreSQL and Redis services remained off.
+
 Continue the actual page pass after updating Preview: corrected Baam launch and
 Back, scrolled menus and nested dialogs, reachable full-screen close controls,
 auth return links, all relevant roles/stores, warehouse operations, reports,
