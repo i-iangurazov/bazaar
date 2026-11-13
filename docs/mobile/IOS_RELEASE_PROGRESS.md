@@ -19,12 +19,64 @@ Apple approval and publication are tracked separately after owner approval.
 | 4 | Normal newcomer signup through business/store creation and working-screen login | Complete; actual iPhone signup, full business fields, login, dashboard/trial7 and two onboarding steps; independent HTTP verification passed |
 | 5 | Entire agreed digital catalog, prices and commercial conditions configured for Apple | In progress |
 | 6 | Real Sandbox purchase, restore and refund accepted and reconciled | In progress; one real Sandbox purchase and restore verified without a second period; refund and remaining lifecycle cases open |
-| 7 | Paid GoPay access works in iOS and Apple access works in web without duplicate payment | In progress; Apple-to-web access observed in Chrome; physical GoPay-to-iOS case remains open |
+| 7 | Paid GoPay access works in iOS and Apple access works in web without duplicate payment | In progress; Apple-to-web access observed in Chrome; synthetic GoPay A working screen observed on iPhone, but its paid-feature and billing-screen acceptance remains open |
 | 8 | Critical iPhone workflows, roles, offline recovery, privacy and deletion accepted | In progress |
 | 9 | Complete App Store materials, disclosures, screenshots and reviewer access | In progress |
-| 10 | Final App Store-eligible Release build and complete release checks | In progress; normal Release `111121` archived/exported and inspected locally; upload, Apple processing and final acceptance remain open |
+| 10 | Final App Store-eligible Release build and complete release checks | In progress; normal Release `111123` from `f2f0d270` archived/exported and inspected locally; upload, Apple processing and final acceptance remain open |
 
 ## Current checkpoint — updated 2026-11-13
+
+The owner approved three concrete commercial choices: current-term upgrades
+round upward to the least Apple price covering the quote under the agreed
+conditional 15% calculation; Apple-purchased WhatsApp credits do not expire;
+the first public territory is Kyrgyzstan. The approved 800-point UP proposal
+preserves the original period end and never charges for the base period again.
+Implementation and guarded draft-product registration are in progress; this
+approval does not enable production sales or authorize publication. Existing
+Apple credit fulfillment already uses `expiresAt: null`; web packs retain their
+existing expiry and prior isolated PostgreSQL coverage verifies both behaviors.
+
+The accumulated branch was integrated with freshly fetched main `012a54f2` in
+merge **`f2f0d270`**, preserving both parents. The three locale conflicts retain
+the 13 November privacy date and all main/playground translation leaves.
+Native Google measurement and inherited consent pings are disabled; existing
+Meta native protection remains. The exact reviewed integration passed 359 unit
+cases and 24 real-PostgreSQL cases, plus types, lint and translation checks.
+No main push or production deployment was performed.
+
+That source has now built 133 pages in the cloud and the isolated stable Preview
+points to READY deployment **`dpl_G75DJWBKCUJiSo1doR3Yb88vEnpK`**. Candidate and
+stable signup/mode/privacy HTTP checks returned 200; signup remains open with a
+seven-day trial. This supersedes the older Preview IDs recorded below. The BAAM
+mobile consent scrolling fix is deployed; actual hosted checks on the preceding
+`013854e1` deployment showed both choices accessible without enabling AI.
+
+Apple's independent server API confirmed the actual C purchase: transaction
+information and refund history both returned 200, the official online signature
+verifier passed all 11 bindings, and the purchase was not revoked. Refund
+history was empty. Two Apple GETs and no financial mutations were used; this is
+verification of the existing purchase, not an actual refund lifecycle test.
+Protected evidence is in `actual-C-apple-server-readonly-20261113/`.
+
+Normal www Release **1.0.0 (111123)** is archived, exported and inspected from
+`f2f0d270`. Its distribution signature/profile, production origin, white icons,
+startup, privacy manifest and localized permissions passed. The IPA is not
+internal-only; SHA256 is
+`73f34a99714833d065c63f65515d44ed11d1cbd2aaf21f94208ea16988efe609`.
+It has not been uploaded, installed or launched. Evidence is in
+`appstore-www-f2f0d270-111123/release-summary.json`; this supersedes the earlier
+local www artifact. Installed staging TestFlight remains `111122`.
+
+On that phone, synthetic GoPay A's working screen was directly observed after
+the owner's login. Its billing details and paid-feature behavior were not
+accepted: iPhone Mirroring stopped transmitting input and finally displayed a
+connection interruption. The captured screen is bounded evidence, and gate 7
+remains open. No repeat purchase was requested. Separate controlled operational
+QA found fractional quantities rounded in document summaries while stock and
+money remained correct; a narrow SQL-cast correction and real-database regression
+are being completed before accepting those summaries.
+
+### Earlier checkpoints and supporting detail
 
 The owner completed an actual first Starter Sandbox purchase in synthetic
 organization C on iPhone 18 Pro Max / iOS 27.0.1, build `111120`. Apple's signed
