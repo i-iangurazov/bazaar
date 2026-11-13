@@ -99,6 +99,21 @@ describe("optional marketing analytics", () => {
     expect(JSON.stringify(commands())).not.toMatch(/private-click-id|utm_id=|utm_term=|fbclid=/);
   });
 
+  it("attributes the second ad's observed automatic IDs only through reviewed GA4 fields", async () => {
+    window.history.replaceState({}, "", "/ru?utm_source=instagram&utm_medium=paid_social&utm_campaign=kg_store_launch_202611&utm_content=ad02_ru&utm_id=52574017478097&utm_term=52574017478697&fbclid=private-click-id#platform");
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.synchronizeMarketingAnalytics("/ru");
+    expect(commands()).toEqual([]);
+    analytics.writeAnalyticsConsent("granted");
+    analytics.synchronizeMarketingAnalytics("/ru");
+    expect(commands().find(command => command[0] === "set")?.[1]).toMatchObject({
+      campaign_source: "instagram", campaign_medium: "paid_social", campaign_name: "kg_store_launch_202611",
+      campaign_content: "ad02_ru", campaign_id: "52574017478097", campaign_term: "52574017478697",
+      page_location: "https://www.bazaar.kg/ru", page_referrer: "",
+    });
+    expect(JSON.stringify(commands())).not.toMatch(/private-click-id|utm_id=|utm_term=|fbclid=|#platform/);
+  });
+
   it("updates sanitized global engagement context before public route views without reconfiguring on signup or exposing private routes", async () => {
     window.history.replaceState({}, "", "/ru?utm_source=instagram&utm_medium=organic_social&utm_campaign=profile&utm_content=bio&email=private@example.invalid#private");
     const analytics = await import("@/lib/marketingAnalytics");

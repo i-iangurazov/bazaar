@@ -11,6 +11,7 @@ type Pixel = ((...args: unknown[]) => void) & { queue: unknown[][]; callMethod?:
 type PixelWindow = Window & { fbq?: Pixel; _fbq?: Pixel };
 const pixelId = "1635457884748007";
 const observedMetaQuery = "utm_source=instagram&utm_medium=paid_social&utm_campaign=bishkek_take6&utm_content=take6_landing&utm_id=52573740529697&utm_term=52573740529897";
+const observedSecondMetaQuery = "utm_source=instagram&utm_medium=paid_social&utm_campaign=kg_store_launch_202611&utm_content=ad02_ru&utm_id=52574017478097&utm_term=52574017478697";
 const script = () => document.getElementById("bazaar-meta-measurement") as HTMLScriptElement | null;
 const browser = () => window as PixelWindow;
 function sdkLoaded() {
@@ -147,9 +148,13 @@ describe("separate consented Meta registration measurement", () => {
     expect(script()).not.toBeNull();
   });
 
-  it.each(["", "&fbclid=Valid-Meta_Click123"])("measures the observed Instagram landing only after consent, then one new-account conversion: %s", async click => {
+  it.each([
+    ["first", observedMetaQuery], ["second", observedSecondMetaQuery],
+  ].flatMap(([name, query]) => ["", "#platform"].flatMap(fragment =>
+    ["", "&fbclid=Valid-Meta_Click123"].map(click => [name, fragment, click, query] as const),
+  )))("measures the %s observed Instagram landing%s%s only after consent, then one new-account conversion", async (_name, fragment, click, query) => {
     vi.useFakeTimers();
-    window.history.replaceState({}, "", `/ru?${observedMetaQuery}${click}`);
+    window.history.replaceState({}, "", `/ru?${query}${click}${fragment}`);
     Object.defineProperty(document, "referrer", { configurable: true, value: "https://instagram.com/" });
     const meta = await import("@/lib/metaMarketing");
     expect(meta.safeMetaContext()).toBe(true);
@@ -169,14 +174,46 @@ describe("separate consented Meta registration measurement", () => {
     ]);
   });
 
-  it.each(["", "#platform", "#pos", "#inventory", "#commerce", "#analytics", "#mobile", "#pricing"])("accepts the observed landing as a fresh signup document's same-origin referrer: %s", async fragment => {
+  it.each([
+    ["first", observedMetaQuery], ["second", observedSecondMetaQuery],
+  ].flatMap(([name, query]) =>
+    ["", "#platform", "#pos", "#inventory", "#commerce", "#analytics", "#mobile", "#pricing"].map(fragment => [name, fragment, query] as const),
+  ))("accepts the %s observed landing%s as a fresh signup document's same-origin referrer", async (_name, fragment, query) => {
     const dispatchEvent = window.dispatchEvent.bind(window);
     vi.stubGlobal("window", { location: new URL("https://www.bazaar.kg/signup"), dispatchEvent });
-    Object.defineProperty(document, "referrer", { configurable: true, value: `https://www.bazaar.kg/ru?${observedMetaQuery}&fbclid=Valid-Meta_Click123${fragment}` });
+    Object.defineProperty(document, "referrer", { configurable: true, value: `https://www.bazaar.kg/ru?${query}&fbclid=Valid-Meta_Click123${fragment}` });
     const meta = await import("@/lib/metaMarketing");
     expect(meta.safeMetaContext()).toBe(true);
     meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/signup");
     expect(script()).not.toBeNull();
+  });
+
+  it.each([
+    ["utm_id", "52574017478098"], ["utm_term", "52574017478698"],
+    ["utm_id", "52573740529697"], ["utm_term", "52573740529897"],
+    ["utm_id", "52574017479297"], ["utm_term", "52574017479297"],
+    ["utm_content", "ad01_ru"], ["utm_campaign", "bishkek_take6"],
+  ])("blocks a wrong or mixed second-ad ID combination even with a public anchor: %s=%s", async (key, value) => {
+    const search = new URLSearchParams(observedSecondMetaQuery);
+    search.set(key, value);
+    window.history.replaceState({}, "", `/ru?${search}&fbclid=Valid-Meta_Click123#platform`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(meta.safeMetaContext()).toBe(false);
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+  });
+
+  it.each(["utm_id", "utm_term"])("blocks missing or duplicate second-ad %s", async key => {
+    const search = new URLSearchParams(observedSecondMetaQuery);
+    search.delete(key);
+    window.history.replaceState({}, "", `/ru?${search}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+    const duplicate = new URLSearchParams(observedSecondMetaQuery);
+    duplicate.append(key, duplicate.get(key)!);
+    window.history.replaceState({}, "", `/ru?${duplicate}`);
+    expect(meta.safeMetaContext()).toBe(false);
   });
 
   it.each(["/", "/ru", "/kg", "/en"].flatMap(path =>
