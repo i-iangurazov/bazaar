@@ -21,7 +21,7 @@ describe("Apple consumption V2 minimal facts and official SDK transport", () => 
     expect(appleConsumptionPayload({ deliveryStatus, sampleContentProvided: true })).toEqual({ customerConsented: true, deliveryStatus, sampleContentProvided: true, consumptionPercentage: 0 });
   });
   it.each(["Sandbox", "Production"] as const)("uses the official SDK signer and exact %s V2 PUT with a redirect/body/time fence", async environment => {
-    const http = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 202 }));
+    const http = vi.fn<typeof fetch>().mockResolvedValue(new Response(undefined, { status: 202 }));
     const client = new AppleConsumptionClient(key, "SYNTHETIC", "synthetic-issuer", environment, http);
     await client.sendConsumptionInformation("100000000000001", delivered);
     expect(http).toHaveBeenCalledTimes(1);
@@ -55,7 +55,7 @@ describe("Apple consumption V2 minimal facts and official SDK transport", () => 
     expect(http).not.toHaveBeenCalled();
   });
   it("accepts only202 and keeps unexpected success/redirect outcomes distinct from delivery acknowledgement", async () => {
-    const http = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(null, { status: 200 })).mockResolvedValueOnce(new Response(null, { status: 302 }));
+    const http = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(undefined, { status: 200 })).mockResolvedValueOnce(new Response(undefined, { status: 302 }));
     const client = new AppleConsumptionClient(key, "SYNTHETIC", "synthetic-issuer", "Sandbox", http);
     await expect(client.sendConsumptionInformation("1", delivered)).rejects.toThrow("appleConsumptionOutcomeUnknown");
     await expect(client.sendConsumptionInformation("1", delivered)).rejects.toThrow();

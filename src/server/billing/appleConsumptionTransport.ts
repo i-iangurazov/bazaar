@@ -34,7 +34,7 @@ export class AppleConsumptionClient extends AppStoreServerAPIClient {
       const text = await response.text();
       if (Buffer.byteLength(text, "utf8") > 32_768) throw new AppleConsumptionTransportError("appleConsumptionOutcomeUnknown");
       if (response.ok && response.status !== 202) throw new AppleConsumptionTransportError("appleConsumptionOutcomeUnknown");
-      return new Response(text || null, { status: response.status, statusText: response.statusText, headers: response.headers });
+      return new Response(text || undefined, { status: response.status, statusText: response.statusText, headers: response.headers });
     } finally { clearTimeout(timer); }
   }
 }
