@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const native = vi.hoisted(() => ({
   plugins: new Set(["Filesystem", "Share"]),
-  writeFile: vi.fn(), getUri: vi.fn(), deleteFile: vi.fn(), share: vi.fn(), diagnostic: vi.fn(),
+  writeFile: vi.fn(), getUri: vi.fn(), deleteFile: vi.fn(), rmdir: vi.fn(), share: vi.fn(), diagnostic: vi.fn(),
 }));
 
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Cache: "CACHE" },
-  Filesystem: { writeFile: native.writeFile, getUri: native.getUri, deleteFile: native.deleteFile },
+  Filesystem: { writeFile: native.writeFile, getUri: native.getUri, deleteFile: native.deleteFile, rmdir: native.rmdir },
 }));
 vi.mock("@capacitor/share", () => ({ Share: { share: native.share } }));
 vi.mock("@/lib/native/platform", () => ({ isPluginAvailable: (name: string) => native.plugins.has(name) }));
@@ -23,10 +23,11 @@ const file = () => ({ blob: new Blob(["abc"], { type: "text/csv" }), fileName: "
 beforeEach(() => {
   vi.stubGlobal("crypto", { randomUUID: () => "00000000-0000-4000-8000-000000000001" });
   native.plugins = new Set(["Filesystem", "Share"]);
-  for (const mock of [native.writeFile, native.getUri, native.deleteFile, native.share, native.diagnostic]) mock.mockReset();
-  native.writeFile.mockResolvedValue({ uri: "file:///private/cache/stock.csv" });
-  native.getUri.mockResolvedValue({ uri: "file:///private/cache/stock.csv" });
+  for (const mock of [native.writeFile, native.getUri, native.deleteFile, native.rmdir, native.share, native.diagnostic]) mock.mockReset();
+  native.writeFile.mockImplementation(async ({ path }: { path: string }) => ({ uri: `file:///private/cache/${path}` }));
+  native.getUri.mockImplementation(async ({ path }: { path: string }) => ({ uri: `file:///private/cache/${path}` }));
   native.deleteFile.mockResolvedValue(undefined);
+  native.rmdir.mockResolvedValue(undefined);
   native.share.mockResolvedValue({ activityType: "com.apple.UIKit.activity.SaveToFiles" });
   native.diagnostic.mockResolvedValue(undefined);
 });
@@ -36,15 +37,19 @@ describe("native file share terminal outcomes", () => {
   it("shares the prepared private cache file and removes that exact file afterward", async () => {
     await expect(shareBlobNative(file())).resolves.toEqual({ status: "shared" });
     expect(native.writeFile).toHaveBeenCalledWith({
-      path: expect.stringMatching(/^bazaar-share\/[A-Za-z0-9-]+-stock\.csv$/),
+      path: "bazaar-share/00000000-0000-4000-8000-000000000001/stock.csv",
       data: "YWJj", directory: "CACHE", recursive: true,
     });
     const path = native.writeFile.mock.calls[0][0].path;
     expect(native.getUri).toHaveBeenCalledWith({ path, directory: "CACHE" });
     expect(native.share).toHaveBeenCalledWith({
-      title: "Stock", dialogTitle: "Stock", files: ["file:///private/cache/stock.csv"],
+      title: "Stock", dialogTitle: "Stock", files: [`file:///private/cache/${path}`],
     });
     expect(native.deleteFile).toHaveBeenCalledWith({ path, directory: "CACHE" });
+    expect(native.rmdir).toHaveBeenCalledExactlyOnceWith({
+      path: "bazaar-share/00000000-0000-4000-8000-000000000001", directory: "CACHE", recursive: false,
+    });
+    expect(native.deleteFile.mock.invocationCallOrder[0]).toBeLessThan(native.rmdir.mock.invocationCallOrder[0]);
     expect(native.diagnostic).not.toHaveBeenCalled();
   });
 
@@ -54,6 +59,9 @@ describe("native file share terminal outcomes", () => {
       await expect(shareBlobNative(file())).resolves.toEqual({ status: "cancelled" });
       expect(native.share).toHaveBeenCalledTimes(1);
       expect(native.deleteFile).toHaveBeenCalledTimes(1);
+      expect(native.rmdir).toHaveBeenCalledExactlyOnceWith({
+        path: "bazaar-share/00000000-0000-4000-8000-000000000001", directory: "CACHE", recursive: false,
+      });
       expect(native.diagnostic).not.toHaveBeenCalled();
     },
   );
@@ -87,13 +95,69 @@ describe("native file share terminal outcomes", () => {
     expect(native.writeFile).not.toHaveBeenCalled();
     expect(native.share).not.toHaveBeenCalled();
     expect(native.deleteFile).not.toHaveBeenCalled();
+    expect(native.rmdir).not.toHaveBeenCalled();
     expect(native.diagnostic).not.toHaveBeenCalled();
   });
 
   it.each(["shared", "cancelled"] as const)("does not replace %s with a cleanup error", async (status) => {
     if (status === "cancelled") native.share.mockRejectedValue(new Error("Share canceled"));
     native.deleteFile.mockRejectedValue(new Error("cache cleanup refused"));
+    native.rmdir.mockRejectedValue(new Error("directory is not empty"));
     await expect(shareBlobNative(file())).resolves.toEqual({ status });
+    expect(native.rmdir).toHaveBeenCalledExactlyOnceWith({
+      path: "bazaar-share/00000000-0000-4000-8000-000000000001", directory: "CACHE", recursive: false,
+    });
+    expect(native.diagnostic).not.toHaveBeenCalled();
+  });
+
+  it("keeps a successful share when only its empty-directory cleanup fails", async () => {
+    native.rmdir.mockRejectedValue(new Error("cache directory cleanup refused"));
+    await expect(shareBlobNative(file())).resolves.toEqual({ status: "shared" });
+    expect(native.deleteFile).toHaveBeenCalledTimes(1);
+    expect(native.rmdir).toHaveBeenCalledTimes(1);
+    expect(native.diagnostic).not.toHaveBeenCalled();
+  });
+});
+
+describe("native file share names and attempt isolation", () => {
+  it.each([
+    ["price-list-2026-11-13_to_2026-11-13-qa123456.csv", "price-list-2026-11-13_to_2026-11-13-qa123456.csv"],
+    ["../../price list.xlsx", "..-..-price-list.xlsx"],
+    ["a".repeat(150) + ".xlsx", "a".repeat(115) + ".xlsx"],
+    [".", "bazaar-file"], ["..", "bazaar-file"], ["", "bazaar-file"],
+  ])("shares a safe visible basename for %s", async (fileName, basename) => {
+    await expect(shareBlobNative({ ...file(), fileName })).resolves.toEqual({ status: "shared" });
+    const sharedUri = native.share.mock.calls[0][0].files[0] as string;
+    expect(new URL(sharedUri).pathname.split("/").at(-1)).toBe(basename);
+    expect(native.writeFile.mock.calls[0][0].path).toBe(`bazaar-share/00000000-0000-4000-8000-000000000001/${basename}`);
+  });
+
+  it("keeps simultaneous same-name attempts separate and cleans only the completed attempt", async () => {
+    let attempt = 0;
+    vi.stubGlobal("crypto", { randomUUID: () => `00000000-0000-4000-8000-00000000000${++attempt}` });
+    const settle = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+    native.share.mockImplementation(({ files }: { files: string[] }) => new Promise<void>((resolve, reject) => {
+      settle.set(files[0], { resolve, reject });
+    }));
+    const first = shareBlobNative(file());
+    await waitFor(() => expect(settle.size).toBe(1));
+    const second = shareBlobNative(file());
+    await waitFor(() => expect(settle.size).toBe(2));
+    const firstPath = native.writeFile.mock.calls[0][0].path as string;
+    const secondPath = native.writeFile.mock.calls[1][0].path as string;
+    expect(firstPath).not.toBe(secondPath);
+    expect([firstPath.split("/").at(-1), secondPath.split("/").at(-1)]).toEqual(["stock.csv", "stock.csv"]);
+
+    settle.get(`file:///private/cache/${secondPath}`)!.reject(new Error("Share canceled"));
+    await expect(second).resolves.toEqual({ status: "cancelled" });
+    expect(native.deleteFile).toHaveBeenCalledExactlyOnceWith({ path: secondPath, directory: "CACHE" });
+    expect(native.rmdir).toHaveBeenCalledExactlyOnceWith({ path: secondPath.slice(0, secondPath.lastIndexOf("/")), directory: "CACHE", recursive: false });
+    expect(native.deleteFile).not.toHaveBeenCalledWith({ path: firstPath, directory: "CACHE" });
+
+    settle.get(`file:///private/cache/${firstPath}`)!.resolve();
+    await expect(first).resolves.toEqual({ status: "shared" });
+    expect(native.deleteFile).toHaveBeenNthCalledWith(2, { path: firstPath, directory: "CACHE" });
+    expect(native.rmdir).toHaveBeenNthCalledWith(2, { path: firstPath.slice(0, firstPath.lastIndexOf("/")), directory: "CACHE", recursive: false });
     expect(native.diagnostic).not.toHaveBeenCalled();
   });
 });
@@ -103,6 +167,7 @@ describe("native file share audience guard", () => {
     await expect(shareBlobNative({ ...file(), shouldShare: () => false })).resolves.toEqual({ status: "discarded" });
     expect(native.writeFile).not.toHaveBeenCalled();
     expect(native.share).not.toHaveBeenCalled();
+    expect(native.rmdir).not.toHaveBeenCalled();
     expect(native.diagnostic).not.toHaveBeenCalled();
   });
 
@@ -114,6 +179,7 @@ describe("native file share audience guard", () => {
     expect(native.writeFile).not.toHaveBeenCalled();
     expect(native.share).not.toHaveBeenCalled();
     expect(native.deleteFile).not.toHaveBeenCalled();
+    expect(native.rmdir).not.toHaveBeenCalled();
   });
 
   it("cleans the file instead of sharing when the audience changes during the cache write", async () => {
@@ -127,6 +193,7 @@ describe("native file share audience guard", () => {
     expect(native.getUri).not.toHaveBeenCalled();
     expect(native.share).not.toHaveBeenCalled();
     expect(native.deleteFile).toHaveBeenCalledTimes(1);
+    expect(native.rmdir).toHaveBeenCalledExactlyOnceWith({ path: "bazaar-share/00000000-0000-4000-8000-000000000001", directory: "CACHE", recursive: false });
     expect(native.diagnostic).not.toHaveBeenCalled();
   });
 
@@ -140,6 +207,7 @@ describe("native file share audience guard", () => {
     await expect(result).resolves.toEqual({ status: "discarded" });
     expect(native.share).not.toHaveBeenCalled();
     expect(native.deleteFile).toHaveBeenCalledTimes(1);
+    expect(native.rmdir).toHaveBeenCalledExactlyOnceWith({ path: "bazaar-share/00000000-0000-4000-8000-000000000001", directory: "CACHE", recursive: false });
     expect(native.diagnostic).not.toHaveBeenCalled();
   });
 });

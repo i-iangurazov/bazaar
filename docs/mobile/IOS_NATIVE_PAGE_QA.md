@@ -274,8 +274,29 @@ the unsent synthetic draft, which was cleared without an AI request.
 
 The follow-up adds physical left/right safe-area padding to the native iOS
 workspace, with border-box sizing so the existing height contract remains intact.
-Its production build and actual cutout/keyboard recheck are pending. This check
-does not yet establish the new history-download handoff or date-field spacing.
+Its immutable `ad0c9f658e3a34a281bd15de4f813149dbb51c13` production build was
+verified Ready (`dpl_7FwUUzypvGPTYw7MEohfPJViHmDz`); the dedicated alias and actual
+cutout/keyboard recheck remain pending. Typecheck, lint and translation checks
+passed for that source.
+
+On the actual app still serving `6a5d2503`, the two report date fields now have
+separate bounded surfaces and a visible gap. The From/To native calendars each
+opened November with their correct selected dates (7 and 13 November), then
+cancelled without changing the period. Existing history download now opened
+the real system Share sheet with a 554-byte CSV while retaining Bazaar behind
+it. Cancelling restored the same history and enabled download controls without
+a browser navigation or visible error. A second attempt reached Save to Files
+on the device; no final saved-file verification is claimed.
+
+That sheet exposed a readable-name issue: the cache collision UUID prefixes
+the recipient-visible filename. The follow-up moves uniqueness into a private
+attempt directory while preserving the safe basename and extension. Cleanup
+removes only that exact file and its empty directory, nonrecursively. Three
+focused sharing/export/download suites passed 74 checks, including concurrent
+same-name attempts and terminal cleanup. Its combined quality/build checks and
+actual system-sheet filename/save recheck remain pending. Combined typecheck,
+lint and RU/KG/EN translation validation subsequently passed; the production
+build and actual filename/save recheck remain open.
 
 Continue the actual page pass after updating Preview: corrected Baam launch and
 Back, scrolled menus and nested dialogs, reachable full-screen close controls,

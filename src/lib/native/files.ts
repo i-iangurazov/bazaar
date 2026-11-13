@@ -4,11 +4,14 @@ import { Share } from "@capacitor/share";
 import { reportNativeDiagnostic } from "@/lib/native/diagnostics";
 import { isPluginAvailable } from "@/lib/native/platform";
 
-const safeFileName = (value: string) =>
-  value
+const safeFileName = (value: string) => {
+  const name = value
     .replace(/[^A-Za-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 120) || "bazaar-file";
+    .replace(/^-+|-+$/g, "");
+  if (!name || name === "." || name === "..") return "bazaar-file";
+  const extension = /\.[A-Za-z0-9]{1,16}$/.exec(name)?.[0] ?? "";
+  return name.length <= 120 ? name : `${name.slice(0, 120 - extension.length)}${extension}`;
+};
 
 const blobToBase64 = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
@@ -40,10 +43,14 @@ export const shareBlobNative = async (input: {
   if (!isPluginAvailable("Filesystem") || !isPluginAvailable("Share")) return { status: "unavailable" };
 
   let path: string | undefined;
+  let shareDirectory: string | undefined;
   try {
     const data = await blobToBase64(input.blob);
     if (!isCurrent()) return { status: "discarded" };
-    path = `bazaar-share/${crypto.randomUUID()}-${safeFileName(input.fileName)}`;
+    // The system Share sheet uses the URL's basename as the recipient-visible
+    // filename. Keep collision protection in an owned directory instead.
+    shareDirectory = `bazaar-share/${crypto.randomUUID()}`;
+    path = `${shareDirectory}/${safeFileName(input.fileName)}`;
     await Filesystem.writeFile({ path, data, directory: Directory.Cache, recursive: true });
     if (!isCurrent()) return { status: "discarded" };
     const uri = await Filesystem.getUri({ path, directory: Directory.Cache });
@@ -70,6 +77,14 @@ export const shareBlobNative = async (input: {
         await Filesystem.deleteFile({ path, directory: Directory.Cache });
       } catch {
         // Cache cleanup is best effort and never exposes a permanent public URL.
+      }
+    }
+    if (shareDirectory) {
+      try {
+        await Filesystem.rmdir({ path: shareDirectory, directory: Directory.Cache, recursive: false });
+      } catch {
+        // Remove only this attempt's empty directory. Never sweep other files
+        // if the exact file deletion failed or the directory is not empty.
       }
     }
   }
