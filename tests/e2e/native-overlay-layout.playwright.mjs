@@ -15,6 +15,7 @@ import postcss from "postcss";
 import postcssImport from "postcss-import";
 import tailwindcss from "tailwindcss";
 import ts from "typescript";
+import { twMerge } from "tailwind-merge";
 import { chromium, webkit } from "playwright";
 import tailwindConfig from "../../tailwind.config.ts";
 
@@ -26,6 +27,7 @@ assert(["chromium", "webkit"].includes(engine), "Only isolated Chrome/WebKit are
 // Confirm the fixture reproduces this installation's actual Radix dependency
 // contract, including its late important rule. Do not disable modal behavior.
 const require = createRequire(import.meta.url);
+const { build } = createRequire(require.resolve("tsx"))("esbuild");
 const dialogRequire = createRequire(require.resolve("@radix-ui/react-dialog"));
 const removeScrollRequire = createRequire(dialogRequire.resolve("react-remove-scroll"));
 const scrollBarEntry = removeScrollRequire.resolve("react-remove-scroll-bar");
@@ -57,6 +59,55 @@ const ordinarySheet = `<section id="surface" role="dialog" aria-label="Synthetic
 const ordinaryDialog = `<section id="surface" role="dialog" aria-label="Synthetic centered dialog"
   class="fixed left-1/2 top-1/2 z-[1001] h-[300px] max-h-[85dvh] w-[300px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto bg-card">
   <h2 class="p-4">Synthetic centered dialog</h2></section>`;
+
+// Read the shipping primitive variant strings, rather than maintaining another
+// copy of their dimensions. No shipping component is added to an app route.
+const sourceStrings = (file) => {
+  const strings = [], parsed = ts.createSourceFile(file, fs.readFileSync(path.join(repo, file), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const visit = (node) => { if (ts.isStringLiteral(node)) strings.push(node.text); ts.forEachChild(node, visit); };
+  visit(parsed); return strings;
+};
+const primitiveVariants = (file, key) => {
+  const parsed = ts.createSourceFile(file, fs.readFileSync(path.join(repo, file), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let found;
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && node.expression.getText(parsed) === "cva") found = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed); assert(found && ts.isStringLiteral(found.arguments[0]));
+  const variants = found.arguments[1].properties.find((property) => property.name.text === "variants").initializer;
+  const group = variants.properties.find((property) => property.name.text === key).initializer;
+  return Object.fromEntries(group.properties.map((property) => [property.name.text, twMerge(found.arguments[0].text, property.initializer.text)]));
+};
+const modalStrings = sourceStrings("src/components/ui/modal.tsx");
+const modalBase = modalStrings.find((text) => text.startsWith("fixed z-[1001]"));
+const modalCentered = modalStrings.find((text) => text.startsWith("left-1/2 top-1/2"));
+const modalResponsive = modalStrings.find((text) => text.startsWith("bottom-0 left-0 right-0"));
+const mobileStrings = sourceStrings("src/components/mobile-app-shell.tsx");
+const moreClass = mobileStrings.find((text) => text.startsWith("fixed inset-x-0 bottom-0 z-[1001]"));
+const navClass = mobileStrings.find((text) => text.startsWith("fixed inset-x-0 bottom-0 z-40"));
+const railClass = sourceStrings("src/components/app-shell.tsx").find((text) => text.startsWith("sticky top-0 hidden h-screen w-[57px]"));
+const operationGrids = ["receiving", "transfer", "write-off"].map((name) => sourceStrings(`src/components/inventory/${name}-workflow.tsx`)
+  .find((text) => text.includes("xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]")));
+const receivingGrid = operationGrids[0];
+assert(operationGrids.every((classes) => classes === receivingGrid), "The three established operational grids retain the same reviewed dimensions/order");
+assert(modalBase && modalCentered && modalResponsive && moreClass && navClass && railClass && receivingGrid, "Reviewed native geometry source contracts changed");
+const horizontalSurfaces = [
+  ...Object.entries(primitiveVariants("src/components/ui/dialog.tsx", "size")).map(([name, classes]) => [`dialog-${name}`, classes]),
+  ...Object.entries(primitiveVariants("src/components/ui/sheet.tsx", "side")).map(([name, classes]) => [`sheet-${name}`, classes]),
+  ["modal-centered", twMerge(modalBase, modalCentered)],
+  ["modal-responsive", twMerge(modalBase, modalResponsive), 'data-native-overlay-layout="responsive-bottom"'],
+  ["mobile-more", moreClass],
+].map(([name, classes, attributes = ""]) => [name, `<section id="surface" role="dialog" aria-label="Synthetic ${name}" class="${classes}" ${attributes}>
+  <header class="flex shrink-0 items-center justify-between gap-2 p-4"><h2>Synthetic ${name}</h2><button id="close" class="h-11 shrink-0" type="button">Close</button></header>
+  <div class="min-h-0 overflow-y-auto p-4"><input id="horizontal-overlay-input" class="h-11 w-full border" aria-label="Synthetic draft" value="retained" /><p>Synthetic offline controls</p></div>
+</section>`]);
+const horizontalShell = `<main data-bazaar-app class="min-h-screen bg-background"><div class="flex min-h-screen w-full">
+  <nav id="rail" class="${railClass}"><button id="rail-report" class="h-[34px] w-[34px]" type="button">R</button><button id="rail-settings" class="h-[34px] w-[34px]" type="button">S</button></nav>
+  <section class="min-w-0 flex-1 p-4"><header id="app-header">Synthetic shell</header><div id="baam-workspace" class="fixture-baam-workspace mx-auto min-w-0 max-w-4xl"><input id="horizontal-draft" class="h-11 w-full border" value="Q" /><button id="baam-send" class="ml-auto h-11" type="button">Send</button></div>
+  <div id="operation-grid" class="${receivingGrid}"><section id="operation-left" class="min-w-0">Existing left column</section><section id="operation-right" class="min-w-0">Existing right column</section></div></section>
+</div><nav id="bottom-nav" data-native-bottom-nav class="${navClass}"><div class="grid grid-cols-3"><button class="h-11">Products</button><button class="h-11">Reports</button><button class="h-11">More</button></div></nav>
+<div id="document-actions" class="bazaar-doc-mobile-actions bottom-20 flex justify-between"><button class="h-11">Cancel</button><button class="h-11">Save</button></div></main>`;
 const app = `<main data-bazaar-app class="min-h-screen bg-background">
   <header id="app-header" class="sticky top-0 z-40 bg-card px-4 pb-2"
     style="padding-top:max(12px,var(--mobile-top-safe-area))">
@@ -95,12 +146,19 @@ const reportDates = (variant = "populated") => `<section id="date-card" class="m
         ${variant === "disabled" ? "disabled" : ""} /></label>`).join("")}
   </div><input id="date-height-reference" type="text" class="${inputClasses}" tabindex="-1" aria-hidden="true"
     style="position:absolute;visibility:hidden;pointer-events:none" ${variant === "disabled" ? "disabled" : ""} /></section>`;
-const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd + reportDates();
+const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd + reportDates() + horizontalShell + horizontalSurfaces.map(([, markup]) => markup).join("");
+const anchoredSources = ["tests/e2e/fixtures/native-safe-area-anchors.tsx", "src/components/ui/select.tsx", "src/components/ui/dropdown-menu.tsx", "src/components/ui/popover.tsx", "src/components/ui/tooltip.tsx"]
+  .map((file) => ({ raw: fs.readFileSync(path.join(repo, file), "utf8"), extension: "tsx" }));
 const compiled = await postcss([
   postcssImport(),
-  tailwindcss({ ...tailwindConfig, content: [{ raw: allMarkup, extension: "html" }] }),
+  tailwindcss({ ...tailwindConfig, content: [{ raw: allMarkup, extension: "html" }, ...anchoredSources] }),
 ]).process(fs.readFileSync(source, "utf8"), { from: source });
-const currentCss = compiled.css;
+const workspaceRule = postcss.parse(fs.readFileSync(path.join(repo, "src/components/baam-native-workspace.module.css"), "utf8")).nodes.find((node) => node.type === "rule" && node.selector === ".workspace");
+assert(workspaceRule, "Use the actual Baam workspace box without a second horizontal inset");
+const currentCss = compiled.css + `\n.fixture-baam-workspace {${workspaceRule.nodes.map((node) => node.toString()).join(";")}}`;
+const anchorBundle = await build({ entryPoints: [path.join(repo, "tests/e2e/fixtures/native-safe-area-anchors.tsx")], bundle: true, write: false,
+  platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' }, logLevel: "silent" });
+const anchorScript = anchorBundle.outputFiles[0].text;
 const dateBaseline = postcss.parse(currentCss);
 let dateRulesRemoved = 0;
 dateBaseline.walkRules((rule) => {
@@ -122,7 +180,7 @@ keyboardBaseline.walkRules((rule) => {
   if (rule.selector.startsWith("html.native-ios") && (
     rule.selector.includes('[data-native-keyboard="visible"]') ||
     rule.selector === 'html.native-ios [role="dialog"][class~="top-1/2"]' ||
-    rule.selector === 'html.native-ios [role="dialog"][data-native-overlay-layout="responsive-bottom"]'
+    (rule.selector === 'html.native-ios [role="dialog"][data-native-overlay-layout="responsive-bottom"]' && rule.nodes.some((node) => node.prop === "top"))
   )) { rule.remove(); keyboardRemoved += 1; return; }
   if (rule.selector === "html.native-ios") rule.walkDecls("--native-centered-dialog-safe-height", (decl) => {
     decl.value = "calc(100dvh - 2 * max(var(--mobile-top-safe-area), var(--mobile-bottom-safe-area)) - 1rem)";
@@ -162,13 +220,19 @@ baseline.walkRules((rule) => {
 });
 assert.equal(removed, 3, "The before/after comparison must remove only the reviewed fix");
 const beforeCss = baseline.toString();
+const beforeFence = postcss.parse(currentCss);
+let fencesRemoved = 0;
+beforeFence.walkRules((rule) => { if (rule.selector === "html.native-ios [data-bazaar-app]") { rule.remove(); fencesRemoved += 1; } });
+assert.equal(fencesRemoved, 1, "Negative horizontal case removes only the shared AppShell fence");
+const beforeFenceCss = beforeFence.toString();
 
 const browser = await (engine === "webkit" ? webkit : chromium).launch({
   headless: true,
   ...(engine === "chromium" ? { channel: "chrome" } : {}),
 });
 const results = [];
-const outputDir = path.join(repo, ".local/ios-release-20261111/native-overlay-layout");
+const outputDir = process.env.QA_LAYOUT_OUTPUT_DIR ? path.resolve(process.env.QA_LAYOUT_OUTPUT_DIR) : path.join(repo, ".local/ios-release-20261111/native-overlay-layout");
+assert(outputDir.startsWith(path.join(repo, ".local/ios-release-20261111/") ), "QA evidence stays in the owned ignored release folder");
 fs.mkdirSync(outputDir, { recursive: true, mode: 0o700 });
 const check = (name, detail = {}) => results.push({ name, result: "PASS", ...detail });
 const frame = (page) => page.evaluate(() => new Promise((resolve) =>
@@ -188,13 +252,13 @@ const state = (page) => page.evaluate(() => {
     ...(close ? { closeTop: close.top } : {}),
   };
 });
-const load = async (page, { css = currentCss, platform = "ios", width = 393, height = 844, surface = "" } = {}) => {
-  await page.evaluate(() => window.fixtureKeyboard?.dispose());
+const load = async (page, { css = currentCss, platform = "ios", width = 393, height = 844, surface = "", appMarkup = app, left = 0, right = 0 } = {}) => {
+  await page.evaluate(() => { window.fixtureReactRoot?.unmount(); window.fixtureReactRoot = undefined; window.fixtureKeyboard?.dispose(); });
   await page.setViewportSize({ width, height });
-  await page.setContent(`<!doctype html><html class="${platform === "web" ? "" : `native-app native-${platform}`}">
+  await page.setContent(`<!doctype html><html class="${platform === "web" ? "" : `native-app native-${platform}`}" style="--native-safe-area-left:${left}px;--native-safe-area-right:${right}px">
     <head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
       <style>${css}</style><style>:root { --mobile-top-safe-area:59px; --mobile-bottom-safe-area:34px; }</style>
-    </head><body>${app}${surface}</body></html>`);
+    </head><body>${appMarkup}${surface}</body></html>`);
   await frame(page);
 };
 const lock = async (page, count = 1) => {
@@ -214,6 +278,8 @@ try {
   let blockedNetwork = 0;
   await context.route("**/*", (route) => { blockedNetwork += 1; return route.abort(); });
   const page = await context.newPage();
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
   // A regression test must reproduce the demonstrated failure before the fix.
   await load(page, { css: beforeCss });
@@ -419,9 +485,113 @@ try {
     check(`${platform} date appearance and geometry remain unchanged`);
   }
 
+  const safeBox = async (selector) => {
+    const box = await page.locator(selector).boundingBox(); assert(box, `Visible geometry required: ${selector}`); return box;
+  };
+  const insideHorizontal = (box, { width, left, right }, label) => {
+    assert(box.x >= left - 1 && box.x + box.width <= width - right + 1,
+      `${label} crosses synthetic safe bounds: ${JSON.stringify({ box, width, left, right })}`);
+  };
+  const asymmetrical = [{ left: 64, right: 12 }, { left: 8, right: 64 }];
+  await load(page, { css: beforeFenceCss, appMarkup: horizontalShell, width: 852, height: 393, ...asymmetrical[0] });
+  assert((await safeBox("#rail-report")).x < asymmetrical[0].left,
+    "The previous unfenced rail must reproduce a control under the synthetic left cutout");
+  check("unfenced AppShell reproduces the demonstrated left rail overlap");
+
+  for (const insets of asymmetrical) {
+    for (const width of [393, 852, 1280]) {
+      await load(page, { appMarkup: horizontalShell, width, height: width === 393 ? 844 : 393, ...insets });
+      const bounds = { width, ...insets };
+      if (width >= 768) {
+        const rail = await safeBox("#rail");
+        assert(Math.abs(rail.width - 57) <= 1, "The established navigation rail remains 57px");
+        insideHorizontal(await safeBox("#rail-report"), bounds, "Reports rail action");
+        insideHorizontal(await safeBox("#rail-settings"), bounds, "Settings rail action");
+      } else insideHorizontal(await safeBox("#bottom-nav"), bounds, "Fixed mobile navigation");
+      insideHorizontal(await safeBox("#document-actions"), bounds, "Fixed document actions");
+      insideHorizontal(await safeBox("#baam-send"), bounds, "Baam Send");
+      const workspacePadding = await page.locator("#baam-workspace").evaluate((element) => {
+        const style = getComputedStyle(element); return [parseFloat(style.paddingLeft), parseFloat(style.paddingRight)];
+      });
+      assert.deepEqual(workspacePadding, [0, 0], "Baam must not apply the shell safe area twice");
+      if (width >= 1280) {
+        const first = await safeBox("#operation-left"), second = await safeBox("#operation-right");
+        assert(first.x < second.x && Math.abs(first.width / second.width - 2 / 3) < 0.005,
+          "Receiving/transfer/write-off preserve their established left/right 2:3 tracks");
+      }
+      check(`native shell/nav/actions/Baam keep asymmetric safe bounds at ${width}`, insets);
+      if (width === 852) await page.screenshot({ path: path.join(outputDir, `${engine}-horizontal-shell-${insets.left}-${insets.right}.png`) });
+    }
+    for (const width of [393, 852]) for (const [name, surface] of horizontalSurfaces) {
+      if (name === "mobile-more" && width >= 768) continue; // actual existing md:hidden contract
+      await load(page, { surface, width, height: 844, ...insets }); await lock(page);
+      insideHorizontal(await safeBox("#surface"), { width, ...insets }, name);
+      insideHorizontal(await safeBox("#close"), { width, ...insets }, `${name} Close`);
+      check(`native ${name} keeps asymmetric horizontal safe bounds at ${width}`, insets);
+    }
+  }
+
+  await load(page, { appMarkup: horizontalShell, width: 852, height: 393, ...asymmetrical[0] });
+  await page.locator("#horizontal-draft").fill("Keep focused Q draft");
+  await page.evaluate(() => { document.getElementById("horizontal-draft").focus(); document.documentElement.dataset.nativeKeyboard = "visible"; document.documentElement.style.setProperty("--native-available-height", "250px"); });
+  await page.evaluate(({ left, right }) => { document.documentElement.style.setProperty("--native-safe-area-left", `${left}px`); document.documentElement.style.setProperty("--native-safe-area-right", `${right}px`); }, asymmetrical[1]);
+  await frame(page);
+  assert.equal(await page.locator("#horizontal-draft").inputValue(), "Keep focused Q draft");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "horizontal-draft");
+  insideHorizontal(await safeBox("#horizontal-draft"), { width: 852, ...asymmetrical[1] }, "Focused native draft after side change");
+  insideHorizontal(await safeBox("#baam-send"), { width: 852, ...asymmetrical[1] }, "Send after side change");
+  check("shared horizontal correction preserves a focused keyboard-state draft across asymmetric side changes");
+
+  for (const platform of ["web", "android"]) {
+    await load(page, { platform, appMarkup: horizontalShell, css: beforeFenceCss, width: 1280, ...asymmetrical[0] });
+    const before = { rail: await safeBox("#rail"), workspace: await safeBox("#baam-workspace"), first: await safeBox("#operation-left"), second: await safeBox("#operation-right") };
+    await load(page, { platform, appMarkup: horizontalShell, width: 1280, ...asymmetrical[0] });
+    assert.deepEqual({ rail: await safeBox("#rail"), workspace: await safeBox("#baam-workspace"), first: await safeBox("#operation-left"), second: await safeBox("#operation-right") }, before);
+    check(`${platform} shell/Baam/operational geometry does not acquire native horizontal insets`);
+  }
+
+  // Real portalled Radix components, including caller-specified collision
+  // padding and Escape/focus return. Only CSS insets are synthetic here.
+  for (const [index, insets] of asymmetrical.entries()) for (const kind of ["dropdown", "popover", "select", "tooltip"]) {
+    const edge = index ? "right" : "left", width = 852;
+    await load(page, { width, height: 600, ...insets });
+    await page.addScriptTag({ content: anchorScript });
+    await page.evaluate(({ kind, edge }) => window.fixtureMountAnchors(kind, edge), { kind, edge });
+    await page.locator("#anchor-trigger").waitFor();
+    if (kind === "tooltip") await page.locator("#anchor-trigger").focus();
+    else if (kind === "select") await page.locator("#anchor-trigger").press("Enter");
+    else await page.locator("#anchor-trigger").click();
+    await page.locator("#anchor-surface").waitFor(); await frame(page); await frame(page);
+    insideHorizontal(await safeBox("#anchor-surface"), {
+      width, left: insets.left + 16, right: insets.right + (["dropdown", "select"].includes(kind) ? 20 : 16),
+    }, `Actual portalled ${kind} preserves caller collision padding`);
+    assert.equal(await page.locator("[data-native-safe-area-probe]").count(), 1, "All primitives share one native inset probe");
+    if (kind === "popover") await page.screenshot({ path: path.join(outputDir, `${engine}-horizontal-popover-${edge}.png`) });
+    await page.keyboard.press("Escape");
+    await page.locator("#anchor-surface").waitFor({ state: "hidden" });
+    await page.waitForFunction(() => document.activeElement?.id === "anchor-trigger", undefined, { timeout: 2000 });
+    assert.equal(await page.evaluate(() => document.activeElement.id), "anchor-trigger", `${kind} preserves real Escape focus return`);
+    check(`actual portalled ${kind} respects ${edge} safe boundary and restores trigger focus`, insets);
+  }
+
+  for (const platform of ["web", "android"]) for (const kind of ["dropdown", "popover", "select", "tooltip"]) {
+    await load(page, { platform, width: 852, height: 600, ...asymmetrical[0] });
+    await page.addScriptTag({ content: anchorScript });
+    await page.evaluate((kind) => window.fixtureMountAnchors(kind, "left"), kind);
+    await page.locator("#anchor-trigger").waitFor();
+    if (kind === "tooltip") await page.locator("#anchor-trigger").focus();
+    else if (kind === "select") await page.locator("#anchor-trigger").press("Enter");
+    else await page.locator("#anchor-trigger").click();
+    await page.locator("#anchor-surface").waitFor(); await frame(page);
+    assert.equal(await page.locator("[data-native-safe-area-probe]").count(), 0, "Other platforms create no native inset coordinator");
+    assert((await safeBox("#anchor-trigger")).x < asymmetrical[0].left, "Other platforms retain their original viewport boundary");
+    check(`${platform} ${kind} retains existing portal behavior without native side bounds`);
+  }
+  assert.deepEqual(pageErrors, [], "Real primitives must not introduce browser runtime errors");
+
   fs.writeFileSync(path.join(outputDir, `${engine}.json`), JSON.stringify({
-    result: "PASS", engine, networkBlocked: blockedNetwork, checks: results,
-    scope: "Offline layout/scroll fixture; not actual WKWebView or a full Radix interaction test",
+    result: "PASS", engine, networkBlocked: blockedNetwork, pageErrors, checks: results,
+    scope: "Offline layout/scroll fixture plus real anchored Radix interactions with explicit asymmetric CSS inset overrides; not actual WKWebView, iOS keyboard or payment evidence",
   }, null, 2), { mode: 0o600 });
   console.log(`PASS: ${results.length} isolated ${engine} overlay layout/scroll checks`);
   await context.close();

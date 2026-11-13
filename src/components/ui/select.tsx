@@ -5,6 +5,7 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 
 import { cn } from "@/lib/utils";
 import { CheckIcon, ChevronDownIcon } from "@/components/icons";
+import { useNativeCollisionPadding } from "@/hooks/useNativeCollisionPadding";
 
 type SelectControlAttributes = Pick<
   React.HTMLAttributes<HTMLButtonElement>,
@@ -95,9 +96,11 @@ const SelectContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
 >(
   (
-    { className, children, position = "popper", sideOffset = 6, align = "start", ...props },
+    { className, children, position = "popper", sideOffset = 6, align = "start", collisionPadding = 8, ...props },
     ref,
-  ) => (
+  ) => {
+    const safeCollisionPadding = useNativeCollisionPadding(collisionPadding);
+    return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         ref={ref}
@@ -109,7 +112,7 @@ const SelectContent = React.forwardRef<
         position={position}
         sideOffset={sideOffset}
         align={align}
-        collisionPadding={8}
+        collisionPadding={safeCollisionPadding}
         {...props}
       >
         <SelectPrimitive.ScrollUpButton className="flex h-6 items-center justify-center bg-popover text-muted-foreground">
@@ -123,7 +126,8 @@ const SelectContent = React.forwardRef<
         </SelectPrimitive.ScrollDownButton>
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
-  ),
+    );
+  },
 );
 
 SelectContent.displayName = SelectPrimitive.Content.displayName;

@@ -4,6 +4,7 @@ import * as React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
 import { cn } from "@/lib/utils";
+import { useNativeCollisionPadding } from "@/hooks/useNativeCollisionPadding";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 export const TooltipTrigger = TooltipPrimitive.Trigger;
@@ -17,11 +18,14 @@ export const Tooltip = ({ children, ...props }: TooltipProps) => (
 export const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 6, ...props }, ref) => (
+>(({ className, sideOffset = 6, collisionPadding, ...props }, ref) => {
+  const safeCollisionPadding = useNativeCollisionPadding(collisionPadding);
+  return (
   <TooltipPrimitive.Portal>
     <TooltipPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
+      collisionPadding={safeCollisionPadding}
       className={cn(
         "es-tooltip relative z-[1200]",
         className,
@@ -29,5 +33,6 @@ export const TooltipContent = React.forwardRef<
       {...props}
     />
   </TooltipPrimitive.Portal>
-));
+  );
+});
 TooltipContent.displayName = "TooltipContent";
