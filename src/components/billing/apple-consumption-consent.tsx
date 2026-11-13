@@ -199,6 +199,7 @@ export function AppleConsumptionRevocations() {
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const query = trpc.billing.apple.personalConsumptionConsents.useQuery(undefined, { enabled: status === "authenticated", staleTime: 0, retry: false });
+  const refetchPersonal = query.refetch;
   const revoke = trpc.billing.apple.revokePersonalConsumptionConsent.useMutation();
   const utils = trpc.useUtils();
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -207,8 +208,8 @@ export function AppleConsumptionRevocations() {
   const active = useRef<object | null>(null);
   useEffect(() => {
     active.current = null; setPendingId(null); setIssue(""); setNotice("");
-    if (status === "authenticated") void query.refetch();
-  }, [viewer, status, query.refetch]);
+    if (status === "authenticated") void refetchPersonal();
+  }, [viewer, status, refetchPersonal]);
   const viewerMatches = status === "authenticated" && query.data?.viewerUserId === session?.user.id;
   const withdraw = async (consentId: string) => {
     if (active.current || !viewerMatches) return;
