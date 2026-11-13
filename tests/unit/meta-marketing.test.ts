@@ -10,6 +10,7 @@ vi.mock("@/lib/native/platform", () => ({ isNativeApp: () => {
 type Pixel = ((...args: unknown[]) => void) & { queue: unknown[][]; callMethod?: (...args: unknown[]) => void; disablePushState: boolean };
 type PixelWindow = Window & { fbq?: Pixel; _fbq?: Pixel };
 const pixelId = "1635457884748007";
+const observedMetaQuery = "utm_source=instagram&utm_medium=paid_social&utm_campaign=bishkek_take6&utm_content=take6_landing&utm_id=52573740529697&utm_term=52573740529897";
 const script = () => document.getElementById("bazaar-meta-measurement") as HTMLScriptElement | null;
 const browser = () => window as PixelWindow;
 function sdkLoaded() {
@@ -34,7 +35,7 @@ beforeEach(() => {
   Object.defineProperty(navigator, "doNotTrack", { configurable: true, value: "0" });
   window.history.replaceState({}, "", "/ru");
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("separate consented Meta registration measurement", () => {
   it("keeps a native Capacitor app outside website Meta measurement", async () => {
@@ -144,6 +145,90 @@ describe("separate consented Meta registration measurement", () => {
     expect(meta.safeMetaContext()).toBe(true);
     meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
     expect(script()).not.toBeNull();
+  });
+
+  it.each(["", "&fbclid=Valid-Meta_Click123"])("measures the observed Instagram landing only after consent, then one new-account conversion: %s", async click => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}${click}`);
+    Object.defineProperty(document, "referrer", { configurable: true, value: "https://instagram.com/" });
+    const meta = await import("@/lib/metaMarketing");
+    expect(meta.safeMetaContext()).toBe(true);
+    meta.synchronizeMetaMeasurement("/ru");
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    const send = sdkLoaded();
+    meta.synchronizeMetaMeasurement("/ru");
+    window.history.pushState({}, "", "/signup");
+    meta.synchronizeMetaMeasurement("/signup");
+    const measurement = meta.trackMetaSignupBeforeNavigation();
+    await meta.trackMetaSignupBeforeNavigation();
+    await vi.advanceTimersByTimeAsync(150); await measurement;
+    expect(send.mock.calls).toEqual([
+      ["trackSingle", pixelId, "PageView"], ["trackSingle", pixelId, "PageView"],
+      ["trackSingle", pixelId, "CompleteRegistration"],
+    ]);
+  });
+
+  it("accepts the observed landing as the same-origin referrer of a fresh signup document", async () => {
+    const dispatchEvent = window.dispatchEvent.bind(window);
+    vi.stubGlobal("window", { location: new URL("https://www.bazaar.kg/signup"), dispatchEvent });
+    Object.defineProperty(document, "referrer", { configurable: true, value: `https://www.bazaar.kg/ru?${observedMetaQuery}&fbclid=Valid-Meta_Click123` });
+    const meta = await import("@/lib/metaMarketing");
+    expect(meta.safeMetaContext()).toBe(true);
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/signup");
+    expect(script()).not.toBeNull();
+  });
+
+  it.each([
+    ["utm_id", "52573740529698"], ["utm_id", "52573740529697x"],
+    ["utm_id", "private@example.invalid"], ["utm_term", "52573740529898"],
+    ["utm_term", "52573740529897x"], ["utm_term", "996700000000"],
+    ["utm_campaign", "kg_store_launch_202611"], ["utm_content", "take6_signup"],
+    ["utm_source", "facebook"], ["utm_medium", "organic_social"],
+  ])("keeps a mismatched observed campaign blocked: %s=%s", async (key, value) => {
+    const search = new URLSearchParams(observedMetaQuery);
+    search.set(key, value);
+    window.history.replaceState({}, "", `/ru?${search}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(meta.safeMetaContext()).toBe(false); expect(script()).toBeNull();
+    expect(browser().fbq).toBeUndefined();
+  });
+
+  it.each([
+    "utm_id=52573740529697", "utm_id=52573740529698", "utm_term=52573740529897",
+    "utm_term=52573740529898", "utm_source=instagram", "nxtPlocale=ru", "email=private%40example.invalid",
+  ])("does not broaden allowed raw query fields or allow duplicates: %s", async extra => {
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}&${extra}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(meta.safeMetaContext()).toBe(false); expect(script()).toBeNull();
+    expect(browser().fbq).toBeUndefined();
+  });
+
+  it.each(["utm_id", "utm_term"])("does not allow an incomplete observed identifier pair without %s", async key => {
+    const search = new URLSearchParams(observedMetaQuery);
+    search.delete(key);
+    window.history.replaceState({}, "", `/ru?${search}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+  });
+
+  it.each(["/products", "/register-business/private-token"])("keeps private routes blocked with the reviewed IDs: %s", async path => {
+    window.history.replaceState({}, "", `${path}?${observedMetaQuery}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement(path);
+    await meta.trackMetaSignupBeforeNavigation();
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+  });
+
+  it.each(["globalPrivacyControl", "doNotTrack"])("honors %s on the observed paid landing", async key => {
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}`);
+    Object.defineProperty(navigator, key, { configurable: true, value: key === "doNotTrack" ? "1" : true });
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
   });
 
   it.each([

@@ -73,7 +73,7 @@ function safePublicUrl(url: URL) {
   const search = url.searchParams;
   const campaignFields = {
     utm_source: "campaign_source", utm_medium: "campaign_medium", utm_campaign: "campaign_name",
-    utm_content: "campaign_content", utm_term: "campaign_term",
+    utm_content: "campaign_content", utm_term: "campaign_term", utm_id: "campaign_id",
   } as const;
   const campaignKeys = Object.keys(campaignFields);
   const reviewed = marketingCampaignOverrides(search);

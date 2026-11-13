@@ -9,8 +9,46 @@ const labels = (content: string, term?: string) => new URLSearchParams({
   utm_content: content,
   ...(term ? { utm_term: term } : {}),
 });
+const observedMetaLabels = () => new URLSearchParams({
+  utm_source: "instagram", utm_medium: "paid_social", utm_campaign: "bishkek_take6",
+  utm_content: "take6_landing", utm_id: "52573740529697", utm_term: "52573740529897",
+});
 
 describe("controlled GA4 campaign export", () => {
+  it("exports only the exact observed Meta campaign/ad-set pair from the registry", () => {
+    expect(marketingCampaignOverrides(observedMetaLabels())).toEqual({
+      campaign_source: "instagram", campaign_medium: "paid_social", campaign_name: "bishkek_take6",
+      campaign_content: "take6_landing", campaign_id: "52573740529697", campaign_term: "52573740529897",
+    });
+  });
+
+  it.each([
+    ["utm_id", "52573740529698"], ["utm_id", "52573740529697x"],
+    ["utm_id", "private@example.invalid"], ["utm_term", "52573740529898"],
+    ["utm_term", "52573740529897x"], ["utm_term", "996700000000"],
+    ["utm_campaign", "kg_store_launch_202611"], ["utm_content", "take6_signup"],
+    ["utm_source", "facebook"], ["utm_medium", "organic_social"],
+  ])("does not export a mismatched Meta identifier combination: %s=%s", (key, value) => {
+    const search = observedMetaLabels();
+    search.set(key, value);
+    expect(marketingCampaignOverrides(search)).toEqual({});
+  });
+
+  it.each(["utm_id", "utm_term"])("requires the complete pair, including %s", key => {
+    const search = observedMetaLabels();
+    search.delete(key);
+    expect(marketingCampaignOverrides(search)).toEqual({});
+  });
+
+  it.each([
+    ["utm_id", "52573740529697"], ["utm_id", "52573740529698"],
+    ["utm_term", "52573740529897"], ["utm_term", "52573740529898"],
+  ])("rejects duplicate Meta identifiers even when one is reviewed: %s=%s", (key, value) => {
+    const search = observedMetaLabels();
+    search.append(key, value);
+    expect(marketingCampaignOverrides(search)).toEqual({});
+  });
+
   it.each(["take6_signup", "take6_landing"])("exports the reviewed Take 6 destination %s", content => {
     expect(marketingCampaignOverrides(new URLSearchParams({
       utm_source: "instagram", utm_medium: "paid_social", utm_campaign: "bishkek_take6", utm_content: content,
