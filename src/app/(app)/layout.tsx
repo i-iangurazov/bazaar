@@ -1,10 +1,13 @@
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { SubscriptionFeatureBoundary } from "@/components/billing/subscription-feature-boundary";
 import { SubscriptionAccessBanner } from "@/components/billing/subscription-access-banner";
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   const token = await getServerAuthToken();

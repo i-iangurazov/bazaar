@@ -17,6 +17,8 @@ const sections = [
   "data",
   "purpose",
   "acquisition",
+  "analytics",
+  "metaMeasurement",
   "permissions",
   "security",
   "sharing",

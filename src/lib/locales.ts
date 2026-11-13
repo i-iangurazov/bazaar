@@ -12,7 +12,7 @@ export const normalizeLocale = (value?: string | null): Locale | undefined => {
   if (!value) {
     return undefined;
   }
-  if (value in legacyLocaleMap) {
+  if (Object.prototype.hasOwnProperty.call(legacyLocaleMap, value)) {
     return legacyLocaleMap[value as LegacyLocale];
   }
   return locales.includes(value as Locale) ? (value as Locale) : undefined;

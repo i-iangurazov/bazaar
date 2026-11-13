@@ -48,11 +48,13 @@ const attribution = acquisitionFromSearch(
           attribution,
         };
         const signup = await createSignup(input);
+        expect(signup.accountCreated).toBe(true);
         expect(signup.nextPath).toMatch(/^\/register-business\//);
         const resumed = await createSignup({
           ...input,
           attribution: { ...attribution, utm_content: "later" },
         });
+        expect(resumed.accountCreated).toBe(false);
         const user = await prisma.user.findUniqueOrThrow({ where: { email: input.email } });
         expect(user.signupAttribution).toEqual(attribution);
         expect(user.organizationId).toBeNull();

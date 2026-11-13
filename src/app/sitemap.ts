@@ -1,13 +1,15 @@
 import type { MetadataRoute } from "next";
 
 import { helpCategories, helpGuides } from "@/content/help/catalog";
+import { marketingCanonicalHomes, marketingLanguageAlternates } from "@/lib/marketingSeo";
 
 const sitemap = (): MetadataRoute.Sitemap => [
-  {
-    url: "https://www.bazaar.kg/",
-    changeFrequency: "weekly",
+  ...marketingCanonicalHomes.map(({ url }) => ({
+    url,
+    changeFrequency: "weekly" as const,
     priority: 1,
-  },
+    alternates: { languages: marketingLanguageAlternates },
+  })),
   {
     url: "https://www.bazaar.kg/signup",
     changeFrequency: "monthly",
@@ -17,6 +19,11 @@ const sitemap = (): MetadataRoute.Sitemap => [
     url: "https://www.bazaar.kg/developers/bazaar-api",
     changeFrequency: "monthly",
     priority: 0.6,
+  },
+  {
+    url: "https://www.bazaar.kg/privacy",
+    changeFrequency: "monthly",
+    priority: 0.3,
   },
   {
     url: "https://www.bazaar.kg/help",

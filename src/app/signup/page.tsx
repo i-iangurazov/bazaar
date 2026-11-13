@@ -29,6 +29,8 @@ import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/loca
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { TRIAL_DAYS } from "@/lib/billing/trial";
+import { replaceAfterMarketingSuccess, trackMarketingEvent, trackSignupBeforeNavigation } from "@/lib/marketingAnalytics";
+import { trackMetaSignupBeforeNavigation } from "@/lib/metaMarketing";
 
 type RequestValues = {
   email: string;
@@ -138,6 +140,8 @@ const SignupPage = () => {
 
   const requestMutation = trpc.publicAuth.requestAccess.useMutation({
     onSuccess: () => {
+      // This is an acknowledgement, not a qualified or necessarily new lead.
+      trackMarketingEvent("access_request_submitted");
       setFormError(null);
       setSubmitted(true);
       toast({ variant: "success", description: t("requestSuccess") });
@@ -151,6 +155,10 @@ const SignupPage = () => {
 
   const signupMutation = trpc.publicAuth.signup.useMutation({
     onSuccess: async (result, variables) => {
+      // Resuming an existing registration must not create another conversion.
+      // Run alongside locale persistence, then wait only at the document boundary.
+      const measurement = result.accountCreated
+        ? Promise.all([trackSignupBeforeNavigation(), trackMetaSignupBeforeNavigation()]) : undefined;
       setFormError(null);
       if (result.nextPath) {
         setRedirectingToBusiness(true);
@@ -161,7 +169,8 @@ const SignupPage = () => {
             body: JSON.stringify({ locale: variables.preferredLocale }),
           });
         } finally {
-          router.replace(result.nextPath);
+          await measurement;
+          replaceAfterMarketingSuccess(result.nextPath, path => router.replace(path));
         }
         return;
       }
@@ -185,7 +194,8 @@ const SignupPage = () => {
         toast({ variant: "info", description: t("verifyHint") });
         return;
       }
-      router.replace("/login");
+      await measurement;
+      replaceAfterMarketingSuccess("/login", path => router.replace(path));
     },
     onError: (error) => {
       setRedirectingToBusiness(false);

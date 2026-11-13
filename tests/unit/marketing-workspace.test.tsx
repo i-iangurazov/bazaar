@@ -106,14 +106,28 @@ describe("localized public marketing", () => {
       const structured = JSON.parse(
         root.querySelector('script[type="application/ld+json"]')!.textContent!,
       );
+      expect(structured.name).toBe("BAZAAR");
+      expect(structured.publisher.name).toBe("BAZAAR");
+      expect(structured.publisher["@type"]).toBe("Organization");
+      expect(structured.publisher).not.toHaveProperty("address");
+      expect(structured.offers.map((offer: { name: string }) => offer.name)).toEqual([
+        "Новичок", "Бизнесмен", "Монополист",
+      ]);
       expect(structured.inLanguage).toBe(locale === "kg" ? "ky" : locale);
       expect(structured.offers.map((offer: { price: string }) => Number(offer.price))).toEqual(
         getPlanCatalogEntries().map((plan) => plan.monthlyPriceKgs),
       );
       expect(root.querySelectorAll("article[data-plan]")).toHaveLength(3);
       const metadata = await generateMetadata();
-      expect(metadata.title).toBe(copy.meta.title);
+      expect(metadata.title).toEqual({ absolute: copy.meta.title });
       expect(metadata.description).toBe(copy.meta.description);
+      expect(metadata.alternates?.canonical).toBe(`/${locale}`);
+      expect(metadata.alternates?.languages).toEqual({
+        "ru-KG": "https://www.bazaar.kg/ru",
+        "ky-KG": "https://www.bazaar.kg/kg",
+        en: "https://www.bazaar.kg/en",
+        "x-default": "https://www.bazaar.kg/",
+      });
       expect(metadata.openGraph?.locale).toBe({ ru: "ru_KG", kg: "ky_KG", en: "en_US" }[locale]);
       for (const link of root.querySelectorAll<HTMLAnchorElement>('a[href^="#"]'))
         expect(root.querySelector(link.getAttribute("href")!)).toBeTruthy();
@@ -265,6 +279,8 @@ describe("marketing language recovery", () => {
   it.each(["http", "network"])(
     "shows and recovers from a %s failure without a false refresh",
     async (mode) => {
+      // Other public pages retain the existing in-place cookie refresh.
+      history.replaceState(null, "", "/privacy");
       Element.prototype.scrollIntoView = vi.fn();
       let failed = true;
       state.fetch.mockImplementation(async () => {

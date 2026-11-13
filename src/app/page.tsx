@@ -5,23 +5,24 @@ import { getMarketingCopy } from "@/content/marketing";
 
 import { MarketingLanding } from "@/components/marketing/MarketingLanding";
 import { getServerAuthToken } from "@/server/auth/token";
-
-const siteUrl = "https://www.bazaar.kg";
+import { marketingHomePath, marketingLanguageAlternates, marketingSiteUrl } from "@/lib/marketingSeo";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 
 export const generateMetadata = async (): Promise<Metadata> => {
-  const locale = await getLocale();
+  const locale = normalizeLocale(await getLocale()) ?? defaultLocale;
   const copy = getMarketingCopy(locale);
-  const socialImage = `/marketing/social/${locale === "ky" ? "kg" : locale}.png?v=20261030`;
+  const socialImage = `/marketing/social/${locale}.png?v=20261030`;
+  const canonical = marketingHomePath(locale);
   return {
-    metadataBase: new URL(siteUrl),
-    title: copy.meta.title,
+    metadataBase: new URL(marketingSiteUrl),
+    title: { absolute: copy.meta.title },
     description: copy.meta.description,
-    alternates: { canonical: "/" },
+    alternates: { canonical, languages: marketingLanguageAlternates },
     openGraph: {
       title: copy.meta.socialTitle,
       description: copy.meta.description,
-      url: siteUrl,
-      siteName: "Bazaar",
+      url: `${marketingSiteUrl}${canonical}`,
+      siteName: "BAZAAR",
       locale: locale === "kg" ? "ky_KG" : locale === "en" ? "en_US" : "ru_KG",
       type: "website",
       images: [{ url: socialImage, width: 1200, height: 630, alt: copy.meta.imageAlt }],

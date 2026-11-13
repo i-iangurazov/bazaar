@@ -31,7 +31,7 @@ describe("Bazaar Retail OS marketing landing", () => {
     const page = await readSource("src/app/page.tsx");
     const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
     const robots = await readSource("src/app/robots.ts");
-    const sitemap = await readSource("src/app/sitemap.ts");
+    const sitemap = (await import("@/app/sitemap")).default();
 
     expect(page).toContain("metadataBase");
     expect(page).toContain("openGraph");
@@ -40,8 +40,10 @@ describe("Bazaar Retail OS marketing landing", () => {
     expect(robots).toContain('sitemap: "https://www.bazaar.kg/sitemap.xml"');
     expect(robots).toContain('"/api/"');
     expect(robots).toContain('"/dashboard"');
-    expect(sitemap).toContain('url: "https://www.bazaar.kg/"');
-    expect(sitemap).toContain('url: "https://www.bazaar.kg/signup"');
+    expect(sitemap).toEqual(expect.arrayContaining([
+      expect.objectContaining({ url: "https://www.bazaar.kg/ru" }),
+      expect.objectContaining({ url: "https://www.bazaar.kg/signup" }),
+    ]));
     expect(landing).toContain('"@type": "SoftwareApplication"');
     expect(landing).toContain("getPlanCatalogEntries()");
     expect(landing).toContain("price: String(plan.monthlyPriceKgs)");

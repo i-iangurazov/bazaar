@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import React from "react";
 import { renderToString } from "react-dom/server";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ register: vi.fn(), locale: "ru", localizeErrors: false }));
+const state = vi.hoisted(() => ({ register: vi.fn(), locale: "ru", localizeErrors: false,
+  track: vi.fn(), success: null as ((result: { requiresEmailVerification: boolean; verificationEmailSent: boolean }) => void) | null }));
 vi.mock("next/navigation", () => ({ useParams: () => ({ token: "synthetic-registration-token" }) }));
 vi.mock("next-intl", () => ({
   useLocale: () => state.locale,
@@ -13,14 +14,25 @@ vi.mock("next-intl", () => ({
 vi.mock("@/components/auth-brand", () => ({ AuthBrand: () => <span>BAZAAR</span> }));
 vi.mock("@/components/language-switcher", () => ({ LanguageSwitcher: () => null }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/lib/marketingAnalytics", () => ({ trackMarketingEvent: state.track }));
 vi.mock("@/lib/trpc", () => ({ trpc: { publicAuth: {
-  registerBusiness: { useMutation: () => ({ mutate: state.register, isLoading: false }) },
+  registerBusiness: { useMutation: (options: { onSuccess: NonNullable<typeof state.success> }) => {
+    state.success = options.onSuccess;
+    return { mutate: state.register, isLoading: false };
+  } },
 } } }));
 import RegisterBusinessPage from "@/app/register-business/[token]/page";
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 beforeEach(() => { state.locale = "ru"; state.localizeErrors = false; });
 describe("business registration form presentation", () => {
+  it("keeps private business success out of browser analytics, including a recoverable email failure", () => {
+    render(<RegisterBusinessPage />);
+    expect(state.track).not.toHaveBeenCalled();
+    act(() => state.success?.({ requiresEmailVerification: true, verificationEmailSent: false }));
+    expect(state.track).not.toHaveBeenCalled();
+    expect(screen.getByText("registerBusiness.submittedVerifyEmailFailed")).toBeTruthy();
+  });
   it("retranslates validation without losing the business details", () => {
     state.localizeErrors = true;
     const page = render(<RegisterBusinessPage />);

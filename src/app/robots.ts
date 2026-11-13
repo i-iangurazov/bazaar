@@ -3,12 +3,17 @@ import type { MetadataRoute } from "next";
 const privateApplicationRoutes = [
   "/admin/",
   "/api/",
+  "/baam",
   "/billing",
   "/cash",
   "/customers",
   "/dashboard",
+  "/dev/",
   "/finance/",
   "/inventory",
+  "/help/compliance",
+  "/invite",
+  "/loyalty/",
   "/onboarding",
   "/operations/",
   "/orders",
@@ -17,10 +22,13 @@ const privateApplicationRoutes = [
   "/products",
   "/purchase-orders",
   "/reports",
+  "/register-business/",
+  "/reset/",
   "/sales/",
   "/settings/",
   "/stores",
   "/suppliers",
+  "/verify/",
 ];
 
 const robots = (): MetadataRoute.Robots => ({

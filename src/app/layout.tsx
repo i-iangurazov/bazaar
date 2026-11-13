@@ -9,6 +9,8 @@ import { bazaarBaseFontStylesheetHref } from "@/lib/catalogFonts";
 import { defaultLocale, toIntlLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
 import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/theme";
+import { marketingSiteUrl } from "@/lib/marketingSeo";
+import { MarketingAnalytics } from "@/components/analytics/marketing-analytics";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -23,16 +25,17 @@ export const viewport: Viewport = {
 export const generateMetadata = async (): Promise<Metadata> => {
   const t = await getTranslations("meta");
   return {
+    metadataBase: new URL(marketingSiteUrl),
     title: {
       default: t("title"),
       template: `%s | ${t("title")}`,
     },
     description: t("description"),
-    applicationName: "Bazaar",
+    applicationName: "BAZAAR",
     manifest: "/manifest.webmanifest",
     appleWebApp: {
       capable: true,
-      title: "Bazaar",
+      title: "BAZAAR",
       statusBarStyle: "default",
     },
     other: {
@@ -73,6 +76,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
       <body className="min-h-screen bg-background font-sans">
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
           <GlobalNumberInputGuard />
+          <MarketingAnalytics />
           {children}
         </Providers>
       </body>

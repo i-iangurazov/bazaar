@@ -1,10 +1,16 @@
 import { getTranslations } from "next-intl/server";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AuthBrand } from "@/components/auth-brand";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const generateMetadata = async (): Promise<Metadata> => ({
+  title: (await getTranslations("auth"))("loginTitle"),
+  robots: { index: false, follow: true },
+});
 
 const LoginPage = async () => {
   const t = await getTranslations("auth");

@@ -13,10 +13,12 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/server/auth/token", () => ({ getServerAuthToken: async () => state.token }));
 vi.mock("@/components/help/HelpGuidePage", () => ({ HelpGuidePage: () => null }));
+vi.mock("@/components/marketing/MarketingLanding", () => ({ MarketingLanding: () => null }));
 import GuidePage, { generateMetadata } from "@/app/(guide)/help/[category]/[guide]/page";
 import LegacyHome from "@/app/[locale]/page";
 import LegacyRoute from "@/app/[locale]/[...slug]/page";
 import { getHelpGuide } from "@/content/help/catalog";
+import { MarketingLanding } from "@/components/marketing/MarketingLanding";
 
 afterEach(() => {
   state.token = null;
@@ -54,12 +56,11 @@ describe("public guide language and legacy entry points", () => {
     ).rejects.toThrow("notFound");
   });
   it.each([false, true])(
-    "retains the legacy localized home destination with authenticated=%s",
+    "serves the localized public landing while retaining the authenticated destination=%s",
     async (authenticated) => {
       state.token = authenticated ? { role: "ADMIN" } : null;
-      await expect(LegacyHome()).rejects.toThrow(
-        `redirect:${authenticated ? "/dashboard" : "/login"}`,
-      );
+      if (authenticated) await expect(LegacyHome()).rejects.toThrow("redirect:/dashboard");
+      else expect((await LegacyHome()).type).toBe(MarketingLanding);
     },
   );
   it("preserves repeated query values and a nested path when removing a legacy locale prefix", async () => {

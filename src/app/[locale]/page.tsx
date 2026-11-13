@@ -1,12 +1,3 @@
-import { redirect } from "next/navigation";
-
-import { getServerAuthToken } from "@/server/auth/token";
-
-export const dynamic = "force-dynamic";
-
-const HomePage = async () => {
-  const token = await getServerAuthToken();
-  redirect(token ? "/dashboard" : "/login");
-};
-
-export default HomePage;
+// Middleware validates the locale and pins server rendering to the URL language.
+// Reuse the same landing and authenticated destination as the unprefixed entry.
+export { default, generateMetadata } from "../page";
