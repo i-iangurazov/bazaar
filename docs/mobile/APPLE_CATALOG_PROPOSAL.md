@@ -1,15 +1,18 @@
 # Apple catalog proposal — owner review required
 
-Status: commercial draft; 145 base/pack products are registered as unpriced
-metadata drafts. Prices/terms are unapproved and sales stay off.
+Status: commercial draft; 145 base/pack products are registered. The owner-approved
+102 available 15%-scenario prices are configured and read back as Apple drafts;
+43 above-grid prices remain unconfigured/unapproved. Broader terms and catalog
+approval remain open, and sales stay off.
 This does not replace the complete release goal or claim all plan-change paths
 are ready.
 
 The generated `apple-catalog.draft.json` enumerates 126 current subscription
 configurations, 9 immutable legacy configurations, and 10 WhatsApp quantities.
 Every entry records its frozen contract identity, duration, additions, exact
-server entitlements and KGS service valuation. Its `approved:false` marker and
-missing price points intentionally fail the production mapping contract.
+server entitlements and KGS service valuation. Its local `approved:false` marker
+and unset verified price/storefront mappings intentionally fail the production
+mapping contract; configuring Apple draft prices does not change that artifact.
 Reproduce with `node --import tsx scripts/mobile/apple-catalog-draft.ts`.
 Negotiated contracts need their own reviewed mappings; a public price must never
 replace their saved terms.
@@ -27,27 +30,37 @@ replace their saved terms.
   before enabling that offer, and existing connection/worker/privacy gates stay.
 - Actual Apple localized prices are loaded from StoreKit. The KGS amounts in the
   artifact are service valuations, not a promised Apple charge or exchange rate.
-  Per-product price points and approved storefront availability remain open.
+  OWN points for the 102 approved draft prices are verified; the 43 above-grid
+  offers and approved storefront availability remain open.
 
 ## Actual registration and commission checkpoint — 13 November 2026
 
 All 145 base/pack product IDs and their draft versions are registered under
 Bazaar POS, Apple ID `6833508529`, bundle `kg.bazaar.app`. The 290 RU/en-GB
 localization bindings were read back during creation; the final two-GET inventory
-check found all 145 products without missing, foreign or conflicting IDs. Their
-parent states remain `MISSING_METADATA`. Registration did not configure prices,
-availability or review submission and does not establish sellable offers.
+check found all 145 products without missing, foreign or conflicting IDs. At that
+registration checkpoint their parent states were `MISSING_METADATA`. Registration
+itself did not configure prices, availability or review submission. The later
+price-only application below does not establish sellable offers.
 
 The actual KGZ control-product price lookup offers 800 positive USD levels from
-USD 0.29 to USD 1000. A private worksheet proposes the nearest gross price to
+USD 0.29 to USD 1000. An initial private worksheet proposed the nearest gross price to
 each frozen KGS service valuation, using the dated 13 November NBKR reference
 USD rate of 87.4489 KGS. This is a comparison, not an exchange-rate guarantee.
-111 proposed configurations fit that range; 34 Enterprise six-/twelve-month
-configurations exceed it. They are preserved as unresolved, without clamping
-their prices to USD 1000 or reusing another product's price-point identifiers.
+111 proposed configurations fit that initial comparison; 34 Enterprise
+six-/twelve-month configurations exceeded it. This pre-commission comparison was
+superseded for draft-price selection by the commission table below. No above-grid
+price was clamped to USD 1000 or assigned another product's price-point ID.
 The actual higher-price request displays a mandatory consumption-information
-capability when No is selected. Its consent-aware implementation is in progress;
-no higher-price request has been submitted.
+capability when No is selected. The consent-aware server and optional buyer UI
+are implemented with isolated tests; outbound reporting stays off and no actual
+consumption response has been sent. The higher-price form has been truthfully
+prepared, and the owner explicitly confirmed its legal declarations and
+authorized submission. The signed-in Apple UI has now **acknowledged receipt**;
+Apple's review/approval remains pending. Private evidence is
+`.local/ios-release-20261111/catalog-registration/pricing-proposal/higher-price-submission-received.{png,json}`.
+Submission does not approve or configure the 43 blocked prices, open higher
+points, establish country availability or enable sales/publication.
 
 The owner subsequently requested a commission-covering markup table before any
 price application. The separate private workbook/CSV/JSON preserves all 145
@@ -57,12 +70,36 @@ the frozen KGS service valuation after one commission at the dated reference
 rate. Exact rational/Decimal checks cover all 290 scenarios; the workbook's
 formulas/cached prices and desktop rendering were checked. At 30%, 93 candidates
 fit the current grid and 52 exceed USD 1000; at 15%, 102 fit and 43 exceed it.
-Eleven products' own KGZ price grids were read separately and their 22 candidate
-points matched; the remaining 134 own-product grids still require readback.
-Control-product identifiers are not usable as those products' settings. The
-workbook remains unapproved/unapplied and excludes taxes, exchange spreads,
-GoPay/bank fees and the separate temporary-upgrade bands. A markup direction is
-not approval of exact prices, higher-point prices or a future effective rate.
+An initial eleven-product comparison matched 22 candidate points; control-product
+identifiers were not copied into other products' settings. The table excludes
+taxes, exchange spreads, GoPay/bank fees and the separate temporary-upgrade bands.
+
+The owner then explicitly approved **the exact available 15% column prices for
+draft configuration only**, accepting the temporary shortfall while the standard
+30% commission may still apply. All 102 selected OWN SKU grids were read from
+Apple, their points were matched to the frozen plan, and their exact prices up
+to USD 1000 were written and read back with KGZ/USD as the base. Independent
+local review verified all 102 points/current indefinite schedules, 102 POST201
+events and 102 raw before/after availability404 pairs; final pending writes are
+zero. Each SKU has its own verification timestamp, not a simultaneous fresh
+readback of the entire catalog. A transient Apple 500 occurred on a GET before
+the next write; 89 entries were already confirmed and the remaining 13 completed
+after inspection. The 43 prices above USD 1000 remain unconfigured/unapproved.
+
+Availability is still **404 / `UNCONFIGURED_UNSPECIFIED`**, with
+`countryRestrictionVerified:false`. This does not prove a KGZ-only restriction.
+No availability or automatic-new-territory settings, sales, review submissions
+or publication were changed. The source artifact retains `approved:false` and
+unset verified mappings, and its sales guards stay off. This approval does not
+approve the whole commercial catalog, temporary-upgrade policy or a 15% effective
+commission date. Website GoPay prices were not changed.
+
+Private evidence is retained under
+`.local/ios-release-20261111/catalog-registration/approved-pricing-15-20261113/`:
+`owner-approval.json`, immutable `apply-plan.json`,
+`native-independent-apply-review.json`, the durable per-SKU journal and
+`final-verification.json`. This is draft configuration evidence, not a real
+Sandbox purchase or final store availability acceptance.
 
 Under the standard Paid Apps terms the commission is 30%. An approved eligible
 Small Business Program participant receives the 15% program rate; Developer
@@ -79,8 +116,9 @@ and a 15% commission leaves USD 85, before other applicable adjustments. Preserv
 that same gross reference amount after commission alone would require dividing
 by 0.70 or 0.85, not merely adding 30% or 15%. Actual net proceeds require each
 offer's Apple schedule and tax treatment; the control-product proceeds are not
-proof of this account's program enrollment or final payout. The owner's question
-about commission is not approval to increase or configure prices.
+proof of this account's program enrollment or final payout. The earlier question
+about commission was not approval; the later explicit 102-price authorization
+above is the current, narrower approved action.
 
 Current base service valuations (KGS, additions excluded):
 
@@ -111,10 +149,16 @@ Immediate prorated upgrades/additions to a current prepaid GoPay or non-renewing
 Apple term now have a reviewable, isolated-tested implementation: option C,
 [direct temporary upgrades](APPLE_TEMPORARY_UPGRADES.md). Configured non-renewing
 price bands fund only the remaining-term increment, preserving the paid base,
-future periods and consumed usage without a retained wallet. Products, prices,
-valuation/discount rules and terms remain unapproved and sales stay off. The
-proposed below-minimum/zero BLOCK policy does not establish commercial coverage
-of every web change. Existing paid access and website functionality continue.
+future periods and consumed usage without a retained wallet. Actual band
+products/prices and remaining valuation/discount rules and terms remain
+unapproved and sales stay off. The
+earlier below-minimum BLOCK proposal is superseded for tiny positive upgrades by
+the owner's explicit choice: **charge the minimum supported Apple payment while
+keeping the original expiry unchanged**. Implementation and verification of that
+policy remain pending; the `2af628f4` Preview is not evidence that it works.
+Actual C-band products/prices and remaining upgrade terms are still unapproved;
+sales stay off. No goodwill gift policy was selected. Existing paid access and
+website functionality continue.
 An arbitrary prorated KGS quote is still not a StoreKit charge argument.
 
 Before sales, confirm the exact registered IDs, prices in Kyrgyzstan and other
@@ -216,10 +260,13 @@ This appendix enables no products, payment collection or changed paid access.
 
 ### C: direct temporary upgrade, without a retained balance
 
-**Mechanics implemented and isolated-tested; commercial terms unapproved,
-products/prices unregistered and sales off.** C uses a configured non-renewing
-product to fund a temporary upgrade fixed by an immutable organization, rights,
-interval and source-grant quote, without a retained balance. The owner has not
+**Mechanics implemented and isolated-tested; remaining commercial terms
+unapproved, products/prices unregistered and sales off.** On 13 November the owner
+selected the minimum supported Apple payment for tiny positive upgrades, keeping
+the original expiry unchanged. That specific policy still requires implementation
+and verification; it does not approve actual C-band prices. C uses a configured
+non-renewing product to fund a temporary upgrade fixed by an immutable
+organization, rights, interval and source-grant quote, without a retained balance. The owner has not
 approved a wallet or changed commercial terms. Applying Apple's app-managed
 non-renewing model to this upgrade is an inference, not Apple acceptance. The
 configured band SKUs are separate from the 145-entry draft; none are enabled by
@@ -246,9 +293,10 @@ full target. Existing manual GoPay bank-refund attestations remain non-revoking.
 See [implementation and isolated-test boundaries](APPLE_TEMPORARY_UPGRADES.md);
 synthetic verified receipts and database tests are not actual Apple purchases.
 
-Before sales, approve the affected intervals, discount ceiling, below-minimum
-behavior, storefront/currency rule, base/increment refund consequences, meaningful
-product descriptions and actual prices. More bands reduce the discount gap but
+Before sales, implement and verify the selected minimum-charge rule without
+changing the original expiry. Approve the remaining intervals, discount ceiling,
+storefront/currency rule, base/increment refund consequences, meaningful product
+descriptions and actual C-band prices. More bands reduce the discount gap but
 increase product/price maintenance. Actual Sandbox and App Review evidence remain
 required. No new products, balances, access or payment collection are enabled by
 this proposal.

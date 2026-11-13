@@ -21,8 +21,12 @@ The intended bundle ID `kg.bazaar.app` and the owner's device registration were
 confirmed in the Developer portal. The owner then created the App Store Connect
 record **Bazaar POS**, Apple ID **6833508529**, after Apple rejected the plain
 name Bazaar as already used. This record identity was supplied by the owner;
-automated access to App Store Connect remains denied. No price, public seller
-declaration or release setting has been configured by this work. The complete
+automated access to App Store Connect was subsequently restored. The exact app,
+bundle and Russian primary locale were checked through the catalog API. The
+owner-approved 102 available 15%-scenario prices are now configured as IAP drafts;
+43 above-grid prices remain unresolved. The Small Business and higher-price
+applications have been received by Apple; approval remains pending. No public
+seller declaration, review submission or release setting was configured. The complete
 release scope and verification evidence remain in [the execution record](IOS_RELEASE_PROGRESS.md)
 and [iPhone acceptance record](IPHONE_ACCEPTANCE.md). Actual Sandbox purchases,
 the remaining device scenarios and the final normal-production Release remain
@@ -41,7 +45,7 @@ open. The internal-only staging IPA cannot become the App Store release.
 | Other Apple platforms | Inspect Mac with Apple silicon / Vision Pro availability defaults in the actual account; no compatibility or release on those platforms is claimed by the iPhone/iPad checks |
 | Version / build | Signed staging `1.0.0` / `111120`, native source `56c744aa`; owner confirmed processed internal TestFlight installation. This number is used; a later native upload needs a new number |
 | Primary category | Business, matching the existing retail operations application |
-| Download price | Proposed free download with approved digital offers sold through Apple; this does not approve any IAP price or offer |
+| Download price | Proposed free download with approved digital offers sold through Apple; the 102 approved IAP draft prices do not enable sales or approve remaining offers/terms |
 | Initial territory | Kyrgyzstan is a proposal requiring owner confirmation, not a saved availability setting |
 | Release control | Manual release after approval; submission and publication still need explicit authorization |
 | Copyright / seller | Owner must confirm the actual rights holder, year and public seller information; no legal name/address copied from private documents |
@@ -61,7 +65,9 @@ English secondary. Apple's current list supports Russian and English
 English (U.K.) for Kyrgyzstan; that does not change the owner's choice of
 Russian as primary. Displayed language also depends on device, storefront,
 added localizations and primary language. Verify actual storefront presentation
-before release; the saved localization details have not been independently read.
+before release. The app's Russian primary locale was read back through the API;
+the saved listing-localization details and storefront presentation still require
+their own checks.
 [Apple localization reference](https://developer.apple.com/help/app-store-connect/reference/app-information/app-store-localizations/).
 
 **Keep Kyrgyz in the app.** `messages/kg.json` and native `ky.lproj` stay. The

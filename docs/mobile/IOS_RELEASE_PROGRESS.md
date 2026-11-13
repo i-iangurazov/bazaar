@@ -39,22 +39,42 @@ approval or review submission were configured by this registration. Kyrgyz
 remains in-app copy because ASC does not offer that localization.
 
 The initial private USD proposal contained 111 configurations within the observed
-800-point KGZ price range and 34 above its current USD 1000 maximum. It used a
-dated NBKR reference rate, not a promised Apple exchange rate or payout. Prices,
-per-product price points, territories, Small Business commission eligibility and
-other commercial terms are unapproved. The owner asked to understand commission
-before deciding; that reply is not price approval. The owner subsequently
-submitted the prepared Small Business Program application, and the signed-in
-Apple page confirmed receipt; approval and an effective 15% date remain pending.
-The owner then requested a new markup table before application. That separate
-145-row workbook/CSV/JSON has parallel 30% and conditional 15% scenarios, checked
-with exact rational/Decimal arithmetic across all 290 calculations. At 30%, 93
-candidates fit the observed grid and 52 exceed USD 1000; at 15%, 102 fit and 43
-exceed it. The nine base plan/term configurations and two WhatsApp examples had
-their own price grids read from Apple; all 22 candidate points matched. The
-remaining 134 products require their own point readback. The table is unapproved
-and unapplied, excludes tax/FX/bank/GoPay fees, and does not include the separate
-current-term temporary-upgrade bands.
+800-point KGZ price range and 34 above its current USD 1000 maximum. This initial
+comparison was superseded for price selection by a separate 145-row commission
+workbook/CSV/JSON, checked with exact rational/Decimal arithmetic across all 290
+30% and conditional 15% calculations. At 30%, 93 candidates fit the observed grid
+and 52 exceed USD 1000; at 15%, 102 fit and 43 exceed it. The dated NBKR reference
+rate and table exclude tax/FX/bank/GoPay fees and do not promise Apple's exchange
+rate, proceeds or actual commission. Temporary-upgrade bands are separate.
+
+The owner subsequently **approved the exact available 15% column prices for
+draft configuration only**, accepting the temporary shortfall while the standard
+30% commission may still apply. The approval covers the 102 selected prices up
+to USD 1000, not the 43 above the available grid, terms, sales, review submission
+or publication. All 102 OWN SKU price grids were read from Apple before the plan
+was frozen, and their exact price schedules have now been written and read back
+with KGZ/USD as the base. Independent local evidence review matched all 102 OWN
+points, prices and current indefinite schedules, 102 POST201 events and 102 raw
+before/after availability404 pairs. Verification timestamps belong to each SKU;
+this was not a simultaneous reread of all 102. One interrupted batch had an Apple
+500 on a GET before the next POST: 89 entries were already confirmed, no write
+was pending, and the remaining 13 completed after fresh inspection. Final pending
+writes are zero. The 43 above-grid prices remain unconfigured and unapproved.
+
+Availability remains **404 / `UNCONFIGURED_UNSPECIFIED`**, with
+`countryRestrictionVerified:false`; absence of an availability resource is not
+proof of a KGZ-only restriction. No availability, automatic-new-territory, sales,
+review or publication settings were written. The source catalog retains
+`approved:false`, unset verified mappings and sales-off guards. Draft price
+configuration is not a real Sandbox purchase or a finished sellable catalog.
+Private evidence is in
+`.local/ios-release-20261111/catalog-registration/approved-pricing-15-20261113/`,
+including `owner-approval.json`, immutable `apply-plan.json`,
+`native-independent-apply-review.json` and `final-verification.json`.
+
+The owner submitted the prepared Small Business Program application and the
+signed-in Apple page confirmed receipt. Approval and an effective 15% date remain
+pending; choosing 15%-scenario draft prices does not establish that rate.
 
 The actual higher-price form explicitly requires consumption-information
 capability when its No answer is selected. The consent-aware server workflow is
@@ -65,7 +85,13 @@ and stops sharing after withdrawal or buyer ineligibility. Refusing/unknown
 answers do not block refunds or paid access. Personal withdrawal remains available
 after role/organization changes without revealing financial history. Outbound
 reporting stays off and no actual consumption response has been sent to Apple.
-The higher-price request has not been submitted.
+The higher-price form was truthfully prepared and the owner explicitly confirmed
+its legal declarations and authorized submission. The signed-in Apple UI now
+**acknowledges receipt of the submission**; Apple's review/approval remains
+pending. Private receipt evidence is
+`.local/ios-release-20261111/catalog-registration/pricing-proposal/higher-price-submission-received.{png,json}`.
+Submission does not approve or configure the 43 blocked prices, open higher
+points, establish country availability or enable sales/publication.
 
 The first eight-file backend/preflight run had 128 passes and one response-size
 test failure. An explicit UTF-8 byte cap and actual stream case corrected that
@@ -91,8 +117,15 @@ typecheck passed. The initial lint found a type-only import error and a stable
 refetch dependency warning; after scoped corrections lint reported no warnings
 or errors. RU/KG/EN translation validation passed. No SQL was changed after its
 frozen/applied checksum. The owned local PostgreSQL/Redis were stopped with their
-data retained. The immutable production build and Preview update remain pending
-at this source checkpoint.
+data retained. The integrated source checkpoint is `2af628f4`. Its immutable
+cloud production-mode build is now READY (compilation took 45 seconds; 133 static
+pages), with typecheck and lint passing. The isolated Preview deployment is
+`dpl_212g4wdwHWWiafPZfH9MQH4NtX4q`, bound to
+`https://bazaar-ios-preview-20261111.vercel.app`. Seven actual HTTP checks passed,
+including two normal logins. Actual Chrome checks passed the Russian profile
+privacy screen on desktop/mobile and its policy link; both sessions were signed
+out and the QA tabs closed. This is the isolated web Preview, not a new native
+archive, full iPhone acceptance or a customer production deployment.
 
 The app's Sandbox notification URL was saved to the isolated Preview endpoint;
 the production notification URL remains unset. Apple reported one successful
@@ -110,10 +143,31 @@ PROCESSED once with one attempt/no issue and unchanged Apple transactions,
 purchase intents, subscription periods and WhatsApp credit/use rows. This is
 actual TEST replay idempotency, not evidence of a successful money transaction.
 
+A fresh, explicitly synthetic Starter Sandbox organization was then created in
+the same pinned isolated Preview for the first real purchase check. Its six new
+organization/contract/admin/store/access/audit rows contain no paid period,
+invoice, Apple intent, receipt, usage or provider operation. Before/after
+comparison preserved all 29 existing table snapshots, and the full 146-stage
+read-only audit remained clean. Its login is held in a separate owner-only local
+file; existing fixture credentials, environment and allowlists were unchanged.
+This prepares a test account, not payment success or permission for public sales.
+
 Actual temporary-upgrade band products/prices, remaining commercial decisions,
 protected server configuration and real Sandbox lifecycle checks remain open.
-The combined UI Preview at `44bf43c3` passed its production build and actual
-native cutout/keyboard/focus recovery checks described in the page QA record.
+The owner has now selected **the minimum supported Apple payment for a tiny
+positive upgrade**, with the original expiry unchanged. Implementing and checking
+that minimum-charge policy remains pending; the source `2af628f4` Preview does
+not establish it. Actual C-band products/prices and remaining upgrade terms are
+still unapproved, and sales remain off. No goodwill gift policy was selected.
+
+The last actual Simulator cutout/keyboard/focus recovery checks described in the
+page QA record used `44bf43c3`. They have not been rerun for Preview source
+`2af628f4` and must not be attributed to it.
+iPhone Mirroring connected and accepted bounded keyboard/toolbar actions, but
+this troubleshooting attempt never opened Bazaar and establishes no page or
+StoreKit result. No phone screenshots were saved as release evidence. The
+temporary Mirroring/TextEdit processes were stopped; remaining phone acceptance
+is still open.
 Production/main, normal App Store Release, submission and publication still
 require their separate authorizations.
 
@@ -188,7 +242,7 @@ synthetic fixture, or browser screenshot is not a verified native release.
 | R04 | No duplicate sale for the same covered period or capabilities | Server purchase checks, organization locks, durable pending intents and concurrent DB tests | Implemented; isolated concurrency/recovery tests pass; actual Sandbox acceptance remains |
 | R05 | Safe provider switching and recovery | Tests for prepaid GoPay remainder, Apple renewal states, pending/stale payments, cancellation and out-of-app renewals | Open |
 | R06 | Purchases cannot move between organizations or unauthorized users | Tests for account/device changes, restore, several organizations, role changes and departing payers | Open |
-| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 base/pack draft products and 290 RU/en-GB localization bindings registered; all remain unpriced/unapproved. 34 proposed configurations need higher price points and the required consumption-response capability; actual upgrade band products, below-minimum policy and commercial/device acceptance remain open |
+| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 base/pack drafts and 290 RU/en-GB localization bindings registered; 102 owner-approved 15%-scenario draft prices have OWN point/write/readback evidence. The 43 above USD 1000 remain unconfigured/unapproved; availability is unspecified, source catalog remains unapproved and sales off. Apple acknowledged the higher-price submission; approval is pending. The selected minimum-charge/original-expiry policy awaits implementation; actual upgrade-band prices and real Sandbox/device acceptance remain open |
 | R08 | Website GoPay and historical reconciliation continue working | Existing and new DB/protocol regressions; provider-specific amounts and histories preserved | Open |
 | R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Signed staging build installed through TestFlight; prior price-policy 35 and journal/boundary 59 checks passed; four earlier local StoreKit purchase cases failed; real Sandbox and physical-device purchase lifecycle remain unrun |
 | R10 | Signed transaction verification, Server API and Notifications V2 are complete | Certificate/app/environment/product/ownership checks, replay/order/missed-event tests, reconciliation | Actual Sandbox TEST delivered, online signature checks passed, exact payload durably PROCESSED once in isolated Preview; no actual purchase/refund/reconciliation acceptance yet. Consent-aware consumption response remains in progress |
@@ -266,11 +320,13 @@ explicit final gates instead of enabling public sales or release by default.
 
 Signing, app registration, the first internal upload/processing and basic iPhone
 installation are now recorded above; do not ask the owner to repeat them.
-Still to establish: approved Apple commercial configuration, actual products and
-prices, secure server credential/notification setup, real Sandbox lifecycle and
-the remaining iPhone scenarios, public-country/privacy declarations, and final
-production/submission/publication authorization. Do not mark the release complete
-while any required verification or owner/external action remains outstanding.
+Still to establish: the remaining Apple commercial terms and country availability,
+the 43 higher-price offers and separate temporary-upgrade bands/policy, secure
+server credential/notification setup, real Sandbox lifecycle and remaining iPhone
+scenarios, public-country/privacy declarations, and final production/submission/
+publication authorization. The 102 recorded draft prices above do not close these
+gates. Do not mark the release complete while any required verification or
+owner/external action remains outstanding.
 
 ## Implementation and checks recorded during this run
 
