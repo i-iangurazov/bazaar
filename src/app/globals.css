@@ -143,6 +143,14 @@ html.native-ios [data-bazaar-app] > a[href="#workspace-content"] {
   left: calc(var(--native-safe-area-left, 0px) + 1rem);
 }
 
+/* Landscape iPhones still use a touch keyboard at desktop breakpoints. Extend
+   the existing mobile text-entry floor without restricting user/browser zoom. */
+html.native-ios input,
+html.native-ios select,
+html.native-ios textarea {
+  font-size: max(16px, 1rem) !important;
+}
+
 /* Preserve each existing width/max-width/variant. Only viewport-sized widths
    and viewport-edge anchors use the safe horizontal rectangle. Backdrops keep
    covering the entire viewport; vertical/keyboard bounds remain independent. */

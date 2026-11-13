@@ -67,6 +67,17 @@ const sourceStrings = (file) => {
   const visit = (node) => { if (ts.isStringLiteral(node)) strings.push(node.text); ts.forEachChild(node, visit); };
   visit(parsed); return strings;
 };
+const jsxStringProps = (file, tag) => {
+  const parsed = ts.createSourceFile(file, fs.readFileSync(path.join(repo, file), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let found;
+  const visit = (node) => {
+    if (!found && (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(parsed) === tag) found = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed); assert(found, `Use the actual ${file} ${tag} caller`);
+  return Object.fromEntries(found.attributes.properties.filter((property) => ts.isJsxAttribute(property) && property.initializer && ts.isStringLiteral(property.initializer))
+    .map((property) => [property.name.text, property.initializer.text]));
+};
 const primitiveVariants = (file, key) => {
   const parsed = ts.createSourceFile(file, fs.readFileSync(path.join(repo, file), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let found;
@@ -138,6 +149,23 @@ const centeredMd = `<section id="surface" role="dialog" aria-label="Synthetic ac
 const inputClasses = fs.readFileSync(path.join(repo, "src/components/ui/input.tsx"), "utf8")
   .match(/className=\{cn\(\s*"([^"]+)"/)?.[1];
 assert(inputClasses, "Use the actual shared Input classes for date containment");
+const commandModalProps = jsxStringProps("src/components/command-palette.tsx", "Modal");
+const commandScanProps = jsxStringProps("src/components/command-palette.tsx", "ScanInput");
+assert.equal(commandModalProps.className, "max-w-4xl", "Exercise the demonstrated wider CommandPalette caller");
+const commandCopy = JSON.parse(fs.readFileSync(path.join(repo, "messages/ru.json"), "utf8")).commandPalette;
+const commandHeader = modalStrings.find((text) => text.startsWith("sticky top-0 z-10 flex items-start"));
+const commandBody = modalStrings.find((text) => text.startsWith("flex-1 overflow-y-auto bg-card"));
+assert(commandHeader && commandBody && commandScanProps.inputClassName);
+const commandPalette = `<section id="surface" role="dialog" aria-label="Synthetic CommandPalette" data-native-overlay-layout="centered"
+  class="${twMerge(modalBase, modalCentered, commandModalProps.className)}">
+  <header class="${twMerge(commandHeader, commandModalProps.headerClassName)}"><div><h2>${escapeHtml(commandCopy.title)}</h2><p>${escapeHtml(commandCopy.subtitle)}</p></div><button id="close" class="h-11 shrink-0" type="button">Close</button></header>
+  <div class="${twMerge(commandBody, commandModalProps.bodyClassName)}"><div class="relative"><input id="command-search" role="combobox" aria-label="Synthetic command search" aria-expanded="false" autofocus inputmode="search" autocomplete="off"
+    class="${twMerge(inputClasses, "pr-20", commandScanProps.inputClassName)}" placeholder="${escapeHtml(commandCopy.placeholder)}" /></div><p>Synthetic offline actions; no search or scanner requests.</p></div>
+</section>`;
+horizontalSurfaces.push(["modal-command-palette", commandPalette]);
+const plainNativeFields = `<section id="ordinary-native-fields" class="m-4 grid gap-4"><input id="ordinary-native-input" class="${inputClasses}" aria-label="Synthetic native form field" />
+  <select id="ordinary-native-select" class="text-sm sm:text-sm" aria-label="Synthetic native select"><option>Synthetic selection</option></select>
+  <textarea id="ordinary-native-textarea" class="text-sm sm:text-sm" aria-label="Synthetic native note"></textarea></section>`;
 const reportDates = (variant = "populated") => `<section id="date-card" class="mx-4 rounded-lg border border-border bg-card p-4">
   <div class="grid grid-cols-2 gap-3">
     ${["from", "to"].map((id, index) => `<label id="date-${id}-label" class="grid min-w-0 content-start gap-1.5 text-xs font-medium">
@@ -146,7 +174,7 @@ const reportDates = (variant = "populated") => `<section id="date-card" class="m
         ${variant === "disabled" ? "disabled" : ""} /></label>`).join("")}
   </div><input id="date-height-reference" type="text" class="${inputClasses}" tabindex="-1" aria-hidden="true"
     style="position:absolute;visibility:hidden;pointer-events:none" ${variant === "disabled" ? "disabled" : ""} /></section>`;
-const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd + reportDates() + horizontalShell + horizontalSurfaces.map(([, markup]) => markup).join("");
+const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd + reportDates() + plainNativeFields + horizontalShell + horizontalSurfaces.map(([, markup]) => markup).join("");
 const anchoredSources = ["tests/e2e/fixtures/native-safe-area-anchors.tsx", "src/components/ui/select.tsx", "src/components/ui/dropdown-menu.tsx", "src/components/ui/popover.tsx", "src/components/ui/tooltip.tsx"]
   .map((file) => ({ raw: fs.readFileSync(path.join(repo, file), "utf8"), extension: "tsx" }));
 const compiled = await postcss([
@@ -156,6 +184,16 @@ const compiled = await postcss([
 const workspaceRule = postcss.parse(fs.readFileSync(path.join(repo, "src/components/baam-native-workspace.module.css"), "utf8")).nodes.find((node) => node.type === "rule" && node.selector === ".workspace");
 assert(workspaceRule, "Use the actual Baam workspace box without a second horizontal inset");
 const currentCss = compiled.css + `\n.fixture-baam-workspace {${workspaceRule.nodes.map((node) => node.toString()).join(";")}}`;
+const beforeNativeEntryFont = postcss.parse(currentCss);
+const nativeEntrySelectors = new Set(["html.native-ios input", "html.native-ios select", "html.native-ios textarea"]);
+let nativeEntryRulesRemoved = 0;
+beforeNativeEntryFont.walkRules((rule) => {
+  if (rule.selectors.length === 3 && rule.selectors.every((selector) => nativeEntrySelectors.has(selector.trim()))) {
+    rule.remove(); nativeEntryRulesRemoved += 1;
+  }
+});
+assert.equal(nativeEntryRulesRemoved, 1, "The focus-size negative case removes only the native text-entry floor");
+const beforeNativeEntryFontCss = beforeNativeEntryFont.toString();
 const anchorBundle = await build({ entryPoints: [path.join(repo, "tests/e2e/fixtures/native-safe-area-anchors.tsx")], bundle: true, write: false,
   platform: "browser", format: "iife", jsx: "automatic", define: { "process.env.NODE_ENV": '"production"' }, logLevel: "silent" });
 const anchorScript = anchorBundle.outputFiles[0].text;
@@ -493,6 +531,39 @@ try {
       `${label} crosses synthetic safe bounds: ${JSON.stringify({ box, width, left, right })}`);
   };
   const asymmetrical = [{ left: 64, right: 12 }, { left: 8, right: 64 }];
+  const fontSizes = (selectors) => page.evaluate((selectors) => selectors.map((selector) => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize)), selectors);
+  for (const platform of ["ios", "web", "android"]) for (const width of [393, 852]) {
+    const insets = { left: 12, right: 64 }, fields = ["#ordinary-native-input", "#ordinary-native-select", "#ordinary-native-textarea"];
+    await load(page, { platform, width, height: 600, surface: plainNativeFields, css: beforeNativeEntryFontCss, ...insets });
+    const beforeFields = await fontSizes(fields);
+    if (width <= 767) assert.deepEqual(beforeFields, [16, 16, 16], "Retain the existing narrow text-entry safeguard");
+    else assert(beforeFields.every((size) => Number.isFinite(size) && size > 0 && size < 16),
+      `Reproduce the actual below-16px wide text-entry styles: ${JSON.stringify(beforeFields)}`);
+    await load(page, { platform, width, height: 600, surface: plainNativeFields, ...insets });
+    assert.deepEqual(await fontSizes(fields), platform === "ios" ? [16, 16, 16] : beforeFields);
+    await load(page, { platform, width, height: 600, surface: commandPalette, css: beforeNativeEntryFontCss, ...insets });
+    await page.locator("#command-search").focus();
+    const beforeFont = (await fontSizes(["#command-search"]))[0], beforeBounds = await safeBox("#surface");
+    if (width <= 767) assert.equal(beforeFont, 16, "Retain the existing narrow CommandPalette font safeguard");
+    else assert(Number.isFinite(beforeFont) && beforeFont > 0 && beforeFont < 16,
+      `The actual CommandPalette must reproduce a below-16px landscape autofocus field: ${beforeFont}`);
+    await load(page, { platform, width, height: 600, surface: commandPalette, ...insets });
+    await page.locator("#command-search").fill("Retained command draft");
+    assert.equal((await fontSizes(["#command-search"]))[0], platform === "ios" ? 16 : beforeFont);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "command-search");
+    assert.equal(await page.locator("#command-search").inputValue(), "Retained command draft");
+    assert.deepEqual(await safeBox("#surface"), beforeBounds, "Font floor must not replace the CommandPalette's max-w-4xl geometry");
+    if (platform === "ios") {
+      insideHorizontal(await safeBox("#surface"), { width, ...insets }, "Wide caller Modal");
+      insideHorizontal(await safeBox("#command-search"), { width, ...insets }, "Focused CommandPalette field");
+    }
+    check(`${platform} exact CommandPalette autofocus/wide Modal and ordinary text-entry size at ${width}`, { beforeFont, afterFont: (await fontSizes(["#command-search"]))[0] });
+  }
+  await load(page, { width: 1280, height: 844, surface: commandPalette });
+  await page.evaluate(() => document.documentElement.style.fontSize = "20px");
+  assert.equal((await fontSizes(["#command-search"]))[0], 20, "Keep larger native root-relative text sizing instead of imposing a 16px cap");
+  await page.evaluate(() => document.documentElement.style.removeProperty("font-size"));
+  check("native text-entry floor preserves larger root-relative sizing and does not restrict user zoom");
   await load(page, { css: beforeFenceCss, appMarkup: horizontalShell, width: 852, height: 393, ...asymmetrical[0] });
   assert((await safeBox("#rail-report")).x < asymmetrical[0].left,
     "The previous unfenced rail must reproduce a control under the synthetic left cutout");
