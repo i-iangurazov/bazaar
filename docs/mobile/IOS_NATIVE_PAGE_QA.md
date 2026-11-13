@@ -264,6 +264,19 @@ remains preserved. Apple Sandbox and physical-device purchases remain unverified
 
 ## Remaining verification
 
+On 13 November the combined `6a5d2503b0d7595bf38261e7325dd5945716f0f4`
+Preview deployment was verified Ready and assigned to the dedicated iOS alias.
+The actual Simulator app was fully restarted and the synthetic owner signed in.
+In landscape with the real software keyboard, the compact Baam composer and
+Back control now fit vertically. A stable screenshot exposed another issue:
+the right-hand screen cutout covers part of Send. Portrait recovery preserved
+the unsent synthetic draft, which was cleared without an AI request.
+
+The follow-up adds physical left/right safe-area padding to the native iOS
+workspace, with border-box sizing so the existing height contract remains intact.
+Its production build and actual cutout/keyboard recheck are pending. This check
+does not yet establish the new history-download handoff or date-field spacing.
+
 Continue the actual page pass after updating Preview: corrected Baam launch and
 Back, scrolled menus and nested dialogs, reachable full-screen close controls,
 auth return links, all relevant roles/stores, warehouse operations, reports,

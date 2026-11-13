@@ -1,9 +1,13 @@
 /* Only the full iOS workspace uses the native visible-viewport contract.
    The shared value already accounts for keyboard/body/visual viewport resize. */
 .workspace {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  /* WKWebView covers the viewport; keep controls outside either rotated cutout. */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
   height: max(0px, calc(var(--native-available-height, 100dvh) - var(--baam-workspace-top, 0px) - var(--baam-workspace-bottom, 8px)));
   min-height: 0;
   overflow: hidden;
