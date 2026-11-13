@@ -21,6 +21,7 @@ import { readAppleDeferredSource, type AppleDeferredSource } from "./appleDeferr
 import { parseAppleCompletionPublicKey } from "./appleCompletionCrypto";
 import { appleNativeOriginAllowed } from "./appleNativeOrigin";
 import { auditAppleSupportEvidence, type AppleSupportOperator } from "./appleSupportAuth";
+import { presentAppleConsumptionConsent } from "./appleConsumption";
 
 export type AppleBillingActor = { id: string; organizationId: string };
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
@@ -68,7 +69,9 @@ export async function getAppleBillingState(actor: AppleBillingActor) {
       OR: [{ status: "REVIEW" }, { expiresAt: { gt: now } }, { authorizedAt: { not: null } }] }, orderBy: { createdAt: "desc" } }),
     prisma.appleSubscriptionChain.findMany({ where: { organizationId: org.id } }),
     prisma.subscriptionInvoice.findFirst({ where: { organizationId: org.id, OR: [{ pendingSlot: org.id }, { status: "REVIEW" }] } }),
-    prisma.appleTransaction.findMany({ where: { organizationId: org.id }, orderBy: { purchaseDate: "desc" }, take: 30 }),
+    prisma.appleTransaction.findMany({ where: { organizationId: org.id }, orderBy: { purchaseDate: "desc" }, take: 30,
+      include: { intent: { select: { createdById: true } }, consumptionConsent: true,
+        consumptionRequests: { orderBy: { receivedAt: "desc" }, take: 1, select: { status: true, lastIssue: true } } } }),
     prisma.subscriptionPeriod.findMany({ where: { organizationId: org.id, parentPeriodId: { not: null } }, include: { appleTransaction: { select: { status: true, lastIssue: true } } }, orderBy: { startsAt: "desc" }, take: 30 }),
     org.activeSubscriptionPeriod?.appleTransactionId ? prisma.appleTransaction.findUnique({ where: { id: org.activeSubscriptionPeriod.appleTransactionId },
       select: { productId: true, productType: true } }) : Promise.resolve(null),
@@ -109,7 +112,8 @@ export async function getAppleBillingState(actor: AppleBillingActor) {
     }),
     recentTransactions: transactions.map((t) => ({ transactionId: t.transactionId, originalTransactionId: t.originalTransactionId,
       productId: t.productId, status: t.status, reason: t.lastIssue, purchaseDate: t.purchaseDate.toISOString(), expiresDate: t.expiresDate?.toISOString() ?? null,
-      priceMillis: t.priceMillis?.toString() ?? null, currency: t.currency, environment: t.environment, refundable: t.status !== "REVOKED" })),
+      priceMillis: t.priceMillis?.toString() ?? null, currency: t.currency, environment: t.environment, refundable: t.status !== "REVOKED",
+      consumptionConsent: presentAppleConsumptionConsent(actor.id, t.intent?.createdById ?? null, t.consumptionConsent, t.consumptionRequests[0]) })),
     temporaryUpgrades: temporaryPeriods.map((period) => ({ id: period.id, sourcePeriodId: period.parentPeriodId!,
       startsAt: period.startsAt.toISOString(), endsAt: period.endsAt.toISOString(), plan: period.plan,
       extras: readPurchaseSnapshot(period.purchaseSnapshot)?.extras,

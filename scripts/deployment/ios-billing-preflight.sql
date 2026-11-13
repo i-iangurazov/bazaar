@@ -12,7 +12,7 @@ DECLARE
   missing BOOLEAN; affected BIGINT; state TEXT; stage TEXT; report JSONB;
   base_missing INTEGER := 0; privacy_present INTEGER := 0; lifecycle_present INTEGER := 0; attempt_present INTEGER := 0; temporary_present INTEGER := 0; deferred_present INTEGER := 0;
   privacy_expected INTEGER := 14; lifecycle_expected INTEGER := 3;
-  privacy_applied BIGINT := 0; lifecycle_applied BIGINT := 0; attempt_applied BIGINT := 0; temporary_applied BIGINT := 0; deferred_applied BIGINT := 0; utc_applied BIGINT := 0; prerequisite_applied BIGINT := 0;
+  privacy_applied BIGINT := 0; lifecycle_applied BIGINT := 0; attempt_applied BIGINT := 0; temporary_applied BIGINT := 0; deferred_applied BIGINT := 0; utc_applied BIGINT := 0; consumption_applied BIGINT := 0; consumption_present INTEGER := 0; prerequisite_applied BIGINT := 0;
   unfinished BIGINT := 0; bad_checksum BIGINT := 0;
   structural_issues INTEGER := 0; relation_name TEXT; column_name TEXT;
 BEGIN
@@ -45,6 +45,9 @@ BEGIN
   FOREACH column_name IN ARRAY ARRAY['completionPublicKey','completionKeyFingerprint','completionOrigin'] LOOP
     IF EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=to_regclass('public."ApplePurchaseIntent"') AND attname=column_name AND NOT attisdropped) THEN deferred_present := deferred_present + 1; END IF;
   END LOOP;
+  FOREACH relation_name IN ARRAY ARRAY['AppleConsumptionConsent','AppleConsumptionConsentEvent','AppleConsumptionRequest'] LOOP
+    IF to_regclass(format('public.%I',relation_name)) IS NOT NULL THEN consumption_present := consumption_present + 1; END IF;
+  END LOOP;
   stage := CASE WHEN base_missing>0 THEN 'UNBASELINED'
     WHEN privacy_present=0 AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 AND deferred_present=0 THEN 'PRE_APPLE'
     WHEN privacy_present=privacy_expected AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 AND deferred_present=0 THEN 'POST_PRIVACY'
@@ -61,6 +64,7 @@ BEGIN
       count(*) FILTER(WHERE migration_name='20261111150000_apple_temporary_upgrades' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111160000_apple_deferred_outcomes' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111170000_apple_completion_utc_clock' AND finished_at IS NOT NULL),
+      count(*) FILTER(WHERE migration_name='20261113120000_apple_consumption_information' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111020000_manual_subscription_refunds' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE finished_at IS NULL),
       count(*) FILTER(WHERE finished_at IS NOT NULL AND (
@@ -70,11 +74,15 @@ BEGIN
         (migration_name='20261111150000_apple_temporary_upgrades' AND checksum<>'a13faf83ce11ad2c39480fbce1791299b82fd4fa58971bf3548f905c629a714f') OR
         (migration_name='20261111160000_apple_deferred_outcomes' AND checksum<>'66437a9da6224b1cfcc3a3c7d4ddc3be695119c7a00547a1256fa76f7c14201e') OR
         (migration_name='20261111170000_apple_completion_utc_clock' AND checksum<>'5b2bdce206b878ba9c616fbaf661c2c585acf81384de54ce2da334fd6f41016e') OR
+        (migration_name='20261113120000_apple_consumption_information' AND checksum<>'adc1b13b7c9b3c673662a25577ee8b13e6f9fd33f3e115ad2b3d0ed0a8e4c34a') OR
         (migration_name='20261111020000_manual_subscription_refunds' AND checksum<>'800cd487fb2d4b0ecd5501e5edc7182c4a06b851f68b0b02c18e40d795370b87')))
-      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,temporary_applied,deferred_applied,utc_applied,prerequisite_applied,unfinished,bad_checksum;
+      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,temporary_applied,deferred_applied,utc_applied,consumption_applied,prerequisite_applied,unfinished,bad_checksum;
   ELSE structural_issues := structural_issues + 1;
   END IF;
   IF utc_applied>0 AND stage='POST_DEFERRED_OUTCOMES' THEN stage := 'POST_COMPLETION_UTC'; END IF;
+  IF consumption_applied=1 AND consumption_present=3 AND stage='POST_COMPLETION_UTC' THEN stage := 'POST_CONSUMPTION'; END IF;
+  IF consumption_applied>1 OR (consumption_applied>0 AND utc_applied=0) OR
+    (consumption_applied=0 AND consumption_present>0) OR (consumption_applied>0 AND consumption_present<>3) THEN structural_issues := structural_issues+1; END IF;
   IF privacy_applied>1 OR lifecycle_applied>1 OR attempt_applied>1 OR temporary_applied>1 OR deferred_applied>1 OR utc_applied>1 OR (lifecycle_applied>0 AND privacy_applied=0) OR (attempt_applied>0 AND lifecycle_applied=0) OR (temporary_applied>0 AND attempt_applied=0) OR (deferred_applied>0 AND temporary_applied=0) OR (utc_applied>0 AND deferred_applied=0) THEN structural_issues := structural_issues + 1; END IF;
   IF (privacy_applied=0 AND privacy_present>0) OR (privacy_applied>0 AND privacy_present<>privacy_expected) OR
      (lifecycle_applied=0 AND lifecycle_present>0) OR (lifecycle_applied>0 AND lifecycle_present<>lifecycle_expected) OR
@@ -83,7 +91,7 @@ BEGIN
      (deferred_applied=0 AND deferred_present>0) OR (deferred_applied>0 AND deferred_present<>5) OR
      (utc_applied>0 AND deferred_present<>5) OR stage='PARTIAL' THEN structural_issues := structural_issues + 1; END IF;
   checks := checks || jsonb_build_array(
-    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied+temporary_applied+deferred_applied+utc_applied,'skipped',false),
+    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied+temporary_applied+deferred_applied+utc_applied+consumption_applied,'skipped',false),
     jsonb_build_object('name','manual_refund_prerequisite_missing','severity','blocker','count',CASE WHEN prerequisite_applied=1 THEN 0 ELSE 1 END,'skipped',false),
     jsonb_build_object('name','unfinished_migrations','severity','blocker','count',unfinished,'skipped',false),
     jsonb_build_object('name','reviewed_migration_checksum_mismatches','severity','blocker','count',bad_checksum,'skipped',false),
@@ -811,12 +819,171 @@ BEGIN
       "ApplePurchaseIntent.completionOrigin"
     ],
     "sql": "SELECT count(*) FROM public.\"AppleNativeCompletion\" c WHERE c.outcome='DEFERRED' AND NOT EXISTS(SELECT 1 FROM public.\"AppleNativeDeferredOutcome\" d WHERE d.\"intentId\"=c.\"intentId\") AND NOT EXISTS(SELECT 1 FROM public.\"AppleTransaction\" t WHERE t.\"intentId\"=c.\"intentId\")"
+  },
+  {
+    "name": "consumption_consent_rows_total",
+    "severity": "info",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionConsent\""
+  },
+  {
+    "name": "consumption_request_rows_total",
+    "severity": "info",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionRequest"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionRequest\""
+  },
+  {
+    "name": "consumption_guard_function_bodies_changed",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [],
+    "sql": "SELECT count(*) FROM (VALUES ('public.\"appleConsumptionPayloadDigest\"(jsonb)','9da17d105fa33039eaca6e22245ec4a8'),('public.\"protectAppleConsumptionConsent\"()','47e86450aabed205e688cfa66f9e9ad4'),('public.\"protectAppleConsumptionRequest\"()','3956d9de44d907d6dcd24f3ccae62022'),('public.\"protectAppleConsumptionConsentEvent\"()','3bfc95bbf5a44222e54a9937d684e75b'),('public.\"requireAppleConsumptionConsentAudit\"()','fe5db6d6c0dc1b074490b3a5381399e3')) expected(signature,digest) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR p.prosecdef OR p.proconfig IS NOT NULL OR p.prokind<>'f' OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM expected.digest"
+  },
+  {
+    "name": "consumption_required_triggers_missing",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleConsumptionConsent','AppleConsumptionConsent_protect','public.\"protectAppleConsumptionConsent\"()',31,false),('AppleConsumptionConsentEvent','AppleConsumptionConsentEvent_protect','public.\"protectAppleConsumptionConsentEvent\"()',31,false),('AppleConsumptionRequest','AppleConsumptionRequest_protect','public.\"protectAppleConsumptionRequest\"()',31,false),('AppleConsumptionConsent','AppleConsumptionConsent_require_audit','public.\"requireAppleConsumptionConsentAudit\"()',21,true)) expected(table_name,trigger_name,signature,event_type,deferred) WHERE NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=to_regclass(format('public.%I',expected.table_name)) AND t.tgname=expected.trigger_name AND NOT t.tgisinternal AND t.tgenabled IN ('O','A') AND t.tgtype=expected.event_type AND t.tgfoid=to_regprocedure(expected.signature) AND t.tgqual IS NULL AND t.tgnargs=0 AND t.tgattr::text='' AND t.tgdeferrable=expected.deferred AND t.tginitdeferred=expected.deferred)"
+  },
+  {
+    "name": "consumption_constraints_missing_or_unvalidated",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleConsumptionConsent','AppleConsumptionConsent_values_check','c'),('AppleConsumptionRequest','AppleConsumptionRequest_values_check','c'),('AppleConsumptionConsent','AppleConsumptionConsent_transaction_org_fkey','f'),('AppleConsumptionConsentEvent','AppleConsumptionConsentEvent_consent_org_fkey','f'),('AppleConsumptionRequest','AppleConsumptionRequest_notification_fkey','f'),('AppleConsumptionRequest','AppleConsumptionRequest_transaction_org_fkey','f')) expected(table_name,constraint_name,kind) WHERE NOT EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid=to_regclass(format('public.%I',expected.table_name)) AND c.conname=expected.constraint_name AND c.contype::text=expected.kind AND c.convalidated AND (c.contype<>'f' OR (c.confupdtype='r' AND c.confdeltype='r')))"
+  },
+  {
+    "name": "consumption_consent_original_buyer_binding_invalid",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent",
+      "AppleConsumptionConsentEvent",
+      "AppleConsumptionRequest",
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "AppleServerNotification"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionConsent\" c LEFT JOIN public.\"AppleTransaction\" t ON t.id=c.\"appleTransactionId\" AND t.\"organizationId\"=c.\"organizationId\" LEFT JOIN public.\"ApplePurchaseIntent\" i ON i.id=t.\"intentId\" AND i.\"organizationId\"=t.\"organizationId\" WHERE t.id IS NULL OR i.id IS NULL OR c.\"purchaserId\" IS DISTINCT FROM i.\"createdById\" OR c.\"evidenceSource\"<>'BUYER_REPORTED'"
+  },
+  {
+    "name": "consumption_consent_latest_audit_missing",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent",
+      "AppleConsumptionConsentEvent",
+      "AppleConsumptionRequest",
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "AppleServerNotification"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionConsent\" c WHERE NOT EXISTS(SELECT 1 FROM public.\"AppleConsumptionConsentEvent\" e WHERE e.\"consentId\"=c.id AND e.revision=c.revision AND (e.\"organizationId\",e.\"actorId\",e.\"policyVersion\",e.consented,e.\"deliveryStatus\",e.\"sampleContentProvided\",e.\"evidenceSource\") IS NOT DISTINCT FROM (c.\"organizationId\",c.\"purchaserId\",c.\"policyVersion\",c.consented,c.\"deliveryStatus\",c.\"sampleContentProvided\",c.\"evidenceSource\"))"
+  },
+  {
+    "name": "consumption_request_origin_deadline_invalid",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent",
+      "AppleConsumptionConsentEvent",
+      "AppleConsumptionRequest",
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "AppleServerNotification"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionRequest\" r LEFT JOIN public.\"AppleServerNotification\" n ON n.id=r.id WHERE n.id IS NULL OR n.\"notificationType\"<>'CONSUMPTION_REQUEST' OR n.environment IS DISTINCT FROM r.environment OR r.\"receivedAt\" IS DISTINCT FROM n.\"createdAt\" OR r.\"deadlineAt\" IS DISTINCT FROM r.\"receivedAt\"+interval '12 hours'"
+  },
+  {
+    "name": "consumption_request_tenant_binding_invalid",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent",
+      "AppleConsumptionConsentEvent",
+      "AppleConsumptionRequest",
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "AppleServerNotification"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionRequest\" r LEFT JOIN public.\"AppleTransaction\" t ON t.id=r.\"appleTransactionId\" AND t.\"organizationId\"=r.\"organizationId\" WHERE ((r.\"appleTransactionId\" IS NULL)<>(r.\"organizationId\" IS NULL)) OR (r.\"appleTransactionId\" IS NOT NULL AND (t.id IS NULL OR (r.environment,r.\"transactionId\",r.\"originalTransactionId\",r.\"productId\",r.\"appAccountToken\") IS DISTINCT FROM (t.environment,t.\"transactionId\",t.\"originalTransactionId\",t.\"productId\",t.\"appAccountToken\")))"
+  },
+  {
+    "name": "consumption_frozen_payload_audit_invalid",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent",
+      "AppleConsumptionConsentEvent",
+      "AppleConsumptionRequest",
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "AppleServerNotification"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionRequest\" r WHERE r.payload IS NOT NULL AND (r.\"payloadDigest\" IS DISTINCT FROM public.\"appleConsumptionPayloadDigest\"(r.payload) OR NOT EXISTS(SELECT 1 FROM public.\"AppleConsumptionConsent\" c JOIN public.\"AppleConsumptionConsentEvent\" e ON e.\"consentId\"=c.id AND e.revision=r.\"consentRevision\" WHERE c.\"appleTransactionId\"=r.\"appleTransactionId\" AND c.\"organizationId\"=r.\"organizationId\" AND e.consented AND e.\"evidenceSource\"='BUYER_REPORTED' AND (r.payload->>'deliveryStatus') IS NOT DISTINCT FROM e.\"deliveryStatus\" AND r.payload->'sampleContentProvided' IS NOT DISTINCT FROM to_jsonb(e.\"sampleContentProvided\")))"
+  },
+  {
+    "name": "consumption_sent_without_timely_frozen_attempt",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent",
+      "AppleConsumptionConsentEvent",
+      "AppleConsumptionRequest",
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "AppleServerNotification"
+    ],
+    "sql": "SELECT count(*) FROM public.\"AppleConsumptionRequest\" r WHERE (r.status='SENT' AND (r.\"sentAt\" IS NULL OR r.payload IS NULL OR r.\"attemptCount\"<1 OR r.\"lastAttemptAt\" IS NULL OR r.\"lastAttemptAt\">=r.\"deadlineAt\")) OR (r.status<>'SENT' AND r.\"sentAt\" IS NOT NULL)"
+  },
+  {
+    "name": "consumption_indexes_missing_or_invalid",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleConsumptionConsent_pkey','AppleConsumptionConsent',true,true,ARRAY['id']),('AppleConsumptionConsent_appleTransactionId_key','AppleConsumptionConsent',true,false,ARRAY['appleTransactionId']),('AppleConsumptionConsent_id_organizationId_key','AppleConsumptionConsent',true,false,ARRAY['id','organizationId']),('AppleConsumptionConsent_appleTransactionId_organizationId_key','AppleConsumptionConsent',true,false,ARRAY['appleTransactionId','organizationId']),('AppleConsumptionConsentEvent_pkey','AppleConsumptionConsentEvent',true,true,ARRAY['id']),('AppleConsumptionConsentEvent_consentId_revision_key','AppleConsumptionConsentEvent',true,false,ARRAY['consentId','revision']),('AppleConsumptionRequest_pkey','AppleConsumptionRequest',true,true,ARRAY['id']),('AppleConsumptionRequest_recovery_idx','AppleConsumptionRequest',false,false,ARRAY['status','nextAttemptAt','processingUntil']),('AppleConsumptionRequest_environment_transactionId_idx','AppleConsumptionRequest',false,false,ARRAY['environment','transactionId'])) expected(index_name,table_name,is_unique,is_primary,columns) LEFT JOIN pg_index i ON i.indexrelid=to_regclass(format('public.%I',expected.index_name)) WHERE i.indexrelid IS NULL OR i.indrelid<>to_regclass(format('public.%I',expected.table_name)) OR NOT i.indisvalid OR NOT i.indisready OR i.indisunique IS DISTINCT FROM expected.is_unique OR i.indisprimary IS DISTINCT FROM expected.is_primary OR i.indpred IS NOT NULL OR i.indexprs IS NOT NULL OR i.indnkeyatts<>cardinality(expected.columns) OR ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY k(attnum,pos) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum WHERE k.pos<=i.indnkeyatts ORDER BY k.pos) IS DISTINCT FROM expected.columns"
+  },
+  {
+    "name": "consumption_foreign_key_shapes_invalid",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleConsumptionConsent','AppleConsumptionConsent_transaction_org_fkey','AppleTransaction',ARRAY['appleTransactionId','organizationId'],ARRAY['id','organizationId']),('AppleConsumptionConsentEvent','AppleConsumptionConsentEvent_consent_org_fkey','AppleConsumptionConsent',ARRAY['consentId','organizationId'],ARRAY['id','organizationId']),('AppleConsumptionRequest','AppleConsumptionRequest_notification_fkey','AppleServerNotification',ARRAY['id'],ARRAY['id']),('AppleConsumptionRequest','AppleConsumptionRequest_transaction_org_fkey','AppleTransaction',ARRAY['appleTransactionId','organizationId'],ARRAY['id','organizationId'])) expected(table_name,constraint_name,target_table,source_columns,target_columns) LEFT JOIN pg_constraint c ON c.conrelid=to_regclass(format('public.%I',expected.table_name)) AND c.conname=expected.constraint_name WHERE c.oid IS NULL OR c.contype<>'f' OR NOT c.convalidated OR c.confrelid<>to_regclass(format('public.%I',expected.target_table)) OR c.confupdtype<>'r' OR c.confdeltype<>'r' OR ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY k(attnum,pos) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum ORDER BY k.pos) IS DISTINCT FROM expected.source_columns OR ARRAY(SELECT a.attname::text FROM unnest(c.confkey) WITH ORDINALITY k(attnum,pos) JOIN pg_attribute a ON a.attrelid=c.confrelid AND a.attnum=k.attnum ORDER BY k.pos) IS DISTINCT FROM expected.target_columns"
+  },
+  {
+    "name": "consumption_constraint_definitions_changed",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleConsumptionConsent_values_check','9fda043fe5ce01d43afe0bd9eb1c4ed7'),('AppleConsumptionRequest_values_check','59ac16f2cf21b7c32301597b0b115e05'),('AppleConsumptionRequest_notification_fkey','b994e850924dd8d5071b6d73e005824d'),('AppleConsumptionConsent_transaction_org_fkey','082847aed796d86e24916caeac7e9b25'),('AppleConsumptionRequest_transaction_org_fkey','082847aed796d86e24916caeac7e9b25'),('AppleConsumptionConsentEvent_consent_org_fkey','655de7c176cf9c65e8aafd27e6ace62b')) expected(name,digest) LEFT JOIN pg_constraint c ON c.conname=expected.name AND c.connamespace='public'::regnamespace WHERE c.oid IS NULL OR md5(pg_get_constraintdef(c.oid,true)) IS DISTINCT FROM expected.digest"
+  },
+  {
+    "name": "consumption_trigger_definitions_changed",
+    "severity": "blocker",
+    "afterConsumption": true,
+    "requires": [
+      "AppleConsumptionConsent",
+      "AppleConsumptionConsentEvent",
+      "AppleConsumptionRequest",
+      "AppleTransaction",
+      "ApplePurchaseIntent",
+      "AppleServerNotification"
+    ],
+    "sql": "SELECT count(*) FROM (VALUES ('AppleConsumptionConsent_protect','4cf2218f4336cbad01118f5839dce06e'),('AppleConsumptionRequest_protect','edf58ccd1a7a6d342a34e81d8f09bc8c'),('AppleConsumptionConsentEvent_protect','cbe2b65974ece5836fdc43e227a33769'),('AppleConsumptionConsent_require_audit','54351ca0fc9817f5a0a196a27b2fee25')) expected(name,digest) LEFT JOIN pg_trigger t ON t.tgname=expected.name AND NOT t.tgisinternal AND t.tgrelid IN ('public.\"AppleConsumptionConsent\"'::regclass,'public.\"AppleConsumptionConsentEvent\"'::regclass,'public.\"AppleConsumptionRequest\"'::regclass) WHERE t.oid IS NULL OR md5(pg_get_triggerdef(t.oid,true)) IS DISTINCT FROM expected.digest"
   }
 ]
 $checks$::jsonb)
   LOOP
     -- Older reviewed stages retain their existing report/check set. A partial
     -- 144 schema still executes these checks and blocks instead of hiding it.
+    IF spec->>'afterConsumption'='true' AND consumption_present=0 AND consumption_applied=0 THEN CONTINUE; END IF;
     IF spec->>'afterDeferred'='true' AND deferred_present=0 AND deferred_applied=0 THEN CONTINUE; END IF;
     missing := false;
     FOR requirement IN SELECT value FROM jsonb_array_elements(spec->'requires') LOOP

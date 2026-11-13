@@ -1,16 +1,32 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { adminProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { adminProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { appleIntentInputSchema, cancelApplePurchaseIntent, confirmApplePurchase, createApplePurchaseIntent,
   getAppleBillingState, getApplePurchasePreview, restoreApplePurchases } from "@/server/billing/applePayments";
 import { getAppleTemporaryUpgradeCatalog, previewAppleTemporaryUpgrade, temporaryUpgradePreviewInputSchema } from "@/server/billing/appleTemporaryUpgrades";
+import { appleConsumptionConsentInputSchema, getPersonalAppleConsumptionConsents, revokePersonalAppleConsumptionConsent, setAppleConsumptionConsent } from "@/server/billing/appleConsumption";
 const appleProcedure = adminProcedure.use(({ ctx, next }) => {
   if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
   return next();
 });
 const signedInfo = z.string().min(30).max(100_000);
+const personalAppleProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  return next();
+});
 export const appleBillingRouter = router({
+  consumptionConsent: personalAppleProcedure.use(rateLimit({ max: 20, windowMs: 60_000, prefix: "apple-consumption-consent" }))
+    .input(appleConsumptionConsentInputSchema).mutation(async ({ ctx, input }) => {
+      try { return await setAppleConsumptionConsent(ctx.user, input); } catch (e) { throw toTRPCError(e); }
+    }),
+  personalConsumptionConsents: personalAppleProcedure.query(async ({ ctx }) => {
+    try { return await getPersonalAppleConsumptionConsents(ctx.user); } catch (e) { throw toTRPCError(e); }
+  }),
+  revokePersonalConsumptionConsent: personalAppleProcedure.use(rateLimit({ max: 20, windowMs: 60_000, prefix: "apple-consumption-withdraw" }))
+    .input(z.object({ consentId: z.string().min(1).max(80) })).mutation(async ({ ctx, input }) => {
+      try { return await revokePersonalAppleConsumptionConsent(ctx.user, input.consentId); } catch (e) { throw toTRPCError(e); }
+    }),
   temporaryUpgradeCatalog: appleProcedure.query(async ({ ctx }) => {
     try { return await getAppleTemporaryUpgradeCatalog(ctx.user); } catch (e) { throw toTRPCError(e); }
   }),

@@ -4527,6 +4527,8 @@ model AppleTransaction {
   subscriptionPeriod SubscriptionPeriod?
   whatsappCreditLot WhatsAppCreditLot?
   deferredOutcomes AppleNativeDeferredOutcome[]
+  consumptionConsent AppleConsumptionConsent?
+  consumptionRequests AppleConsumptionRequest[]
   @@unique([environment, transactionId])
   @@unique([id, organizationId])
   @@index([organizationId, purchaseDate])
@@ -4607,7 +4609,81 @@ model AppleServerNotification {
   lastIssue String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  consumptionRequest AppleConsumptionRequest?
   @@index([status, nextAttemptAt])
+}
+
+// Specific, optional original-purchaser consent. Facts are explicitly reported
+// by the purchaser; they are not Apple-verified quality or inferred usage.
+model AppleConsumptionConsent {
+  id String @id @default(cuid())
+  organizationId String
+  appleTransactionId String @unique
+  purchaserId String
+  policyVersion String
+  consented Boolean @default(false)
+  revision Int @default(1)
+  deliveryStatus String?
+  sampleContentProvided Boolean?
+  evidenceSource String @default("BUYER_REPORTED")
+  grantedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transaction AppleTransaction @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionConsent_transaction_org_fkey")
+  events AppleConsumptionConsentEvent[]
+  @@unique([id, organizationId])
+  @@unique([appleTransactionId, organizationId])
+  @@index([purchaserId, consented])
+}
+
+model AppleConsumptionConsentEvent {
+  id String @id @default(cuid())
+  consentId String
+  organizationId String
+  actorId String
+  revision Int
+  policyVersion String
+  consented Boolean
+  deliveryStatus String?
+  sampleContentProvided Boolean?
+  evidenceSource String @default("BUYER_REPORTED")
+  createdAt DateTime @default(now())
+  consent AppleConsumptionConsent @relation(fields: [consentId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionConsentEvent_consent_org_fkey")
+  @@unique([consentId, revision])
+}
+
+// One response obligation per verified Apple notification UUID. A request with
+// no existing journal binding is retained without granting access or sending.
+model AppleConsumptionRequest {
+  id String @id
+  organizationId String?
+  appleTransactionId String?
+  environment String
+  transactionId String
+  originalTransactionId String
+  productId String
+  appAccountToken String @db.Uuid
+  signedTransactionInfo String @db.Text
+  receivedAt DateTime
+  deadlineAt DateTime
+  status String @default("WAITING_BINDING")
+  nextAttemptAt DateTime @default(now())
+  attemptCount Int @default(0)
+  lastAttemptAt DateTime?
+  processingToken String?
+  processingUntil DateTime?
+  payload Json?
+  payloadDigest String? @db.VarChar(64)
+  consentRevision Int?
+  sentAt DateTime?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  notification AppleServerNotification @relation(fields: [id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionRequest_notification_fkey")
+  transaction AppleTransaction? @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionRequest_transaction_org_fkey")
+  @@index([status, nextAttemptAt, processingUntil], map: "AppleConsumptionRequest_recovery_idx")
+  @@index([environment, transactionId])
 }
 
 

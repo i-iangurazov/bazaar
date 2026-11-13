@@ -119,6 +119,12 @@ describe("explicit read-only iOS migration preflight", () => {
     expect(parsed).toMatchObject({ ok: false, blockerChecks: 1, skippedChecks: 0 });
     for (const value of Object.values(privateProof)) expect(JSON.stringify(parsed)).not.toContain(value);
   });
+  it("accepts only the explicitly requested consumption stage and preserves the reviewed145 boundary", () => {
+    const parsed = parsePreflightTarget([...args, "--expect-stage", "POST_CONSUMPTION"], { EXPLICIT_AUDIT_URL: url });
+    expect(parsePreflightReport(report({ schemaStage: "POST_CONSUMPTION" }), parsed.expectedStage)).toMatchObject({ ok: true, schemaStage: "POST_CONSUMPTION" });
+    expect(parsePreflightReport(report({ schemaStage: "POST_COMPLETION_UTC" }), parsed.expectedStage).ok).toBe(false);
+    expect(parsePreflightReport(report({ schemaStage: "POST_COMPLETION_UTC" }), "POST_COMPLETION_UTC").ok).toBe(true);
+  });
 
   it("emits only approved report fields and rejects malformed counts or row-shaped output", () => {
     const parsed = parsePreflightReport(report({ extraCustomerData: "person@example.com", checks: [

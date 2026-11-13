@@ -734,7 +734,7 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     const args = ["--url-env", "EXPLICIT_OWNED_TEMPORARY_UPGRADE_AUDIT_URL",
       "--expect-host", connection.hostname, "--expect-port", connection.port || "5432",
       "--expect-database", decodeURIComponent(connection.pathname.slice(1)),
-      "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_COMPLETION_UTC"];
+      "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_CONSUMPTION"];
     // The owned local runner pins its approved binary; ordinary Linux CI can
     // keep the existing psql-on-PATH convention. No implicit database is used.
     if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
@@ -755,7 +755,7 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     // Execute the actual SQL in a separate psql read-only transaction, without
     // a fake executor, fixture mutations, or disabling any financial guard.
     const report = await runIosBillingPreflight(options);
-    expect(report).toMatchObject({ ok: true, schemaStage: "POST_COMPLETION_UTC", transactionReadOnly: true,
+    expect(report).toMatchObject({ ok: true, schemaStage: "POST_CONSUMPTION", transactionReadOnly: true,
       blockerChecks: 0, skippedChecks: 0 });
     for (const name of ["apple_intent_account_binding_invalid", "apple_transaction_account_binding_invalid",
       "apple_transaction_intent_binding_invalid", "temporary_upgrade_token_namespace_collisions",
