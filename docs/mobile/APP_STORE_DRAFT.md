@@ -242,12 +242,15 @@ original bundle was restored by exact checksum and its normal login observed
 again. This proves that scoped Simulator behavior, not a physical network
 outage. See `IOS_STARTUP_PRESENTATION.md` and its private verification evidence.
 
-The signed `1.0.0/111120` archive/local IPA includes this startup source; it has
-not been observed running on the owner's iPhone. Reduce Motion,
-landscape/dynamic type, clipping/rotation and a real connection outage remain
-actual-UI checks, followed by real-iPhone verification. Neither the generated
-assets nor these Simulator diagnostic captures are approved App Store gallery
-screenshots or a completed accessibility evaluation.
+The signed `1.0.0/111120` archive/local IPA includes this startup source. The owner
+installed that build and reported the bounded login/search/keyboard/camera results
+at the top of this document. Those reports do not verify the startup presentation,
+Reduce Motion, landscape/dynamic type, clipping/rotation or a real connection
+outage on the physical iPhone. Current scoped Simulator coverage is recorded in
+[the native page QA record](IOS_NATIVE_PAGE_QA.md); remaining physical-device
+acceptance is separate. Neither the generated assets nor these Simulator
+diagnostic captures are approved App Store gallery screenshots or a completed
+accessibility evaluation.
 
 ## Native screenshots — pending, with a concrete capture plan
 

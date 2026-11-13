@@ -1,6 +1,6 @@
 # Store submission handoff
 
-Original preparation: 2026-11-03. iOS handoff updated 2026-11-11.
+Original preparation: 2026-11-03. iOS handoff updated 2026-11-13.
 Drafts below are not submissions or approved declarations. The current iOS
 execution record is [IOS_RELEASE_PROGRESS.md](../IOS_RELEASE_PROGRESS.md);
 use [APP_STORE_DRAFT.md](../APP_STORE_DRAFT.md) for current listing/review copy,
@@ -8,16 +8,22 @@ use [APP_STORE_DRAFT.md](../APP_STORE_DRAFT.md) for current listing/review copy,
 [IPHONE_ACCEPTANCE.md](../IPHONE_ACCEPTANCE.md) for actual-device acceptance.
 
 Apple account setup and local implementation have progressed beyond the original
-November 3 audit. An unsigned device-platform archive and automated checks now
-pass; a signed upload, real Sandbox purchase, TestFlight installation and App Store
-release remain unverified. Historical Android observations below are dated
-November 3 and are not a fresh console check.
+November 3 audit. Source `56c744aa` produced a signed AppStaging archive and local
+distribution IPA, version `1.0.0`, build `111120`. The owner uploaded it through
+Transporter, supplied the App Store Connect result **Complete, Internal, Ready to
+Test**, and installed it through internal TestFlight. The owner reported login,
+product search with the keyboard, and scanner camera permission/live image. These
+bounded physical-iPhone results do not establish complete device acceptance or an
+actual Sandbox purchase. This staging build connects to the isolated Preview and
+is restricted by `TFInternalTestingOnly=true`; a normal production `App`/`Release`
+App Store candidate remains unprepared. Historical Android observations below are
+dated November 3 and are not a fresh console check.
 
 Identity: `kg.bazaar.app`. Production shell: `https://www.bazaar.kg/dashboard`.
 Version/build are supplied by `MOBILE_APP_VERSION` / `MOBILE_BUILD_NUMBER`.
-The iOS `1.0.0/111112` archive is a local rehearsal, not an approved unused store
-build number. Google Play accepted build 1 in the historical record. Check the
-next unused number for the intended store before any upload.
+The earlier iOS `1.0.0/111112` archive was a local rehearsal. Build `111120` is now
+used; check a new unused number before any later native upload. Google Play
+accepted build 1 in the historical record.
 
 ## Ready to copy
 
@@ -37,28 +43,36 @@ verified App Store submission package.
 Apple: the owner has completed Developer enrollment/payment, bank and tax setup,
 and Paid Apps agreements; their active setup was observed in the November 11
 record. Full Xcode is installed and its license accepted. Do not repeat those
-steps. The latest passive local signing check found no valid code-signing
-identity; intended team/app registration, certificates/private key and matching
-profiles still require configuration or verification. A paid membership does not
-by itself create a signed archive. Set `APPLE_TEAM_ID` only to the verified team,
-preserve `kg.bazaar.app`, and check the needed Associated Domains/push capabilities.
+steps. Xcode account login, the intended team `DWR6Z246Y8`, bundle ID
+`kg.bazaar.app` and the owner's device registration were subsequently confirmed.
+The `111120` local IPA was verified with Apple Distribution signing for that team,
+an unexpired profile, `get-task-allow=false`, no `ProvisionedDevices`, and the
+internal-only restriction. Its owner-operated upload and installation are recorded
+above. Preserve that identity and the protected signing credentials; signing this
+staging build does not establish a normal production App Store candidate.
 
-Remaining owner actions for internal TestFlight:
+Remaining verification after internal TestFlight installation:
 
-1. Allow the previously declined Xcode/App Store Connect access for this setup,
-   or complete those account steps personally: verify the intended app/team and
-   install the distribution identity/profile. Do not substitute another browser,
-   API credential or account route for a declined permission.
+1. Continue the [iPhone acceptance steps](../IPHONE_ACCEPTANCE.md) against the
+   isolated Preview. The bounded login/search/keyboard/camera reports above do not
+   cover every device scenario or actual Apple payment. USB pairing is optional
+   for TestFlight distribution and is needed only for local device debugging.
 2. Approve the actual Apple product model, prices and terms, then complete the
    registered IAP products and server-key setup through protected configuration.
    See [the catalog proposal](../APPLE_CATALOG_PROPOSAL.md). Do not paste private
    keys, passwords or verification codes into chat or Git.
-3. Accept the internal TestFlight invitation on the owner's iPhone and run the
-   acceptance steps against the isolated preview. USB pairing is optional for
-   TestFlight distribution; it is needed only if local device debugging is used.
+3. Prepare and verify a separate normal production `App`/`Release` candidate and
+   the remaining seller, privacy, territory and review declarations before any
+   separately authorized public submission. The internal-only staging IPA cannot
+   be promoted to the App Store release.
 
-The preparation helper signs/exports only after the intended identity exists;
-internal upload/processing must then be observed. Public App Review and release
+On 13 November the owner's updated Chrome access was verified through the same
+browser integration, and the owner completed the fresh Apple login. The owner
+accepted the API access request and created the App Manager catalog key; its
+private file is held in protected local storage outside Git. The first current
+non-renewing product was created as a draft with Russian and English (U.K.)
+metadata. Its price and availability remain unset. Catalog registration and
+actual Sandbox purchases remain work in progress. Public App Review and release
 retain their separate authorization.
 
 Google: the owner's **personal Chrome profile** successfully opened the Ilias Iangurazov Personal developer account. Bazaar was absent from its app list. The Create app form confirmed **Package name available** for `kg.bazaar.app`; name Bazaar, Russian default language, App and Free were prepared. The owner then checked both declarations and explicitly confirmed creation. Bazaar app record `4973851578570693264` now exists; a signed version 1.0.0/build 1 AAB was uploaded into internal release 1. The Bazaar dashboard explicitly requires 12 closed-test participants for 14 consecutive days before applying for production access. Internal release 1.0.0/build 1 is now published, track Active, with the owner as the sole eligible tester. The invite link opens successfully; installation/real device checks remain outstanding. The initial check in an unrelated work profile was discarded. No Play service account or upload keystore settings were supplied locally. The existing Android debug keystore is not a protected upload identity.
@@ -115,7 +129,7 @@ store-declaration gates below. See the current execution record for check result
 
 1. **Account deletion:** an in-app own-account flow and server enforcement are now implemented and regression-tested, including authentication/session invalidation, owner handling and preservation of required company records. Verify the actual shipping flow, public policy/support links and Apple renewal warning on iPhone. See [the privacy/deletion record](../IOS_PRIVACY_ACCOUNT_DELETION.md); the November 3 “not found” finding is superseded.
 2. **Privacy:** the current compiled app manifest includes 18 app-level collected-data categories plus Filesystem timestamp use (`C617.1`). AI consent/revocation and current policy text are implemented; final deployed links, seller/controller contacts, retention/processor declarations and App Store privacy answers still need release verification. See [the data audit](../IOS_APP_PRIVACY_AUDIT.md). This does not establish “no data collected,” and no public legal/contact value is invented here.
-3. **Billing:** StoreKit 2, server-verified Apple records, shared organization access with web GoPay, overlap guards and attempt-bound cancellation/recovery are implemented and tested. Immediate prorated iOS tier/store/reserve additions over a prepaid GoPay or non-renewing Apple term remain unimplemented commercial/model work pending the concrete A/B proposal decision. Actual approved Apple products/prices/terms, server setup and real Sandbox/iPhone purchase, cancellation and restore remain open. Existing GoPay-paid access must work without a second charge for the same coverage. Use the Apple purchase path for iOS digital sales; do not rely on the old draft's possible enterprise exemption or enable unapproved commercial terms.
+3. **Billing:** StoreKit 2, server-verified Apple records, shared organization access with web GoPay, overlap guards and attempt-bound cancellation/recovery are implemented and tested. Direct current-term tier/store/reserve upgrades over a prepaid GoPay or non-renewing Apple term (proposal C) are implemented and verified by unit and isolated real-database tests; see [temporary upgrades](../APPLE_TEMPORARY_UPGRADES.md). Commercial Apple products, price bands, discount/minimum policy and terms are not approved, and sales remain disabled. Actual server setup and real Sandbox/iPhone purchase, cancellation and restore remain open. Existing GoPay-paid access must work without a second charge for the same coverage. Use the Apple purchase path for iOS digital sales; do not rely on the old draft's possible enterprise exemption or enable unapproved commercial terms.
 4. **Push:** Firebase/APNs credentials and physical-device delivery are unverified. The November 3 source audit noted no production callers of `sendMobilePushToUsers`; recheck the intended release behavior instead of treating that old observation as current end-to-end evidence. Advertise only delivery behavior verified on the actual build.
 5. **Links:** on 2026-11-03 production assetlinks was `[]`, and AASA had empty application details. Configure real team/app-signing identities and verify HTTPS app/universal links. Custom `bazaar:` links are a separate mechanism.
 6. **Devices and assets:** scanning, file sharing, offline recovery, keyboard/safe areas, session changes and native screenshots remain device gates. Native features add utility beyond a web wrapper but do not guarantee approval under guideline 4.2.

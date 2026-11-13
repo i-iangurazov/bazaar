@@ -356,6 +356,42 @@ type the nullable grace-date fixture accurately. Combined `pnpm typecheck`,
 `pnpm lint` and `pnpm i18n:check` passed. Immutable production build,
 deployment and actual native copy/cutout checks remain pending.
 
+The immutable `16020d2d90e2f77637efdc36befec4bec9ab2c87` combined candidate
+subsequently passed its production build (38.5-second compilation, 133 static
+pages), was verified Ready as `dpl_EDYp8a9HRSm9FbfyJy4R47x2fnbC`, and received
+the dedicated Preview alias with its exact project/deployment/source binding
+checked. A cold native launch retained the synthetic B login. Both landscape
+orientations kept the common shell outside the cutouts. The formerly covered
+Reports and Settings rail controls were clicked and opened their respective
+navigation sections. Baam was checked with the real software keyboard in both
+orientations and portrait: composer, Send and Back fit, `Q` survived rotation,
+and clearing it followed by Back returned to Home with the keyboard dismissed.
+No AI request was sent. B's privacy consent was changed only in that isolated
+synthetic account to reach the composer.
+
+B's actual native billing summary now labels its own trial as free and preserves
+its independent date/limits. After ordinary sign-out and A sign-in, A's summary
+showed active BUSINESS access through 1 June 2027, two stores, 6,000 products and
+seven users, plus the explicit retained-access/no-repurchase copy. Its renewal
+link scrolled to the existing panel without starting an Apple purchase; the
+panel retained web payment, additions and paid-until details. A real shared
+term Select opened within the right-hand safe area and Escape closed it with
+visible focus returned to the unchanged one-month trigger. Sales remain off;
+this is UI/access recovery evidence, not a live Apple charge or restore test.
+
+An additional actual wide CommandPalette check exposed input-focus enlargement:
+the initially bounded shell enlarged after its search autofocus and remained
+enlarged after Escape, leaving content under the cutout. The earlier 16px text
+entry safeguard applies only below 768px, while landscape iPhones use the wider
+breakpoint. The follow-up extends that same floor to native iOS fields while
+retaining larger root-relative text and user zoom. The fixture now includes the
+actual wider caller and its search classes. Its first new assertion incorrectly
+assumed a 14px baseline; actual Espresso fields compute to 13px. Correcting only
+that assertion to demonstrate a positive size below 16px produced 113 passing
+offline cases, zero page errors and no network requests. Combined typecheck,
+lint and translation checks passed. This does not prove actual WK focus-zoom
+recovery; the immutable build and native recheck for the follow-up remain open.
+
 Continue the actual page pass after updating Preview: corrected Baam launch and
 Back, scrolled menus and nested dialogs, reachable full-screen close controls,
 auth return links, all relevant roles/stores, warehouse operations, reports,

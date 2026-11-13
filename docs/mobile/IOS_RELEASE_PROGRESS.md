@@ -26,7 +26,16 @@ The complete Apple-enabled candidate is still unfinished. The
 [commercial proposal](APPLE_CATALOG_PROPOSAL.md) retains 145 unapproved draft
 products, with no verified actual prices/storefronts. A private registration
 worksheet now preserves every draft ID/right and provides 435 RU/EN/KY text rows;
-it registers and approves nothing. Actual temporary-upgrade band IDs/prices,
+it does not itself register or approve offers. On 13 November the original Chrome
+access was restored and the owner completed Apple login, accepted API access and
+created the App Manager catalog key. The first current prepaid Starter product
+was created as a non-renewing draft with RU/en-GB metadata. A read-only API pass
+then verified its exact app/product/version/localizations, and the first bounded
+API creation registered the next product, draft version and two localizations.
+The remaining catalog is being registered separately without prices, availability
+or review submission. Kyrgyz remains in-app copy because ASC does not offer that
+localization. These are actual metadata operations, not approved sellable offers.
+Actual temporary-upgrade band IDs/prices,
 commercial decisions, server keys/notifications and real Sandbox lifecycle
 checks remain open. Production/main, normal App Store Release, submission and
 publication still require their separate authorizations.
