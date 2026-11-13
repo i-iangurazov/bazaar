@@ -18,14 +18,17 @@ export function LegalDocument({
   seller,
   localeControl,
   draft = true,
+  documentOverride,
 }: {
-  documentId: LegalDocumentId;
+  documentId: LegalDocumentId | null;
+  documentOverride?: LegalCopy["documents"][LegalDocumentId];
   copy: LegalCopy;
   seller: SellerDetails;
   localeControl?: ReactNode;
   draft?: boolean;
 }) {
-  const document = copy.documents[documentId];
+  const document = documentOverride ?? (documentId ? copy.documents[documentId] : null);
+  if (!document) throw new Error("Legal document content is required");
   return (
     <main
       className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-8 sm:py-10"
@@ -66,7 +69,7 @@ export function LegalDocument({
               aria-label={copy.navigation}
               className="flex flex-wrap gap-2 lg:sticky lg:top-6 lg:flex-col lg:items-stretch"
             >
-              {legalDocumentIds.map((id) => (
+              {(documentId ? legalDocumentIds : ["offer", "requisites"] as const).map((id) => (
                 <Button
                   key={id}
                   asChild
@@ -89,13 +92,13 @@ export function LegalDocument({
                   {copy.privacy}
                 </Link>
               </Button>
-              <Button
+              {documentId ? <Button
                 asChild
                 variant="ghost"
                 className="h-auto min-h-11 justify-start whitespace-normal px-3 py-2 text-left"
               >
                 <Link href="/#pricing">{copy.pricing}</Link>
-              </Button>
+              </Button> : null}
             </nav>
           </aside>
 

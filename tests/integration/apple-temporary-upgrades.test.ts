@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import { APPLE_PURCHASE_TERMS_REVISION, APPLE_PURCHASE_TERMS_URL } from "@/lib/applePurchaseLegal";
+import { syntheticSellerEnvironment } from "../helpers/legalSeller";
 import { businessDateKey } from "@/lib/timezone";
 import type { SubscriptionSelection } from "@/lib/billing/subscriptionPricing";
 import { prisma } from "@/server/db/prisma";
@@ -199,6 +201,34 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
   afterEach(() => {
     expect(network).not.toHaveBeenCalled();
     vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks();
+  });
+
+  it("preserves an unfinished historical v2 C purchase through scoped terms, then records the new revision on a later increment", async () => {
+    const f = await seed(), base = await paidWeb(f), preview = await previewChange(f), key = randomUUID();
+    const intent = await changeIntent(f, preview, key), before = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } });
+    const approve = () => {
+      for (const [name, value] of Object.entries({ ...syntheticSellerEnvironment, BILLING_LEGAL_RELEASE_APPROVED: LEGAL_TERMS_VERSION,
+        BILLING_SUPPORT_EMAIL_VERIFIED: "1", BILLING_PUBLIC_CONTACT_ADDRESS: "Synthetic correspondence address 100",
+        APPLE_LEGAL_RELEASE_APPROVED: APPLE_PURCHASE_TERMS_REVISION })) vi.stubEnv(name, value);
+    };
+    approve();
+    expect((await changeIntent(f, preview, key)).intentId).toBe(intent.intentId);
+    await authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() });
+    vi.stubEnv("APPLE_LEGAL_RELEASE_APPROVED", "");
+    const payload = signed(intent);
+    expect((await apply(f, payload, intent.intentId, "NOTIFICATION")).status).toBe("GRANTED");
+    expect((await apply(f, payload, undefined, "RESTORE")).status).toBe("GRANTED");
+    const after = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } });
+    expect(after.offerSnapshot).toEqual(before.offerSnapshot); expect(after.termsUrl).toBe(before.termsUrl); expect(after.termsVersion).toBe("2026-11-11-v2");
+    expect((await getOrganizationPlan(f.org.id)).activeSubscriptionPeriod?.endsAt).toEqual(base.period.endsAt);
+    expect(await prisma.subscriptionPeriod.count({ where: { parentPeriodId: { not: null } } })).toBe(1);
+    approve();
+    const next = await previewChange(f, enterprise);
+    const nextIntent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, action: "CHANGE", offerKey: next.offerKey,
+      quoteToken: next.quoteToken, idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION,
+      termsRevision: APPLE_PURCHASE_TERMS_REVISION });
+    expect(await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: nextIntent.intentId } })).toMatchObject({
+      termsUrl: APPLE_PURCHASE_TERMS_URL, offerSnapshot: { appleLegalConsent: { revision: APPLE_PURCHASE_TERMS_REVISION, termsUrl: APPLE_PURCHASE_TERMS_URL } } });
   });
 
   it.each((["GOPAY", "APPLE"] as const).flatMap((source) => (["DOWN", "UP"] as const).map((rounding) => ({ source, rounding }))))(

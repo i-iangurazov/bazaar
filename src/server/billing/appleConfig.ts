@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import { applePurchaseLegalPublication, APPLE_PURCHASE_TERMS_REVISION, APPLE_PURCHASE_TERMS_URL } from "@/lib/applePurchaseLegal";
 
 export const APPLE_BUNDLE_ID = "kg.bazaar.app";
 export const APPLE_MANAGEMENT_URL = "https://apps.apple.com/account/subscriptions";
@@ -39,12 +40,14 @@ export function appleBillingConfig(env: Record<string, string | undefined> = pro
   const privateKey = env.APPLE_IAP_PRIVATE_KEY?.replace(/\\n/g, "\n") ?? "";
   const apiReady = Boolean(keyId && issuerId && privateKey.includes("PRIVATE KEY") && appId);
   const termsVersion = env.APPLE_BILLING_TERMS_VERSION?.trim() ?? "";
-  const termsUrl = "https://www.bazaar.kg/legal/offer";
+  const scopedTermsPublished = applePurchaseLegalPublication(env).published;
+  const termsUrl = scopedTermsPublished ? APPLE_PURCHASE_TERMS_URL : "https://www.bazaar.kg/legal/offer";
   const termsReady = termsVersion === LEGAL_TERMS_VERSION && env.APPLE_BILLING_TERMS_APPROVED === "true";
   const foundationReady = mode !== "off" && apiReady && termsReady && env.APPLE_BILLING_SALES_APPROVED === "true";
   const ready = foundationReady && catalogValid;
   return { mode, environment, catalog: catalogValid ? catalog : [], catalogValid, appAppleId: appId,
-    keyId, issuerId, privateKey, apiReady, termsVersion, termsUrl, ready, foundationReady,
+    keyId, issuerId, privateKey, apiReady, termsVersion, termsUrl,
+    termsRevision: scopedTermsPublished ? APPLE_PURCHASE_TERMS_REVISION : null, scopedTermsPublished, ready, foundationReady,
     unavailableReason: ready ? null : "appleUnavailable",
     sandboxOrganizations: new Set((env.APPLE_BILLING_SANDBOX_ORGANIZATION_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean)),
   };

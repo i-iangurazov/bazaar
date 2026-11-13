@@ -6,6 +6,8 @@ import { createContractTerms } from "@/server/billing/contractTerms";
 import { appleSubscriptionOffer, appleWhatsAppOffer } from "@/server/billing/appleOfferCatalog";
 import { APPLE_WHATSAPP_OFFER_VERSION } from "@/server/billing/appleConfig";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import { APPLE_PURCHASE_TERMS_REVISION, APPLE_PURCHASE_TERMS_URL } from "@/lib/applePurchaseLegal";
+import { syntheticSellerEnvironment } from "../helpers/legalSeller";
 import { createApplePurchaseIntent, authorizeApplePurchase, applyAppleTransaction, getAppleBillingState, getApplePurchasePreview } from "@/server/billing/applePayments";
 import { createSubscriptionCheckout } from "@/server/billing/subscriptionPayments";
 import { calculateSubscriptionQuote } from "@/server/billing/subscriptionQuotes";
@@ -62,6 +64,49 @@ const paidWebPeriod = async (f: Awaited<ReturnType<typeof seed>>) => {
 describeDb("verified Apple purchases on isolated PostgreSQL", () => {
   beforeEach(resetDatabase);
   afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+  const approveScopedTerms = () => {
+    for (const [key, value] of Object.entries({ ...syntheticSellerEnvironment, BILLING_LEGAL_RELEASE_APPROVED: LEGAL_TERMS_VERSION,
+      BILLING_SUPPORT_EMAIL_VERIFIED: "1", BILLING_PUBLIC_CONTACT_ADDRESS: "Synthetic correspondence address 100",
+      APPLE_LEGAL_RELEASE_APPROVED: APPLE_PURCHASE_TERMS_REVISION })) vi.stubEnv(key, value);
+  };
+  it("blocks only a new production purchase when scoped legal approval is absent", async () => {
+    const f = await seed(); vi.stubEnv("APPLE_BILLING_MODE", "live"); vi.stubEnv("APPLE_BILLING_SANDBOX_ORGANIZATION_IDS", "");
+    await expect(intentFor(f)).rejects.toThrow("billingTermsChanged");
+    expect(await prisma.applePurchaseIntent.count()).toBe(0);
+    expect((await getAppleBillingState(f.actor)).ready).toBe(true);
+    expect((await getAppleBillingState(f.actor)).offers.find(o => o.offerKey === offer.offerKey))
+      .toMatchObject({ available: false, unavailableReason: "appleUnavailable" });
+  });
+  it("retains the exact scoped consent and URL while notification/restore still grant after its release flag is removed", async () => {
+    const f = await seed(); approveScopedTerms();
+    const intent = await intentFor(f, { termsRevision: APPLE_PURCHASE_TERMS_REVISION });
+    const before = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } });
+    expect(before).toMatchObject({ termsVersion: "2026-11-11-v2", termsUrl: APPLE_PURCHASE_TERMS_URL,
+      offerSnapshot: { appleLegalConsent: { version: 1, revision: APPLE_PURCHASE_TERMS_REVISION,
+        termsVersion: LEGAL_TERMS_VERSION, termsUrl: APPLE_PURCHASE_TERMS_URL } } });
+    vi.stubEnv("APPLE_LEGAL_RELEASE_APPROVED", "");
+    const receipt = await syntheticAppleVerifier().transaction(syntheticAppleTransaction({ appAccountToken: intent.appAccountToken, productId }));
+    expect((await applyAppleTransaction(receipt, { organizationId: f.org.id, source: "NOTIFICATION" })).status).toBe("GRANTED");
+    expect((await applyAppleTransaction(receipt, { organizationId: f.org.id, source: "RESTORE" })).status).toBe("GRANTED");
+    const after = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } });
+    expect(after.offerSnapshot).toEqual(before.offerSnapshot); expect(after.termsUrl).toBe(before.termsUrl);
+    expect(await prisma.subscriptionPeriod.count()).toBe(1);
+  });
+  it("finishes an existing v2 intent across a new scoped edition without reacceptance or rewriting its snapshot", async () => {
+    const f = await seed(), preview = await getApplePurchasePreview(f.actor, { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" });
+    const input = { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" as const, quoteToken: preview.quoteToken!,
+      idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true as const, storeKitConsent: syntheticAppleStoreKitConsent };
+    const intent = await createApplePurchaseIntent(f.actor, input);
+    const original = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } });
+    expect(original.termsUrl).toBe("https://www.bazaar.kg/legal/offer");
+    approveScopedTerms();
+    expect((await createApplePurchaseIntent(f.actor, input)).intentId).toBe(intent.intentId);
+    await authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() });
+    vi.stubEnv("APPLE_LEGAL_RELEASE_APPROVED", "");
+    expect((await receive(intent)).status).toBe("GRANTED");
+    const after = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } });
+    expect(after.offerSnapshot).toEqual(original.offerSnapshot); expect(after.termsVersion).toBe(original.termsVersion); expect(after.termsUrl).toBe(original.termsUrl);
+  });
   it("durably records exact signed USD milliunits, grants once, and restores without quota reset", async () => {
     const f = await seed(), intent = await intentFor(f);
     const receipt = await syntheticAppleVerifier().transaction(syntheticAppleTransaction({ appAccountToken: intent.appAccountToken, productId }));

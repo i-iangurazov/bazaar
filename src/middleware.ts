@@ -10,6 +10,7 @@ import {
 import { canAccessAppRoute, getRoleHomePath } from "./lib/roleAccess";
 import { legalDraftPreviewAllowed } from "./lib/legalPreview";
 import { legalPublicationState } from "./lib/legalPublication";
+import { applePurchaseLegalPublication, applePurchaseLegalPreviewAllowed, APPLE_PURCHASE_TERMS_PATH } from "./lib/applePurchaseLegal";
 import {
   isMarketingLandingPath,
   marketingHomePath,
@@ -72,8 +73,16 @@ export const middleware = async (request: NextRequest) => {
   const { pathname } = request.nextUrl;
   // A page-level notFound can be streamed with HTTP 200 by the App Router.
   // Reject unpublished legal drafts before rendering, including locale aliases.
+  const legalPath = pathname.replace(/^\/(?:ru|kg|ky|en)(?=\/legal(?:\/|$))/, "");
+  const appleLegalPath = /^\/legal\/apple-purchases(?:\/|$)/.test(legalPath);
+  if (appleLegalPath && (legalPath !== APPLE_PURCHASE_TERMS_PATH ||
+    (!applePurchaseLegalPublication(process.env).published && !applePurchaseLegalPreviewAllowed(request.headers.get("host"))))) {
+    return new NextResponse(null, { status: 404, headers: { "x-request-id": requestId,
+      "x-robots-tag": "noindex, nofollow, noarchive", "cache-control": "private, no-store" } });
+  }
   if (
     /^\/(?:ru\/|kg\/|ky\/|en\/)?legal(?:\/|$)/.test(pathname) &&
+    !appleLegalPath &&
     !legalPublicationState(process.env).published &&
     !legalDraftPreviewAllowed(process.env, request.headers.get("host"))
   ) {

@@ -185,7 +185,7 @@ export function ApplePayments({
     .sort()
     .join("\n");
   const selectionKey = JSON.stringify([catalog.data?.organization.id, temporaryChange ? temporaryQuote?.offerKey : selected?.offerKey,
-    action, selectedPlan ?? plan, temporaryChange ? null : months, stores, reserve, catalog.data?.termsVersion,
+    action, selectedPlan ?? plan, temporaryChange ? null : months, stores, reserve, catalog.data?.termsVersion, catalog.data?.termsRevision,
     product?.id, product?.displayPrice, product?.priceMillis, product?.currencyCode, product?.storefrontId,
     temporaryChange ? temporaryQuote?.quoteToken : needsQuote ? preview.data?.quoteToken : null,
     temporaryChange ? temporaryCatalog.data?.policyVersion : null,
@@ -418,6 +418,7 @@ export function ApplePayments({
         idempotencyKey: requestKey.current.key,
         expectedOrganizationId: catalog.data.organization.id,
         termsVersion: catalog.data.termsVersion,
+        termsRevision: catalog.data.termsRevision ?? undefined,
         ...(temporaryChange && temporaryQuote ? { quoteToken: temporaryQuote.quoteToken }
           : needsQuote && preview.data?.quoteToken ? { quoteToken: preview.data.quoteToken } : {}),
         acceptedTerms: true,

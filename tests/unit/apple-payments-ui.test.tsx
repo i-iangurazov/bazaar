@@ -1006,6 +1006,23 @@ describe("iOS Apple checkout and recovery", () => {
     expect(mock.purchase).not.toHaveBeenCalled();
   });
 
+  it("requires fresh acceptance for a scoped legal revision and sends that exact revision before purchase", async () => {
+    const view = mount(); await openConsent();
+    const termsUrl = "https://www.bazaar.kg/legal/apple-purchases/2026-11-13-v1";
+    mock.data = { ...mock.data, termsRevision: "2026-11-13-v1", termsUrl };
+    view.rerender(checkout());
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /\$19\.99/ }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByRole("checkbox").getAttribute("aria-checked")).toBe("false");
+    expect(dialog.getByRole("link", { name: ru.billingApple.terms }).getAttribute("href")).toBe(termsUrl);
+    fireEvent.click(dialog.getByRole("checkbox"));
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.intent).toHaveBeenCalledWith(expect.objectContaining({ termsVersion: "test-terms", termsRevision: "2026-11-13-v1" })));
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+  });
+
   it("clears prior consent when StoreKit changes price/storefront and sends the exact newly accepted metadata", async () => {
     const { container } = mount();
     await openConsent();

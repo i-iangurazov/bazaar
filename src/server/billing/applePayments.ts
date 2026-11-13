@@ -2,6 +2,7 @@ import { applePreservedAccess, captureApplePreservedAccess } from "./appleAccess
 import { randomUUID } from "node:crypto";
 import { Prisma, type ApplePurchaseIntent, type AppleSubscriptionChain, type AppleTransaction } from "@prisma/client";
 import { z } from "zod";
+import { newApplePurchaseLegalConsent } from "@/lib/applePurchaseLegal";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { getOrganizationPlan } from "@/server/services/planLimits";
@@ -29,7 +30,8 @@ const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonVa
 const offerSnapshotSchema = z.object({ kind: z.enum(["SUBSCRIPTION", "WHATSAPP_PACK"]), offerKey: z.string() }).passthrough();
 export const appleIntentInputSchema = z.object({ expectedOrganizationId: z.string().min(1).max(80), offerKey: z.string().min(1).max(400), idempotencyKey: z.string().uuid(),
   action: z.enum(["RENEW", "CHANGE"]).default("RENEW"), quoteToken: z.string().max(12000).optional(),
-  termsVersion: z.string().min(1).max(100), acceptedTerms: z.literal(true), storeId: z.string().min(1).max(80).optional(),
+  termsVersion: z.string().min(1).max(100), termsRevision: z.string().min(1).max(100).optional(),
+  acceptedTerms: z.literal(true), storeId: z.string().min(1).max(80).optional(),
   storeKitConsent: appleStoreKitConsentSchema.optional() });
 export async function assertAppleBillingActor(actor: AppleBillingActor, db: Prisma.TransactionClient = prisma) {
   if (db !== prisma) await db.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} AND "organizationId" = ${actor.organizationId} FOR UPDATE`;
@@ -84,10 +86,11 @@ export async function getAppleBillingState(actor: AppleBillingActor) {
   return {
     organization: { id: org.id, name: org.name },
     ready, environment, unavailableReason,
-    termsVersion: config.termsVersion, termsUrl: config.termsUrl, managementUrl: APPLE_MANAGEMENT_URL,
+    termsVersion: config.termsVersion, termsRevision: config.termsRevision, termsUrl: config.termsUrl, managementUrl: APPLE_MANAGEMENT_URL,
     offers: offers.map((offer) => {
       const mapping = config.catalog.find((m) => m.offerKey === offer.offerKey);
       let reason: string | null = !ready ? unavailableReason ?? "appleUnavailable" : !mapping ? "appleProductNotConfigured" : null;
+      if (environment === "Production" && !config.scopedTermsPublished) reason ??= "appleUnavailable";
       if (!reason && mapping) { try { assertMappingKind(offer, mapping); } catch { reason = "appleCatalogMismatch"; } }
       if (offer.kind === "SUBSCRIPTION") {
         reason ??= protectedReason ?? (pending?.scope === "SUBSCRIPTION" ? "applePurchasePending" : null) ??
@@ -97,6 +100,7 @@ export async function getAppleBillingState(actor: AppleBillingActor) {
       }
       let changeReason: string | null = offer.kind !== "SUBSCRIPTION" || mapping?.productType !== "AUTO_RENEWABLE" || !activeChain
         ? "appleChangeRequiresAppleSubscription" : !ready || !mapping ? unavailableReason ?? "appleUnavailable" : protectedReason;
+      if (environment === "Production" && !config.scopedTermsPublished) changeReason ??= "appleUnavailable";
       const initialMapping = activeChain && config.catalog.find((m) => m.productId === activeChain.productId);
       if (!changeReason && mapping?.subscriptionGroupId !== initialMapping?.subscriptionGroupId) changeReason = "appleCatalogMismatch";
       if (!changeReason && activeProduct?.productType === "AUTO_RENEWABLE" && mapping?.productId === activeProduct.productId) changeReason = "billingNoPaidChange";
@@ -187,6 +191,12 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
       if (environment === "Sandbox" && !config.sandboxOrganizations.has(actor.organizationId)) throw new AppError("appleSandboxNotAllowed", "FORBIDDEN", 403);
       return presentIntent(prior);
     }
+    // Final scoped approval applies only to a NEW purchase. Existing immutable
+    // intents, paid receipts, notifications and recovery retain their old terms.
+    const legal = newApplePurchaseLegalConsent(environment, input.termsRevision);
+    if (!legal.allowed) throw new AppError("billingTermsChanged", "CONFLICT", 409);
+    const legalSnapshot = legal.consent ? { appleLegalConsent: legal.consent } : {};
+    const intentTermsUrl = legal.consent?.termsUrl ?? config.termsUrl;
     if (temporary) {
       const ready = temporaryUpgradeReadiness(actor.organizationId);
       if (!ready.ready || !ready.policy) throw new AppError(ready.reason, "CONFLICT", 409);
@@ -201,8 +211,8 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
       const intent = await db.applePurchaseIntent.create({ data: { organizationId: actor.organizationId, createdById: actor.id,
         idempotencyKey: input.idempotencyKey, pendingSlot: `SUBSCRIPTION:${actor.organizationId}`, scope: "SUBSCRIPTION", action: "CHANGE",
         offerKey: input.offerKey, productId: context.productId, productType: "NON_RENEWING", environment, appAccountToken: account.appAccountToken,
-        purchaseAppAccountToken: randomUUID(), offerSnapshot: { kind: "SUBSCRIPTION", offerKey: input.offerKey, temporaryUpgrade: true },
-        purchaseSnapshot: json(purchase), termsVersion: input.termsVersion, termsUrl: config.termsUrl, expiresAt: new Date(purchase.expiresAt) } });
+        purchaseAppAccountToken: randomUUID(), offerSnapshot: json({ kind: "SUBSCRIPTION", offerKey: input.offerKey, temporaryUpgrade: true, ...legalSnapshot }),
+        purchaseSnapshot: json(purchase), termsVersion: input.termsVersion, termsUrl: intentTermsUrl, expiresAt: new Date(purchase.expiresAt) } });
       return presentIntent(intent);
     }
     const { org, offers } = await offersFor(actor.organizationId, db);
@@ -255,9 +265,9 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
       idempotencyKey: input.idempotencyKey, action: input.action, pendingSlot: `${scope}:${org.id}`, scope, offerKey: offer.offerKey,
       productId: mapping.productId, productType: mapping.productType, environment,
       appAccountToken: account.appAccountToken, offerSnapshot: json({ ...offer, ...(preservedAccess ? { preservedAccess } : {}),
-        ...(appleChangeSource ? { appleChangeSource } : {}), appleProduct: { subscriptionGroupId: mapping.subscriptionGroupId, appleOfferVersion: mapping.appleOfferVersion,
+        ...(appleChangeSource ? { appleChangeSource } : {}), ...legalSnapshot, appleProduct: { subscriptionGroupId: mapping.subscriptionGroupId, appleOfferVersion: mapping.appleOfferVersion,
           storeKitConsent: input.storeKitConsent } }), ...(purchase ? { purchaseSnapshot: json(purchase) } : {}),
-      storeId: input.storeId, termsVersion: config.termsVersion, termsUrl: config.termsUrl, expiresAt: new Date(now.getTime() + 15 * 60_000) } });
+      storeId: input.storeId, termsVersion: config.termsVersion, termsUrl: intentTermsUrl, expiresAt: new Date(now.getTime() + 15 * 60_000) } });
     return presentIntent(intent);
   });
 }

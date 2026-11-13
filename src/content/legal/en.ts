@@ -8,7 +8,7 @@ export const enLegal: LegalCopy = {
   published: "Version dated 11 November 2026",
   paymentSystemsTitle: "Payment methods",
   paymentSystemsNotice:
-    "Confirm payment in a supported banking app through the GoPay page opened from your Bazaar invoice. That page shows available banks and restrictions; having the app does not guarantee that any amount can be paid.",
+    "For web payments, confirm payment in a supported banking app through the GoPay page opened from your Bazaar invoice. That page shows available banks and restrictions; having the app does not guarantee that any amount can be paid. Digital purchases inside iOS are confirmed through Apple.",
   draftNotice:
     "Draft for review. Current entrepreneur and Bakai KGS account details and the building address, excluding floor and apartment details, are prepared; the support mailbox is verified. Until separately approved, this text is available only in the local preview, remains unpublished and is not an effective offer. Viewing this page does not enable payments.",
   missing: "To be completed from the entrepreneur's documents",
@@ -52,8 +52,8 @@ export const enLegal: LegalCopy = {
           id: "acceptance",
           title: "2. Choosing a plan and accepting terms",
           paragraphs: [
-            "Before paying, the customer reviews the offer, refund rules, privacy policy, price and plan limits. For online payment, the customer selects a plan in the subscription section and expressly agrees to the offer before a payment link is created. Visiting the website or registering does not constitute consent to paid renewal.",
-            "The agreement for the selected period is concluded upon verified successful payment following prior acceptance of the offer. The invoice record retains the amount, plan, provider name, terms version and terms link. A failed or incomplete payment does not create a paid period.",
+            "Before paying, the customer reviews the offer, refund rules, privacy policy, price and plan limits. For web payment, the customer selects a plan in the subscription section and expressly agrees to the offer before a payment link is created. Visiting the website or registering does not constitute consent to paid renewal.",
+            "The agreement for the selected period is concluded upon verified successful payment following prior acceptance of the offer. The invoice or purchase record retains the amount, plan, provider name, terms version and terms link. A failed or incomplete payment does not create a paid period.",
             "Existing customers whose access is granted or renewed through support retain their agreed arrangements until separately agreed otherwise. Having an account does not automatically switch it to online billing.",
           ],
         },
@@ -63,7 +63,7 @@ export const enLegal: LegalCopy = {
           paragraphs: [
             "Bazaar supports product and stock records, POS, orders, inventory operations and reporting. Available features and limits on stores, products and users depend on the selected plan, published under Plans and features and displayed in the account before payment.",
             "Hardware, fiscal services and external integrations may require compatible equipment, configuration, a separate agreement or payment to a third party. Paying for Bazaar does not itself activate every external service. AI features may make mistakes; verify financial and inventory decisions against source records.",
-            "The service is delivered remotely; no physical goods are shipped. Internet access and a compatible browser are required. Contact the provider for access and setup questions.",
+            "The service is delivered remotely; no physical goods are shipped. Internet access and a compatible browser or supported iOS app are required. Contact the provider for access and setup questions.",
             "Add-ons accompany the selected plan and do not unlock another plan’s features. Starter cannot add stores; the total store limits with add-ons are 1, 5 and 15 respectively. One capacity reserve adds 1,000 product cards and two users; only one such pack may be active at a time. Products and people are counted across the organization and are not multiplied by store count.",
             "Included AI, image, email and external API allowances are shown in the plan. Monthly allowances renew monthly even when six or twelve months are prepaid. Processing reserves capacity before execution; failed operations release unused reservations. Automatic paid overages are not enabled.",
           ],
@@ -72,9 +72,10 @@ export const enLegal: LegalCopy = {
           id: "price",
           title: "4. Price and payment",
           paragraphs: [
-            "Prices are in Kyrgyz som (KGS). The final amount and selected plan are shown before payment confirmation. If the price changes before invoice creation, the updated amount must be confirmed again. The price of an already paid period cannot be increased retrospectively.",
+            "Web prices are in Kyrgyz som (KGS). The final amount and selected plan are shown before payment confirmation. If the price changes before invoice creation, the updated amount must be confirmed again. The price of an already paid period cannot be increased retrospectively.",
             "Access is purchased in one payment for a selected term of 1, 6 or 12 calendar months, when that term is available in the published plan. The discount, its application to extra capacity and the full amount are determined by the selected offer and shown before payment. There are no automatic charges or mandatory card saving.",
-            "All new Bazaar online payments are processed through GoPay in KGS: the customer confirms the payment in an available banking app. Funds go directly to the service provider’s current account at Bakai Bank. The service provider pays the payment-acceptance fee; it does not increase the Bazaar invoice amount. The payer’s bank determines any fees or currency conversion charged by that bank.",
+            "New Bazaar web payments are processed through GoPay in KGS: the customer confirms the payment in an available banking app. Funds go directly to the service provider’s current account at Bakai Bank. The service provider pays the payment-acceptance fee; it does not increase the Bazaar invoice amount. The payer’s bank determines any fees or currency conversion charged by that bank.",
+            "Purchases inside iOS use a separate edition, Terms for Bazaar purchases through Apple, linked before confirmation. The current App Store storefront determines the amount and currency. Available one-off Apple subscriptions for 1, 6 or 12 months do not renew automatically. Verified organisation access, including GoPay coverage, remains valid without buying it again when signing in to iOS.",
           ],
         },
         {
@@ -122,7 +123,7 @@ export const enLegal: LegalCopy = {
           id: "scope",
           title: "1. Payments covered",
           paragraphs: [
-            "These rules cover payment for access to Bazaar software. Stores using Bazaar handle refunds to their shoppers under their own agreements and rules.",
+            "These bank-transfer rules cover web payments for Bazaar access. App Store refunds are requested through Apple; GoPay bank-refund timelines and procedures do not apply to them. Stores using Bazaar handle refunds to their shoppers under their own agreements and rules.",
             "Each renewal requires a separate payment initiated by the customer. To stop renewal for the next period, do not create another payment. This does not cancel an existing payment or replace a refund request.",
           ],
         },
@@ -179,7 +180,7 @@ export const enLegal: LegalCopy = {
           title: "Who provides Bazaar",
           paragraphs: [
             "The individual entrepreneur identified below provides access to the software. Bazaar is the software brand; the named entrepreneur is the contracting party and payment recipient.",
-            "All new online purchases of Bazaar services use GoPay in Kyrgyz som (KGS). Previously created FreedomPay invoices remain in the history with their original provider. The payment provider is identified on the invoice and does not replace the seller's details. The stores of Bazaar users are also not the sellers of the Bazaar subscription.",
+            "New Bazaar web purchases use GoPay in Kyrgyz som (KGS). Previously created FreedomPay invoices remain in the history with their original provider. The payment provider is identified on the invoice and does not replace the seller's details. The stores of Bazaar users are also not the sellers of the Bazaar subscription. Apple processes digital purchases inside iOS in the App Store currency.",
           ],
         },
         {
@@ -201,9 +202,10 @@ export const enLegal: LegalCopy = {
           id: "before",
           title: "1. What you are paying for",
           paragraphs: [
-            "Payment covers 1, 6 or 12 calendar months of Bazaar access on the selected plan with the chosen extra capacity. Prices are in Kyrgyz som (KGS). Compare features and limits on the plans page; the full amount and discount appear in the account before confirmation.",
+            "Web payment covers 1, 6 or 12 calendar months of Bazaar access on the selected plan with the chosen extra capacity. Prices are in Kyrgyz som (KGS). Compare features and limits on the plans page; the full amount and discount appear in the account before confirmation.",
             "This pays for business software, not purchases by shoppers at a store's POS. Online payment is available only with acquiring connected and for organisations eligible for this renewal method. If no payment button is available, contact support; do not pay through somebody else's account.",
             "GoPay permits one-off prepayment for 1, 6 or 12 months; automatic debits are not connected. GoPay’s limit is 999,999.99 KGS per payment, and the payer’s bank may impose lower limits. If the bank does not allow the selected amount, contact support before attempting another payment.",
+            "Inside iOS, Apple purchases use the final Apple price and currency, a one-off term without auto-renewal, and separate Apple purchase terms shown beforehand. Organisation access is shared across web and iOS. The following GoPay steps describe web payment only, not a bank-transfer alternative for an App Store purchase.",
           ],
         },
         {
