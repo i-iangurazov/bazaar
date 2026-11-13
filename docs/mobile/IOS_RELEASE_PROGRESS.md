@@ -60,14 +60,42 @@ browser checks passed RU/KG/EN long portrait messages, the landscape keyboard
 case, dismissal and unchanged desktop placement. These are browser fixture
 checks, not a new physical-iPhone or whole-device acceptance result. The expanded
 matrix attempts hit harness timing/API limits and are not counted as passes.
-The combined source still needs its cloud build and new staging archive/upload.
+The combined source **`0c1c48e4`** subsequently passed its production-mode cloud
+build. Signed internal staging **1.0.0 (111122)** was archived, exported,
+inspected and uploaded exactly once with Apple's official altool. IPA SHA256 is
+`66a683f302a4a6acc35874bec8edba924febcad63932d939e2d8e54ca0ee25ce`.
+Apple reports VALID / INTERNAL_ONLY; the exact build was added only to the
+existing owner-only group «Проверка Bazaar», with readback IN_BETA_TESTING and
+the old build links/tester unchanged. The owner subsequently confirmed updating
+to `111122` and launching it; direct iPhone observation confirmed its TestFlight
+version and the original C working screen. The actual Profile Save success toast
+was captured on this phone in the safe top area, with its full message and close
+control visible. Two saves of unchanged synthetic personal fields were used to
+capture the five-second notice; no business/payment state was changed. Remaining
+device cases are still open. The normal www Release `111121` predates these
+native changes and remains an earlier artifact, not the final public candidate.
 
-The current isolated web Preview is source **`fbb9ae6c`**, schema **147**,
-READY deployment `dpl_24gtc81ajWaCYad5vgewkdktVxvm`, actually bound to
+The current isolated web Preview is source **`0c1c48e4`**, schema **147**,
+READY deployment `dpl_Cc7ZYRzcbbSQUL3GfGEr12CYChzp`, actually bound to
 `https://bazaar-ios-preview-20261111.vercel.app`. Its production-mode cloud build
-passed. This source includes the minimum-payment rule and isolated newcomer
-registration fix; the present documentation update is later and is not a new
-deployed application source. No customer/production deployment was performed.
+passed. New source and native archive match, runtime/build configuration remains
+byte-identical to the prior isolated registration deployment, and fresh read-only
+checks preserve C's single Apple period and A's GoPay periods/quotas. Ordinary C
+web login and paid access pass. No customer/production deployment was performed.
+
+An actual Chrome review then visited eight pages at desktop/mobile sizes. It
+found one defect in non-native mobile BAAM: AI consent choices are clipped below
+the viewport. Native BAAM already uses a separate scrolling wrapper, whose real
+phone acceptance is still pending. The browser wrapper now provides bounded
+scrolling; both choices are reachable. The one-line fix passed 53 focused tests,
+types/lint/translations and five actual-component browser states, including
+decline, short landscape and the unchanged native branch with keyboard metrics.
+Those fixture checks made no real AI consent or provider calls. Deployment of
+this follow-up remains separate from the installed `111122` binary. Empty
+inventory states and the Starter transfer gate are recorded as such, not passed
+operational flows. Three onboarding tips were closed through their normal UI;
+there were no stock, payment or provider mutations. Evidence is in
+`.local/ios-release-20261111/hosted-page-qa-0c1c48e4-20261113/`.
 
 The signed staging build **1.0.0 (111120)** exists for team `DWR6Z246Y8` and
 bundle ID `kg.bazaar.app`, from native source `56c744aa`. The inspected Apple

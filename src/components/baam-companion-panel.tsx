@@ -269,7 +269,7 @@ export function BaamCompanionPanel({
         </>
       )}
       </div>
-      {!c.showHistory ? <div data-baam-composer className={nativeViewport ? "min-h-0 shrink-0 overflow-y-auto" : "contents"}><BaamComposer c={c} inlineControls={compactViewport} /></div> : null}
+      {!c.showHistory ? <div data-baam-composer className={nativeViewport ? "min-h-0 shrink-0 overflow-y-auto" : "min-h-0 shrink overflow-y-auto overscroll-contain"}><BaamComposer c={c} inlineControls={compactViewport} /></div> : null}
     </section>
   );
 }
