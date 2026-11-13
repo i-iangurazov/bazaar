@@ -14,6 +14,25 @@ App Store screenshots.
 
 ## Current physical-device checkpoint — updated 2026-11-13
 
+The latest installed staging build is **1.0.0 (111122)**, uploaded exactly once,
+reported VALID / INTERNAL_ONLY by Apple and added only to the existing owner-only
+group. The owner confirmed updating and launching it; direct observation
+confirmed that version in TestFlight and the C working screen. An actual Profile
+Save toast displayed its full message and close control inside the safe top
+area. Only unchanged synthetic personal fields were saved. After the owner's
+login to protected GoPay fixture A, its working screen was also observed on this
+build; plan/source/expiry details and an included paid feature remain unaccepted
+because Mirroring stopped transmitting input. Gate 7 is still partial.
+
+The first purchase below has additionally passed independent Apple Server API
+verification: transaction info and refund history returned 200, official online
+signature verification passed 11 exact bindings, and it was not revoked. Empty
+refund history is not an actual refund test. See protected
+`actual-C-apple-server-readonly-20261113/` and
+`iphone-mirroring-page-qa-20261113/` evidence.
+
+### First installed build and supporting purchase detail
+
 The owner confirmed Transporter **Delivered**, supplied the App Store Connect
 status **Complete / Internal / Ready to Test**, and installed **1.0.0 (111120)**
 through TestFlight. The app record is **Bazaar POS**, Apple ID **6833508529**,
@@ -72,15 +91,17 @@ buyer. Use the same preview website as the staging app, never the customer site.
    install Bazaar Test on iPhone. Record build/source/device details above,
    verify the intended preview organization, and confirm registered Apple products
    are available in Sandbox. An unsigned local rehearsal cannot satisfy this step.
-   **Result: Partial.** Owner confirmed installation of `111120` and successful
-   initial login. Starter Sandbox availability is subsequently established by
+   **Result: Partial.** Owner confirmed installation and successful initial
+   login, then updated to `111122`; its version and working screen were directly
+   observed. Starter Sandbox availability is established by
    the real C purchase; complete catalog availability remains unverified.
 2. **Keep existing web-paid access.** Sign into A in the preview website and on
    iPhone. Compare plan, additions and expiry, then open an included paid feature.
    Access must work without buying again through Apple. An automatic subscription
    must not charge the already-covered period; any separately approved voluntary
    future prepayment must show dates after existing coverage before consent.
-   **Result: Not run.**
+   **Result: Partial.** A working screen observed on `111122` after owner login;
+   actual plan/additions/expiry comparison and paid-feature acceptance pending.
 3. **Cancel before buying.** Sign into B, open the approved product, compare the
    localized price/currency, organization and term with Apple's sheet, then tap
    Cancel. Confirm no entitlement grant and a server-acknowledged cancellation.

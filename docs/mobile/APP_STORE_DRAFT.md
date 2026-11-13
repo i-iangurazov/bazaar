@@ -1,36 +1,24 @@
 # Bazaar — App Store listing and review draft
 
 Prepared 2026-11-11; checkpoint updated 2026-11-13.
-**Draft only; not ready for submission.** A signed
-AppStaging archive and locally exported distribution IPA now exist from source
-`56c744aa`, version `1.0.0`, build `111120`. The export was observed with Apple
-Distribution signing for team `DWR6Z246Y8`, an unexpired distribution profile,
-`get-task-allow=false`, no `ProvisionedDevices`, and the bundled
-`TFInternalTestingOnly=true` restriction.
+**Draft only; not ready for submission.** Internal staging **1.0.0 (111122)**
+was signed, delivered, installed and launched on the owner's iPhone. One actual
+Starter Sandbox purchase, its single period after Restore, Apple-funded web
+access and a real native success toast are verified. Refund, the remaining
+device cases and full catalog acceptance remain open. Normal www Release
+**1.0.0 (111123)** from `f2f0d270` is separately archived, exported and inspected;
+it is not internal-only and has not been uploaded, installed or launched.
+The internal staging IPA cannot become the public release.
 
-The owner subsequently confirmed **Delivered** in Transporter and supplied the
-App Store Connect result for **1.0.0 (111120): Complete, Internal, Ready to Test**.
-The owner installed it through the internal group and confirmed login to the
-working screen, product search with the keyboard, and opening the scanner with
-camera permission and a live camera image. These are bounded owner-reported
-physical-iPhone results; they do not establish complete device acceptance or an
-Apple purchase. The exported IPA SHA256 is
-`d6ee74fb1ebf68d0183ef1d28a00e1bf9b873182bfe2adb53a27a36c7963d55d`.
-This build number is already used; any later native upload needs a new number.
-The intended bundle ID `kg.bazaar.app` and the owner's device registration were
-confirmed in the Developer portal. The owner then created the App Store Connect
-record **Bazaar POS**, Apple ID **6833508529**, after Apple rejected the plain
-name Bazaar as already used. This record identity was supplied by the owner;
-automated access to App Store Connect was subsequently restored. The exact app,
-bundle and Russian primary locale were checked through the catalog API. The
-owner-approved 102 available 15%-scenario prices are now configured as IAP drafts;
-43 above-grid prices remain unresolved. The Small Business and higher-price
-applications have been received by Apple; approval remains pending. No public
-seller declaration, review submission or release setting was configured. The complete
-release scope and verification evidence remain in [the execution record](IOS_RELEASE_PROGRESS.md)
-and [iPhone acceptance record](IPHONE_ACCEPTANCE.md). Actual Sandbox purchases,
-the remaining device scenarios and the final normal-production Release remain
-open. The internal-only staging IPA cannot become the App Store release.
+The exact app **Bazaar POS**, Apple ID **6833508529**, bundle `kg.bazaar.app`,
+team `DWR6Z246Y8` and Russian primary locale were checked. All 145 base/pack
+products exist as drafts; 102 approved prices are configured and 43 above-grid
+prices remain unresolved. The owner has now approved upward upgrade rounding,
+non-expiring Apple WhatsApp credits and Kyrgyzstan as the first territory.
+The 800 upgrade drafts are being configured. Small Business and higher-price
+applications were received; approval is still pending. No App Review submission
+or public release has occurred. See [the execution record](IOS_RELEASE_PROGRESS.md)
+and [iPhone acceptance](IPHONE_ACCEPTANCE.md) for the bounded results.
 
 ## App record proposal
 
@@ -43,11 +31,11 @@ open. The internal-only staging IPA cannot become the App Store release.
 | User Access | Full Access, selected by the owner for App Store Connect users; this does not invite TestFlight users or publish the app |
 | Platform / devices | iOS; existing iPhone and iPad support; minimum iOS 15 |
 | Other Apple platforms | Inspect Mac with Apple silicon / Vision Pro availability defaults in the actual account; no compatibility or release on those platforms is claimed by the iPhone/iPad checks |
-| Version / build | Signed staging `1.0.0` / `111120`, native source `56c744aa`; owner confirmed processed internal TestFlight installation. This number is used; a later native upload needs a new number |
+| Version / build | Installed internal staging `1.0.0 (111122)`; separate local www Release `1.0.0 (111123)` from `f2f0d270` is inspected but not uploaded. Never reuse an uploaded build number |
 | Primary category | Business, matching the existing retail operations application |
 | Download price | Proposed free download with approved digital offers sold through Apple; the 102 approved IAP draft prices do not enable sales or approve remaining offers/terms |
-| Initial territory | Kyrgyzstan is a proposal requiring owner confirmation, not a saved availability setting |
-| Release control | Manual release after approval; submission and publication still need explicit authorization |
+| Initial territory | Owner approved Kyrgyzstan. App availability saved and read back across all 175 territories: only `KGZ` available, automatic new territories and pre-order off. IAP availability is tracked separately |
+| Release control | Saved and read back as `PREPARE_FOR_SUBMISSION` / `MANUAL`; App Review approval alone will not publish the app. Submission and publication still require the owner's separate authorization |
 | Copyright / seller | Owner must confirm the actual rights holder, year and public seller information; no legal name/address copied from private documents |
 | Age rating / accessibility | Complete the current questionnaires against the actual release; no 4+, accessibility support or other rating is assumed |
 
@@ -187,7 +175,7 @@ This conservative copy does not remove those features from the release audit.
 | `https://www.bazaar.kg/privacy` | Public GET returned HTTP 200. The deployed text still says November 7 and describes support-request deletion and web payment processing. Deploy/review the new in-app deletion, Apple billing and AI-consent policy before App Review; an existing working URL alone is insufficient. |
 | `https://www.bazaar.kg` | Existing marketing site; do not treat current web KGS prices as Apple storefront prices. |
 | `https://www.bazaar.kg/legal/offer` | Public GET returned HTTP 200. Current Apple server configuration's terms URL; final approved Apple product/renewal/credit terms must be published and verified here. HTTP success does not approve those commercial terms. |
-| Seller, copyright, review contact, territory | Still owner decisions. Keep private bank/tax documents, home address and reviewer credentials out of this repository and public copy. |
+| Seller, copyright, review contact | Remaining owner facts. Initial territory is already approved and saved as KGZ only. Keep private bank/tax documents, home address and reviewer credentials out of this repository and public copy. |
 
 Use `IOS_APP_PRIVACY_AUDIT.md` for concrete collected-data categories and tracking
 evidence, and `IOS_PRIVACY_ACCOUNT_DELETION.md` for AI processors, erasure and
@@ -258,7 +246,24 @@ acceptance is separate. Neither the generated assets nor these Simulator
 diagnostic captures are approved App Store gallery screenshots or a completed
 accessibility evaluation.
 
-## Native screenshots — pending, with a concrete capture plan
+## Native screenshots — partial, with a concrete capture plan
+
+One actual Simulator product-catalog capture now exists from the current native
+Staging build `111122`, hosted source `f2f0d270`, iPhone 17 Pro Max / iOS 26.5,
+Russian, isolated synthetic Demo. It was saved through Simulator's Save Screen
+UI at **1320×2868**. The original's alpha values are all 255; an RGB PNG copy
+removes only the redundant channel, with identical visible RGB bytes verified.
+No resizing, cropping, overlays or simulated UI were used. Protected provenance
+is in `native-store-screenshots-f2f0d270-20261113/capture-partial-proof.json`.
+This is QA evidence, excluded from the public gallery after the owner's review;
+its visible test labels are unsuitable for the store listing. The owner requested
+a separate fictional shop with realistic products and consistent photography.
+Eight generated product photographs for «Тёплый дом» are ready under
+`public/retails/gallery-teply-dom-20261113/`; an independent isolated shop fixture
+and professional gallery using actual captured app screens are in preparation.
+No generated UI or test-labelled QA frame is an approved gallery asset.
+Native input subsequently stopped with `noWindowsAvailable`; repeated attempts
+were stopped and the owned simulator shut down. The iPad set remains pending.
 
 The 14 files in `store/screenshots/browser-candidates/` are November 3 browser
 captures from an isolated synthetic database. Their provenance explicitly says
@@ -267,10 +272,10 @@ resize/relabel them as native evidence or submit them as verified iOS captures.
 
 Capture the tested release build with a dedicated synthetic review organisation,
 English and Russian UI, no customer records, secrets or development overlays.
-The current Apple requirements call for an iPhone Dynamic Island medium-display
-set and, because Bazaar supports iPad, a 13-inch iPad set. Use accepted native
-portrait sizes such as **1206×2622** for iPhone 17 Pro and **2064×2752** for a
-13-inch iPad Pro, checking the actual captured device dimensions. PNG/JPEG must
+Apple's specifications rechecked on 13 November accept an iPhone Dynamic Island
+large-display set, such as **1320×2868**, and require a 13-inch iPad set because
+Bazaar runs on iPad, such as **2064×2752**. Check the actual captured device
+dimensions. PNG/JPEG must
 be opaque; provide 1–10 per required device size. Recheck Apple's specifications
 at upload rather than assuming the old 1242×2688 browser set covers the current
 requirement.
