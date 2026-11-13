@@ -9,8 +9,14 @@ const describeDb = shouldRunDbTests ? describe : describe.skip;
 describeDb("POS return preview uses authoritative refund allocation", () => {
   beforeEach(resetDatabase);
 
-  async function fixture(qty = 2, price = 150, discount = 30) {
+  async function fixture(qty = 2, price = 150, discount = 30, fractional = false) {
     const f = await seedBase({ plan: "ENTERPRISE", allowNegativeStock: true });
+    if (fractional) {
+      await prisma.unit.update({
+        where: { id: f.baseUnit.id },
+        data: { quantityPrecision: 3 },
+      });
+    }
     await prisma.product.update({ where: { id: f.product.id }, data: { basePriceKgs: price } });
     const register = await prisma.posRegister.create({
       data: {
@@ -106,6 +112,48 @@ describeDb("POS return preview uses authoritative refund allocation", () => {
         lines: [{ customerOrderLineId: f.line.id, qty: 1 }],
       }),
     ).rejects.toMatchObject({ message: "posReturnQtyExceeded" });
+  });
+
+  it("quotes and posts only 0.5 of 2.5 sold units at 120.50 for an exact 60.25 refund", async () => {
+    const f = await fixture(2.5, 120.5, 0, true);
+    const counts = async () => Promise.all([
+      prisma.saleReturn.count(),
+      prisma.salePayment.count(),
+      prisma.stockMovement.count(),
+    ]);
+    const before = await counts();
+    const quote = await f.caller.pos.returns.preview({
+      originalSaleId: f.sale.id,
+      lines: [{ customerOrderLineId: f.line.id, qty: 0.5 }],
+    });
+    expect(quote).toMatchObject({
+      totalKgs: 60.25,
+      lines: [{ customerOrderLineId: f.line.id, qty: 0.5, lineTotalKgs: 60.25 }],
+    });
+    expect(await counts()).toEqual(before);
+    const draft = await f.caller.pos.returns.createDraft({
+      shiftId: f.shift.id,
+      originalSaleId: f.sale.id,
+    });
+    await f.caller.pos.returns.addLine({
+      saleReturnId: draft.id,
+      customerOrderLineId: f.line.id,
+      qty: 0.5,
+    });
+    const savedReturn = await f.caller.pos.returns.get({ saleReturnId: draft.id });
+    expect(savedReturn?.totalKgs).toBe(quote.totalKgs);
+    await f.caller.pos.returns.complete({
+      saleReturnId: draft.id,
+      idempotencyKey: "preview-fractional-half-unit-return",
+      payments: [{ method: "CASH", amountKgs: savedReturn!.totalKgs }],
+    });
+    const receipt = await f.caller.pos.sales.get({ saleId: f.sale.id });
+    expect(receipt?.saleReturns).toHaveLength(1);
+    expect(receipt?.saleReturns[0]).toMatchObject({
+      status: "COMPLETED",
+      totalKgs: 60.25,
+      lines: [{ customerOrderLineId: f.line.id, qty: 0.5 }],
+    });
   });
 
   it("rejects duplicate, foreign-receipt and non-whole selections", async () => {

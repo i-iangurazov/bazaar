@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { PosReturnQuantityInput } from "@/components/pos/return-quantity-input";
 import { QueryErrorState } from "@/components/query-error-state";
 import { CloseIcon, DownloadIcon, PrintIcon, ShareIcon, ViewIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { businessDateKey, businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
+import { parseQuantity } from "@/lib/quantity";
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -526,7 +528,7 @@ const PosHistoryPage = () => {
     }
     return selectedSale.lines.flatMap((line) => {
       const availableQty = Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0));
-      const qty = Math.trunc(Number(returnQtyByLine[line.id] ?? 0));
+      const qty = parseQuantity(returnQtyByLine[line.id] ?? "0") ?? 0;
       if (!Number.isFinite(qty) || qty <= 0 || availableQty <= 0) {
         return [];
       }
@@ -551,7 +553,7 @@ const PosHistoryPage = () => {
       .map((line) => ({
         lineId: line.id,
         maxQty: Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0)),
-        qty: Math.trunc(Number(returnQtyByLine[line.id] ?? 0)),
+        qty: parseQuantity(returnQtyByLine[line.id] ?? "0") ?? 0,
       }))
       .filter((line) => Number.isFinite(line.qty) && line.qty > 0 && line.maxQty > 0)
       .map((line) => ({
@@ -1660,19 +1662,16 @@ const PosHistoryPage = () => {
                 {t("history.availableQty")}:{" "}
                 {Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0))}
               </p>
-              <Input
+              <PosReturnQuantityInput
                 aria-label={`${line.product.name}: ${t("history.availableQty")} ${Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0))}`}
                 value={returnQtyByLine[line.id] ?? "0"}
-                onChange={(event) => {
-                  const raw = event.target.value.replace(/[^\d]/g, "");
-                  const parsed = raw ? Math.trunc(Number(raw)) : 0;
-                  const maxQty = Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0));
+                availableQuantity={Math.max(0, line.qty - (alreadyReturnedByLine[line.id] ?? 0))}
+                onChange={(draft) => {
                   setReturnQtyByLine((current) => ({
                     ...current,
-                    [line.id]: String(Math.min(parsed, maxQty)),
+                    [line.id]: draft,
                   }));
                 }}
-                inputMode="numeric"
                 className="mt-2"
               />
             </div>
