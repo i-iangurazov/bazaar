@@ -215,8 +215,10 @@ const mount = (locale: keyof typeof messages = "ru", wrapper = false) =>
   );
 const openConsent = async () => {
   await screen.findByText(product.displayPrice);
-  fireEvent.click(screen.getByRole("button", { name: /\$19\.99/ }));
-  const dialog = within(screen.getByRole("dialog"));
+  const purchaseButton = screen.getByRole("button", { name: /\$19\.99/ });
+  await waitFor(() => expect((purchaseButton as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(purchaseButton);
+  const dialog = within(await screen.findByRole("dialog"));
   fireEvent.click(dialog.getByRole("checkbox"));
   return dialog;
 };

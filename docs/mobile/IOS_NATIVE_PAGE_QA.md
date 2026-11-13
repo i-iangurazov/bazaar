@@ -298,6 +298,64 @@ actual system-sheet filename/save recheck remain pending. Combined typecheck,
 lint and RU/KG/EN translation validation subsequently passed; the production
 build and actual filename/save recheck remain open.
 
+The combined `3533eeede1a033f3f79172954d84d477a3d91efb` deployment subsequently
+passed its production build (39.8-second compilation, all 133 static pages) and
+was verified Ready with the exact dedicated alias binding. After a full app
+restart, real software-keyboard checks confirmed the Baam composer, Send and
+Back in both landscape orientations. The synthetic `Q` survived rotation and
+portrait recovery, then was cleared without sending. A separate defect remains:
+the opposite-landscape left cutout covers the shared 57px module navigation rail.
+The correction must protect the common shell and supported overlays, rather
+than adding a second Baam-only inset.
+
+On that same actual app, the existing 554-byte history CSV opened Share with its
+readable original basename. Save to Files completed and returned to the unchanged
+Bazaar history with enabled controls. In the system Files app, the saved `.csv`
+appeared under On My iPhone with the expected name and size; native Quick Look
+opened its three synthetic product rows. The initial Recents view reported a
+system content error; switching to the local Browse location rendered the file.
+No new export job or external share was created. An earlier Home/background
+round trip also retained the history and scroll position.
+
+The protected synthetic GoPay-prepaid organization A was then signed in through
+the actual native app. Its BUSINESS access was active through 1 June 2027,
+with two stores, 6,000 products and seven users allowed. The native payment panel
+identified web payment, the store/reserve additions and the preserved paid-until
+date, and explicitly stated that buying existing access again is unnecessary.
+The separate fresh HTTP check passed seven cases, including identical relogin
+snapshots, current/future paid periods, two synthetic PAID GoPay invoices and
+unchanged monthly usage. Apple sales remain off: this proves existing-access
+display and ordinary login recovery, not a live StoreKit duplicate-charge test.
+
+Signing out of A and signing into the separate synthetic trial organization B
+cleared A's BUSINESS plan, additions and June 2027 paid-until date. B showed its
+own Newbie trial ending 18 November, with one store, 1,000 products and two users.
+This actual native account-switch check does not establish StoreKit restore or
+cross-organization purchase isolation. The owned Simulator was then shut down
+with its app data retained while the follow-up was prepared.
+
+The shared correction moves physical horizontal safe-area protection into the
+native iOS app shell, bottom actions and supported dialogs/sheets. Shared Radix
+menus, popovers, selects and tooltips merge the measured left/right insets into
+their existing collision padding; Baam's duplicate local side padding is removed.
+Web and Android retain their existing layout. Focused native-layout unit checks
+passed 56 cases across 11 suites. The offline overlay fixture passed all 102
+checks, including asymmetric left/right cutouts, real shared Radix components,
+focus return, existing two-column operations and web/Android negative controls;
+it made no network requests and recorded no page errors. The actual iOS check
+against the next combined Preview remains pending.
+
+The same checkpoint exposed ambiguous summary copy above already-granted native
+access. The follow-up explicitly preserves existing access, calls its native
+summary link renewal/changes, and shows the trial price for the legacy native
+trial shape. The link still scrolls to the existing panel; payment handlers,
+amounts and entitlements are unchanged. RU/KG/EN text is included. Four billing
+UI suites passed 127 checks. Initial failures were corrected in the assertions:
+preserve Intl nonbreaking spaces, await the enabled purchase button/dialog, and
+type the nullable grace-date fixture accurately. Combined `pnpm typecheck`,
+`pnpm lint` and `pnpm i18n:check` passed. Immutable production build,
+deployment and actual native copy/cutout checks remain pending.
+
 Continue the actual page pass after updating Preview: corrected Baam launch and
 Back, scrolled menus and nested dialogs, reachable full-screen close controls,
 auth return links, all relevant roles/stores, warehouse operations, reports,

@@ -80,6 +80,8 @@ const BillingPage = () => {
   } as const;
   const pendingRequest = billingQuery.data?.pendingUpgradeRequest ?? null;
   const currentPlan = billingQuery.data?.planTier ?? null;
+  const hasCurrentGrantedAccess = Boolean(billingQuery.data?.hasAccess && billingQuery.data.subscriptionActive && !billingQuery.data.trialActive);
+  const hasNativeTrialAccess = platform === "ios" && Boolean(billingQuery.data?.hasAccess && billingQuery.data.trialActive && !billingQuery.data.subscriptionActive);
   const requestPlanLabel = useMemo(() => {
     if (!requestedPlan) {
       return "";
@@ -203,12 +205,14 @@ const BillingPage = () => {
                   ) : null}
                 </div>
                 <p className="font-medium text-foreground">
-                  {billingQuery.data.trialOffer
+                  {billingQuery.data.trialOffer || hasNativeTrialAccess
                     ? t("trial.free")
                     : !webPayments
                       ? platform === null
                         ? tCommon("loading")
-                        : apple("pricesAppStore")
+                        : hasCurrentGrantedAccess
+                          ? apple("currentAccessPreserved")
+                          : apple("pricesAppStore")
                       : t("planPricePrimary", {
                           amount: formatNumber(billingQuery.data.monthlyPriceKgs),
                         })}
@@ -263,7 +267,7 @@ const BillingPage = () => {
                 billingQuery.data.subscriptionStatus !== "CANCELED" ? (
                   <div className="pt-2">
                     <Button asChild>
-                      <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
+                      <a href="#subscription-checkout">{platform === "ios" ? apple("renewalAndChanges") : t("payments.openCheckout")}</a>
                     </Button>
                   </div>
                 ) : null}

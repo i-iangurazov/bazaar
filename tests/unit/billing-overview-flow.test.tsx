@@ -103,6 +103,22 @@ const mount = (locale: keyof typeof messages = "ru", state: BillingUiState = "pa
 };
 
 describe("complete billing workspace disclosures", () => {
+  it.each(["ru", "kg", "en"] as const)("retains website current prices and checkout wording in %s", (locale) => {
+    const { container } = mount(locale, "paid");
+    const overview = container.querySelector("[data-subscription-overview]") as HTMLElement;
+    const t = createTranslator({ locale, messages: messages[locale], namespace: "billing" });
+    const currentPrice = t("planPricePrimary", {
+      amount: formatNumber(model.summary.monthlyPriceKgs, locale, { maximumFractionDigits: 2 }),
+    });
+    // Intl uses a nonbreaking grouping space in RU/KG. Compare the actual
+    // price verbatim rather than collapsing only the DOM side of the match.
+    expect(within(overview).getByText(currentPrice, { normalizer: (text) => text })).toBeTruthy();
+    expect(overview.textContent).not.toContain(messages[locale].billingApple.currentAccessPreserved);
+    expect(within(overview).getByRole("link", { name: messages[locale].billing.payments.openCheckout }).getAttribute("href")).toBe("#subscription-checkout");
+    expect(screen.queryByRole("link", { name: messages[locale].billingApple.renewalAndChanges })).toBeNull();
+    expect(mock.checkout).not.toHaveBeenCalled();
+  });
+
   it.each(["ru", "kg", "en"] as const)(
     "distinguishes current trial from the future paid plan and retains details in %s",
     (locale) => {

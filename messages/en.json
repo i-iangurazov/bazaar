@@ -9061,6 +9061,8 @@
     "operationFailed": "Apple verification could not be completed. Check again when your connection returns; you do not need to pay again.",
     "recoveryHint": "An Apple purchase still needs confirmation. The recorded payment will be checked again — do not buy it again.",
     "pricesAppStore": "Price and terms in the App Store",
+    "currentAccessPreserved": "Your existing access is preserved. You do not need to purchase it again.",
+    "renewalAndChanges": "Renewal and changes",
     "source": "Access source: {provider}",
     "history": "Apple purchases",
     "historyEmpty": "This organization has no Apple purchases yet.",
