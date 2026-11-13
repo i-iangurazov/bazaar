@@ -38,6 +38,7 @@ describe("privacy matches subscription, AI and real seller processing", () => {
         "security",
         "sharing",
         "payments",
+        "appleRefunds",
         "ai",
         "marketing",
         "retention",
@@ -54,6 +55,7 @@ describe("privacy matches subscription, AI and real seller processing", () => {
       expect(root.textContent).toContain("+996 709 911 300");
       expect(root.textContent).not.toMatch(/\b\d{14,16}\b|placeholder/i);
       expect(root.querySelector('a[href="/help"]')).not.toBeNull();
+      expect(root.querySelector('#apple-refund-data')?.textContent).toContain(copy.appleRefundsBody);
       const account = { ru, kg, en }[locale].accountPrivacy;
       for (const key of ["aiTitle", "aiChoice", "deleteTitle", "deleteSummary", "retention", "appleWarning"] as const)
         expect(root.textContent).toContain(account[key]);

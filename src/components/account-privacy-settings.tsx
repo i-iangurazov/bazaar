@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { isIOS } from "@/lib/native/platform";
 import { AiPrivacyConsent } from "./ai-privacy-consent";
+import { AppleConsumptionRevocations } from "./billing/apple-consumption-consent";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -69,6 +70,7 @@ export function AccountPrivacySettings() {
     <CardHeader><CardTitle>{t("title")}</CardTitle></CardHeader>
     <CardContent className="space-y-6">
       <AiPrivacyConsent showStatus />
+      <AppleConsumptionRevocations />
       <div className="space-y-3">
         <h3 className="font-semibold">{t("deleteTitle")}</h3>
         <p className="text-sm leading-6 text-muted-foreground">{t("deleteSummary")}</p>

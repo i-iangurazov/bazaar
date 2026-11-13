@@ -21,6 +21,7 @@ const sections = [
   "security",
   "sharing",
   "payments",
+  "appleRefunds",
   "ai",
   "marketing",
   "retention",
@@ -48,7 +49,7 @@ const PrivacyPage = async () => {
 
         <div className="mt-12 space-y-9">
           {sections.map((section) => (
-            <section key={section}>
+            <section key={section} id={section === "appleRefunds" ? "apple-refund-data" : undefined}>
               <h2 className="text-xl font-semibold text-foreground">{t(`${section}Title`)}</h2>
               <p className="mt-2 leading-7 text-muted-foreground">{t(`${section}Body`)}</p>
             </section>

@@ -13,6 +13,7 @@ import { SubscriptionPayments } from "@/components/billing/subscription-payments
 const mock = vi.hoisted(() => ({
   platform: "ios",
   nativeReady: true,
+  session: { user: { id: "synthetic-buyer", organizationId: "synthetic-organization", role: "ADMIN" } },
   data: {} as Record<string, unknown>,
   products: vi.fn(),
   storefront: vi.fn(),
@@ -27,6 +28,7 @@ const mock = vi.hoisted(() => ({
   confirm: vi.fn(),
   restoreBatch: vi.fn(),
   cancel: vi.fn(),
+  consumptionConsent: vi.fn(),
   purchase: vi.fn(),
   finish: vi.fn(),
   restore: vi.fn(),
@@ -38,6 +40,7 @@ const mock = vi.hoisted(() => ({
   updated: vi.fn(),
   webGet: vi.fn(),
 }));
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: mock.session, status: "authenticated" }) }));
 vi.mock("@/lib/native/platform", () => ({ getNativePlatform: () => mock.platform }));
 vi.mock("@/lib/native/appleBilling", () => ({
   isAppleBillingAvailable: () => mock.nativeReady,
@@ -89,6 +92,7 @@ vi.mock("@/lib/trpc", () => ({
         confirm: { useMutation: () => ({ mutateAsync: mock.confirm }) },
         restore: { useMutation: () => ({ mutateAsync: mock.restoreBatch }) },
         cancelIntent: { useMutation: () => ({ mutateAsync: mock.cancel }) },
+        consumptionConsent: { useMutation: () => ({ mutateAsync: mock.consumptionConsent }) },
       },
       payments: { get: { useQuery: mock.webGet } },
     },
@@ -243,6 +247,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.platform = "ios";
   mock.nativeReady = true;
+  mock.session = { user: { id: "synthetic-buyer", organizationId: "synthetic-organization", role: "ADMIN" } };
   mock.data = fixture();
   mock.temporaryData = temporaryCatalogFixture();
   mock.temporaryError = null;
@@ -928,5 +933,27 @@ describe("iOS Apple checkout and recovery", () => {
     await screen.findByText(ru.billingApple.refundSubmitted);
     expect(mock.refund).toHaveBeenCalledWith("paid-receipt");
     expect(mock.confirm).not.toHaveBeenCalled();
+  });
+
+  it("keeps requesting a refund independent from a pending consent withdrawal", async () => {
+    const data = fixture();
+    data.recentTransactions = [{ transactionId: "9007199254740993001", priceMillis: "9990", currency: "USD", status: "GRANTED",
+      purchaseDate: "2026-11-11T00:00:00Z", expiresDate: null, environment: "Sandbox", refundable: true,
+      consumptionConsent: { viewerUserId: "synthetic-buyer", availableToViewer: true, policyVersion: "2026-11-13-v1",
+        canManage: true, canRevoke: true, consented: true, valid: true, grantedAt: "2026-11-13T12:00:00Z", revokedAt: null,
+        deliveryStatus: "DELIVERED", sampleContentProvided: false, invalidReason: null, responseStatus: null, lastIssue: null } }];
+    mock.data = data;
+    mock.consumptionConsent.mockReturnValue(new Promise(() => {}));
+    const { container } = mount();
+    (container.querySelector("[data-apple-history]") as HTMLDetailsElement).open = true;
+    fireEvent.click(screen.getByRole("button", { name: ru.appleConsumption.revoke }));
+    expect(mock.consumptionConsent.mock.calls[0][0]).toMatchObject({ consented: false, transactionId: "9007199254740993001" });
+    const refund = screen.getByRole("button", { name: ru.billingApple.refund }) as HTMLButtonElement;
+    await waitFor(() => expect(refund.disabled).toBe(false));
+    fireEvent.click(refund);
+    await screen.findByText(ru.billingApple.refundSubmitted);
+    expect(mock.refund).toHaveBeenCalledWith("9007199254740993001");
+    expect(screen.queryByText(ru.appleConsumption.withdrawn)).toBeNull();
+    expect(mock.purchase).not.toHaveBeenCalled();
   });
 });

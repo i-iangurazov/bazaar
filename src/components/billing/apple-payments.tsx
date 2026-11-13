@@ -22,6 +22,7 @@ import {
   type AppleStorefront,
 } from "@/lib/native/appleBilling";
 import { AppleTemporaryUpgradeDetails, AppleTemporaryUpgradeHistory } from "@/components/billing/apple-temporary-upgrade";
+import { AppleConsumptionConsent } from "@/components/billing/apple-consumption-consent";
 import { QueryErrorState } from "@/components/query-error-state";
 import { RestoreIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
@@ -793,7 +794,7 @@ export function ApplePayments({
                       key={transaction.transactionId}
                       className="flex items-start justify-between gap-3 py-3 text-sm"
                     >
-                      <div className="space-y-1">
+                      <div className="min-w-0 flex-1 space-y-1">
                         <p>
                           {t("paidAmount", {
                             amount:
@@ -815,6 +816,15 @@ export function ApplePayments({
                         {transaction.environment === "Sandbox" ? (
                           <Badge variant="warning">{t("sandbox")}</Badge>
                         ) : null}
+                        <AppleConsumptionConsent
+                          key={`${catalog.data.organization.id}:${transaction.environment}:${transaction.transactionId}`}
+                          organizationId={catalog.data.organization.id}
+                          organizationName={catalog.data.organization.name}
+                          transactionId={transaction.transactionId}
+                          environment={transaction.environment}
+                          state={transaction.consumptionConsent}
+                          onUpdated={() => catalog.refetch()}
+                        />
                       </div>
                       {transaction.refundable ? (
                         <IconButton
