@@ -175,6 +175,7 @@ const temporaryQuoteFixture = (input: TemporaryRequest) => ({
     provider: "GOPAY", startsAt: "2026-11-01T00:00:00Z", endsAt: "2027-05-01T00:00:00Z" },
   timing: { startsAt: "2026-11-11T00:00:00Z", endsAt: "2027-05-01T00:00:00Z", validUntil: "2027-01-01T00:00:00Z" },
   priceConstraint: { storefrontId: "123456", currency: "USD", priceMillis: "2990" },
+  minimumChargeApplied: false,
   serviceValue: { currency: "KGS", incrementalMinor: 20_000, chargedServiceMinor: 19_000, ownerDiscountMinor: 1000 },
   currentTermOnly: true, futureCoverageUnchanged: true, parentDependent: true,
 });
@@ -384,6 +385,58 @@ describe("iOS Apple checkout and recovery", () => {
     expect(mock.purchase).toHaveBeenCalledWith("native-authorized-intent");
     expect(mock.webGet).not.toHaveBeenCalled();
     await screen.findByText(messages[locale].billingApple.temporaryRecorded);
+  });
+
+  it.each(["ru", "kg", "en"] as const)("discloses the exact minimum price before consent and the OS purchase in %s", async (locale) => {
+    configureTemporary();
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => ({ ...temporaryQuoteFixture(input), minimumChargeApplied: true,
+      serviceValue: { currency: "KGS", incrementalMinor: 1, chargedServiceMinor: 26910, ownerDiscountMinor: 0, minimumChargeAdjustmentMinor: 26909 } }));
+    const { container } = mount(locale);
+    await chooseTemporary(locale);
+    const text = messages[locale].billingApple.temporaryMinimumCharge.replace("{price}", temporaryProduct.displayPrice);
+    expect(container.querySelector("[data-apple-minimum-charge]")?.textContent).toBe(text);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+    const dialog = await openTemporaryConsent();
+    expect(dialog.getByText(text)).toBeTruthy();
+    expect(dialog.getByText(messages[locale].billingApple.temporaryPreserved)).toBeTruthy();
+    expect(mock.purchase).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole("button", { name: messages[locale].billingApple.confirmPurchase }));
+    await screen.findByText(messages[locale].billingApple.temporaryRecorded);
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+    expect(mock.webGet).not.toHaveBeenCalled();
+  });
+
+  it("keeps Apple's localized minimum display price verbatim in details and consent", async () => {
+    configureTemporary();
+    const localizedPrice = "2,99 $";
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => ({ ...temporaryQuoteFixture(input), minimumChargeApplied: true }));
+    mock.products.mockImplementation(async (ids: string[]) => ({ products: [product, { ...temporaryProduct, displayPrice: localizedPrice }]
+      .filter((entry) => ids.includes(entry.id)), missingProductIds: [] }));
+    const { container } = mount();
+    await screen.findByRole("combobox", { name: ru.billingApple.action });
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await choose(ru.billingApple.plan, ru.billing.plans.business.name);
+    await waitFor(() => expect(container.querySelector("[data-apple-price]")?.textContent).toContain(localizedPrice));
+    const expected = ru.billingApple.temporaryMinimumCharge.replace("{price}", localizedPrice);
+    expect(container.querySelector("[data-apple-minimum-charge]")?.textContent).toBe(expected);
+    fireEvent.click(screen.getByRole("button", { name: /2,99\s+\$/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector("[data-apple-minimum-charge]")?.textContent).toBe(expected);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
+  it("does not offer a minimum payment when exact native metadata is missing", async () => {
+    configureTemporary();
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => ({ ...temporaryQuoteFixture(input), minimumChargeApplied: true }));
+    mock.products.mockResolvedValue({ products: [], missingProductIds: [temporaryProduct.id] });
+    const { container } = mount();
+    await screen.findByRole("combobox", { name: ru.billingApple.action });
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await choose(ru.billingApple.plan, ru.billing.plans.business.name);
+    await screen.findByText(ru.billingApple.priceUnavailable);
+    expect(container.querySelector("[data-apple-minimum-charge]")).toBeNull();
+    expect((screen.getByRole("button", { name: ru.billingApple.buy.replace("{price}", "—") }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
   });
 
   it("preserves selected paid additions when the temporary target plan changes", async () => {

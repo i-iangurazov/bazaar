@@ -9059,6 +9059,7 @@
     "temporaryPreserved": "This purchase does not extend the term. Existing paid access and later prepaid periods are preserved.",
     "temporaryDependency": "The upgrade works while its original paid access remains valid.",
     "temporaryPriceTerms": "The App Store confirms the final price and currency. This purchase covers only the stated upgrade and period.",
+    "temporaryMinimumCharge": "The calculated top-up is below this upgrade’s minimum App Store price. You pay {price}. The paid term is not extended and used limits do not reset.",
     "temporaryTerms": "A one-time temporary upgrade without automatic renewal.",
     "temporaryMarketUnavailable": "Temporary upgrades are not available for this App Store region and currency.",
     "temporaryQuoteExpired": "This offer has expired. Refresh it and review the conditions before confirming.",

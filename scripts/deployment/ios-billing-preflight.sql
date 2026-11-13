@@ -13,6 +13,7 @@ DECLARE
   base_missing INTEGER := 0; privacy_present INTEGER := 0; lifecycle_present INTEGER := 0; attempt_present INTEGER := 0; temporary_present INTEGER := 0; deferred_present INTEGER := 0;
   privacy_expected INTEGER := 14; lifecycle_expected INTEGER := 3;
   privacy_applied BIGINT := 0; lifecycle_applied BIGINT := 0; attempt_applied BIGINT := 0; temporary_applied BIGINT := 0; deferred_applied BIGINT := 0; utc_applied BIGINT := 0; consumption_applied BIGINT := 0; consumption_present INTEGER := 0; prerequisite_applied BIGINT := 0;
+  minimum_applied BIGINT := 0; minimum_present INTEGER := 0;
   unfinished BIGINT := 0; bad_checksum BIGINT := 0;
   structural_issues INTEGER := 0; relation_name TEXT; column_name TEXT;
 BEGIN
@@ -48,6 +49,9 @@ BEGIN
   FOREACH relation_name IN ARRAY ARRAY['AppleConsumptionConsent','AppleConsumptionConsentEvent','AppleConsumptionRequest'] LOOP
     IF to_regclass(format('public.%I',relation_name)) IS NOT NULL THEN consumption_present := consumption_present + 1; END IF;
   END LOOP;
+  IF to_regprocedure('public."appleTemporaryMinimumChargeValid"(jsonb)') IS NOT NULL THEN minimum_present := minimum_present+1; END IF;
+  IF to_regprocedure('public."validateAppleTemporaryMinimumCharge"()') IS NOT NULL THEN minimum_present := minimum_present+1; END IF;
+  IF EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='ApplePurchaseIntent_temporary_minimum_guard' AND tgrelid=to_regclass('public."ApplePurchaseIntent"') AND NOT tgisinternal) THEN minimum_present := minimum_present+1; END IF;
   stage := CASE WHEN base_missing>0 THEN 'UNBASELINED'
     WHEN privacy_present=0 AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 AND deferred_present=0 THEN 'PRE_APPLE'
     WHEN privacy_present=privacy_expected AND lifecycle_present=0 AND attempt_present=0 AND temporary_present=0 AND deferred_present=0 THEN 'POST_PRIVACY'
@@ -65,6 +69,7 @@ BEGIN
       count(*) FILTER(WHERE migration_name='20261111160000_apple_deferred_outcomes' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111170000_apple_completion_utc_clock' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261113120000_apple_consumption_information' AND finished_at IS NOT NULL),
+      count(*) FILTER(WHERE migration_name='20261113130000_apple_temporary_minimum_charge' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE migration_name='20261111020000_manual_subscription_refunds' AND finished_at IS NOT NULL),
       count(*) FILTER(WHERE finished_at IS NULL),
       count(*) FILTER(WHERE finished_at IS NOT NULL AND (
@@ -75,12 +80,16 @@ BEGIN
         (migration_name='20261111160000_apple_deferred_outcomes' AND checksum<>'66437a9da6224b1cfcc3a3c7d4ddc3be695119c7a00547a1256fa76f7c14201e') OR
         (migration_name='20261111170000_apple_completion_utc_clock' AND checksum<>'5b2bdce206b878ba9c616fbaf661c2c585acf81384de54ce2da334fd6f41016e') OR
         (migration_name='20261113120000_apple_consumption_information' AND checksum<>'adc1b13b7c9b3c673662a25577ee8b13e6f9fd33f3e115ad2b3d0ed0a8e4c34a') OR
+        (migration_name='20261113130000_apple_temporary_minimum_charge' AND checksum<>'c928c60955d3f34b0a4c919bd40ffa59cc9fec60e3c685e6434ac8585c18b323') OR
         (migration_name='20261111020000_manual_subscription_refunds' AND checksum<>'800cd487fb2d4b0ecd5501e5edc7182c4a06b851f68b0b02c18e40d795370b87')))
-      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,temporary_applied,deferred_applied,utc_applied,consumption_applied,prerequisite_applied,unfinished,bad_checksum;
+      FROM public._prisma_migrations WHERE rolled_back_at IS NULL$history$ INTO privacy_applied,lifecycle_applied,attempt_applied,temporary_applied,deferred_applied,utc_applied,consumption_applied,minimum_applied,prerequisite_applied,unfinished,bad_checksum;
   ELSE structural_issues := structural_issues + 1;
   END IF;
   IF utc_applied>0 AND stage='POST_DEFERRED_OUTCOMES' THEN stage := 'POST_COMPLETION_UTC'; END IF;
   IF consumption_applied=1 AND consumption_present=3 AND stage='POST_COMPLETION_UTC' THEN stage := 'POST_CONSUMPTION'; END IF;
+  IF minimum_applied=1 AND minimum_present=3 AND stage='POST_CONSUMPTION' THEN stage := 'POST_TEMPORARY_MINIMUM'; END IF;
+  IF minimum_applied>1 OR (minimum_applied>0 AND consumption_applied<>1) OR (minimum_applied=0 AND minimum_present>0) OR
+    (minimum_applied>0 AND minimum_present<>3) THEN structural_issues := structural_issues+1; END IF;
   IF consumption_applied>1 OR (consumption_applied>0 AND utc_applied=0) OR
     (consumption_applied=0 AND consumption_present>0) OR (consumption_applied>0 AND consumption_present<>3) THEN structural_issues := structural_issues+1; END IF;
   IF privacy_applied>1 OR lifecycle_applied>1 OR attempt_applied>1 OR temporary_applied>1 OR deferred_applied>1 OR utc_applied>1 OR (lifecycle_applied>0 AND privacy_applied=0) OR (attempt_applied>0 AND lifecycle_applied=0) OR (temporary_applied>0 AND attempt_applied=0) OR (deferred_applied>0 AND temporary_applied=0) OR (utc_applied>0 AND deferred_applied=0) THEN structural_issues := structural_issues + 1; END IF;
@@ -91,7 +100,7 @@ BEGIN
      (deferred_applied=0 AND deferred_present>0) OR (deferred_applied>0 AND deferred_present<>5) OR
      (utc_applied>0 AND deferred_present<>5) OR stage='PARTIAL' THEN structural_issues := structural_issues + 1; END IF;
   checks := checks || jsonb_build_array(
-    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied+temporary_applied+deferred_applied+utc_applied+consumption_applied,'skipped',false),
+    jsonb_build_object('name','apple_migrations_applied','severity','info','count',privacy_applied+lifecycle_applied+attempt_applied+temporary_applied+deferred_applied+utc_applied+consumption_applied+minimum_applied,'skipped',false),
     jsonb_build_object('name','manual_refund_prerequisite_missing','severity','blocker','count',CASE WHEN prerequisite_applied=1 THEN 0 ELSE 1 END,'skipped',false),
     jsonb_build_object('name','unfinished_migrations','severity','blocker','count',unfinished,'skipped',false),
     jsonb_build_object('name','reviewed_migration_checksum_mismatches','severity','blocker','count',bad_checksum,'skipped',false),
@@ -978,11 +987,33 @@ BEGIN
     ],
     "sql": "SELECT count(*) FROM (VALUES ('AppleConsumptionConsent_protect','4cf2218f4336cbad01118f5839dce06e'),('AppleConsumptionRequest_protect','edf58ccd1a7a6d342a34e81d8f09bc8c'),('AppleConsumptionConsentEvent_protect','cbe2b65974ece5836fdc43e227a33769'),('AppleConsumptionConsent_require_audit','54351ca0fc9817f5a0a196a27b2fee25')) expected(name,digest) LEFT JOIN pg_trigger t ON t.tgname=expected.name AND NOT t.tgisinternal AND t.tgrelid IN ('public.\"AppleConsumptionConsent\"'::regclass,'public.\"AppleConsumptionConsentEvent\"'::regclass,'public.\"AppleConsumptionRequest\"'::regclass) WHERE t.oid IS NULL OR md5(pg_get_triggerdef(t.oid,true)) IS DISTINCT FROM expected.digest"
   }
+  ,{
+    "name": "temporary_minimum_function_bodies_changed",
+    "severity": "blocker",
+    "afterMinimum": true,
+    "requires": [],
+    "sql": "SELECT count(*) FROM (VALUES ('public.\"appleTemporaryMinimumChargeValid\"(jsonb)','fc593a4b362f744113f28d4235439ab8','i'),('public.\"validateAppleTemporaryMinimumCharge\"()','f2ea8d4221bb86a573579f95b2035f00','v')) expected(signature,digest,volatility) LEFT JOIN pg_proc p ON p.oid=to_regprocedure(expected.signature) WHERE p.oid IS NULL OR md5(p.prosrc) IS DISTINCT FROM expected.digest OR p.provolatile::text IS DISTINCT FROM expected.volatility OR p.prosecdef"
+  },
+  {
+    "name": "temporary_minimum_trigger_invalid",
+    "severity": "blocker",
+    "afterMinimum": true,
+    "requires": ["ApplePurchaseIntent"],
+    "sql": "SELECT count(*) FROM (VALUES ('ApplePurchaseIntent_temporary_minimum_guard')) expected(name) LEFT JOIN pg_trigger t ON t.tgname=expected.name AND t.tgrelid='public.\"ApplePurchaseIntent\"'::regclass AND NOT t.tgisinternal WHERE t.oid IS NULL OR t.tgfoid IS DISTINCT FROM to_regprocedure('public.\"validateAppleTemporaryMinimumCharge\"()') OR t.tgtype<>23 OR t.tgenabled<>'O' OR t.tgqual IS NOT NULL OR t.tgattr::text<>''"
+  },
+  {
+    "name": "temporary_minimum_quote_invalid",
+    "severity": "blocker",
+    "afterMinimum": true,
+    "requires": ["ApplePurchaseIntent.purchaseAppAccountToken"],
+    "sql": "SELECT count(*) FROM public.\"ApplePurchaseIntent\" i WHERE NOT public.\"appleTemporaryMinimumChargeValid\"(i.\"purchaseSnapshot\") OR (i.\"purchaseSnapshot\"->'appleTemporaryUpgrade' ? 'minimumCharge') AND (i.scope<>'SUBSCRIPTION' OR i.action<>'CHANGE' OR i.\"productType\"<>'NON_RENEWING' OR i.\"purchaseAppAccountToken\" IS NULL)"
+  }
 ]
 $checks$::jsonb)
   LOOP
     -- Older reviewed stages retain their existing report/check set. A partial
     -- 144 schema still executes these checks and blocks instead of hiding it.
+    IF spec->>'afterMinimum'='true' AND minimum_present=0 AND minimum_applied=0 THEN CONTINUE; END IF;
     IF spec->>'afterConsumption'='true' AND consumption_present=0 AND consumption_applied=0 THEN CONTINUE; END IF;
     IF spec->>'afterDeferred'='true' AND deferred_present=0 AND deferred_applied=0 THEN CONTINUE; END IF;
     missing := false;

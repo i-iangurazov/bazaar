@@ -58,7 +58,7 @@ const counts = async () => ({ periods: await prisma.subscriptionPeriod.count(), 
 const audit = () => {
   const connection = new URL(process.env.DATABASE_URL!);
   const args = ["--url-env", "EXPLICIT_OWNED_CONSUMPTION_AUDIT_URL", "--expect-host", connection.hostname, "--expect-port", connection.port || "5432",
-    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_CONSUMPTION"];
+    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_MINIMUM"];
   if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
   return runIosBillingPreflight(parsePreflightTarget(args, { EXPLICIT_OWNED_CONSUMPTION_AUDIT_URL: process.env.DATABASE_URL }));
 };
@@ -232,7 +232,7 @@ describeDb("Apple Consumption Information V2 consent/tenant/recovery on PostgreS
     await processAppleConsumptionRequests({ sender }); await consent(f, { consented: false });
     const before = await prisma.appleConsumptionRequest.findUniqueOrThrow({ where: { id } });
     const result = await audit();
-    expect(result).toMatchObject({ ok: true, schemaStage: "POST_CONSUMPTION", blockerChecks: 0, skippedChecks: 0 });
+    expect(result).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_MINIMUM", blockerChecks: 0, skippedChecks: 0 });
     expect(result.checks.find(c => c.name === "consumption_request_rows_total")?.count).toBe(1);
     for (const check of result.checks.filter(c => c.name.startsWith("consumption_") && c.severity === "blocker")) expect(check.count).toBe(0);
     for (const privateValue of [f.org.id, f.actor.id, f.signed, id]) expect(JSON.stringify(result)).not.toContain(privateValue);

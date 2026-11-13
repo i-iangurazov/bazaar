@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
-import { selectTemporaryUpgradeBand, temporaryUpgradePolicy, temporaryUpgradePolicySchema } from "@/server/billing/appleTemporaryUpgradePolicy";
+import { selectTemporaryUpgradeBand, temporaryUpgradePolicy, temporaryUpgradePolicySchema, validTemporaryUpgradePricing } from "@/server/billing/appleTemporaryUpgradePolicy";
+import { purchaseSnapshotSchema, readPurchaseSnapshot } from "@/server/billing/purchaseSnapshot";
 
 const now = new Date("2026-11-12T12:00:00Z");
 const price = (priceMillis: number) => ({ storefrontId: "143441", currency: "USD", priceMillis,
@@ -35,6 +36,63 @@ describe("explicitly approved temporary-upgrade price bands", () => {
   it("enforces both the absolute and relative owner-discount limits", () => {
     expect(() => selectTemporaryUpgradeBand({ ...policy(), maxDiscountMinor: 5089 }, 50000, "143441", "USD")).toThrow("appleTemporaryUpgradeDiscountUnavailable");
     expect(() => selectTemporaryUpgradeBand({ ...policy(), maxDiscountBps: 1000 }, 50000, "143441", "USD")).toThrow("appleTemporaryUpgradeDiscountUnavailable");
+  });
+  it("charges the configured market minimum only for an explicitly enabled positive below-floor quote", () => {
+    const p = policy(); p.minimumPolicy = "CHARGE_MINIMUM_FOR_POSITIVE";
+    p.bands.reverse(); p.maxDiscountMinor = 0; p.maxDiscountBps = 0;
+    const selected = selectTemporaryUpgradeBand(p, 1, "143441", "USD");
+    expect(selected.band.key).toBe("band-0"); expect(selected.price.priceMillis).toBe(2990);
+    expect(selected.chargedServiceMinor).toBe(26910); expect(selected.ownerDiscountMinor).toBe(0);
+    expect(selected.minimumCharge).toEqual({ serviceAdjustmentMinor: 26909 });
+    for (const amount of [0, -1, 0.1, Number.MAX_SAFE_INTEGER + 1])
+      expect(() => selectTemporaryUpgradeBand(p, amount, "143441", "USD")).toThrow("billingNoPaidChange");
+    expect(() => selectTemporaryUpgradeBand(p, 1, "143442", "USD")).toThrow("appleTemporaryUpgradeMarketUnavailable");
+    expect(selectTemporaryUpgradeBand(p, 26910, "143441", "USD").minimumCharge).toBeUndefined();
+    expect(() => selectTemporaryUpgradeBand(p, 50000, "143441", "USD")).toThrow("appleTemporaryUpgradeDiscountUnavailable");
+  });
+  it("uses the lowest actual price in its own currency rather than a hardcoded dollar floor", () => {
+    const p = policy(); p.minimumPolicy = "CHARGE_MINIMUM_FOR_POSITIVE";
+    p.bands.push({ key: "euro-minimum", productId: "synthetic.euro", prices: [{ ...price(1090), storefrontId: "143442", currency: "EUR" }] });
+    const result = selectTemporaryUpgradeBand(p, 2, "143442", "EUR");
+    expect(result.price).toMatchObject({ priceMillis: 1090, currency: "EUR", storefrontId: "143442" });
+    expect(result.minimumCharge?.serviceAdjustmentMinor).toBe(9808);
+  });
+  it("binds minimum accounting to its exact positive quote while keeping old discounted snapshots readable", () => {
+    const p = policy(); p.minimumPolicy = "CHARGE_MINIMUM_FOR_POSITIVE";
+    const selected = selectTemporaryUpgradeBand(p, 1, "143441", "USD");
+    const context = { version: 1 as const, policyVersion: p.version, policyDigest: "a".repeat(64), sourceFingerprint: "b".repeat(64),
+      bandKey: selected.band.key, productId: selected.band.productId, price: selected.price, chargedServiceMinor: selected.chargedServiceMinor,
+      ownerDiscountMinor: 0, minimumCharge: selected.minimumCharge };
+    expect(validTemporaryUpgradePricing(1, context)).toBe(true);
+    expect(validTemporaryUpgradePricing(0, context)).toBe(false);
+    expect(validTemporaryUpgradePricing(1, { ...context, minimumCharge: undefined })).toBe(false);
+    expect(validTemporaryUpgradePricing(1, { ...context, ownerDiscountMinor: 1 })).toBe(false);
+    const snapshot = { version: 1, catalogVersion: "2026-11", kind: "UPGRADE", plan: "BUSINESS", months: 1,
+      extras: { stores: 0, productPacks: 0, userPacks: 0 }, monthlyMinor: 350000, discountBps: 0, fullAmountMinor: 350000,
+      amountMinor: 1, serviceValueMinor: 2, creditMinor: 1, organizationId: "synthetic", expectedPlan: "STARTER", expectedPeriodEnd: null,
+      sourcePeriodId: "synthetic-base", startsAt: now.toISOString(), endsAt: p.validUntil, cycleStartsAt: now.toISOString(),
+      cycleEndsAt: p.validUntil, anchorDay: 12, issuedAt: now.toISOString(), expiresAt: p.validUntil, appleTemporaryUpgrade: context };
+    expect(purchaseSnapshotSchema.safeParse(snapshot).success).toBe(true);
+    expect(purchaseSnapshotSchema.safeParse({ ...snapshot, amountMinor: 0 }).success).toBe(false);
+    expect(purchaseSnapshotSchema.safeParse({ ...snapshot, appleTemporaryUpgrade: { ...context, minimumCharge: { serviceAdjustmentMinor: 1 } } }).success).toBe(false);
+    const dirtyContexts = [
+      ...[0, -1, 0.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Infinity].flatMap((value) => [
+        { ...context, price: { ...context.price, serviceMinorPerUnitDenominator: value } },
+        { ...context, price: { ...context.price, serviceMinorPerUnitNumerator: value } },
+        { ...context, price: { ...context.price, priceMillis: value } },
+      ]),
+      { ...context, chargedServiceMinor: 1.5 }, { ...context, ownerDiscountMinor: 1.5 },
+      { ...context, minimumCharge: { serviceAdjustmentMinor: 0.5 } },
+    ];
+    for (const dirty of dirtyContexts) {
+      const invalid = { ...snapshot, appleTemporaryUpgrade: dirty };
+      expect(() => purchaseSnapshotSchema.safeParse(invalid)).not.toThrow();
+      expect(purchaseSnapshotSchema.safeParse(invalid).success).toBe(false);
+      expect(() => readPurchaseSnapshot(invalid)).toThrow("billingPaymentNeedsReview");
+    }
+    const old = selectTemporaryUpgradeBand(policy(), 50000, "143441", "USD");
+    expect(purchaseSnapshotSchema.safeParse({ ...snapshot, amountMinor: 50000, appleTemporaryUpgrade: { ...context,
+      price: old.price, chargedServiceMinor: old.chargedServiceMinor, ownerDiscountMinor: old.ownerDiscountMinor, minimumCharge: undefined } }).success).toBe(true);
   });
   it("uses exact rational arithmetic and rounds valuation conservatively at subminor boundaries", () => {
     const p = policy(); p.bands = [{ key: "fraction", productId: "synthetic.fraction", prices: [{ ...price(1001), serviceMinorPerUnitNumerator: 1, serviceMinorPerUnitDenominator: 3 }] }];

@@ -12,7 +12,7 @@ export const temporaryUpgradePriceSchema = z.object({
 export const temporaryUpgradePolicySchema = z.object({
   version: z.string().min(1).max(80), termsVersion: z.literal(LEGAL_TERMS_VERSION), approved: z.literal(true),
   validUntil: z.string().datetime(), rounding: z.literal("DOWN_WITH_OWNER_DISCOUNT"),
-  zeroPolicy: z.literal("BLOCK"), minimumPolicy: z.literal("BLOCK"),
+  zeroPolicy: z.literal("BLOCK"), minimumPolicy: z.enum(["BLOCK", "CHARGE_MINIMUM_FOR_POSITIVE"]),
   maxDiscountMinor: z.number().int().nonnegative().max(2_147_483_647), maxDiscountBps: z.number().int().min(0).max(10_000),
   bands: z.array(z.object({ key: z.string().regex(/^[a-zA-Z0-9._-]{1,80}$/), productId: z.string().regex(/^[A-Za-z0-9._-]{1,100}$/),
     prices: z.array(temporaryUpgradePriceSchema).min(1).max(200) }).strict()).min(1).max(2000),
@@ -32,11 +32,37 @@ export type TemporaryUpgradePolicy = z.infer<typeof temporaryUpgradePolicySchema
 export const temporaryUpgradeContextSchema = z.object({
   version: z.literal(1), policyVersion: z.string().min(1).max(80), policyDigest: z.string().regex(/^[a-f0-9]{64}$/),
   sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/), bandKey: z.string().min(1).max(80), productId: z.string().min(1).max(100),
-  price: temporaryUpgradePriceSchema, chargedServiceMinor: z.number().int().positive(), ownerDiscountMinor: z.number().int().nonnegative(),
+  price: temporaryUpgradePriceSchema, chargedServiceMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  ownerDiscountMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  // A service-valuation difference, never a customer balance or extra entitlement.
+  minimumCharge: z.object({ serviceAdjustmentMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }).strict().optional(),
   usageContext: z.object({ version: z.literal(1), origin: z.string().datetime(), anchorDay: z.number().int().min(1).max(31),
     paidEnd: z.string().datetime().nullable(), trialOrigin: z.string().datetime() }).strict().optional(),
 }).strict();
 export type TemporaryUpgradeContext = z.infer<typeof temporaryUpgradeContextSchema>;
+
+const positiveSafeInteger = (value: number, maximum = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value > 0 && value <= maximum;
+
+export function temporaryUpgradeServiceMinor(price: z.infer<typeof temporaryUpgradePriceSchema>) {
+  // Zod refinements can receive dirty numbers after an earlier bounds failure.
+  // Validate every operand before BigInt conversion or division.
+  if (!price || !positiveSafeInteger(price.priceMillis) || !positiveSafeInteger(price.serviceMinorPerUnitNumerator, 1_000_000_000) ||
+    !positiveSafeInteger(price.serviceMinorPerUnitDenominator, 1_000_000_000)) return null;
+  const denominator = 1000n * BigInt(price.serviceMinorPerUnitDenominator);
+  const value = (BigInt(price.priceMillis) * BigInt(price.serviceMinorPerUnitNumerator) + denominator - 1n) / denominator;
+  return value > 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null;
+}
+
+export function validTemporaryUpgradePricing(amountMinor: number, context: TemporaryUpgradeContext) {
+  if (!positiveSafeInteger(amountMinor, 2_147_483_647) || !context || !positiveSafeInteger(context.chargedServiceMinor) ||
+    !Number.isSafeInteger(context.ownerDiscountMinor) || context.ownerDiscountMinor < 0 ||
+    temporaryUpgradeServiceMinor(context.price) !== context.chargedServiceMinor) return false;
+  if (context.minimumCharge !== undefined && (!context.minimumCharge || !positiveSafeInteger(context.minimumCharge.serviceAdjustmentMinor))) return false;
+  const due = BigInt(amountMinor), charged = BigInt(context.chargedServiceMinor), discount = BigInt(context.ownerDiscountMinor);
+  return context.minimumCharge
+    ? discount === 0n && charged > due && charged - due === BigInt(context.minimumCharge.serviceAdjustmentMinor)
+    : charged + discount === due;
+}
 
 export function temporaryUpgradePolicy(env: Record<string, string | undefined> = process.env, now = new Date()) {
   const parsed = temporaryUpgradePolicySchema.safeParse((() => { try { return JSON.parse(env.APPLE_BILLING_TEMPORARY_UPGRADES_JSON ?? "null"); } catch { return null; } })());
@@ -48,16 +74,19 @@ export function selectTemporaryUpgradeBand(policy: TemporaryUpgradePolicy, dueMi
   if (!Number.isSafeInteger(dueMinor) || dueMinor <= 0) throw new AppError("billingNoPaidChange", "CONFLICT", 409);
   if (!policy.bands.some((band) => band.prices.some((price) => price.storefrontId === storefrontId && price.currency === currency)))
     throw new AppError("appleTemporaryUpgradeMarketUnavailable", "CONFLICT", 409);
-  const candidates = policy.bands.flatMap((band) => band.prices.filter((price) => price.storefrontId === storefrontId && price.currency === currency).map((price) => {
-    const denominator = 1000n * BigInt(price.serviceMinorPerUnitDenominator);
-    const value = (BigInt(price.priceMillis) * BigInt(price.serviceMinorPerUnitNumerator) + denominator - 1n) / denominator;
-    return { band, price, chargedServiceMinor: Number(value) };
-  })).filter((entry) => Number.isSafeInteger(entry.chargedServiceMinor) && entry.chargedServiceMinor > 0 && entry.chargedServiceMinor <= dueMinor)
+  const market = policy.bands.flatMap((band) => band.prices.filter((price) => price.storefrontId === storefrontId && price.currency === currency).flatMap((price) => {
+    const chargedServiceMinor = temporaryUpgradeServiceMinor(price);
+    return chargedServiceMinor === null ? [] : [{ band, price, chargedServiceMinor }];
+  }));
+  const floor = [...market].sort((a, b) => a.price.priceMillis - b.price.priceMillis || a.band.key.localeCompare(b.band.key))[0];
+  if (floor && dueMinor < floor.chargedServiceMinor && policy.minimumPolicy === "CHARGE_MINIMUM_FOR_POSITIVE")
+    return { ...floor, ownerDiscountMinor: 0, minimumCharge: { serviceAdjustmentMinor: floor.chargedServiceMinor - dueMinor } };
+  const candidates = market.filter((entry) => entry.chargedServiceMinor <= dueMinor)
     .sort((a, b) => b.chargedServiceMinor - a.chargedServiceMinor || a.band.key.localeCompare(b.band.key));
   const selected = candidates[0];
   if (!selected) throw new AppError("appleTemporaryUpgradeBelowMinimum", "CONFLICT", 409);
   const ownerDiscountMinor = dueMinor - selected.chargedServiceMinor;
   if (ownerDiscountMinor > policy.maxDiscountMinor || BigInt(ownerDiscountMinor) * 10_000n > BigInt(dueMinor) * BigInt(policy.maxDiscountBps))
     throw new AppError("appleTemporaryUpgradeDiscountUnavailable", "CONFLICT", 409);
-  return { ...selected, ownerDiscountMinor };
+  return { ...selected, ownerDiscountMinor, minimumCharge: undefined };
 }

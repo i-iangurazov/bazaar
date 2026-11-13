@@ -126,6 +126,14 @@ describe("explicit read-only iOS migration preflight", () => {
     expect(parsePreflightReport(report({ schemaStage: "POST_COMPLETION_UTC" }), "POST_COMPLETION_UTC").ok).toBe(true);
   });
 
+  it("recognizes minimum-charge guards separately without weakening the146 boundary", () => {
+    const parsed = parsePreflightTarget([...args, "--expect-stage", "POST_TEMPORARY_MINIMUM"], { EXPLICIT_AUDIT_URL: url });
+    expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_MINIMUM" }), parsed.expectedStage).ok).toBe(true);
+    expect(parsePreflightReport(report({ schemaStage: "POST_CONSUMPTION" }), parsed.expectedStage).ok).toBe(false);
+    expect(parsePreflightReport(report({ schemaStage: "POST_CONSUMPTION" }), "POST_CONSUMPTION").ok).toBe(true);
+    expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_MINIMUM" }), "POST_CONSUMPTION").ok).toBe(false);
+  });
+
   it("emits only approved report fields and rejects malformed counts or row-shaped output", () => {
     const parsed = parsePreflightReport(report({ extraCustomerData: "person@example.com", checks: [
       { name: "source_binding_invalid", severity: "blocker", count: 0, skipped: false, customerEmail: "person@example.com" },

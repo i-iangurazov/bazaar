@@ -715,7 +715,7 @@ export function ApplePayments({
               ) : null}
               {temporaryChange ? (
                 <div className="space-y-2" data-apple-temporary-checkout>
-                  {temporaryQuote ? <AppleTemporaryUpgradeDetails quote={temporaryQuote} /> : null}
+                  {temporaryQuote ? <AppleTemporaryUpgradeDetails quote={temporaryQuote} displayPrice={temporaryProductMatches ? product?.displayPrice : undefined} /> : null}
                   {temporaryCatalog.isError ? <QueryErrorState error={temporaryCatalog.error} onRetry={() => void temporaryCatalog.refetch()} /> : null}
                   {temporaryCatalog.data && !temporaryCatalog.data.ready ? (
                     <p role="status">{messageFor(new Error(temporaryCatalog.data.unavailableReason ?? "appleTemporaryUpgradePolicyUnavailable"))}</p>
@@ -881,7 +881,7 @@ export function ApplePayments({
                 })}
               </p>
             ) : null}
-            {temporaryQuote ? <AppleTemporaryUpgradeDetails quote={temporaryQuote} /> : null}
+            {temporaryQuote ? <AppleTemporaryUpgradeDetails quote={temporaryQuote} displayPrice={temporaryProductMatches ? product?.displayPrice : undefined} /> : null}
             <p className="text-sm">
               {temporaryChange ? t("temporaryTerms") : t(
                 product?.type === "AUTO_RENEWABLE"

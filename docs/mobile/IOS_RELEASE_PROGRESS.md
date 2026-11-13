@@ -25,8 +25,11 @@ role, real Apple purchases, or complete iPhone acceptance. See the
 The complete Apple-enabled candidate is still unfinished. On 13 November the
 original Chrome access was restored and the owner completed Apple login,
 accepted API access, and created separate catalog and purchase-server keys.
-Both private keys are held locally in protected storage outside Git; this does
-not establish their deployment into the server environment.
+Both private keys are held locally in protected storage outside Git. The purchase
+server key is now configured only in the isolated Preview deployment's runtime;
+project-level environment remains unchanged. The dedicated TestFlight alias now
+points to this verified deployment.
+Candidate verification below is separate from real purchase acceptance.
 
 Actual catalog registration is now complete for all 145 base/pack drafts:
 126 current configurations, nine legacy configurations and ten WhatsApp packs;
@@ -152,22 +155,53 @@ read-only audit remained clean. Its login is held in a separate owner-only local
 file; existing fixture credentials, environment and allowlists were unchanged.
 This prepares a test account, not payment success or permission for public sales.
 
-Actual temporary-upgrade band products/prices, remaining commercial decisions,
-protected server configuration and real Sandbox lifecycle checks remain open.
-The owner has now selected **the minimum supported Apple payment for a tiny
-positive upgrade**, with the original expiry unchanged. Implementing and checking
-that minimum-charge policy remains pending; the source `2af628f4` Preview does
-not establish it. Actual C-band products/prices and remaining upgrade terms are
-still unapproved, and sales remain off. No goodwill gift policy was selected.
+The owner's **minimum configured Apple payment for a tiny positive upgrade**,
+with the original expiry unchanged, is now implemented and locally verified;
+zero remains blocked. The focused unit/UI group passed 82 cases in three files.
+Real PostgreSQL checks passed 59 cases in four files plus 87 broader base-payment,
+refund and consumption cases in three files: 146 cases across seven files.
+Typecheck, lint and RU/KG/EN translation validation passed. The six RU/KG/EN ×
+portrait/landscape real-component fixture states passed with 12 screenshots,
+zero network requests/mutations and a closed browser; root additionally inspected
+three representative images. Its `2,99 $` price is synthetic, not StoreKit data.
+Independent review found no blockers at file-set digest `d6e1f581…cc76c2`.
+These later documentation changes alter that combined digest only; all 21
+reviewed application/SQL/test files still match their recorded hashes.
+
+Migration 147 (`c928c609…8b323`) was applied **only to owned localhost CI**.
+All 29 table snapshots, 54 existing functions, 1,581 existing triggers and all
+146 historical migration records were preserved. The actual read-only
+`POST_TEMPORARY_MINIMUM` audit passed all 98 checks without blockers, warnings
+or skips. Both PostgreSQL groups finished and the owned PostgreSQL/Redis were
+stopped with their data retained. A production-mode build of the C-minimum/147
+application has **not yet run**. Remote Preview still has schema 146; the
+TestFlight alias uses source `2af628f4` / `dpl_JDzD3en8tWGAuzxoPyMKx8RLac9a`.
+The quality record is private
+`.local/ios-release-20261111/C-minimum-final-quality.json`.
+
+A separate source-`2af628f4` Sandbox candidate,
+`dpl_JDzD3en8tWGAuzxoPyMKx8RLac9a`, is READY with one synthetic organization,
+one current Starter product and the new server key in runtime only. Its
+per-deployment settings leave the saved project environment unchanged. Candidate
+HTTP and independent read-only database checks passed; the dedicated alias was
+then moved to it and one normal C login/catalog check passed there. A's GoPay
+paid periods, future prepayment and usage were preserved; C sees exactly one
+Sandbox Starter offer and has no purchases or pending intents. This deployment
+does not contain migration 147 and no real Sandbox
+purchase has been completed. Actual C-band products/prices and remaining upgrade
+terms remain unapproved and disabled; the minimum-rule decision alone does not
+approve those commercial settings. No goodwill gift policy was selected.
 
 The last actual Simulator cutout/keyboard/focus recovery checks described in the
 page QA record used `44bf43c3`. They have not been rerun for Preview source
 `2af628f4` and must not be attributed to it.
-iPhone Mirroring connected and accepted bounded keyboard/toolbar actions, but
-this troubleshooting attempt never opened Bazaar and establishes no page or
-StoreKit result. No phone screenshots were saved as release evidence. The
-temporary Mirroring/TextEdit processes were stopped; remaining phone acceptance
-is still open.
+The latest physical TestFlight/Mirroring check passed the anonymous login
+screen, invite-only registration notice, empty-email validation and back
+navigation. Credentialed phone-login automation did not establish a successful
+login; the actual password contents in the phone field were not established.
+The same isolated fixture's normal HTTP login passed with status 200 and its
+expected organization. No authenticated phone working-page or StoreKit purchase
+result is claimed; the remaining physical acceptance stays open.
 Production/main, normal App Store Release, submission and publication still
 require their separate authorizations.
 
@@ -242,7 +276,7 @@ synthetic fixture, or browser screenshot is not a verified native release.
 | R04 | No duplicate sale for the same covered period or capabilities | Server purchase checks, organization locks, durable pending intents and concurrent DB tests | Implemented; isolated concurrency/recovery tests pass; actual Sandbox acceptance remains |
 | R05 | Safe provider switching and recovery | Tests for prepaid GoPay remainder, Apple renewal states, pending/stale payments, cancellation and out-of-app renewals | Open |
 | R06 | Purchases cannot move between organizations or unauthorized users | Tests for account/device changes, restore, several organizations, role changes and departing payers | Open |
-| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 base/pack drafts and 290 RU/en-GB localization bindings registered; 102 owner-approved 15%-scenario draft prices have OWN point/write/readback evidence. The 43 above USD 1000 remain unconfigured/unapproved; availability is unspecified, source catalog remains unapproved and sales off. Apple acknowledged the higher-price submission; approval is pending. The selected minimum-charge/original-expiry policy awaits implementation; actual upgrade-band prices and real Sandbox/device acceptance remain open |
+| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 base/pack drafts and 290 RU/en-GB localization bindings registered; 102 owner-approved 15%-scenario draft prices have OWN point/write/readback evidence. The 43 above USD 1000 remain unconfigured/unapproved; availability is unspecified, source catalog remains unapproved and sales off. Apple acknowledged the higher-price submission; approval is pending. The minimum-charge/original-expiry rule is implemented with 82 unit/UI and 146 real-PG cases plus a clean owned-CI post147 audit; its production-mode build, actual upgrade-band prices and real Sandbox/device acceptance remain open |
 | R08 | Website GoPay and historical reconciliation continue working | Existing and new DB/protocol regressions; provider-specific amounts and histories preserved | Open |
 | R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Signed staging build installed through TestFlight; prior price-policy 35 and journal/boundary 59 checks passed; four earlier local StoreKit purchase cases failed; real Sandbox and physical-device purchase lifecycle remain unrun |
 | R10 | Signed transaction verification, Server API and Notifications V2 are complete | Certificate/app/environment/product/ownership checks, replay/order/missed-event tests, reconciliation | Actual Sandbox TEST delivered, online signature checks passed, exact payload durably PROCESSED once in isolated Preview; no actual purchase/refund/reconciliation acceptance yet. Consent-aware consumption response remains in progress |

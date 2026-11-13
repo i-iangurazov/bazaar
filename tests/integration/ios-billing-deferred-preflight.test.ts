@@ -23,7 +23,7 @@ const audit = async () => {
   const connection = new URL(databaseUrl);
   const args = ["--url-env", "EXPLICIT_OWNED_CI_AUDIT_URL", "--expect-host", connection.hostname,
     "--expect-port", connection.port || "5432", "--expect-database", decodeURIComponent(connection.pathname.slice(1)),
-    "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_CONSUMPTION"];
+    "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_MINIMUM"];
   if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
   return runIosBillingPreflight(parsePreflightTarget(args, { EXPLICIT_OWNED_CI_AUDIT_URL: databaseUrl }));
 };
@@ -105,7 +105,7 @@ describeDb("deferred capability aggregate preflight on exact owned PostgreSQL", 
     const f = await seedCapability(false);
     await expect(completeAppleNativeOutcome(f.proof, origin)).resolves.toMatchObject({ acknowledged: true, kind: "CANCELED" });
     const before = await snapshot(), result = await audit();
-    expect(result).toMatchObject({ ok: true, schemaStage: "POST_CONSUMPTION", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
+    expect(result).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_MINIMUM", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
     expect(await snapshot()).toEqual(before);
     for (const value of [f.org.id, f.adminUser.id, f.adminUser.email, f.intent.intentId, f.attemptId,
       f.publicKey, f.fingerprint, f.proof.challenge, f.proof.signature]) expect(JSON.stringify(result)).not.toContain(value);
@@ -125,7 +125,7 @@ describeDb("deferred capability aggregate preflight on exact owned PostgreSQL", 
       environment: "Sandbox", transactionId: f.baseData.transactionId,
     } } })).status).toBe("REVOKED");
     const before = await snapshot(), result = await audit();
-    expect(result).toMatchObject({ ok: true, schemaStage: "POST_CONSUMPTION", blockerChecks: 0, skippedChecks: 0 });
+    expect(result).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_MINIMUM", blockerChecks: 0, skippedChecks: 0 });
     expect(await snapshot()).toEqual(before);
     for (const value of [f.org.id, f.adminUser.id, f.adminUser.email, f.intent.intentId, f.publicKey, f.proof.challenge,
       f.proof.signature, f.baseSigned, f.renewalSigned]) expect(JSON.stringify(result)).not.toContain(value);

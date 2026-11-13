@@ -154,11 +154,16 @@ products/prices and remaining valuation/discount rules and terms remain
 unapproved and sales stay off. The
 earlier below-minimum BLOCK proposal is superseded for tiny positive upgrades by
 the owner's explicit choice: **charge the minimum supported Apple payment while
-keeping the original expiry unchanged**. Implementation and verification of that
-policy remain pending; the `2af628f4` Preview is not evidence that it works.
-Actual C-band products/prices and remaining upgrade terms are still unapproved;
-sales stay off. No goodwill gift policy was selected. Existing paid access and
-website functionality continue.
+keeping the original expiry unchanged**. That rule is now implemented and
+locally verified: 82 unit/UI cases and 146 real-PostgreSQL cases across seven PG
+files passed, with typecheck/lint/RU/KG/EN validation and six localized portrait/
+landscape fixture states. Migration 147 was applied only to owned CI; its 98-check
+read-only audit passed. The C-minimum production-mode build has not yet run, and
+remote Preview remains source `2af628f4` / schema146. See the
+[verification boundaries](APPLE_TEMPORARY_UPGRADES.md). Actual C-band products,
+prices and remaining upgrade terms are still unapproved; sales stay off. No
+goodwill gift policy was selected. Existing paid access and website functionality
+continue.
 An arbitrary prorated KGS quote is still not a StoreKit charge argument.
 
 Before sales, confirm the exact registered IDs, prices in Kyrgyzstan and other
@@ -171,11 +176,12 @@ reference](https://developer.apple.com/help/app-store-connect/reference/in-app-p
 
 ## Commercial decision appendix: customers with prepaid access
 
-**Owner decision prepared on 2026-11-11; no alternative's commercial terms are
-approved or enabled.** A and B remain design alternatives. C now has implemented
-mechanics and isolated regression coverage; review its prices, discount limits
-and below-minimum/zero policy for immediate changes without a retained wallet.
-This does not establish full catalog coverage or actual Apple acceptance.
+**Full commercial policies remain unapproved and disabled.** A and B remain
+design alternatives. C has implemented mechanics and isolated regression
+coverage. On 13 November the owner selected its positive-quote minimum-payment
+rule with unchanged expiry; zero remains blocked. Actual band products/prices,
+remaining discount limits and terms still require review. This does not
+establish full catalog coverage or actual Apple acceptance.
 
 An identified IAP product has configured storefront prices; a time-sensitive
 web KGS quote is not an amount argument Bazaar can pass to StoreKit for that
@@ -263,11 +269,12 @@ This appendix enables no products, payment collection or changed paid access.
 **Mechanics implemented and isolated-tested; remaining commercial terms
 unapproved, products/prices unregistered and sales off.** On 13 November the owner
 selected the minimum supported Apple payment for tiny positive upgrades, keeping
-the original expiry unchanged. That specific policy still requires implementation
-and verification; it does not approve actual C-band prices. C uses a configured
-non-renewing product to fund a temporary upgrade fixed by an immutable
-organization, rights, interval and source-grant quote, without a retained balance. The owner has not
-approved a wallet or changed commercial terms. Applying Apple's app-managed
+the original expiry unchanged. That specific rule is implemented and locally
+verified, with its production-mode build and actual Apple acceptance still open;
+it does not approve actual C-band prices. C uses a configured non-renewing product
+to fund a temporary upgrade fixed by an immutable organization, rights, interval
+and source-grant quote, without a retained balance. No wallet or full C-band
+commercial terms are approved. Applying Apple's app-managed
 non-renewing model to this upgrade is an inference, not Apple acceptance. The
 configured band SKUs are separate from the 145-entry draft; none are enabled by
 that artifact. See
@@ -293,8 +300,8 @@ full target. Existing manual GoPay bank-refund attestations remain non-revoking.
 See [implementation and isolated-test boundaries](APPLE_TEMPORARY_UPGRADES.md);
 synthetic verified receipts and database tests are not actual Apple purchases.
 
-Before sales, implement and verify the selected minimum-charge rule without
-changing the original expiry. Approve the remaining intervals, discount ceiling,
+Before sales, complete the C-minimum production-mode build and real Sandbox/
+device checks. Approve the remaining intervals, discount ceiling,
 storefront/currency rule, base/increment refund consequences, meaningful product
 descriptions and actual C-band prices. More bands reduce the discount gap but
 increase product/price maintenance. Actual Sandbox and App Review evidence remain

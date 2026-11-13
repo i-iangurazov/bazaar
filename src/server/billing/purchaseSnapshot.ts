@@ -4,7 +4,7 @@ import { PLAN_CODES } from "@/lib/billing/plans";
 import { subscriptionExtrasSchema } from "@/lib/billing/subscriptionPricing";
 import { AppError } from "@/server/services/errors";
 import { planDefinitionSchema } from "./contractTerms";
-import { temporaryUpgradeContextSchema } from "./appleTemporaryUpgradePolicy";
+import { temporaryUpgradeContextSchema, validTemporaryUpgradePricing } from "./appleTemporaryUpgradePolicy";
 
 export const purchaseSnapshotSchema = z.object({
   version: z.literal(1),
@@ -32,6 +32,10 @@ export const purchaseSnapshotSchema = z.object({
   expiresAt: z.string().datetime(),
   entitlements: planDefinitionSchema.optional(),
   appleTemporaryUpgrade: temporaryUpgradeContextSchema.optional(),
+}).superRefine((purchase, ctx) => {
+  if (purchase.appleTemporaryUpgrade && (purchase.kind !== "UPGRADE" || !purchase.sourcePeriodId ||
+    !validTemporaryUpgradePricing(purchase.amountMinor, purchase.appleTemporaryUpgrade)))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["appleTemporaryUpgrade"], message: "Temporary upgrade pricing must match its frozen positive quote" });
 });
 export type PurchaseSnapshot = z.infer<typeof purchaseSnapshotSchema>;
 export const readPurchaseSnapshot = (value: unknown): PurchaseSnapshot | null => {

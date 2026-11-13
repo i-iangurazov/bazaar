@@ -9,7 +9,7 @@ type AppleOutputs = inferRouterOutputs<AppRouter>["billing"]["apple"];
 export type TemporaryUpgradePreview = AppleOutputs["previewTemporaryUpgrade"];
 type TemporaryUpgrades = AppleOutputs["catalog"]["temporaryUpgrades"];
 
-export function AppleTemporaryUpgradeDetails({ quote }: { quote: TemporaryUpgradePreview }) {
+export function AppleTemporaryUpgradeDetails({ quote, displayPrice }: { quote: TemporaryUpgradePreview; displayPrice?: string }) {
   const t = useTranslations("billingApple");
   const plans = useTranslations("billing.plans");
   const locale = useLocale();
@@ -27,6 +27,9 @@ export function AppleTemporaryUpgradeDetails({ quote }: { quote: TemporaryUpgrad
       <p>{t("period", { start: formatDateTime(quote.timing.startsAt, locale), end: formatDateTime(quote.timing.endsAt, locale) })}</p>
       <p>{t("temporaryPreserved")}</p>
       <p>{t("temporaryDependency")}</p>
+      {quote.minimumChargeApplied && displayPrice ? (
+        <p className="font-medium" data-apple-minimum-charge>{t("temporaryMinimumCharge", { price: displayPrice })}</p>
+      ) : null}
       <p className="text-xs text-muted-foreground">{t("temporaryPriceTerms")}</p>
     </div>
   );

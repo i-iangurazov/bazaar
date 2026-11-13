@@ -5,12 +5,39 @@ configuration for the remainder of the current paid term. There is no wallet,
 unused balance or invented gateway invoice. Existing GoPay/Apple base grants,
 future prepayments and consumed usage remain separate.
 
-No commercial approval, registered band prices, actual Sandbox purchase or
-App Review acceptance is claimed. Below-minimum/zero handling currently supports
-an explicit proposed **BLOCK** policy. That restriction is not owner approval or
-proof that every existing immediate-change case is commercially covered. A free
-owner-funded waiver would require a separately reviewed nonfinancial grant path;
-there is no enabling stub for it.
+The owner approved charging the actual configured minimum for a **positive**
+current-term quote below that minimum on 13 November 2026. Zero remains blocked.
+This decision does not invent registered band products, prices, valuation rates,
+terms or sales configuration. Actual Sandbox purchases and App Review acceptance
+remain unverified. There is no free grant, wallet or leftover credit path.
+
+## Current verification checkpoint — 13 November 2026
+
+The positive-quote minimum rule is implemented locally. Focused unit/UI tests
+passed 82 cases in three files; real PostgreSQL groups passed 59 cases in four
+files plus 87 broader base-payment/refund/consumption cases in three files
+(146 PG cases across seven files). Typecheck, lint and RU/KG/EN validation passed.
+Six locale × portrait/landscape actual-component fixture states passed with 12
+screenshots and zero network requests/mutations; the browser closed. Root also
+inspected three representative images. The preserved `2,99 $` display price was
+synthetic and establishes no actual StoreKit price.
+
+Migration 147, SHA256 `c928c60955d3f34b0a4c919bd40ffa59cc9fec60e3c685e6434ac8585c18b323`,
+was applied only to the owned localhost CI. It preserved all 29 original table
+snapshots, 54 existing functions, 1,581 existing triggers and the 146 historical
+migration records; the read-only `POST_TEMPORARY_MINIMUM` audit passed all 98
+checks with zero blockers, warnings or skips. Both PG groups completed; owned
+PostgreSQL/Redis are stopped with their data retained. Independent review at
+file-set digest `d6e1f581…cc76c2` found no blockers. Later documentation edits
+change that combined digest; all 21 reviewed application/SQL/test files still
+match their recorded hashes. Private check evidence is consolidated in
+`.local/ios-release-20261111/C-minimum-final-quality.json`.
+
+The C-minimum/147 production-mode build has not yet run. Remote Preview remains
+schema146/source `2af628f4`; the separate one-organization/one-Starter candidate
+also uses that older source and does not test this rule. No actual C-band products,
+prices, storefront configuration or remaining commercial terms are approved or
+enabled. Real Sandbox/device purchases and App Review acceptance remain open.
 
 ## Commercial configuration
 
@@ -21,7 +48,8 @@ Both normal Apple foundation gates and these additional values are required:
 
 The policy must specify `version`, current `termsVersion`, `approved:true`,
 `validUntil`, `rounding:"DOWN_WITH_OWNER_DISCOUNT"`, `zeroPolicy:"BLOCK"`,
-`minimumPolicy:"BLOCK"`, `maxDiscountMinor`, `maxDiscountBps`, and `bands`.
+`minimumPolicy:"BLOCK"|"CHARGE_MINIMUM_FOR_POSITIVE"`, `maxDiscountMinor`,
+`maxDiscountBps`, and `bands`.
 Each band has a unique `key`, an actual unique Apple `productId`, and `prices`.
 Each price defines `storefrontId`, ISO `currency`, integer `priceMillis`, and an
 explicit `serviceMinorPerUnitNumerator` / `serviceMinorPerUnitDenominator`.
@@ -32,8 +60,23 @@ per one currency unit, not a fetched market exchange rate or promised settlement
 rate. All bands for one storefront/currency must use the same rational valuation.
 The server uses integer arithmetic to convert each approved band conservatively,
 chooses the highest band that does not exceed the frozen incremental service
-value, and checks both absolute and percentage owner-discount limits. If none
-fits, the customer cannot pay through this path. No difference is put on account.
+value, and checks both absolute and percentage owner-discount limits. That normal
+selection and its discount limits remain unchanged. With the explicit minimum
+policy, a quote strictly above zero and below the cheapest configured market band
+uses that band's actual price, with zero owner discount. The minimum comes from
+the reviewed own-product configuration for that storefront/currency; there is no
+hardcoded dollar floor or fallback to a full-period product. A missing minimum
+product or market remains unavailable. `BLOCK` retains its previous behavior.
+
+The immutable optional `minimumCharge.serviceAdjustmentMinor` records only the
+positive difference between the selected band's service valuation and the
+original prorated `amountMinor`. The amount is not a customer balance, debt or
+extra entitlement. The quoted paid expiry, usage cycle and original service
+quote stay unchanged. The normal relation is charged valuation plus owner
+discount equals the quote; the minimum relation is charged valuation equals the
+positive quote plus this adjustment, with no discount. A rounded zero is never
+coerced to a positive charge. Historical contexts without the marker remain
+readable and are not reinterpreted.
 
 The actual Apple localized price remains distinct from that valuation. The native
 bridge checks exact storefront, currency and price again before the sheet; a
@@ -59,6 +102,10 @@ and [review guidelines](https://developer.apple.com/app-store/review/guidelines/
   duration. It returns `offerKey`, `action:"CHANGE"`, selected band SKU,
   `quoteToken`, organization, source configuration/provider/interval, target
   configuration/limits, exact timing and `priceConstraint`.
+- The preview also returns `minimumChargeApplied` and the separate service-value
+  adjustment. Main details and consent show a minimum-charge explanation using
+  the actual localized StoreKit `displayPrice`. No KGS valuation replaces the
+  payment price, and missing or changed metadata still blocks checkout.
 - `priceConstraint` is `{storefrontId:string,currency:string,priceMillis:string}`.
   Native Storefront.current ID is compared with signed `storefrontId`; the old
   transaction `storefront` field remains a separate three-letter country code.
@@ -127,8 +174,13 @@ and are not reinterpreted as base revocation. Late approval after quote/source
 invalidation or after the term ends remains paid REVIEW with a refund path;
 there is no fictional past access, automatic extra debt or retained credit.
 
-The migration is `20261111150000_apple_temporary_upgrades`. Applied earlier SQL
-is unchanged. The new schema is required even while sales remain off. Meaningful
+The original migration is `20261111150000_apple_temporary_upgrades`. The additive
+`20261113130000_apple_temporary_minimum_charge` adds a positive-quote accounting
+guard for the new marker on intent insertion/update, without changing historical
+rows, database columns, or any existing parent/price/expiry/usage guard. Applied
+migrations through 146 are unchanged. Read-only aggregate preflight distinguishes
+`POST_TEMPORARY_MINIMUM` from the retained `POST_CONSUMPTION` stage and checks the
+new function bodies, trigger and marker values. Meaningful
 isolated regression cases cover dependency/refund/restore, same-SKU old receipt
 binding, current/future preservation, quota anchors, authorization races and raw
 database guards; actual Apple/device validation remains a separate release gate.
