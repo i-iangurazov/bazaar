@@ -1,0 +1,166 @@
+.banner {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 50;
+  padding: 14px max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: 0 -3px 18px rgb(24 53 96 / 4%);
+}
+.inner {
+  position: relative;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.summary {
+  margin: 0;
+  padding-right: 26px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  line-height: 19px;
+  overflow-wrap: anywhere;
+}
+.customize {
+  color: hsl(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.dismiss {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: hsl(var(--muted-foreground));
+}
+.dismiss:hover {
+  background: hsl(var(--secondary));
+}
+.actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.choice {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 8px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.reopen {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 40;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 9px;
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  box-shadow: 0 1px 4px rgb(24 53 96 / 5%);
+}
+.customize:focus-visible,
+.dismiss:focus-visible,
+.reopen:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+.settings {
+  max-height: calc(100dvh - 24px);
+}
+.settingsHeader {
+  flex-shrink: 0;
+  padding: 22px 56px 16px 22px;
+}
+.settingsBody {
+  padding: 0 22px;
+}
+.preference {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 16px 0;
+  border-top: 1px solid hsl(var(--border));
+}
+.preference > div {
+  flex: 1;
+  min-width: 0;
+}
+.preference label {
+  display: inline;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.preference p {
+  margin-top: 5px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  line-height: 19px;
+}
+.preference > button {
+  margin-top: 2px;
+}
+.settingsFooter {
+  flex-shrink: 0;
+  padding: 0 22px 14px;
+}
+.privacy {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.browserChoice {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  max-width: 320px;
+  padding: 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 9px;
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+
+@media (min-width: 768px) {
+  .inner {
+    display: flex;
+    max-width: 1120px;
+    align-items: center;
+    gap: 24px;
+    padding-right: 40px;
+  }
+  .summary {
+    flex: 1;
+    padding-right: 0;
+  }
+  .inner > .actions {
+    flex: 0 0 320px;
+    margin-top: 0;
+  }
+  .dismiss {
+    top: 0;
+    right: -8px;
+  }
+}
