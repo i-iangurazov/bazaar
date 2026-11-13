@@ -1,0 +1,217 @@
+{
+  "checkedAtUtc": "2026-11-13T22:38:00.253242+00:00",
+  "property": "sc-domain:bazaar.kg",
+  "account": "support@bazaar.kg",
+  "googleInspection": {
+    "url": "https://www.bazaar.kg/ru",
+    "indexed": true,
+    "lastCrawlAsReported": "Nov 12, 2026, 6:15:59 PM",
+    "crawler": "Googlebot smartphone",
+    "crawlAllowed": true,
+    "fetch": "Successful",
+    "indexingAllowed": true,
+    "selectedCanonical": "Inspected URL",
+    "declaredCanonicalInLastCrawl": "None",
+    "currentLiveCanonical": "https://www.bazaar.kg/ru"
+  },
+  "googleIndexExclusions": {
+    "pageWithRedirect": [
+      "http://bazaar.kg/",
+      "https://bazaar.kg/",
+      "http://www.bazaar.kg/"
+    ],
+    "notFound404": [
+      "https://bazaar.kg/eksperiment",
+      "https://bazaar.kg/news/1443"
+    ],
+    "crawledNotIndexed": "Three historical _next/static/css resources; not marketing pages",
+    "assessment": "Expected canonical-domain redirects; obsolete paths absent from current sitemap; CSS resources need not rank as pages. No fake redirects to home or validation of intentional exclusions requested."
+  },
+  "googleSearchPerformance": {
+    "selectedRange": "3 months",
+    "totalImpressions": 13,
+    "totalClicks": 0,
+    "averagePosition": 5.5,
+    "queryExamples": [
+      {
+        "query": "bazaarg",
+        "clicks": 0,
+        "impressions": 1
+      },
+      {
+        "query": "bazaar",
+        "clicks": 0,
+        "impressions": 1
+      },
+      {
+        "query": "bazar.c",
+        "clicks": 0,
+        "impressions": 1
+      }
+    ],
+    "limitation": "Tiny sample, not proof of first-page commercial visibility; low-volume/anonymized queries may be absent from rows."
+  },
+  "googleAI": {
+    "setting": "Include",
+    "totalImpressions": 1,
+    "selectedRange": "3 months",
+    "report": "Generative AI features",
+    "note": "Participation is enabled, and report has one impression; does not establish useful reach or registrations."
+  },
+  "sitemap": {
+    "url": "https://www.bazaar.kg/sitemap.xml",
+    "status": "Success",
+    "lastReadAsReported": "Nov 13, 2026",
+    "discoveredPages": 42,
+    "allCurrentUrlsRespond200": true,
+    "noindexUrls": []
+  },
+  "bing": {
+    "site": "https://www.bazaar.kg/",
+    "signedInVia": "Google support@bazaar.kg; name/profile/email only",
+    "googleSearchConsoleAccessGranted": false,
+    "propertyAdded": true,
+    "verified": false,
+    "method": "XML file",
+    "filePrepared": "public/BingSiteAuth.xml",
+    "remaining": "Approve website release, make file available on production, click Verify, submit public sitemap, inspect AI Performance when data is available"
+  },
+  "robots": {
+    "wildcardAlreadyPermitsPublicSearchBots": true,
+    "privateExclusionsPreserved": true,
+    "trainingPolicyChanged": false,
+    "crawlerIPOrWafLogsNotInspected": true
+  },
+  "sources": [
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide",
+      "applied": "SEO foundations, valuable original product content, crawlability; no special Google AI schema or llms.txt requirement, no ranking guarantees."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/site-names",
+      "applied": "WebSite on root home, consistent real brand identity and visible Cyrillic reading with alternateName."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/7440203",
+      "applied": "Differentiate expected redirects/obsolete 404/assets from actual missing product pages; inspect specific URLs."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/16908024",
+      "applied": "Read Google Search generative AI setting; already Include, no toggle needed."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/16984139",
+      "applied": "Separate AI performance evidence from general Web performance."
+    },
+    {
+      "url": "https://developers.openai.com/api/docs/bots",
+      "applied": "OAI-SearchBot is for search; no expansion of GPTBot/training permissions."
+    },
+    {
+      "url": "https://docs.perplexity.ai/docs/resources/perplexity-crawlers",
+      "applied": "Preserve public crawl access; no unverified agent-specific override of private exclusions."
+    },
+    {
+      "url": "https://blogs.bing.com/webmaster/2026/2/Introducing-AI-Performance-in-Bing-Webmaster-Tools-Public-Preview/",
+      "applied": "Prepare Bing ownership and future measurement of citations, not a claimed ranking boost."
+    }
+  ],
+  "productionChanged": false,
+  "adsChanged": false,
+  "budgetsChanged": false,
+  "baseCommit": "67847914",
+  "branch": "main",
+  "status": "implemented_verified_pending_production_release_approval",
+  "implementation": [
+    "Clear localized inventory-management positioning and metadata",
+    "Visible BAZAAR/Базар identity in FAQ and footer, linked WebSite/Organization/SoftwareApplication graph",
+    "Direct links to three real public sales, stock-count and analytics guides",
+    "Bing XML ownership file ready for release"
+  ],
+  "verification": {
+    "unitTests": 372,
+    "unitFiles": 14,
+    "typecheck": "passed on isolated generated Prisma client and in final build",
+    "lint": "passed in final production build",
+    "translations": "passed",
+    "productionBuild": "passed; 129 static pages; one CPU cap; Node 22.23.4",
+    "languages": [
+      "ru",
+      "kg",
+      "en"
+    ],
+    "html": "Valid production canonicals, consistent identity graph, visible Cyrillic name and real KGS plan prices",
+    "browserLayouts": [
+      {
+        "locale": "kg",
+        "clearance": 31.75,
+        "ctaBottom": 396.25,
+        "ctaReceivesClick": true,
+        "documentWidth": 320,
+        "height": 568,
+        "panelHeight": 140,
+        "panelTop": 428,
+        "width": 320
+      },
+      {
+        "locale": "ru",
+        "clearance": 24.5,
+        "ctaBottom": 422.5,
+        "ctaReceivesClick": true,
+        "documentWidth": 320,
+        "height": 568,
+        "panelHeight": 121,
+        "panelTop": 447,
+        "width": 320
+      },
+      {
+        "locale": "ru",
+        "clearance": 8.140625,
+        "ctaBottom": 638.859375,
+        "ctaReceivesClick": true,
+        "documentWidth": 1280,
+        "height": 720,
+        "panelHeight": 73,
+        "panelTop": 647,
+        "width": 1280
+      },
+      {
+        "locale": "en",
+        "clearance": 50.75,
+        "ctaBottom": 396.25,
+        "ctaReceivesClick": true,
+        "documentWidth": 320,
+        "height": 568,
+        "panelHeight": 121,
+        "panelTop": 447,
+        "width": 320
+      },
+      {
+        "locale": "ru",
+        "clearance": 138.203125,
+        "ctaBottom": 407.796875,
+        "ctaReceivesClick": true,
+        "documentWidth": 375,
+        "height": 667,
+        "panelHeight": 121,
+        "panelTop": 546,
+        "width": 375
+      }
+    ],
+    "signup": "Real form loaded after clicking hero CTA; no form submission",
+    "localIsolation": "Loopback only, disposable Redis 32MB without persistence, no database server, no provider credentials, external tracking blocked by local CSP",
+    "evidenceDirectory": "/Users/ilias_iangurazov/Commercial/bazaar/artifacts/search-indexing-20261114"
+  },
+  "remaining": [
+    "Approve and deploy this reviewed main commit",
+    "Verify Bing ownership after file becomes available on domain and submit current sitemap",
+    "Request Google recrawl once after release",
+    "Develop distinct useful product/scenario pages and assess queries and registrations over time; ranking is not guaranteed"
+  ],
+  "notClaimed": [
+    "First-page rankings achieved",
+    "Confirmed search volumes or CPC for proposed keywords",
+    "AI feature appearance guaranteed",
+    "Bing verified before file deployment"
+  ]
+}

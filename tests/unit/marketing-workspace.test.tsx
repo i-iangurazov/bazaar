@@ -106,15 +106,28 @@ describe("localized public marketing", () => {
       const structured = JSON.parse(
         root.querySelector('script[type="application/ld+json"]')!.textContent!,
       );
-      expect(structured.name).toBe("BAZAAR");
-      expect(structured.publisher.name).toBe("BAZAAR");
-      expect(structured.publisher["@type"]).toBe("Organization");
-      expect(structured.publisher).not.toHaveProperty("address");
-      expect(structured.offers.map((offer: { name: string }) => offer.name)).toEqual([
+      const application = structured["@graph"].find(
+        (node: { "@type": string }) => node["@type"] === "SoftwareApplication",
+      );
+      const publisher = structured["@graph"].find(
+        (node: { "@type": string }) => node["@type"] === "Organization",
+      );
+      const website = structured["@graph"].find(
+        (node: { "@type": string }) => node["@type"] === "WebSite",
+      );
+      expect(application.name).toBe("BAZAAR");
+      expect(publisher.name).toBe("BAZAAR");
+      expect(application.publisher).toEqual({ "@id": publisher["@id"] });
+      expect(publisher).not.toHaveProperty("address");
+      expect(website.alternateName).toContain("Базар");
+      expect(root.querySelector("footer")?.textContent).toContain("Базар");
+      for (const story of Object.values(copy.stories))
+        expect(root.querySelector(`a[href="${story.guide.href}"]`)?.textContent).toBe(story.guide.label);
+      expect(application.offers.map((offer: { name: string }) => offer.name)).toEqual([
         "Новичок", "Бизнесмен", "Монополист",
       ]);
-      expect(structured.inLanguage).toBe(locale === "kg" ? "ky" : locale);
-      expect(structured.offers.map((offer: { price: string }) => Number(offer.price))).toEqual(
+      expect(application.inLanguage).toBe(locale === "kg" ? "ky" : locale);
+      expect(application.offers.map((offer: { price: string }) => Number(offer.price))).toEqual(
         getPlanCatalogEntries().map((plan) => plan.monthlyPriceKgs),
       );
       expect(root.querySelectorAll("article[data-plan]")).toHaveLength(3);

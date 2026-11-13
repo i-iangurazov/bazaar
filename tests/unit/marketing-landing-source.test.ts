@@ -44,7 +44,7 @@ describe("Bazaar Retail OS marketing landing", () => {
       expect.objectContaining({ url: "https://www.bazaar.kg/ru" }),
       expect.objectContaining({ url: "https://www.bazaar.kg/signup" }),
     ]));
-    expect(landing).toContain('"@type": "SoftwareApplication"');
+    expect(landing).toContain("getMarketingStructuredData");
     expect(landing).toContain("getPlanCatalogEntries()");
     expect(landing).toContain("price: String(plan.monthlyPriceKgs)");
   });

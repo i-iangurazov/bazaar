@@ -11,7 +11,10 @@ import { loadPublicSellerLegalName } from "@/server/legal/seller";
 import { legalCopy } from "@/content/legal";
 import { legalDocumentIds } from "@/content/legal/types";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
-import { marketingHomePath, marketingSiteUrl } from "@/lib/marketingSeo";
+import {
+  getMarketingStructuredData,
+  serializeMarketingStructuredData,
+} from "@/lib/marketingStructuredData";
 import { MarketingPricing } from "./MarketingPricing";
 
 import { FeatureShowcase } from "./FeatureShowcase";
@@ -55,6 +58,7 @@ const Story = ({
   title,
   description,
   bullets,
+  guide,
   visual,
   reverse = false,
   dark = false,
@@ -65,6 +69,7 @@ const Story = ({
   title: string;
   description: string;
   bullets: string[];
+  guide: { href: string; label: string };
   visual: ReactNode;
   reverse?: boolean;
   dark?: boolean;
@@ -86,6 +91,10 @@ const Story = ({
             </li>
           ))}
         </ul>
+        <Link className={styles.storyGuide} href={guide.href}>
+          {guide.label}
+          <Arrow />
+        </Link>
       </div>
       <div className={styles.storyVisual} data-reveal>
         {visual}
@@ -152,48 +161,20 @@ export const MarketingLanding = async () => {
   const documents = legalCopy[normalizeLocale(locale) ?? defaultLocale].documents;
   const copy = getMarketingCopy(locale);
   const previewData = getMarketingPreviewData(locale);
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "@id": `${marketingSiteUrl}/#software`,
-    name: "BAZAAR",
-    applicationCategory: "BusinessApplication",
-    operatingSystem: "Web, iOS PWA, Android PWA",
+  const structuredData = getMarketingStructuredData({
+    locale,
     description: copy.meta.structuredDescription,
-    inLanguage: locale === "kg" ? "ky" : locale,
-    url: `${marketingSiteUrl}${marketingHomePath(locale)}`,
-    publisher: {
-      "@type": "Organization",
-      "@id": `${marketingSiteUrl}/#organization`,
-      name: "BAZAAR",
-      url: `${marketingSiteUrl}/`,
-      logo: {
-        "@type": "ImageObject",
-        url: `${marketingSiteUrl}/brand/logo.png`,
-        width: 724,
-        height: 181,
-      },
-      sameAs: ["https://www.instagram.com/bazaar.pos/"],
-      contactPoint: {
-        "@type": "ContactPoint",
-        contactType: "customer support",
-        telephone: "+996709911300",
-        email: "support@bazaar.kg",
-      },
-    },
     offers: plans.map((plan) => ({
-      "@type": "Offer",
       name: t(`plans.${plan.code.toLowerCase()}.name`),
       price: String(plan.monthlyPriceKgs),
-      priceCurrency: "KGS",
     })),
-  };
+  });
   return (
     <main className={styles.marketing} data-marketing-root>
       <MarketingMotion />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: serializeMarketingStructuredData(structuredData) }}
       />
       <MarketingNav copy={copy.nav} />
 
