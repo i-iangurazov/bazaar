@@ -17,6 +17,12 @@ struct BazaarApplePriceConstraint: Decodable, Equatable, Sendable {
 }
 
 enum BazaarApplePricePolicy {
+    /// A price fence is bound to the server-authorized SKU type as well as money.
+    /// A C band remains NON_RENEWING; a normal consumable/auto SKU cannot replace it.
+    static func permitsProductType(expected: String?, actual: String) -> Bool {
+        guard let expected, ["NON_RENEWING", "CONSUMABLE", "AUTO_RENEWABLE"].contains(expected) else { return false }
+        return expected == actual
+    }
     /// Decimal-only display/preflight metadata, never proof that Apple charged.
     static func priceMillis(_ price: Decimal) -> String? {
         var source = price
@@ -33,8 +39,8 @@ enum BazaarApplePricePolicy {
         _ constraint: BazaarApplePriceConstraint?, storefrontId: String?,
         currency: String, price: Decimal
     ) -> Bool {
-        // Existing automatic/full-period offers have no C price fence and retain
-        // their original behavior, including an unavailable storefront query.
+        // Historical unconstrained offers retain their original behavior,
+        // including an unavailable storefront query.
         guard let constraint else { return true }
         return constraint.isValid && constraint.storefrontId == storefrontId &&
             constraint.currency == currency && constraint.priceMillis == priceMillis(price)

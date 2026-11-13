@@ -18,13 +18,49 @@ Apple approval and publication are tracked separately after owner approval.
 | 3 | Signed TestFlight build delivered, installed and initially launched on iPhone | Complete; bounded physical checks |
 | 4 | Normal newcomer signup through business/store creation and working-screen login | Complete; actual iPhone signup, full business fields, login, dashboard/trial7 and two onboarding steps; independent HTTP verification passed |
 | 5 | Entire agreed digital catalog, prices and commercial conditions configured for Apple | In progress |
-| 6 | Real Sandbox purchase, restore and refund accepted and reconciled | In progress |
-| 7 | Paid GoPay access works in iOS and Apple access works in web without duplicate payment | In progress; database regressions alone do not close this gate |
+| 6 | Real Sandbox purchase, restore and refund accepted and reconciled | In progress; one real Sandbox purchase and restore verified without a second period; refund and remaining lifecycle cases open |
+| 7 | Paid GoPay access works in iOS and Apple access works in web without duplicate payment | In progress; Apple-to-web access observed in Chrome; physical GoPay-to-iOS case remains open |
 | 8 | Critical iPhone workflows, roles, offline recovery, privacy and deletion accepted | In progress |
 | 9 | Complete App Store materials, disclosures, screenshots and reviewer access | In progress |
 | 10 | Final App Store-eligible Release build and complete release checks | In progress; normal Release `111121` archived/exported and inspected locally; upload, Apple processing and final acceptance remain open |
 
 ## Current checkpoint — updated 2026-11-13
+
+The owner completed an actual first Starter Sandbox purchase in synthetic
+organization C on iPhone 18 Pro Max / iOS 27.0.1, build `111120`. Apple's signed
+transaction and server ledger record **USD 26.95 / KGZ**, exactly one GRANTED
+transaction and one non-revoked period, from `2026-11-13T15:21:52Z` to
+`2026-12-13T15:21:52Z`. Initial fulfillment arrived through a verified Apple
+notification. The same organization's ordinary web login and billing screen
+showed active Apple-funded access, without a GoPay purchase. Protected synthetic
+A's existing GoPay periods and consumed quotas were preserved.
+
+The initial phone UI still showed a generic verification error, and its product
+card displayed `$24.95`. The cause of that price discrepancy is not established.
+Neither the error nor the display amount changes the recorded signed amount.
+The subsequent owner-run Restore reached the server: its evidence now includes
+CLIENT, NOTIFICATION and RESTORE observations, the same GRANTED transaction and
+the same single period, with no additional money or extension. No receipt from
+another organization was adopted. This database observation does not prove a
+successful native `Transaction.finish()` acknowledgement or the refund cases.
+Protected evidence is in `.local/ios-release-20261111/`, under
+`actual-C-first-purchase-readonly-147-20261113-*` and
+`actual-C-restore-readonly-147-20261113-*`; the latter includes an offline
+correction for the diagnostic helper's CLIENT enum label.
+
+The subsequent reviewed changes bind new normal intents to StoreKit's observed
+price/storefront, recover ambiguous native/confirmation outcomes against exact
+server intent ownership, and show Restore feedback beside its action. Validation
+passed 50 policy/verifier units, 177 real-PostgreSQL cases, 115 UI/bridge/recovery
+cases and 46 compiled Swift policy checks, plus typecheck, lint and translations.
+The owned test database/services were stopped with data retained. Native toast
+placement now respects safe areas and available keyboard space, with a visible
+40px close control even in a short landscape viewport. Bounded actual-component
+browser checks passed RU/KG/EN long portrait messages, the landscape keyboard
+case, dismissal and unchanged desktop placement. These are browser fixture
+checks, not a new physical-iPhone or whole-device acceptance result. The expanded
+matrix attempts hit harness timing/API limits and are not counted as passes.
+The combined source still needs its cloud build and new staging archive/upload.
 
 The current isolated web Preview is source **`fbb9ae6c`**, schema **147**,
 READY deployment `dpl_24gtc81ajWaCYad5vgewkdktVxvm`, actually bound to

@@ -1,6 +1,6 @@
 # Bazaar iPhone acceptance record
 
-Status: **partial owner-reported TestFlight smoke; full acceptance pending**.
+Status: **partial physical TestFlight acceptance; full acceptance pending**.
 Compilation, browser checks and synthetic signed fixtures do not complete this
 record. The owner's required delivery order is a complete
 candidate, isolated website/internal TestFlight acceptance, then a separately
@@ -24,13 +24,30 @@ Hosted interface changes are recorded separately in [native page QA](IOS_NATIVE_
 
 The owner reported a successful login and working screen, product search with
 the keyboard, and a scanner opening after camera permission with a live image.
-No physical-device purchase, barcode decode or complete page pass is inferred.
-Exact device/model/OS and per-case capture times still need to accompany the
-remaining acceptance evidence. Agent-run Simulator checks are separate evidence.
+The subsequently observed phone is iPhone 18 Pro Max / iOS 27.0.1. Actual full
+newcomer registration, business/store creation, login and the working screen were
+checked on this phone. A first real Apple Sandbox purchase and owner-run restore
+are also recorded below. Barcode decoding and a complete page pass remain open.
+Agent-run Simulator checks are separate evidence.
 
-The [commercial catalog](APPLE_CATALOG_PROPOSAL.md) remains unapproved. A private
-145-product registration worksheet and RU/EN/KY draft copy are prepared; actual
-prices, storefronts and product registration are unverified, and sales stay off.
+All 145 base/pack products are registered as Apple drafts, and 102 available
+15%-scenario draft prices were approved and configured. The first Starter product
+alone has observed KGZ-only availability and is enabled for synthetic C's Sandbox
+test. The remaining prices, availability, temporary-upgrade bands and pack terms
+are incomplete; ordinary customer sales stay off. See the
+[release record](IOS_RELEASE_PROGRESS.md).
+
+Actual purchase fixture labels differ from the original planned sequence below:
+**C is now the first Starter buyer**, while A remains the protected GoPay fixture.
+The owner completed the C purchase at `2026-11-13T15:21:52Z`. Signed/ledger money
+is USD 26.95 / KGZ; the phone card displayed `$24.95`, which is an unresolved
+discrepancy. Notification processing granted one period ending
+`2026-12-13T15:21:52Z`; ordinary Chrome login showed the same active Apple access.
+After owner-run Restore, server evidence contains CLIENT, NOTIFICATION and RESTORE
+observations, still one transaction and the same single period. A's financial
+records and quotas are preserved. Original generic phone messaging and native
+finish acknowledgement still require the updated candidate check; refund,
+reinstall and cross-organization restore have not passed.
 
 Use only the dedicated preview services and synthetic organizations. Private
 demo and two distinct SELF_SERVE Bazaar logins for Apple Sandbox scenarios are in the owner's local
@@ -56,8 +73,8 @@ buyer. Use the same preview website as the staging app, never the customer site.
    verify the intended preview organization, and confirm registered Apple products
    are available in Sandbox. An unsigned local rehearsal cannot satisfy this step.
    **Result: Partial.** Owner confirmed installation of `111120` and successful
-   initial login. Registered-product availability in Sandbox and the complete
-   device evidence record remain unverified.
+   initial login. Starter Sandbox availability is subsequently established by
+   the real C purchase; complete catalog availability remains unverified.
 2. **Keep existing web-paid access.** Sign into A in the preview website and on
    iPhone. Compare plan, additions and expiry, then open an included paid feature.
    Access must work without buying again through Apple. An automatic subscription
@@ -75,20 +92,25 @@ buyer. Use the same preview website as the staging app, never the customer site.
    resolved, complete the approved Sandbox purchase for B. Record the verified
    initial transaction and resulting rights/dates. Open the same organization in
    the preview website: the same access must be available without GoPay payment,
-   and replay/refresh must not grant it twice. **Result: Not run.**
+   and replay/refresh must not grant it twice. **Result: Partial actual pass using
+   C: one signed purchase, one period and ordinary web access observed; phone
+   price discrepancy and initial verification message remain unresolved.**
 5. **Interrupt and relaunch.** Exercise connection loss/app closure around purchase
    confirmation or the finish acknowledgement. Restore connection and reopen B:
    a verified paid transaction must recover without another purchase; existing
    durable access remains usable while finish synchronization retries. If Apple
    has not established a purchase, preserve pending/review instead of inventing
    success or cancellation. Record which interruption actually occurred.
-   **Result: Not run.**
+   **Result: Not run as a controlled interruption scenario. The initial real
+   purchase's generic phone error and notification-only grant are preserved.**
 6. **Restore, reinstall and keep ownership.** With terminal cancellations already
    acknowledged, record B's rights and consumed quota/credits. Restore purchases,
    then reinstall from TestFlight and restore using the same Apple/Bazaar accounts.
    Rights must recover without duplicate periods, credits or quota resets. Switch
    to C and restore: B's purchase must stay bound to B, and C must not gain it.
-   **Result: Not run.**
+   **Result: Partial: owner-run C Restore reached the server without another
+   transaction or period. Reinstall, foreign-organization case and native finish
+   acknowledgement remain unverified.**
 
 These steps are the first-run sequence, not a replacement for the full matrix.
 Only the explicitly bounded owner-reported checks below have passed. Keep the
@@ -101,7 +123,7 @@ that individual result; a Simulator pass cannot fill a physical-device result.
 | Logout, password recovery, expired session and restart | Cookies survive restart as intended, recovery works, and protected data is unavailable after logout | Not run |
 | Organization and role boundaries | Owner, manager and employee retain their real permissions; a different login cannot adopt the previous organization's purchases | Not run |
 | Existing GoPay coverage | iPhone shows the current plan/additions/expiry and permits paid features without another Apple charge | Not run |
-| Apple purchase and web access | Localized Apple price and explicit organization/term consent match the sheet; exactly one verified grant appears in iOS and web | Not run |
+| Apple purchase and web access | Localized Apple price and explicit organization/term consent match the sheet; exactly one verified grant appears in iOS and web | Partial: C Sandbox grant and ordinary web access observed; displayed-price discrepancy and initial phone message remain open |
 | Prepaid and future periods | New explicit renewal preserves all paid coverage and future selections; no quota reset or overlapping charge | Not run |
 | Complete approved catalog | All approved plans, 1/6/12-month terms, allowed store/reserve combinations and enabled WhatsApp packs match actual products, prices and entitlements | Not run |
 | Multi-organization Apple Account | Original immutable binding survives two Bazaar organization logins, restore and changes of Apple Account; same-group conflict opens no new sheet | Not run |
@@ -110,7 +132,7 @@ that individual result; a Simulator pass cannot fill a physical-device result.
 | Pending approval | A delayed purchase remains pending after local timeout/restart; an old unpaid GoPay invoice cannot bypass it | Not run |
 | Network lost after Apple charge | Closing/reopening the app and restoring connection recovers the signed operation; the app does not require another payment | Not run |
 | Durable confirmation, lost finish ACK | Paid access is visible before Apple synchronization completes, and the unfinished receipt is retried safely | Not run |
-| Restore and reinstall | Large/paginated history, an unrelated organization's receipt and a temporary verification failure preserve progress and do not duplicate access | Not run |
+| Restore and reinstall | Large/paginated history, an unrelated organization's receipt and a temporary verification failure preserve progress and do not duplicate access | Partial: actual C Restore preserves its one period; reinstall, unrelated organization and native finish remain open |
 | Renewal, expiry, grace and billing retry | Signed Apple state drives access and dates; failure/expiry messaging is accurate and monthly usage remains consumed | Not run |
 | Plan/addition changes | Every agreed immediate/scheduled transition uses the approved commercial model; pending reductions respect actual stores/users/products and enabled features | Not run |
 | Direct temporary upgrade over web-paid access | In A, use an explicitly approved Sandbox C band: actual Apple price/currency, source and target additions, exact remaining dates and parent dependency match consent; web/iPhone show the same higher current-term access while original/future paid periods and consumed quotas stay unchanged | Not run |

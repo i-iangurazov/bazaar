@@ -13,7 +13,7 @@ import { getSubscriptionPaymentState } from "@/server/billing/subscriptionPaymen
 import { getSubscriptionUsage, reserveSubscriptionUsage, withSubscriptionUsage } from "@/server/billing/subscriptionUsage";
 import { assertFeatureCanBeConfigured, getCapacityLimits, getOrganizationPlan, resolveOrganizationAccessState } from "@/server/services/planLimits";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
-import { signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const DAY = 86_400_000, terms = createContractTerms("2026-11");
@@ -23,7 +23,7 @@ const selections = [{ plan: "ENTERPRISE" as const, months: 12 as const, extras }
   { plan: "ENTERPRISE" as const, months: 12 as const, extras: { ...extras, stores: 1 } }];
 const intentFor = async (actor: { id: string; organizationId: string }, offerKey: string, action: "RENEW" | "CHANGE") => {
   const intent = await createApplePurchaseIntent(actor, { expectedOrganizationId: actor.organizationId, offerKey, action,
-    idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true });
+    idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true });
   const attemptId = randomUUID();
   await authorizeApplePurchase(actor, intent.intentId, { attemptId });
   return { ...intent, attemptId };
@@ -102,10 +102,10 @@ describeDb("earned native deferred-purchase outcomes on PostgreSQL", () => {
     expect(activeOffer.availableActions).not.toContain("CHANGE"); expect(activeOffer.changeUnavailableReason).toBe("billingNoPaidChange");
     expect(catalog.managementUrl).toBe("https://apps.apple.com/account/subscriptions");
     await expect(createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: f.mappings[0].offerKey, action: "CHANGE",
-      idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true })).rejects.toThrow("billingNoPaidChange");
+      idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true })).rejects.toThrow("billingNoPaidChange");
     expect(await prisma.appleSubscriptionChain.findFirstOrThrow()).toEqual(preference);
     const next = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: f.mappings[2].offerKey, action: "CHANGE",
-      idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true });
+      idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true });
     expect(next.intentId).not.toBe(f.change.intentId);
   });
 
@@ -303,7 +303,7 @@ describeDb("earned native deferred-purchase outcomes on PostgreSQL", () => {
   it("rechecks a frozen source is still active and GRANTED before consuming final authorization", async () => {
     const f = await seed(); await cancelApplePurchaseIntent(f.actor, f.change.intentId, f.change.attemptId);
     const pending = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: f.mappings[1].offerKey, action: "CHANGE",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await prisma.subscriptionPeriod.updateMany({ where: { appleTransactionId: f.previous.id }, data: { revokedAt: new Date() } });
     await expect(authorizeApplePurchase(f.actor, pending.intentId, { attemptId: randomUUID() })).rejects.toThrow("appleAccessChanged");
     expect((await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: pending.intentId } })).authorizedAt).toBeNull();

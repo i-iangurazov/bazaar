@@ -16,7 +16,7 @@ import { deleteOwnAccount } from "@/server/services/accountDeletion";
 import { setUserActive, updateUser } from "@/server/services/users";
 import * as verification from "@/server/billing/appleVerification";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
-import { signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const origin = "https://www.bazaar.kg", password = "Synthetic-native-completion-password";
@@ -37,7 +37,7 @@ const seed = async (deferred = false, enroll = true) => {
   const actor = { id: f.adminUser.id, organizationId: f.org.id };
   const makeIntent = (index: number, action: "RENEW" | "CHANGE") => createApplePurchaseIntent(actor, {
     expectedOrganizationId: f.org.id, offerKey: mappings[index].offerKey, action, idempotencyKey: randomUUID(),
-    termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true });
+    termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true });
   const first = await makeIntent(0, "RENEW"), verifier = syntheticAppleVerifier();
   const baseData = { appAccountToken: first.appAccountToken, productId: first.productId, type: Type.AUTO_RENEWABLE_SUBSCRIPTION,
     subscriptionGroupIdentifier: "synthetic-completion-group", transactionId: "100000000000001", originalTransactionId: "100000000000001",
@@ -160,7 +160,7 @@ describeDb("pre-enrolled native completion after payer departure", () => {
     const user = await prisma.user.create({ data: { organizationId: org.id, name: "Another synthetic administrator", email: "another-completion@synthetic.invalid", role: "ADMIN", passwordHash: "not-a-login" } });
     vi.stubEnv("APPLE_BILLING_SANDBOX_ORGANIZATION_IDS", `${f.org.id},${org.id}`);
     const actor = { id: user.id, organizationId: org.id }, intent = await createApplePurchaseIntent(actor, { expectedOrganizationId: org.id,
-      offerKey: appleSubscriptionOffer(terms, selections[0]).offerKey, action: "RENEW", idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      offerKey: appleSubscriptionOffer(terms, selections[0]).offerKey, action: "RENEW", idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     const key = generateKeyPairSync("ec", { namedCurve: "prime256v1" }), publicKey = key.publicKey.export({ type: "spki", format: "der" }).toString("base64");
     const attemptId = randomUUID(), fingerprint = parseAppleCompletionPublicKey(publicKey).fingerprint;
     await authorizeApplePurchase(actor, intent.intentId, { attemptId, completionPublicKey: publicKey, completionOrigin: origin });

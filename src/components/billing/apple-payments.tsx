@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { PLAN_CODES, type PlanCode } from "@/lib/billing/plans";
@@ -40,6 +40,25 @@ import {
 } from "@/components/ui/select";
 
 type Products = Awaited<ReturnType<typeof getAppleProducts>>["products"];
+const purchaseDiagnosticCodes = new Set([
+  "APPLE_NETWORK_ERROR", "APPLE_SERVER_ERROR", "APPLE_STORE_ERROR", "APPLE_PURCHASE_FAILED",
+  "APPLE_UNKNOWN_PURCHASE_RESULT", "APPLE_UNVERIFIED_TRANSACTION", "APPLE_ENVIRONMENT_MISMATCH",
+]);
+const preSheetPurchaseCodes = new Set([
+  "APPLE_PRICE_CHANGED", "APPLE_STOREFRONT_CHANGED", "APPLE_STOREFRONT_UNAVAILABLE",
+  "APPLE_PRODUCT_UNAVAILABLE", "APPLE_PRODUCT_UNSUPPORTED", "APPLE_PAYMENTS_NOT_ALLOWED",
+  "APPLE_BILLING_UNAVAILABLE", "APPLE_STORE_BUSY", "APPLE_INVALID_ARGUMENT",
+]);
+type RecoveringPurchase = {
+  organizationId: string;
+  environment: string;
+  intentId: string;
+  productId: string;
+  requestKey: string;
+  temporary: boolean;
+  pending: boolean;
+  diagnosticCode?: string;
+};
 type Props = {
   kind: "SUBSCRIPTION" | "WHATSAPP_PACK";
   onUpdated: () => void;
@@ -64,6 +83,7 @@ export function ApplePayments({
   const locale = useLocale();
   const nativeReady = isAppleBillingAvailable();
   const catalog = trpc.billing.apple.catalog.useQuery(undefined, { retry: false });
+  const refetchCatalog = catalog.refetch;
   const temporaryCatalog = trpc.billing.apple.temporaryUpgradeCatalog.useQuery(undefined, {
     enabled: nativeReady && kind === "SUBSCRIPTION", retry: false,
   });
@@ -90,8 +110,16 @@ export function ApplePayments({
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [recoveringPurchase, setRecoveringPurchase] = useState<RecoveringPurchase | null>(null);
+  const [checkingPurchase, setCheckingPurchase] = useState(false);
+  const recoveringRef = useRef<RecoveringPurchase | null>(null);
+  const currentScope = useRef({ organizationId: catalog.data?.organization.id, environment: catalog.data?.environment });
+  currentScope.current = { organizationId: catalog.data?.organization.id, environment: catalog.data?.environment };
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const running = useRef(false);
   const requestKey = useRef<{ selection: string; key: string } | null>(null);
+  const submittedIntents = useRef(new Set<string>());
   const restoreSession = useMemo(() => new AppleRestoreSession(catalog.data?.organization.id ?? null), [catalog.data?.organization.id]);
   const restoreRef = useRef(restoreSession);
   restoreRef.current = restoreSession;
@@ -137,6 +165,11 @@ export function ApplePayments({
   });
   const temporaryQuote = temporaryChange ? temporaryPreview.data : undefined;
   const product = products.find((item) => item.id === (temporaryChange ? temporaryQuote?.productId : selected?.productId));
+  const storeKitConsent = product && typeof product.storefrontId === "string" && /^[0-9]{1,40}$/.test(product.storefrontId) &&
+    typeof product.priceMillis === "string" && /^[A-Z]{3}$/.test(product.currencyCode) && /^(0|[1-9][0-9]{0,15})$/.test(product.priceMillis) &&
+    BigInt(product.priceMillis) <= BigInt(Number.MAX_SAFE_INTEGER) && product.displayPrice.trim() && product.displayPrice.length <= 160
+    ? { storefrontId: product.storefrontId, currency: product.currencyCode, priceMillis: product.priceMillis, displayPrice: product.displayPrice }
+    : null;
   const constraint = temporaryQuote?.priceConstraint;
   const temporaryProductMatches = Boolean(product && constraint && product.id === temporaryQuote?.productId && product.type === "NON_RENEWING" &&
     product.priceMillis === constraint.priceMillis && product.currencyCode === constraint.currency &&
@@ -159,6 +192,14 @@ export function ApplePayments({
     temporaryChange ? [temporaryCatalog.data?.ready, temporaryCatalog.isError, temporaryPreview.isError, storefront?.id] : null,
     temporaryChange ? [temporaryQuote?.timing, temporaryQuote?.source, temporaryQuote?.target, constraint] : null]);
   const consentKey = useRef("");
+  const recoveryForCurrentOrganization = recoveringPurchase?.organizationId === catalog.data?.organization.id &&
+    recoveringPurchase?.environment === catalog.data?.environment ? recoveringPurchase : null;
+  // Existing access, an old receipt and a matching SKU do not prove this attempt.
+  // Only the server's exact intent/tenant/environment/product binding can resolve it.
+  const recoveredTransaction = recoveryForCurrentOrganization ? catalog.data?.recentTransactions.find((entry) =>
+    entry.intentId === recoveryForCurrentOrganization.intentId && entry.productId === recoveryForCurrentOrganization.productId &&
+    entry.environment === recoveryForCurrentOrganization.environment) : undefined;
+  const purchaseUnresolved = Boolean(recoveryForCurrentOrganization && (!recoveredTransaction || recoveredTransaction.status === "REVIEW"));
   const initialized = useRef(false);
   useEffect(() => {
     if (initialized.current || !catalog.data) return;
@@ -208,8 +249,18 @@ export function ApplePayments({
     setAccepted(false);
     setConsentOpen(false);
     // A failed network request keeps its idempotency key until the offer changes.
-    if (requestKey.current?.selection !== selectionKey) requestKey.current = null;
-  }, [selectionKey]);
+    if (requestKey.current?.selection !== selectionKey &&
+      !(recoveringRef.current?.organizationId === catalog.data?.organization.id && purchaseUnresolved)) requestKey.current = null;
+  }, [selectionKey, catalog.data?.organization.id, purchaseUnresolved]);
+
+  useEffect(() => {
+    setNotice(""); setConsentOpen(false); setAccepted(false);
+  }, [catalog.data?.organization.id]);
+
+  useEffect(() => {
+    if (recoveredTransaction && recoveredTransaction.status !== "REVIEW" &&
+      requestKey.current?.key === recoveryForCurrentOrganization?.requestKey) requestKey.current = null;
+  }, [recoveredTransaction, recoveryForCurrentOrganization?.requestKey]);
 
   useEffect(() => {
     let active = true;
@@ -277,23 +328,62 @@ export function ApplePayments({
             : "";
     return key && errors.has(key) ? errors(key) : t("operationFailed");
   };
-  const refresh = async () => {
-    await catalog.refetch();
+  const refresh = async (scope?: Pick<RecoveringPurchase, "organizationId" | "environment">) => {
+    await refetchCatalog();
+    if (scope && !isCurrentPurchase(scope)) return;
     if (temporaryChange) {
       await temporaryCatalog.refetch();
+      if (scope && !isCurrentPurchase(scope)) return;
       if (supportedMarket && temporaryCatalog.data?.ready) await temporaryPreview.refetch();
     } else if (needsQuote && selected?.available && catalog.data?.ready) await preview.refetch();
-    onUpdated();
+    if (!scope || isCurrentPurchase(scope)) onUpdated();
   };
+  const checkingRef = useRef(false);
+  const isCurrentPurchase = (purchase: Pick<RecoveringPurchase, "organizationId" | "environment">) => mounted.current &&
+    currentScope.current.organizationId === purchase.organizationId && currentScope.current.environment === purchase.environment;
+  const checkRecoveringPurchase = useCallback(async (purchase: RecoveringPurchase) => {
+    if (!mounted.current || currentScope.current.organizationId !== purchase.organizationId ||
+      currentScope.current.environment !== purchase.environment || checkingRef.current || document.hidden || navigator.onLine === false) return;
+    checkingRef.current = true;
+    setCheckingPurchase(true);
+    // This drains StoreKit.unfinished; it never opens a payment/login sheet.
+    window.dispatchEvent(new Event("bazaar:apple-retry"));
+    try {
+      const result = await refetchCatalog();
+      if (mounted.current && currentScope.current.organizationId === purchase.organizationId &&
+        currentScope.current.environment === purchase.environment && result.data?.organization.id === purchase.organizationId &&
+        result.data.environment === purchase.environment) onUpdated();
+    } catch { /* Keep the same intent and the explicit recovery action while offline. */ }
+    finally {
+      checkingRef.current = false;
+      if (mounted.current) setCheckingPurchase(false);
+    }
+  }, [refetchCatalog, onUpdated]);
+  useEffect(() => {
+    if (!recoveryForCurrentOrganization || !purchaseUnresolved) return;
+    const resume = () => { void checkRecoveringPurchase(recoveryForCurrentOrganization); };
+    window.addEventListener("online", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
+    document.addEventListener("visibilitychange", resume);
+    return () => {
+      window.removeEventListener("online", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("pageshow", resume);
+      document.removeEventListener("visibilitychange", resume);
+    };
+  }, [recoveryForCurrentOrganization, purchaseUnresolved, checkRecoveringPurchase]);
   const run = async (operation: () => Promise<void>) => {
     if (running.current) return;
     running.current = true;
     setBusy(true);
     setNotice("");
+    const scope = { ...currentScope.current };
     try {
       await operation();
     } catch (error) {
-      setNotice(messageFor(error));
+      if (mounted.current && currentScope.current.organizationId === scope.organizationId &&
+        currentScope.current.environment === scope.environment) setNotice(messageFor(error));
     } finally {
       running.current = false;
       setBusy(false);
@@ -306,17 +396,21 @@ export function ApplePayments({
         setQuoteExpired(true); setAccepted(false); setConsentOpen(false); setNotice(t("temporaryQuoteExpired")); return;
       }
       if (
-        !offerKey ||
+        purchaseUnresolved || !offerKey ||
         (temporaryChange ? !temporaryQuote || !temporaryCatalog.data?.ready || quoteExpired || temporaryPreview.isFetching || temporaryPreview.isError ||
           !temporaryProductMatches || !temporarySelectionMatches
           : !selected?.available) ||
-        !product ||
+        !product || (!temporaryChange && !storeKitConsent) ||
         !accepted ||
         consentKey.current !== selectionKey ||
         !catalog.data
       )
         return;
+      recoveringRef.current = null;
+      setRecoveringPurchase(null);
       requestKey.current ??= { selection: selectionKey, key: crypto.randomUUID() };
+      const purchaseScope = { organizationId: catalog.data.organization.id, environment: catalog.data.environment };
+      const purchaseRequestKey = requestKey.current.key;
       const authorization = await intent.mutateAsync({
         offerKey,
         action,
@@ -326,28 +420,51 @@ export function ApplePayments({
         ...(temporaryChange && temporaryQuote ? { quoteToken: temporaryQuote.quoteToken }
           : needsQuote && preview.data?.quoteToken ? { quoteToken: preview.data.quoteToken } : {}),
         acceptedTerms: true,
+        ...(!temporaryChange && storeKitConsent ? { storeKitConsent } : {}),
         storeId,
       });
-      if (temporaryChange && authorization.productId !== product.id) {
-        // This fresh intent has not been handed to native. The server's soft
-        // cancellation still refuses any already-authorized winning attempt.
-        try { await cancel.mutateAsync({ intentId: authorization.intentId }); } catch { /* Reconciliation remains server-owned. */ }
-        requestKey.current = null;
-        await refresh();
-        throw new Error("appleTemporaryUpgradePriceChanged");
+      if (!isCurrentPurchase(purchaseScope)) return;
+      const recovery: RecoveringPurchase = { ...purchaseScope, intentId: authorization.intentId, productId: product.id,
+        requestKey: purchaseRequestKey, temporary: temporaryChange, pending: false };
+      if (authorization.productId !== product.id) {
+        setAccepted(false); setConsentOpen(false);
+        // Only an intent this component has never handed to native is eligible
+        // for soft cancellation. The server independently refuses paid/authorized ones.
+        if (!submittedIntents.current.has(authorization.intentId)) {
+          try { await cancel.mutateAsync({ intentId: authorization.intentId }); } catch { /* Reconciliation remains server-owned. */ }
+          if (!isCurrentPurchase(purchaseScope)) return;
+          requestKey.current = null;
+        }
+        try { await refresh(purchaseScope); } catch { /* Keep the actionable mismatch notice. */ }
+        if (isCurrentPurchase(purchaseScope)) setNotice(temporaryChange ? errors("appleTemporaryUpgradePriceChanged") : t("productMismatch"));
+        return;
       }
       let result;
+      submittedIntents.current.add(authorization.intentId);
       try { result = await purchaseAppleProduct(authorization.intentId); }
       catch (error) {
+        if (!isCurrentPurchase(purchaseScope)) return;
+        const nativeCode = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : undefined;
         if (error && typeof error === "object" && "code" in error && error.code === "APPLE_SUBSCRIPTION_ACCOUNT_CONFLICT") {
           // This native preflight runs before the payment sheet. Generic native
           // errors may conceal a paid transaction and must never cancel here.
           try { await cancel.mutateAsync({ intentId: authorization.intentId }); requestKey.current = null; }
           catch { /* The same intent remains available for cancellation retry. */ }
-          await refresh();
+          await refresh(purchaseScope);
+        } else if (!nativeCode || !preSheetPurchaseCodes.has(nativeCode)) {
+          // Unknown errors cannot prove that StoreKit did not charge. Only the
+          // diagnostic label is allowlisted; recovery never trusts an error as money.
+          const attempt = { ...recovery, diagnosticCode: nativeCode && purchaseDiagnosticCodes.has(nativeCode) ? nativeCode : undefined };
+          recoveringRef.current = attempt;
+          setRecoveringPurchase(attempt);
+          setConsentOpen(false);
+          setAccepted(false);
+          await checkRecoveringPurchase(attempt);
+          return;
         }
         throw error;
       }
+      if (!isCurrentPurchase(purchaseScope)) return;
       setConsentOpen(false);
       setAccepted(false);
       if (result.status === "deferred") {
@@ -367,14 +484,19 @@ export function ApplePayments({
           : t(acknowledged ? "cancelled" : "cancellationPending"));
         if (!acknowledged || recorded) window.dispatchEvent(new Event("bazaar:apple-retry"));
       } else if (result.status === "pending") {
+        const attempt = { ...recovery, pending: true };
+        recoveringRef.current = attempt;
+        setRecoveringPurchase(attempt);
         setNotice(t("pending"));
+        await checkRecoveringPurchase(attempt);
+        return;
       } else {
         if (action === "CHANGE" && product.type === "AUTO_RENEWABLE" && result.transaction.productId !== product.id) {
           // Older native builds lack exact deferred-outcome recovery. An old
           // receipt cannot be presented as a newly purchased target plan.
           setNotice(t("deferredPending"));
           window.dispatchEvent(new Event("bazaar:apple-retry"));
-          await refresh();
+          await refresh(purchaseScope);
           return;
         }
         let saved;
@@ -384,14 +506,16 @@ export function ApplePayments({
             intentId: authorization.intentId,
           });
         } catch (error) {
-          if (!temporaryChange) throw error;
-          setNotice(t("temporaryConfirmationPending", { reason: messageFor(error) }));
-          window.dispatchEvent(new Event("bazaar:apple-retry"));
+          if (!isCurrentPurchase(purchaseScope)) return;
+          recoveringRef.current = recovery;
+          setRecoveringPurchase(recovery);
+          if (temporaryChange) setNotice(t("temporaryConfirmationPending", { reason: messageFor(error) }));
           // A paid outcome may already be durable despite a lost response. Keep
           // the same intent key and let signed-receipt recovery decide access.
-          try { await refresh(); } catch { /* The recovery notice remains visible offline. */ }
+          await checkRecoveringPurchase(recovery);
           return;
         }
+        if (!isCurrentPurchase(purchaseScope)) return;
         requestKey.current = null;
         setNotice(
           t(
@@ -404,15 +528,24 @@ export function ApplePayments({
         );
         // Access is already durable even if StoreKit acknowledgment loses its
         // connection. Refresh it before independently retrying native finish.
-        await refresh();
+        try { await refresh(purchaseScope); }
+        catch {
+          if (isCurrentPurchase(purchaseScope)) {
+            if (saved.status === "GRANTED") setNotice(t(temporaryChange ? "temporaryRecoveryPending" : "confirmedRecoveryPending"));
+            window.dispatchEvent(new Event("bazaar:apple-retry"));
+          }
+          return;
+        }
+        if (!isCurrentPurchase(purchaseScope)) return;
         try { await finishAppleTransaction(result.transaction.transactionId); }
         catch {
+          if (!isCurrentPurchase(purchaseScope)) return;
           if (saved.status === "GRANTED") setNotice(t(temporaryChange ? "temporaryRecoveryPending" : "confirmedRecoveryPending"));
           window.dispatchEvent(new Event("bazaar:apple-retry"));
         }
         return;
       }
-      await refresh();
+      await refresh(purchaseScope);
     });
   const restore = () =>
     run(async () => {
@@ -474,9 +607,15 @@ export function ApplePayments({
     (needsQuote && (!preview.data?.quoteToken || preview.isFetching || preview.isError)) ||
     (temporaryChange && (!temporaryQuote || !temporarySelectionMatches || temporaryPreview.isFetching || temporaryPreview.isError || quoteExpired || storefrontBusy || storefrontIssue)) ||
     !productMatches ||
+    (!temporaryChange && !storeKitConsent) ||
     productsBusy ||
     busy ||
+    purchaseUnresolved ||
     !canPurchase;
+  const visibleNotice = recoveryForCurrentOrganization ? recoveredTransaction
+    ? t(recoveredTransaction.status === "GRANTED" ? recoveryForCurrentOrganization.temporary ? "temporaryRecorded" : "confirmed"
+      : recoveredTransaction.status === "REVOKED" ? "revoked" : "review")
+    : recoveryForCurrentOrganization.pending ? t("pending") : recoveryForCurrentOrganization.temporary && notice ? notice : t("purchaseRecoveryPending") : notice;
   const subscriptions = allOffers.filter((offer) => offer.kind === "SUBSCRIPTION");
   const planOffers = subscriptions.filter(
     (offer) => offer.selection?.plan === (selectedPlan ?? plan),
@@ -699,6 +838,9 @@ export function ApplePayments({
                   {t("productMismatch")}
                 </p>
               ) : null}
+              {product && !temporaryChange && !storeKitConsent ? (
+                <p role="alert" className="text-sm text-danger">{errors("applePriceConsentRequired")}</p>
+              ) : null}
               {action === "CHANGE" && kind === "SUBSCRIPTION" && !temporaryChange ? (
                 <p className="text-sm">{t("changeTiming")}</p>
               ) : null}
@@ -744,37 +886,52 @@ export function ApplePayments({
                 {t("someProductsUnavailable")}
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                disabled={busy || !nativeReady}
-                onClick={() => void restore()}
-              >
-                {t(restoreSession.pending ? "resumeRestore" : "restore")}
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={busy || !nativeReady}
-                onClick={() =>
-                  void run(async () => {
-                    await showAppleSubscriptionManagement();
-                    await refresh();
-                  })
-                }
-              >
-                {t("manage")}
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => {
-                  window.dispatchEvent(new Event("bazaar:apple-retry"));
-                  setReloadProducts((value) => value + 1);
-                  void refresh();
-                }}
-              >
-                {t("retry")}
-              </Button>
+            <div className="space-y-3" data-apple-purchase-actions>
+              {visibleNotice ? (
+                <div className="space-y-2 rounded-md border border-border p-3 text-sm" data-apple-attempt-recovery={recoveryForCurrentOrganization ? "true" : undefined}>
+                  <p role="status">{visibleNotice}</p>
+                  {recoveryForCurrentOrganization?.diagnosticCode && !recoveredTransaction ? (
+                    <p className="text-xs text-muted-foreground">{t("purchaseRecoveryDiagnostic", { code: recoveryForCurrentOrganization.diagnosticCode })}</p>
+                  ) : null}
+                  {purchaseUnresolved && recoveryForCurrentOrganization ? (
+                    <Button variant="secondary" disabled={checkingPurchase || busy} onClick={() => void checkRecoveringPurchase(recoveryForCurrentOrganization)}>
+                      {checkingPurchase ? common("loading") : t("purchaseRecoveryRetry")}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={busy || !nativeReady}
+                  onClick={() => void restore()}
+                >
+                  {t(restoreSession.pending ? "resumeRestore" : "restore")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={busy || !nativeReady}
+                  onClick={() =>
+                    void run(async () => {
+                      await showAppleSubscriptionManagement();
+                      await refresh();
+                    })
+                  }
+                >
+                  {t("manage")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    window.dispatchEvent(new Event("bazaar:apple-retry"));
+                    setReloadProducts((value) => value + 1);
+                    void refresh();
+                  }}
+                >
+                  {t("retry")}
+                </Button>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">{t("restoreOrganization")}</p>
             <div className="flex flex-wrap gap-4 text-xs text-primary underline">
@@ -854,11 +1011,6 @@ export function ApplePayments({
                 )}
               </div>
             </details>
-            {notice ? (
-              <p role="status" className="rounded-md border border-border p-3 text-sm">
-                {notice}
-              </p>
-            ) : null}
           </>
         ) : null}
         <Modal
@@ -914,9 +1066,9 @@ export function ApplePayments({
                 ) : null}
               </label>
             </div>
-            {notice ? (
+            {visibleNotice ? (
               <p role="alert" className="text-sm text-danger">
-                {notice}
+                {visibleNotice}
               </p>
             ) : null}
             <ModalFooter>

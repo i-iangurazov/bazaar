@@ -148,7 +148,8 @@ const paidApple = async (f: Fixture) => {
   const mapping = f.mappings[0]!;
   const preview = await getApplePurchasePreview(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW" });
   const intent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey,
-    action: "RENEW", quoteToken: preview.quoteToken!, idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+    action: "RENEW", quoteToken: preview.quoteToken!, idempotencyKey: randomUUID(),
+    storeKitConsent: { storefrontId: "143441", currency: "USD", priceMillis: "2990" }, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
   await authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() });
   const payload = signed(intent);
   expect((await apply(f, payload, intent.intentId)).status).toBe("GRANTED");

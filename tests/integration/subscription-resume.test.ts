@@ -11,7 +11,7 @@ import { applyAppleSignedRenewal } from "@/server/billing/appleLifecycle";
 import { handleGoPayNotification } from "@/server/billing/goPayWebhook";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
-import { syntheticAppleTransaction, syntheticAppleVerifier, signSyntheticApplePayload } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, syntheticAppleTransaction, syntheticAppleVerifier, signSyntheticApplePayload } from "../helpers/appleSignedFixture";
 import { GOPAY_FIXTURE_API_KEY, GOPAY_FIXTURE_API_SECRET, GOPAY_FIXTURE_WEBHOOK_SECRET, goPayProtocolFixture } from "../helpers/gopayProtocolFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -37,7 +37,7 @@ describeDb("fresh validation of saved GoPay payment links", () => {
       APPLE_BILLING_CATALOG_JSON: JSON.stringify([{ offerKey: offer.offerKey, productId: "synthetic.resume.business", productType: "AUTO_RENEWABLE",
         subscriptionGroupId: "synthetic-resume-group", approved: true }]) })) vi.stubEnv(key, value);
     const intent = await createApplePurchaseIntent(actor(), { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await authorizeApplePurchase(actor(), intent.intentId, { attemptId: randomUUID() });
     const signed = syntheticAppleTransaction({ appAccountToken: intent.appAccountToken, productId: intent.productId,
       type: Type.AUTO_RENEWABLE_SUBSCRIPTION, subscriptionGroupIdentifier: "synthetic-resume-group", purchaseDate: Date.now() - 120_000, expiresDate: Date.now() - 60_000 });
@@ -115,7 +115,7 @@ describeDb("fresh validation of saved GoPay payment links", () => {
       APPLE_BILLING_CATALOG_JSON: JSON.stringify([{ offerKey: offer.offerKey, productId: "synthetic.resume.nonrenewing", productType: "NON_RENEWING", approved: true }]) })) vi.stubEnv(key, value);
     const preview = await getApplePurchasePreview(actor(), { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" });
     const intent = await createApplePurchaseIntent(actor(), { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW", quoteToken: preview.quoteToken!,
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await authorizeApplePurchase(actor(), intent.intentId, { attemptId: randomUUID() });
     const purchaseDate = Date.now();
     await applyAppleTransaction(await syntheticAppleVerifier().transaction(syntheticAppleTransaction({ appAccountToken: intent.appAccountToken,

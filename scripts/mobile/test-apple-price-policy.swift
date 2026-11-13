@@ -14,6 +14,14 @@ struct ApplePricePolicyChecks {
             BazaarApplePriceConstraint(storefrontId: id, currency: currency, priceMillis: millis)
         }
         let expected = constraint()
+        for type in ["NON_RENEWING", "CONSUMABLE", "AUTO_RENEWABLE"] {
+            check(BazaarApplePricePolicy.permitsProductType(expected: type, actual: type), "Exact authorized sale type remains eligible")
+            for other in ["NON_RENEWING", "CONSUMABLE", "AUTO_RENEWABLE"].filter({ $0 != type }) {
+                check(!BazaarApplePricePolicy.permitsProductType(expected: type, actual: other), "A matching price cannot replace the authorized product type")
+            }
+        }
+        check(!BazaarApplePricePolicy.permitsProductType(expected: nil, actual: "NON_RENEWING"), "Constrained metadata requires the server's authorized type")
+        check(!BazaarApplePricePolicy.permitsProductType(expected: "NON_CONSUMABLE", actual: "NON_CONSUMABLE"), "Unapproved nonconsumables cannot enter the constrained sale flow")
         check(expected.isValid, "Server price constraints use exact canonical fields")
         check(BazaarApplePricePolicy.priceMillis(decimal("2.99")) == "2990", "No binary floating-point rounding")
         check(BazaarApplePricePolicy.priceMillis(decimal("1.005")) == "1005", "Preserve three decimal currency units exactly")

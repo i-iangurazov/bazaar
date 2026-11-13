@@ -11,7 +11,7 @@ import { getAppleSupportCase, importAppleSupportEvidence, listAppleSupportCases,
 import { deleteOwnAccount } from "@/server/services/accountDeletion";
 import * as verification from "@/server/billing/appleVerification";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
-import { syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const terms = createContractTerms("2026-11"), selection = { plan: "BUSINESS" as const, months: 1 as const, extras: { stores: 0, productPacks: 0, userPacks: 0 as const } };
@@ -27,7 +27,7 @@ const seed = async () => {
     APPLE_BILLING_CATALOG_JSON: JSON.stringify([mapping]) })) vi.stubEnv(key, value);
   const actor = { id: f.adminUser.id, organizationId: f.org.id };
   const intent = await createApplePurchaseIntent(actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-    idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+    idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
   const attemptId = randomUUID(); await authorizeApplePurchase(actor, intent.intentId, { attemptId });
   const operatorOrg = await prisma.organization.create({ data: { name: "Synthetic platform operations" } });
   const operator = await prisma.user.create({ data: { organizationId: operatorOrg.id, email: "apple-support-operator@synthetic.invalid",

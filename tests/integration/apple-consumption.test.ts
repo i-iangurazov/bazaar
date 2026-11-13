@@ -13,7 +13,7 @@ import * as verification from "@/server/billing/appleVerification";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 import { deleteOwnAccount } from "@/server/services/accountDeletion";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
-import { signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
 import { parsePreflightTarget, runIosBillingPreflight } from "../../scripts/deployment/ios-billing-preflight";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -31,7 +31,7 @@ async function fixture(grant = true) {
   const actor = { id: f.adminUser.id, organizationId: f.org.id };
   const preview = await getApplePurchasePreview(actor, { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" });
   const intent = await createApplePurchaseIntent(actor, { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW", idempotencyKey: randomUUID(),
-    quoteToken: preview.quoteToken ?? undefined, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+    quoteToken: preview.quoteToken ?? undefined, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
   await authorizeApplePurchase(actor, intent.intentId, { attemptId: randomUUID() });
   const signed = syntheticAppleTransaction({ appAccountToken: intent.appAccountToken, productId: intent.productId, purchaseDate: Date.now() - 1000 });
   if (grant) await applyAppleTransaction(await syntheticAppleVerifier().transaction(signed), { organizationId: f.org.id, intentId: intent.intentId, source: "CLIENT" });

@@ -18,7 +18,7 @@ import { deleteOwnAccount } from "@/server/services/accountDeletion";
 import { setUserActive, updateUser } from "@/server/services/users";
 import type { SubscriptionSelection } from "@/lib/billing/subscriptionPricing";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
-import { syntheticAppleTransaction, syntheticAppleVerifier, signSyntheticApplePayload } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, syntheticAppleTransaction, syntheticAppleVerifier, signSyntheticApplePayload } from "../helpers/appleSignedFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const empty = { stores: 0, productPacks: 0, userPacks: 0 as const };
@@ -46,7 +46,7 @@ const seed = async () => {
 const intentFor = async (f: Awaited<ReturnType<typeof seed>>, offerKey: string, action: "RENEW" | "CHANGE" = "RENEW") => {
   const preview = await getApplePurchasePreview(f.actor, { expectedOrganizationId: f.org.id, offerKey, action });
   const intent = await createApplePurchaseIntent(f.actor, { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey, action, idempotencyKey: randomUUID(),
-    termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true });
+    termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true });
   const attemptId = randomUUID();
   await authorizeApplePurchase(f.actor, intent.intentId, { attemptId });
   return { ...intent, attemptId };
@@ -306,7 +306,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
     expect(preview.timing?.startsAt).toBe(paidEnd.toISOString()); expect(preview.quoteToken).toBeTruthy();
     await prisma.organization.update({ where: { id: f.org.id }, data: { currentPeriodEndsAt: new Date(paidEnd.getTime() + 86400000) } });
     await expect(createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW", idempotencyKey: randomUUID(),
-      quoteToken: preview.quoteToken!, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION })).rejects.toThrow("appleAccessChanged");
+      quoteToken: preview.quoteToken!, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION })).rejects.toThrow("appleAccessChanged");
   });
 
   it.each(["MANUAL", "LIFETIME"])("preserves existing %s access and never creates a new Apple sale", async (kind) => {
@@ -326,7 +326,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
     const actor = { id: f.adminUser.id, organizationId: f.org.id };
     const preview = await getApplePurchasePreview(actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW" });
     const intent = await createApplePurchaseIntent(actor, { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW", idempotencyKey: randomUUID(),
-      acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await authorizeApplePurchase(actor, intent.intentId, { attemptId: randomUUID() });
     await apply(syntheticAppleTransaction({ appAccountToken: intent.appAccountToken, productId: mapping.productId }), f.org.id);
     const org = await getOrganizationPlan(f.org.id);
@@ -405,7 +405,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
   it("lets metadata-only preparation expire safely without recording a potentially paid authorization", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
     const intent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     expect(await authorizeApplePurchase(f.actor, intent.intentId, { prepareOnly: true })).toEqual({ ...intent, attemptId: null });
     expect((await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } })).authorizedAt).toBeNull();
     vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(Date.now() + 16 * 60_000); vi.stubEnv("APPLE_IAP_PRIVATE_KEY", "");
@@ -419,7 +419,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
   it("consumes final native authorization once and refuses both sheet and preparation replay", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
     const intent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await authorizeApplePurchase(f.actor, intent.intentId, { prepareOnly: true });
     const attemptId = randomUUID();
     expect((await authorizeApplePurchase(f.actor, intent.intentId, { attemptId: attemptId.toUpperCase() })).attemptId).toBe(attemptId);
@@ -434,7 +434,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
   it("admits only one concurrent final native authorization before any StoreKit sheet", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
     const intent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     const ids = [randomUUID(), randomUUID()];
     const attempts = await Promise.allSettled(ids.map((attemptId) => authorizeApplePurchase(f.actor, intent.intentId, { attemptId })));
     expect(attempts.filter((a) => a.status === "fulfilled")).toHaveLength(1);
@@ -456,7 +456,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
   it("recovers a lost pre-SDK authorization response only through the original durable native attempt", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
     const input = { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW" as const,
-      idempotencyKey: randomUUID(), acceptedTerms: true as const, termsVersion: LEGAL_TERMS_VERSION };
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true as const, termsVersion: LEGAL_TERMS_VERSION };
     const intent = await createApplePurchaseIntent(f.actor, input), attemptId = randomUUID();
     // Discard the successful server response: the local journal still has the
     // UUID it persisted before sending final authorization, and SDK was not called.
@@ -475,7 +475,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
   it("retains historical authorized intents without an attempt and rejects retroactive device claims in the database", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
     const intent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await prisma.applePurchaseIntent.update({ where: { id: intent.intentId }, data: { authorizedAt: new Date() } });
     await expect(cancelApplePurchaseIntent(f.actor, intent.intentId)).rejects.toThrow("applePurchaseAttemptMismatch");
     await expect(cancelApplePurchaseIntent(f.actor, intent.intentId, randomUUID())).rejects.toThrow("applePurchaseAttemptMismatch");
@@ -486,7 +486,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
   it("requires a valid native UUID and makes a bound authorization immutable even for raw database writers", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
     const intent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await expect(authorizeApplePurchase(f.actor, intent.intentId)).rejects.toThrow("applePurchaseAttemptRequired");
     await expect(authorizeApplePurchase(f.actor, intent.intentId, { attemptId: "not-a-uuid" })).rejects.toThrow("applePurchaseAttemptRequired");
     expect((await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } })).authorizedAt).toBeNull();
@@ -559,7 +559,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
   it("forbids non-allowlisted organizations in sandbox mode, including a previously prepared intent", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
     const intent = await createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION });
     await authorizeApplePurchase(f.actor, intent.intentId, { prepareOnly: true });
     vi.stubEnv("APPLE_BILLING_SANDBOX_ORGANIZATION_IDS", "");
     const catalog = await getAppleBillingState(f.actor);
@@ -567,7 +567,7 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
     expect(catalog.offers.every((o) => !o.available)).toBe(true);
     await expect(authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() })).rejects.toThrow("appleSandboxNotAllowed");
     await expect(createApplePurchaseIntent(f.actor, { expectedOrganizationId: f.org.id, offerKey: mapping.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION })).rejects.toThrow("appleSandboxNotAllowed");
+      idempotencyKey: randomUUID(), storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, termsVersion: LEGAL_TERMS_VERSION })).rejects.toThrow("appleSandboxNotAllowed");
     expect(await prisma.subscriptionPeriod.count()).toBe(0);
   });
 

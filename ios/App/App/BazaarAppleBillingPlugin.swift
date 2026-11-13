@@ -174,20 +174,21 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
             return try await BazaarApplePreSheetAttempt.perform(
                 authorize: {
                     // Check actual StoreKit metadata before consuming the one-use
-                    // authorization. No C constraint is taken from JavaScript.
-                    _ = try await self.productMatchingPrice(product, constraint: authorization.priceConstraint)
+                    // authorization. No constraint is taken from JavaScript.
+                    _ = try await self.productMatchingPrice(product, constraint: authorization.priceConstraint, expectedType: authorization.productType)
                     return try await self.authorize(intentId, attemptId: attemptId, completionCredential: credential)
                 },
                 prepare: { current in
                     guard current.productId == authorization.productId,
                           current.appAccountToken == authorization.appAccountToken,
+                          current.productType == authorization.productType,
                           current.priceConstraint == authorization.priceConstraint,
                           current.action == authorization.action,
                           current.subscriptionGroupId == authorization.subscriptionGroupId,
                           current.deferredSource == authorization.deferredSource else {
                         throw AppleBillingFailure(code: "APPLE_AUTHORIZATION_CHANGED")
                     }
-                    let purchaseProduct = try await self.productMatchingPrice(product, constraint: current.priceConstraint)
+                    let purchaseProduct = try await self.productMatchingPrice(product, constraint: current.priceConstraint, expectedType: current.productType)
                     if let expectedType = current.productType, try self.productType(purchaseProduct.type) != expectedType {
                         throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
                     }
@@ -433,13 +434,18 @@ public final class BazaarAppleBillingPlugin: CAPPlugin, CAPBridgedPlugin {
         return scene
     }
 
-    @MainActor private func productMatchingPrice(_ original: Product, constraint: BazaarApplePriceConstraint?) async throws -> Product {
+    @MainActor private func productMatchingPrice(_ original: Product, constraint: BazaarApplePriceConstraint?, expectedType: String?) async throws -> Product {
         guard let constraint else { return original }
+        guard BazaarApplePricePolicy.permitsProductType(expected: expectedType, actual: try productType(original.type)) else {
+            throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
+        }
         let before = await Storefront.current
         guard let product = try await Product.products(for: [original.id]).first else {
             throw AppleBillingFailure(code: "APPLE_PRODUCT_UNAVAILABLE")
         }
-        guard product.type == .nonRenewable else { throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED") }
+        guard BazaarApplePricePolicy.permitsProductType(expected: expectedType, actual: try productType(product.type)) else {
+            throw AppleBillingFailure(code: "APPLE_PRODUCT_UNSUPPORTED")
+        }
         let after = await Storefront.current
         guard let before, let after else { throw AppleBillingFailure(code: "APPLE_STOREFRONT_UNAVAILABLE") }
         guard before.id == after.id, after.id == constraint.storefrontId else {

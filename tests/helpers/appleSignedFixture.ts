@@ -8,6 +8,7 @@ const fixture = (name: string) => readFileSync(join(process.cwd(), "tests/fixtur
 const key = createPrivateKey(fixture("leaf.key"));
 const x5c = ["leaf.pem", "intermediate.pem", "root.pem"].map((name) => new X509Certificate(fixture(name)).raw.toString("base64"));
 export const syntheticAppleRoot = fixture("root.pem");
+export const syntheticAppleStoreKitConsent = { storefrontId: "143586", currency: "USD", priceMillis: "9990", displayPrice: "$9.99" };
 export const syntheticAppleVerifier = (environment = Environment.SANDBOX) => new AppleReceiptVerifier(new SignedDataVerifier(
   [syntheticAppleRoot], false, environment, APPLE_BUNDLE_ID, environment === Environment.PRODUCTION ? 1234567890 : undefined));
 export function signSyntheticApplePayload(payload: object, header: object = { alg: "ES256", x5c }) {
@@ -21,5 +22,5 @@ export function syntheticAppleTransaction(input: { appAccountToken: string; prod
   const now = Date.now();
   return signSyntheticApplePayload({ bundleId: APPLE_BUNDLE_ID, environment: "Sandbox", transactionId: "100000000000001",
     originalTransactionId: "100000000000001", purchaseDate: now, signedDate: now, type: Type.NON_RENEWING_SUBSCRIPTION,
-    quantity: 1, inAppOwnershipType: "PURCHASED", price: 9990, currency: "USD", ...input });
+    quantity: 1, inAppOwnershipType: "PURCHASED", price: 9990, currency: "USD", storefrontId: syntheticAppleStoreKitConsent.storefrontId, ...input });
 }

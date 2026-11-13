@@ -22,13 +22,15 @@ import { parseAppleCompletionPublicKey } from "./appleCompletionCrypto";
 import { appleNativeOriginAllowed } from "./appleNativeOrigin";
 import { auditAppleSupportEvidence, type AppleSupportOperator } from "./appleSupportAuth";
 import { presentAppleConsumptionConsent } from "./appleConsumption";
+import { appleStoreKitConsentSchema, appleStoreKitPriceConstraint, assertAppleStoreKitReceiptConsent, readAppleStoreKitConsent, sameAppleStoreKitConsent } from "./appleStoreKitConsent";
 
 export type AppleBillingActor = { id: string; organizationId: string };
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 const offerSnapshotSchema = z.object({ kind: z.enum(["SUBSCRIPTION", "WHATSAPP_PACK"]), offerKey: z.string() }).passthrough();
 export const appleIntentInputSchema = z.object({ expectedOrganizationId: z.string().min(1).max(80), offerKey: z.string().min(1).max(400), idempotencyKey: z.string().uuid(),
   action: z.enum(["RENEW", "CHANGE"]).default("RENEW"), quoteToken: z.string().max(12000).optional(),
-  termsVersion: z.string().min(1).max(100), acceptedTerms: z.literal(true), storeId: z.string().min(1).max(80).optional() });
+  termsVersion: z.string().min(1).max(100), acceptedTerms: z.literal(true), storeId: z.string().min(1).max(80).optional(),
+  storeKitConsent: appleStoreKitConsentSchema.optional() });
 export async function assertAppleBillingActor(actor: AppleBillingActor, db: Prisma.TransactionClient = prisma) {
   if (db !== prisma) await db.$queryRaw`SELECT id FROM "User" WHERE id = ${actor.id} AND "organizationId" = ${actor.organizationId} FOR UPDATE`;
   const user = await db.user.findFirst({ where: { id: actor.id, organizationId: actor.organizationId, isActive: true, deletedAt: null },
@@ -52,7 +54,8 @@ const presentIntent = (intent: ApplePurchaseIntent) => {
     deferredSource: source ? { transactionId: source.transactionId, originalTransactionId: source.originalTransactionId,
       productId: source.productId, expiresAt: source.expiresAt } : null,
     appAccountToken: intent.purchaseAppAccountToken ?? intent.appAccountToken, environment: intent.environment, expiresAt: intent.expiresAt.toISOString(),
-    priceConstraint: temporaryUpgradePriceConstraint(readPurchaseSnapshot(intent.purchaseSnapshot)) };
+    priceConstraint: temporaryUpgradePriceConstraint(readPurchaseSnapshot(intent.purchaseSnapshot)) ??
+      appleStoreKitPriceConstraint(readAppleStoreKitConsent(intent.offerSnapshot)) };
 };
 
 export async function getAppleBillingState(actor: AppleBillingActor) {
@@ -110,7 +113,7 @@ export async function getAppleBillingState(actor: AppleBillingActor) {
         available: availableActions.length > 0, availableActions, renewUnavailableReason: reason, changeUnavailableReason: changeReason,
         unavailableReason: availableActions.length ? null : reason };
     }),
-    recentTransactions: transactions.map((t) => ({ transactionId: t.transactionId, originalTransactionId: t.originalTransactionId,
+    recentTransactions: transactions.map((t) => ({ transactionId: t.transactionId, originalTransactionId: t.originalTransactionId, intentId: t.intentId,
       productId: t.productId, status: t.status, reason: t.lastIssue, purchaseDate: t.purchaseDate.toISOString(), expiresDate: t.expiresDate?.toISOString() ?? null,
       priceMillis: t.priceMillis?.toString() ?? null, currency: t.currency, environment: t.environment, refundable: t.status !== "REVOKED",
       consumptionConsent: presentAppleConsumptionConsent(actor.id, t.intent?.createdById ?? null, t.consumptionConsent, t.consumptionRequests[0]) })),
@@ -173,6 +176,12 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
         throw new AppError("idempotencyConflict", "CONFLICT", 409);
       if (temporary && (!input.quoteToken || temporaryUpgradeDigest(verifyPurchaseQuote(input.quoteToken, actor.organizationId)) !== temporaryUpgradeDigest(readPurchaseSnapshot(prior.purchaseSnapshot))))
         throw new AppError("idempotencyConflict", "CONFLICT", 409);
+      if (!temporary) {
+        const frozenConsent = readAppleStoreKitConsent(prior.offerSnapshot);
+        if (!frozenConsent && !prior.authorizedAt) throw new AppError("applePriceConsentRequired", "CONFLICT", 409);
+        if (frozenConsent && (!input.storeKitConsent || !sameAppleStoreKitConsent(frozenConsent, input.storeKitConsent)))
+          throw new AppError("idempotencyConflict", "CONFLICT", 409);
+      }
       if (prior.status !== "PENDING" || prior.expiresAt <= new Date()) throw new AppError("appleIntentExpired", "CONFLICT", 409);
       if (prior.environment !== environment) throw new AppError("appleCatalogMismatch", "CONFLICT", 409);
       if (environment === "Sandbox" && !config.sandboxOrganizations.has(actor.organizationId)) throw new AppError("appleSandboxNotAllowed", "FORBIDDEN", 403);
@@ -203,6 +212,7 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
     assertMappingKind(offer, mapping);
     if (mapping.productType === "NON_RENEWING" && !input.quoteToken) throw new AppError("appleQuoteRequired", "CONFLICT", 409);
     if (environment === "Sandbox" && !config.sandboxOrganizations.has(org.id)) throw new AppError("appleSandboxNotAllowed", "FORBIDDEN", 403);
+    if (!input.storeKitConsent) throw new AppError("applePriceConsentRequired", "CONFLICT", 409);
     const now = new Date();
     const scope = offer.kind;
     let purchase: PurchaseSnapshot | undefined;
@@ -245,7 +255,8 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
       idempotencyKey: input.idempotencyKey, action: input.action, pendingSlot: `${scope}:${org.id}`, scope, offerKey: offer.offerKey,
       productId: mapping.productId, productType: mapping.productType, environment,
       appAccountToken: account.appAccountToken, offerSnapshot: json({ ...offer, ...(preservedAccess ? { preservedAccess } : {}),
-        ...(appleChangeSource ? { appleChangeSource } : {}), appleProduct: { subscriptionGroupId: mapping.subscriptionGroupId, appleOfferVersion: mapping.appleOfferVersion } }), ...(purchase ? { purchaseSnapshot: json(purchase) } : {}),
+        ...(appleChangeSource ? { appleChangeSource } : {}), appleProduct: { subscriptionGroupId: mapping.subscriptionGroupId, appleOfferVersion: mapping.appleOfferVersion,
+          storeKitConsent: input.storeKitConsent } }), ...(purchase ? { purchaseSnapshot: json(purchase) } : {}),
       storeId: input.storeId, termsVersion: config.termsVersion, termsUrl: config.termsUrl, expiresAt: new Date(now.getTime() + 15 * 60_000) } });
     return presentIntent(intent);
   });
@@ -274,6 +285,7 @@ export async function authorizeApplePurchase(actor: AppleBillingActor, intentId:
     if ((!temporary && (!config.ready || !config.catalog.some((v) => v.offerKey === intent.offerKey && v.productId === intent.productId && v.productType === intent.productType))) ||
       intent.environment !== environment || intent.termsVersion !== config.termsVersion) throw new AppError("appleCatalogMismatch", "CONFLICT", 409);
     if (temporary) await assertTemporaryUpgradeQuote(db, actor.organizationId, readPurchaseSnapshot(intent.purchaseSnapshot)!, true);
+    else if (!readAppleStoreKitConsent(intent.offerSnapshot)) throw new AppError("applePriceConsentRequired", "CONFLICT", 409);
     await assertIntentConditions(db, actor, intent);
     const org = await getOrganizationPlan(actor.organizationId, db);
     const changeSource = readAppleDeferredSource(intent.offerSnapshot);
@@ -427,6 +439,14 @@ export async function applyAppleTransaction(receipt: VerifiedAppleTransaction, i
         const frozenProduct = z.object({ subscriptionGroupId: z.string().optional() }).parse(offer.appleProduct ?? {});
         if (intent.productType === "AUTO_RENEWABLE" && frozenProduct.subscriptionGroupId !== d.subscriptionGroupIdentifier)
           throw new AppError("appleCatalogMismatch", "CONFLICT", 409);
+        const priceConsent = readAppleStoreKitConsent(intent.offerSnapshot);
+        // A later Apple-initiated renewal may have its own price. It does not
+        // reuse the first sheet's consent, and must already have a granted
+        // payment on this exact intent before this exception can apply.
+        const subsequentRenewal = intent.productType === "AUTO_RENEWABLE" && d.transactionReason === "RENEWAL" && !!chain && !!priceConsent &&
+          await db.appleTransaction.findFirst({ where: { intentId: intent.id, status: "GRANTED", id: { not: row.id },
+            purchaseDate: { lt: row.purchaseDate } }, select: { id: true } });
+        if (!subsequentRenewal) assertAppleStoreKitReceiptConsent(priceConsent, d);
         if (offer.kind === "SUBSCRIPTION") superseded = (await grantAppleSubscription(db, row, receipt, intent, Boolean(chain))) === "SUPERSEDED";
         else await grantAppleWhatsApp(db, row, intent);
       } catch (error) {

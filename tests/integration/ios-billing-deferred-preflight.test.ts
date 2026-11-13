@@ -13,7 +13,7 @@ import * as verification from "@/server/billing/appleVerification";
 import { deleteOwnAccount } from "@/server/services/accountDeletion";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { assertSafeTestDatabaseReset } from "../helpers/testDatabaseSafety";
-import { signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, signSyntheticApplePayload, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
 import { parsePreflightTarget, runIosBillingPreflight } from "../../scripts/deployment/ios-billing-preflight";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -60,7 +60,7 @@ async function seedCapability(deferred: boolean) {
   const actor = { id: f.adminUser.id, organizationId: f.org.id };
   const makeIntent = (index: number, action: "RENEW" | "CHANGE") => createApplePurchaseIntent(actor, {
     expectedOrganizationId: f.org.id, offerKey: mappings[index].offerKey, action,
-    idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true,
+    idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true,
   });
   const first = await makeIntent(0, "RENEW"), verifier = syntheticAppleVerifier();
   const baseData = { appAccountToken: first.appAccountToken, productId: first.productId,

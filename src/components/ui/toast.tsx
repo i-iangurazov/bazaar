@@ -111,6 +111,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
       {children}
       {toasts.length ? (
         <div
+          data-toast-viewport
           className={cn(
             "fixed left-4 right-4 z-[1100] flex flex-col gap-3 sm:w-96",
             isPosCashierRoute

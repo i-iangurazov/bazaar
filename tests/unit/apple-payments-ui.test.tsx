@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ru from "../../messages/ru.json";
@@ -110,8 +110,15 @@ const product = {
   displayPrice: "$19.99",
   price: "19.99",
   currencyCode: "USD",
+  priceMillis: "19990",
+  storefrontId: "123456",
   type: "NON_RENEWING",
 };
+const recordedPurchase = (fields: Record<string, unknown> = {}) => ({
+  transactionId: "notification-paid", intentId: "native-authorized-intent", productId: product.id,
+  environment: "Production", status: "GRANTED", purchaseDate: "2026-11-13T15:21:52Z",
+  ...fields,
+});
 const offer = () => ({
   kind: "SUBSCRIPTION",
   offerKey: "business-contract-offer",
@@ -206,18 +213,17 @@ const configureAutomaticChange = () => {
   return data;
 };
 const messages = { ru, kg, en };
-const mount = (locale: keyof typeof messages = "ru", wrapper = false) =>
-  render(
+const checkout = (locale: keyof typeof messages = "ru", wrapper = false, kind: "SUBSCRIPTION" | "WHATSAPP_PACK" = "SUBSCRIPTION") =>
     <NextIntlClientProvider locale={locale} messages={messages[locale]} timeZone="Asia/Bishkek">
       <TooltipProvider>
         {wrapper ? (
           <SubscriptionPayments onUpdated={mock.updated} />
         ) : (
-          <ApplePayments kind="SUBSCRIPTION" onUpdated={mock.updated} />
+          <ApplePayments kind={kind} storeId={kind === "WHATSAPP_PACK" ? "synthetic-store" : undefined} onUpdated={mock.updated} />
         )}
       </TooltipProvider>
-    </NextIntlClientProvider>,
-  );
+    </NextIntlClientProvider>;
+const mount = (locale: keyof typeof messages = "ru", wrapper = false, kind: "SUBSCRIPTION" | "WHATSAPP_PACK" = "SUBSCRIPTION") => render(checkout(locale, wrapper, kind));
 const openConsent = async () => {
   await screen.findByText(product.displayPrice);
   const purchaseButton = screen.getByRole("button", { name: /\$19\.99/ });
@@ -257,7 +263,7 @@ beforeEach(() => {
   mock.temporaryRefetch.mockResolvedValue(undefined);
   mock.temporaryCatalogRefetch.mockImplementation(async () => ({ data: mock.temporaryData }));
   mock.products.mockResolvedValue({ products: [product], missingProductIds: [] });
-  mock.intent.mockResolvedValue({ intentId: "native-authorized-intent" });
+  mock.intent.mockResolvedValue({ intentId: "native-authorized-intent", productId: product.id });
   mock.purchase.mockResolvedValue({ status: "purchased", transaction: receipt() });
   mock.confirm.mockResolvedValue({ acknowledged: true, status: "GRANTED" });
   mock.restoreBatch.mockImplementation(
@@ -271,7 +277,7 @@ beforeEach(() => {
   );
   mock.finish.mockResolvedValue({ finished: true });
   mock.retryCompletions.mockResolvedValue({ pendingCount: 0, acknowledgedCount: 0, deferredCount: 0, recordedCount: 0 });
-  mock.refetch.mockResolvedValue({ data: mock.data });
+  mock.refetch.mockImplementation(async () => ({ data: mock.data }));
   mock.restore.mockResolvedValue({
     transactions: [],
     unverifiedTransactionIds: [],
@@ -593,6 +599,25 @@ describe("iOS Apple checkout and recovery", () => {
     expect(mock.finish).not.toHaveBeenCalled();
   });
 
+  it.each(["NON_RENEWING", "AUTO_RENEWABLE", "CONSUMABLE"])("refuses a changed %s catalog mapping before passing an intent to native", async (type) => {
+    if (type === "AUTO_RENEWABLE") configureAutomaticChange();
+    if (type === "CONSUMABLE") {
+      mock.data = { ...fixture(), offers: [{ kind: "WHATSAPP_PACK", offerKey: "synthetic-wa-pack", productId: product.id,
+        productType: "CONSUMABLE", quantity: 1, available: true, availableActions: ["RENEW"] }] };
+      mock.products.mockResolvedValue({ products: [{ ...product, type: "CONSUMABLE" }], missingProductIds: [] });
+    }
+    mock.intent.mockResolvedValueOnce({ intentId: "fresh-mapping-changed", productId: "different-owned-sku" });
+    mount("ru", false, type === "CONSUMABLE" ? "WHATSAPP_PACK" : "SUBSCRIPTION");
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.productMismatch);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mock.cancel).toHaveBeenCalledExactlyOnceWith({ intentId: "fresh-mapping-changed" });
+    expect(mock.purchase).not.toHaveBeenCalled();
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+  });
+
   it("retains a lost temporary confirmation for receipt recovery without claiming or finishing the grant", async () => {
     configureTemporary();
     mock.confirm.mockRejectedValueOnce(new Error("network lost"));
@@ -685,6 +710,7 @@ describe("iOS Apple checkout and recovery", () => {
           acceptedTerms: true,
           termsVersion: "test-terms",
           action: "RENEW",
+          storeKitConsent: { storefrontId: "123456", currency: "USD", priceMillis: "19990", displayPrice: "$19.99" },
         }),
       );
       expect(mock.purchase).toHaveBeenCalledWith("native-authorized-intent");
@@ -739,6 +765,162 @@ describe("iOS Apple checkout and recovery", () => {
     expect(mock.confirm).not.toHaveBeenCalled();
     expect(mock.finish).not.toHaveBeenCalled();
     expect(mock.cancel).not.toHaveBeenCalled();
+    expect((screen.getByRole("button", { name: /Продолжить с Apple/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /Продолжить с Apple/ }));
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["ru", "kg", "en"] as const)("recovers a notification-only grant for the exact attempt in %s without another purchase", async (locale) => {
+    mock.purchase.mockRejectedValueOnce(Object.assign(new Error("APPLE_STORE_ERROR"), { code: "APPLE_STORE_ERROR" }));
+    const recovered = { ...fixture(), recentTransactions: [recordedPurchase()] };
+    mock.refetch.mockImplementationOnce(async () => { mock.data = recovered; return { data: recovered }; });
+    const retry = vi.fn();
+    window.addEventListener("bazaar:apple-retry", retry);
+    try {
+      mount(locale);
+      const dialog = await openConsent();
+      fireEvent.click(dialog.getByRole("button", { name: messages[locale].billingApple.confirmPurchase }));
+      await screen.findByText(messages[locale].billingApple.confirmed);
+      expect(screen.queryByText(messages[locale].billingApple.operationFailed)).toBeNull();
+      expect(screen.queryByText(messages[locale].billingApple.purchaseRecoveryPending)).toBeNull();
+      expect(retry).toHaveBeenCalledTimes(1);
+      expect(mock.intent).toHaveBeenCalledTimes(1);
+      expect(mock.purchase).toHaveBeenCalledTimes(1);
+      expect(mock.confirm).not.toHaveBeenCalled();
+      expect(mock.finish).not.toHaveBeenCalled();
+      expect(mock.cancel).not.toHaveBeenCalled();
+    } finally { window.removeEventListener("bazaar:apple-retry", retry); }
+  });
+
+  it.each([
+    { intentId: "old-intent", productId: product.id, environment: "Production" },
+    { intentId: null, productId: product.id, environment: "Production" },
+    { intentId: "native-authorized-intent", productId: "different-sku", environment: "Production" },
+    { intentId: "native-authorized-intent", productId: product.id, environment: "Sandbox" },
+  ])("keeps an ambiguous attempt pending instead of using unrelated Apple/GoPay access: %j", async (binding) => {
+    const data = fixture();
+    data.access.paidUntil = "2027-12-01T00:00:00Z";
+    data.recentTransactions = [recordedPurchase({ transactionId: "old-receipt", ...binding })];
+    mock.data = data;
+    mock.purchase.mockRejectedValueOnce(Object.assign(new Error("private-sensitive-message"), {
+      code: "APPLE_NETWORK_ERROR", serverCode: "private-sensitive-code",
+    }));
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.purchaseRecoveryPending);
+    expect(screen.queryByText(ru.billingApple.confirmed)).toBeNull();
+    expect(screen.queryByText(/private-sensitive/)).toBeNull();
+    expect(screen.getByText(ru.billingApple.purchaseRecoveryDiagnostic.replace("{code}", "APPLE_NETWORK_ERROR"))).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Продолжить с Apple/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /Продолжить с Apple/ }));
+    await waitFor(() => expect((screen.getByRole("button", { name: ru.billingApple.purchaseRecoveryRetry }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: ru.billingApple.purchaseRecoveryRetry }));
+    await waitFor(() => expect(mock.refetch.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(mock.intent).toHaveBeenCalledTimes(1);
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+    expect(mock.restore).not.toHaveBeenCalled();
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it("updates an ambiguous attempt from server REVIEW to a late exact GRANTED result", async () => {
+    mock.purchase.mockRejectedValueOnce(Object.assign(new Error("APPLE_NETWORK_ERROR"), { code: "APPLE_NETWORK_ERROR" }));
+    const view = mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.purchaseRecoveryPending);
+    const data = fixture();
+    const row = recordedPurchase({ transactionId: "late-paid", status: "REVIEW" });
+    data.recentTransactions = [row]; mock.data = data;
+    view.rerender(checkout());
+    await screen.findByText(ru.billingApple.review);
+    expect(screen.queryByText(ru.billingApple.confirmed)).toBeNull();
+    expect((screen.getByRole("button", { name: /Продолжить с Apple/ }) as HTMLButtonElement).disabled).toBe(true);
+    mock.data = { ...data, recentTransactions: [{ ...row, status: "GRANTED" }] };
+    view.rerender(checkout());
+    await screen.findByText(ru.billingApple.confirmed);
+    expect(screen.queryByText(ru.billingApple.purchaseRecoveryPending)).toBeNull();
+    expect(screen.queryByText(ru.billingApple.operationFailed)).toBeNull();
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it("does not apply a late native rejection or grant after switching organizations", async () => {
+    let reject: (reason: unknown) => void = () => {};
+    mock.purchase.mockImplementationOnce(() => new Promise((_resolve, rejectPromise) => { reject = rejectPromise; }));
+    const view = mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.purchase).toHaveBeenCalledTimes(1));
+    const other = fixture(); other.organization = { id: "another-organization", name: "Other organization" };
+    other.recentTransactions = [recordedPurchase({ transactionId: "different-org" })];
+    mock.data = other;
+    view.rerender(checkout());
+    reject(Object.assign(new Error("APPLE_STORE_ERROR"), { code: "APPLE_STORE_ERROR" }));
+    await waitFor(() => expect((screen.getByRole("button", { name: /Продолжить с Apple/ }) as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByText(ru.billingApple.confirmed)).toBeNull();
+    expect(screen.queryByText(ru.billingApple.purchaseRecoveryPending)).toBeNull();
+    expect(screen.queryByText(ru.errors.APPLE_STORE_ERROR)).toBeNull();
+    expect(mock.refetch).not.toHaveBeenCalled();
+    expect(mock.confirm).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it("keeps a pre-sheet price error actionable without inventing an ambiguous paid outcome", async () => {
+    mock.purchase.mockRejectedValueOnce(Object.assign(new Error("APPLE_PRICE_CHANGED"), { code: "APPLE_PRICE_CHANGED" }));
+    const { container } = mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await within(await screen.findByRole("dialog")).findByText(ru.billingApple.priceChanged);
+    expect(container.querySelector('[data-apple-attempt-recovery="true"]')).toBeNull();
+    expect(screen.queryByText(ru.billingApple.purchaseRecoveryPending)).toBeNull();
+    expect(mock.cancel).not.toHaveBeenCalled();
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { priceMillis: undefined }, { priceMillis: "19.990" }, { priceMillis: "9007199254740992" },
+    { storefrontId: undefined }, { currencyCode: "usd" },
+  ])("blocks base checkout without exact native price consent metadata: %j", async (fields) => {
+    mock.products.mockResolvedValue({ products: [{ ...product, ...fields }], missingProductIds: [] });
+    mount();
+    await screen.findByText(ru.errors.applePriceConsentRequired);
+    expect((screen.getByRole("button", { name: /Продолжить с Apple/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mock.intent).not.toHaveBeenCalled();
+    expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
+  it("clears prior consent when StoreKit changes price/storefront and sends the exact newly accepted metadata", async () => {
+    const { container } = mount();
+    await openConsent();
+    const changed = { ...product, displayPrice: "24,95\u00a0$", price: "24.95", priceMillis: "24950", storefrontId: "143586" };
+    mock.products.mockResolvedValueOnce({ products: [changed], missingProductIds: [] });
+    fireEvent(window, new Event("focus"));
+    await waitFor(() => expect(container.querySelector("[data-apple-price]")?.textContent).toContain(changed.displayPrice));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: /24,95/ }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByRole("checkbox").getAttribute("aria-checked")).toBe("false");
+    expect((dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mock.intent).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole("checkbox"));
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.intent).toHaveBeenCalledWith(expect.objectContaining({ storeKitConsent: {
+      storefrontId: "143586", currency: "USD", priceMillis: "24950", displayPrice: changed.displayPrice,
+    } })));
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not print an unrecognized native error code or arbitrary error payload", async () => {
+    mock.purchase.mockRejectedValueOnce(Object.assign(new Error("untrusted-private-payload"), { code: "UNTRUSTED_PRIVATE_CODE" }));
+    const { container } = mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.purchaseRecoveryPending);
+    expect(container.textContent).not.toContain("UNTRUSTED_PRIVATE_CODE");
+    expect(container.textContent).not.toContain("untrusted-private-payload");
+    expect(container.querySelector('[data-apple-attempt-recovery="true"]')).not.toBeNull();
   });
 
   it("does not replace the native attempt acknowledgement with a generic web cancellation", async () => {
@@ -887,7 +1069,72 @@ describe("iOS Apple checkout and recovery", () => {
     mount();
     const dialog = await openConsent();
     fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
-    await screen.findByText(ru.billingApple.operationFailed);
+    await screen.findByText(ru.billingApple.purchaseRecoveryPending);
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it("replaces a lost confirmation response with the exact durable grant without paying or finishing again", async () => {
+    mock.confirm.mockRejectedValueOnce(new Error("response-lost-after-server-commit"));
+    const recovered = { ...fixture(), recentTransactions: [recordedPurchase()] };
+    mock.refetch.mockImplementationOnce(async () => { mock.data = recovered; return { data: recovered }; });
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.confirmed);
+    expect(screen.queryByText(ru.billingApple.operationFailed)).toBeNull();
+    expect(mock.intent).toHaveBeenCalledTimes(1);
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
+    expect(mock.confirm).toHaveBeenCalledTimes(1);
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.cancel).not.toHaveBeenCalled();
+  });
+
+  it.each(["resolve", "reject"])("ignores a late confirmation %s after the organization changed", async (outcome) => {
+    let complete: () => void = () => {};
+    mock.confirm.mockImplementationOnce(() => new Promise((resolve, reject) => {
+      complete = () => outcome === "resolve" ? resolve({ acknowledged: true, status: "GRANTED", organizationId: "synthetic-organization" })
+        : reject(new Error("late-old-organization-error"));
+    }));
+    const view = mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.confirm).toHaveBeenCalledTimes(1));
+    mock.data = { ...fixture(), organization: { id: "another-organization", name: "Other organization" } };
+    view.rerender(checkout());
+    await act(async () => { complete(); });
+    expect(screen.queryByText(ru.billingApple.confirmed)).toBeNull();
+    expect(screen.queryByText(ru.billingApple.purchaseRecoveryPending)).toBeNull();
+    expect(screen.queryByText(ru.billingApple.operationFailed)).toBeNull();
+    expect(mock.refetch).not.toHaveBeenCalled();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.updated).not.toHaveBeenCalled();
+  });
+
+  it("does not finish or update a new organization when the prior post-confirm refresh completes late", async () => {
+    let complete: () => void = () => {};
+    const original = mock.data;
+    mock.refetch.mockImplementationOnce(() => new Promise((resolve) => { complete = () => resolve({ data: original }); }));
+    const view = mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await waitFor(() => expect(mock.refetch).toHaveBeenCalledTimes(1));
+    mock.data = { ...fixture(), organization: { id: "another-organization", name: "Other organization" } };
+    view.rerender(checkout());
+    await act(async () => { complete(); });
+    expect(screen.queryByText(ru.billingApple.confirmed)).toBeNull();
+    expect(mock.finish).not.toHaveBeenCalled();
+    expect(mock.updated).not.toHaveBeenCalled();
+  });
+
+  it("keeps the confirmed grant distinct from an unavailable post-confirm refresh", async () => {
+    mock.refetch.mockRejectedValueOnce(new Error("refresh-offline"));
+    mount();
+    const dialog = await openConsent();
+    fireEvent.click(dialog.getByRole("button", { name: ru.billingApple.confirmPurchase }));
+    await screen.findByText(ru.billingApple.confirmedRecoveryPending);
+    expect(screen.queryByText(ru.billingApple.operationFailed)).toBeNull();
+    expect(mock.purchase).toHaveBeenCalledTimes(1);
     expect(mock.finish).not.toHaveBeenCalled();
     expect(mock.cancel).not.toHaveBeenCalled();
   });
@@ -947,6 +1194,13 @@ describe("iOS Apple checkout and recovery", () => {
     expect(mock.restore).toHaveBeenCalledTimes(1);
     expect(mock.finish).toHaveBeenCalledTimes(60);
     expect(mock.restoreBatch.mock.calls[2][0].signedTransactions).toEqual(transactions.slice(50).map((transaction) => transaction.signedTransactionInfo));
+    const status = screen.getByText(ru.billingApple.restored);
+    const actions = status.closest("[data-apple-purchase-actions]") as HTMLElement;
+    expect(actions).not.toBeNull();
+    expect(within(actions).getAllByRole("status")).toHaveLength(1);
+    const restore = within(actions).getByRole("button", { name: ru.billingApple.restore });
+    await waitFor(() => expect((restore as HTMLButtonElement).disabled).toBe(false));
+    expect(status.compareDocumentPosition(restore) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("retries a refused native acknowledgment without presenting another purchase sheet", async () => {

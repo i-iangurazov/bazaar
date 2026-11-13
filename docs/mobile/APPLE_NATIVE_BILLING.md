@@ -63,6 +63,26 @@ an acknowledgement flag. The ACK route requires a durable matching server record
 and does not create an entitlement. A refused/network-failed ACK leaves the
 transaction in StoreKit's queue for recovery.
 
+New normal purchase intents also freeze the buyer-observed StoreKit storefront,
+currency and exact decimal price in milliunits, plus optional literal display
+text, under immutable `offerSnapshot.appleProduct.storeKitConsent`. Preparation
+and final authorization return that exact price constraint. Native re-fetches
+the authorized product and checks SKU type, storefront, currency and amount
+before the sheet; a changed server SKU requires fresh consent. Signed receipt
+money is checked again before a new grant. A discrepancy is durably retained in
+REVIEW for recovery/refund, with no automatic second purchase. Existing granted
+markerless history is preserved; only a later signed automatic renewal with an
+earlier GRANTED payment on the same intent may use its own renewal price.
+Apple documents [transaction price in milliunits](https://developer.apple.com/documentation/appstoreserverapi/price)
+and the separate [localized product price](https://developer.apple.com/documentation/storekit/product/price).
+
+An ambiguous native result or lost confirmation response keeps the original
+intent/idempotency key and blocks a new sheet while unresolved. Passive recovery
+drains unfinished transactions and refreshes authenticated server state, without
+opening Apple login. Success messaging requires a GRANTED transaction bound to
+the exact current organization, environment, intent and product; another paid
+period or matching SKU alone does not resolve the attempt.
+
 ## Recovery and Apple account actions
 
 - The following cancellation-file protocol is retained for **legacy keyless

@@ -13,7 +13,7 @@ import { getOrganizationPlan } from "@/server/services/planLimits";
 import { getSubscriptionUsage, withSubscriptionUsage } from "@/server/billing/subscriptionUsage";
 import { whatsappQuota } from "@/server/whatsapp/quota";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
-import { syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
+import { syntheticAppleStoreKitConsent, syntheticAppleTransaction, syntheticAppleVerifier } from "../helpers/appleSignedFixture";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 const terms = createContractTerms("2026-11");
@@ -39,7 +39,7 @@ const seed = async () => {
 const intentFor = async (f: Awaited<ReturnType<typeof seed>>, extra = {}) => {
   const preview = await getApplePurchasePreview(f.actor, { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" });
   const intent = await createApplePurchaseIntent(f.actor, { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey: offer.offerKey,
-    action: "RENEW", idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true, ...extra });
+    action: "RENEW", idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true, ...extra });
   await authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() });
   return intent;
 };
@@ -65,8 +65,12 @@ describeDb("verified Apple purchases on isolated PostgreSQL", () => {
   it("durably records exact signed USD milliunits, grants once, and restores without quota reset", async () => {
     const f = await seed(), intent = await intentFor(f);
     const receipt = await syntheticAppleVerifier().transaction(syntheticAppleTransaction({ appAccountToken: intent.appAccountToken, productId }));
-    const first = await applyAppleTransaction(receipt, { organizationId: f.org.id, intentId: intent.intentId, source: "CLIENT" });
+    const first = await applyAppleTransaction(receipt, { organizationId: f.org.id, intentId: intent.intentId, source: "NOTIFICATION" });
     expect(first.status).toBe("GRANTED");
+    const catalog = await getAppleBillingState(f.actor);
+    expect(catalog.organization.id).toBe(f.org.id);
+    expect(catalog.recentTransactions[0]).toMatchObject({ intentId: intent.intentId, productId,
+      environment: "Sandbox", transactionId: receipt.data.transactionId, status: "GRANTED" });
     await withSubscriptionUsage({ organizationId: f.org.id, resource: "ai", operationKey: "already-used", units: 5 }, async () => true);
     const usage = await getSubscriptionUsage(f.org.id);
     await applyAppleTransaction(receipt, { organizationId: f.org.id, source: "RESTORE" });
@@ -79,7 +83,7 @@ describeDb("verified Apple purchases on isolated PostgreSQL", () => {
   it("serializes duplicate receipts and duplicate intents with one durable grant", async () => {
     const f = await seed(); const key = randomUUID();
     const preview = await getApplePurchasePreview(f.actor, { expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" });
-    const params = { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" as const, idempotencyKey: key, termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true as const };
+    const params = { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey: offer.offerKey, action: "RENEW" as const, idempotencyKey: key, termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true as const };
     const intents = await Promise.all([createApplePurchaseIntent(f.actor, params), createApplePurchaseIntent(f.actor, params)]);
     expect(intents[0].intentId).toBe(intents[1].intentId);
     await authorizeApplePurchase(f.actor, intents[0].intentId, { attemptId: randomUUID() });
@@ -135,7 +139,7 @@ describeDb("verified Apple purchases on isolated PostgreSQL", () => {
   it("rejects expected organization races and current role changes before opening StoreKit", async () => {
     const f = await seed();
     await expect(createApplePurchaseIntent(f.actor, { expectedOrganizationId: "different-org", offerKey: offer.offerKey, action: "RENEW",
-      idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, acceptedTerms: true })).rejects.toThrow("applePurchaseOrganizationMismatch");
+      idempotencyKey: randomUUID(), termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true })).rejects.toThrow("applePurchaseOrganizationMismatch");
     const intent = await intentFor(f);
     await prisma.user.update({ where: { id: f.adminUser.id }, data: { role: "STAFF" } });
     await expect(authorizeApplePurchase(f.actor, intent.intentId, { attemptId: randomUUID() })).rejects.toThrow("forbidden");
