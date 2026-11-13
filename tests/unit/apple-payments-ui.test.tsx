@@ -9,6 +9,7 @@ import en from "../../messages/en.json";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApplePayments } from "@/components/billing/apple-payments";
 import { SubscriptionPayments } from "@/components/billing/subscription-payments";
+import { formatCurrencyKGS } from "@/lib/i18nFormat";
 
 const mock = vi.hoisted(() => ({
   platform: "ios",
@@ -169,7 +170,7 @@ const temporaryCatalogFixture = (ready = false) => ({
   ready, unavailableReason: ready ? null : "appleTemporaryUpgradePolicyUnavailable", policyVersion: "synthetic-policy",
   organization: { id: "synthetic-organization", name: "Synthetic organization" },
   currentSelection: { plan: "STARTER", months: 6, extras: { stores: 0, productPacks: 0, userPacks: 0 } },
-  currentTermOnly: true, futureCoverageUnchanged: true,
+  currentTermOnly: true, futureCoverageUnchanged: true, roundingMode: "DOWN_WITH_OWNER_DISCOUNT",
   products: ready ? [{ productId: temporaryProduct.id, productType: "NON_RENEWING" }] : [],
   markets: ready ? [{ storefrontId: "123456", currency: "USD" }] : [],
 });
@@ -182,8 +183,9 @@ const temporaryQuoteFixture = (input: TemporaryRequest) => ({
     provider: "GOPAY", startsAt: "2026-11-01T00:00:00Z", endsAt: "2027-05-01T00:00:00Z" },
   timing: { startsAt: "2026-11-11T00:00:00Z", endsAt: "2027-05-01T00:00:00Z", validUntil: "2027-01-01T00:00:00Z" },
   priceConstraint: { storefrontId: "123456", currency: "USD", priceMillis: "2990" },
-  minimumChargeApplied: false,
-  serviceValue: { currency: "KGS", incrementalMinor: 20_000, chargedServiceMinor: 19_000, ownerDiscountMinor: 1000 },
+  minimumChargeApplied: false, roundingMode: "DOWN_WITH_OWNER_DISCOUNT",
+  serviceValue: { currency: "KGS", incrementalMinor: 20_000, chargedServiceMinor: 19_000, ownerDiscountMinor: 1000,
+    minimumChargeAdjustmentMinor: 0, upwardRoundingAdjustmentMinor: 0 },
   currentTermOnly: true, futureCoverageUnchanged: true, parentDependent: true,
 });
 const configureTemporary = () => {
@@ -201,6 +203,20 @@ const configureTemporary = () => {
   }));
   mock.intent.mockResolvedValue({ intentId: "native-authorized-intent", productId: temporaryProduct.id });
   mock.purchase.mockResolvedValue({ status: "purchased", transaction: { ...receipt(), productId: temporaryProduct.id } });
+  return data;
+};
+const upwardQuoteFixture = (input: TemporaryRequest, minimum = false, adjustmentMinor = 10) => ({
+  ...temporaryQuoteFixture(input), roundingMode: "UP_TO_COVER_QUOTE",
+  minimumChargeApplied: minimum,
+  serviceValue: { currency: "KGS", incrementalMinor: minimum ? 1 : 26_910 - adjustmentMinor,
+    chargedServiceMinor: 26_910, ownerDiscountMinor: 0,
+    minimumChargeAdjustmentMinor: minimum ? 26_909 : 0,
+    upwardRoundingAdjustmentMinor: minimum ? 26_909 : adjustmentMinor },
+});
+const configureUpward = (minimum = false) => {
+  const data = configureTemporary();
+  mock.temporaryData = { ...temporaryCatalogFixture(true), roundingMode: "UP_TO_COVER_QUOTE" };
+  mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => upwardQuoteFixture(input, minimum));
   return data;
 };
 const configureAutomaticChange = () => {
@@ -377,6 +393,7 @@ describe("iOS Apple checkout and recovery", () => {
     expect(details.textContent).toContain(messages[locale].billingApple.temporaryPreserved);
     expect(details.textContent).toContain("2027");
     expect(details.textContent).not.toContain("KGS");
+    expect(details.querySelector("[data-apple-upward-rounding]")).toBeNull();
     expect(container.querySelector("[data-apple-price]")?.textContent).not.toContain(product.displayPrice);
     expect(mock.products.mock.calls.at(-1)?.[0]).toEqual([temporaryProduct.id]);
     const dialog = await openTemporaryConsent();
@@ -393,6 +410,103 @@ describe("iOS Apple checkout and recovery", () => {
     await screen.findByText(messages[locale].billingApple.temporaryRecorded);
   });
 
+  it.each([
+    ["ru", false], ["kg", false], ["en", false],
+    ["ru", true], ["kg", true], ["en", true],
+  ] as const)("shows UP price and service valuation before consent in %s, minimum=%s", async (locale, minimum) => {
+    configureUpward(minimum);
+    const { container } = mount(locale);
+    await chooseTemporary(locale);
+    const priceText = messages[locale].billingApple[minimum ? "temporaryUpwardMinimum" : "temporaryUpwardPrice"]
+      .replace("{price}", temporaryProduct.displayPrice);
+    const adjustmentText = messages[locale].billingApple.temporaryUpwardAdjustment
+      .replace("{amount}", formatCurrencyKGS((minimum ? 26_909 : 10) / 100, locale));
+    const details = container.querySelector("[data-apple-temporary-details]")!;
+    expect(details.textContent).toContain(priceText);
+    expect(details.textContent).toContain(adjustmentText);
+    expect(details.textContent).toContain(messages[locale].billingApple.temporaryPreserved);
+    expect(details.textContent).toContain("2027");
+    expect(Boolean(details.querySelector("[data-apple-minimum-charge]"))).toBe(minimum);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+    const dialog = await openTemporaryConsent();
+    expect(dialog.getByText(priceText, { normalizer: (value) => value })).toBeTruthy();
+    expect(dialog.getByText(adjustmentText, { normalizer: (value) => value })).toBeTruthy();
+    expect(dialog.getByText(messages[locale].billingApple.temporaryPreserved)).toBeTruthy();
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+    expect(mock.webGet).not.toHaveBeenCalled();
+  });
+
+  it("does not invent a minimum or adjustment when UP matches an exact price level", async () => {
+    configureUpward();
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => upwardQuoteFixture(input, false, 0));
+    const { container } = mount();
+    await chooseTemporary();
+    const notice = container.querySelector("[data-apple-upward-rounding]")!;
+    expect(notice.textContent).toBe(ru.billingApple.temporaryUpwardPrice.replace("{price}", temporaryProduct.displayPrice));
+    expect(notice.querySelector("[data-apple-upward-adjustment]")).toBeNull();
+    expect(container.querySelector("[data-apple-minimum-charge]")).toBeNull();
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
+  it("keeps the localized Apple UP price verbatim in the action and consent", async () => {
+    configureUpward();
+    const localizedPrice = "2,99 $";
+    mock.products.mockImplementation(async (ids: string[]) => ({ products: [product, { ...temporaryProduct, displayPrice: localizedPrice }]
+      .filter((entry) => ids.includes(entry.id)), missingProductIds: [] }));
+    const { container } = mount();
+    await screen.findByRole("combobox", { name: ru.billingApple.action });
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await choose(ru.billingApple.plan, ru.billing.plans.business.name);
+    const priceText = ru.billingApple.temporaryUpwardPrice.replace("{price}", localizedPrice);
+    await waitFor(() => expect(container.querySelector("[data-apple-upward-rounding]")?.textContent).toContain(priceText));
+    fireEvent.click(screen.getByRole("button", { name: /2,99\s+\$/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(priceText, { normalizer: (value) => value })).toBeTruthy();
+    expect(dialog.textContent).toContain(localizedPrice);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
+  it("keeps UP checkout closed when native price metadata is unavailable", async () => {
+    configureUpward();
+    mock.products.mockResolvedValue({ products: [], missingProductIds: [temporaryProduct.id] });
+    const { container } = mount();
+    await screen.findByRole("combobox", { name: ru.billingApple.action });
+    await choose(ru.billingApple.action, ru.billingApple.temporaryChange);
+    await choose(ru.billingApple.plan, ru.billing.plans.business.name);
+    await screen.findByText(ru.billingApple.priceUnavailable);
+    expect(container.querySelector("[data-apple-upward-rounding]")).toBeNull();
+    expect((screen.getByRole("button", { name: ru.billingApple.buy.replace("{price}", "—") }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
+  it.each(["ru", "kg", "en"] as const)("blocks an UP quote above the configured maximum without a renewal fallback in %s", async (locale) => {
+    configureUpward();
+    mock.temporaryError = new Error("appleTemporaryUpgradeAboveMaximum");
+    const { container } = mount(locale);
+    await screen.findByRole("combobox", { name: messages[locale].billingApple.action });
+    await choose(messages[locale].billingApple.action, messages[locale].billingApple.temporaryChange);
+    await choose(messages[locale].billingApple.plan, messages[locale].billing.plans.business.name);
+    await screen.findByText(messages[locale].errors.appleTemporaryUpgradeAboveMaximum);
+    expect(container.querySelector("[data-apple-upward-rounding]")).toBeNull();
+    expect(screen.getByRole("combobox", { name: messages[locale].billingApple.action }).textContent).toContain(messages[locale].billingApple.temporaryChange);
+    expect(screen.queryByRole("combobox", { name: messages[locale].billingApple.months })).toBeNull();
+    expect((screen.getByRole("button", { name: messages[locale].billingApple.buy.replace("{price}", "—") }) as HTMLButtonElement).disabled).toBe(true);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+    expect(mock.webGet).not.toHaveBeenCalled();
+  });
+
+  it("requires fresh consent when the displayed UP service adjustment changes at the same Apple price", async () => {
+    configureUpward();
+    const view = mount();
+    await chooseTemporary();
+    await openTemporaryConsent();
+    mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => upwardQuoteFixture(input, false, 20));
+    view.rerender(checkout());
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByRole("combobox", { name: ru.billingApple.action }).textContent).toContain(ru.billingApple.temporaryChange);
+    expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
+  });
+
   it.each(["ru", "kg", "en"] as const)("discloses the exact minimum price before consent and the OS purchase in %s", async (locale) => {
     configureTemporary();
     mock.temporaryPreview.mockImplementation((input: TemporaryRequest) => ({ ...temporaryQuoteFixture(input), minimumChargeApplied: true,
@@ -401,6 +515,7 @@ describe("iOS Apple checkout and recovery", () => {
     await chooseTemporary(locale);
     const text = messages[locale].billingApple.temporaryMinimumCharge.replace("{price}", temporaryProduct.displayPrice);
     expect(container.querySelector("[data-apple-minimum-charge]")?.textContent).toBe(text);
+    expect(container.querySelector("[data-apple-upward-rounding]")).toBeNull();
     expect(mock.intent).not.toHaveBeenCalled(); expect(mock.purchase).not.toHaveBeenCalled();
     const dialog = await openTemporaryConsent();
     expect(dialog.getByText(text)).toBeTruthy();

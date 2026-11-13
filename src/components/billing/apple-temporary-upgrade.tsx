@@ -3,7 +3,7 @@
 import type { inferRouterOutputs } from "@trpc/server";
 import { useLocale, useTranslations } from "next-intl";
 import type { AppRouter } from "@/server/trpc/routers/_app";
-import { formatDateTime } from "@/lib/i18nFormat";
+import { formatCurrencyKGS, formatDateTime } from "@/lib/i18nFormat";
 
 type AppleOutputs = inferRouterOutputs<AppRouter>["billing"]["apple"];
 export type TemporaryUpgradePreview = AppleOutputs["previewTemporaryUpgrade"];
@@ -27,7 +27,18 @@ export function AppleTemporaryUpgradeDetails({ quote, displayPrice }: { quote: T
       <p>{t("period", { start: formatDateTime(quote.timing.startsAt, locale), end: formatDateTime(quote.timing.endsAt, locale) })}</p>
       <p>{t("temporaryPreserved")}</p>
       <p>{t("temporaryDependency")}</p>
-      {quote.minimumChargeApplied && displayPrice ? (
+      {quote.roundingMode === "UP_TO_COVER_QUOTE" && displayPrice ? (
+        <div className="space-y-2" data-apple-upward-rounding>
+          <p className="font-medium" data-apple-minimum-charge={quote.minimumChargeApplied ? "" : undefined}>
+            {t(quote.minimumChargeApplied ? "temporaryUpwardMinimum" : "temporaryUpwardPrice", { price: displayPrice })}
+          </p>
+          {quote.serviceValue.upwardRoundingAdjustmentMinor > 0 ? (
+            <p data-apple-upward-adjustment>{t("temporaryUpwardAdjustment", {
+              amount: formatCurrencyKGS(quote.serviceValue.upwardRoundingAdjustmentMinor / 100, locale),
+            })}</p>
+          ) : null}
+        </div>
+      ) : quote.minimumChargeApplied && displayPrice ? (
         <p className="font-medium" data-apple-minimum-charge>{t("temporaryMinimumCharge", { price: displayPrice })}</p>
       ) : null}
       <p className="text-xs text-muted-foreground">{t("temporaryPriceTerms")}</p>

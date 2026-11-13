@@ -65,7 +65,7 @@ export async function getAppleTemporaryUpgradeCatalog(actor: Actor) {
   }
   return { ready: state.ready && !sourceReason, unavailableReason: sourceReason ?? (state.ready ? null : state.reason), policyVersion: state.policy?.version ?? null,
     organization: { id: org.id, name: org.name }, currentSelection: { plan: org.plan, months: org.activePurchase?.months ?? 1, extras: org.subscriptionExtras },
-    currentTermOnly: true as const, futureCoverageUnchanged: true as const,
+    currentTermOnly: true as const, futureCoverageUnchanged: true as const, roundingMode: state.policy?.rounding ?? null,
     products: state.policy?.bands.map((band) => ({ productId: band.productId, productType: "NON_RENEWING" as const } )) ?? [],
     markets: state.policy ? [...new Map(state.policy.bands.flatMap((band) => band.prices).map((price) => [`${price.storefrontId}:${price.currency}`, { storefrontId: price.storefrontId, currency: price.currency }] as const)).values()] : [],
   };
@@ -87,6 +87,7 @@ export async function previewAppleTemporaryUpgrade(actor: Actor, raw: z.infer<ty
       sourceFingerprint: fingerprint, bandKey: selected.band.key, productId: selected.band.productId, price: selected.price,
       chargedServiceMinor: selected.chargedServiceMinor, ownerDiscountMinor: selected.ownerDiscountMinor,
       ...(selected.minimumCharge ? { minimumCharge: selected.minimumCharge } : {}),
+      ...(selected.roundingMode ? { roundingMode: selected.roundingMode, upwardRounding: selected.upwardRounding } : {}),
       usageContext: { version: 1, origin: usage.origin.toISOString(), anchorDay: usage.anchorDay, paidEnd: usage.paidEnd?.toISOString() ?? null,
         trialOrigin: usage.trialOrigin.toISOString() } };
     const sourcePurchase = readPurchaseSnapshot(source.purchaseSnapshot);
@@ -99,9 +100,12 @@ export async function previewAppleTemporaryUpgrade(actor: Actor, raw: z.infer<ty
         startsAt: source.startsAt.toISOString(), endsAt: source.endsAt.toISOString() },
       timing: { startsAt: quote.startsAt, endsAt: quote.endsAt, validUntil: quote.expiresAt },
       priceConstraint: temporaryUpgradePriceConstraint(quote),
-      minimumChargeApplied: Boolean(selected.minimumCharge),
+      roundingMode: state.policy.rounding,
+      minimumChargeApplied: Boolean(selected.minimumCharge || selected.upwardRounding?.minimumPriceApplied),
       serviceValue: { currency: "KGS" as const, incrementalMinor: quote.amountMinor, chargedServiceMinor: selected.chargedServiceMinor,
-        ownerDiscountMinor: selected.ownerDiscountMinor, minimumChargeAdjustmentMinor: selected.minimumCharge?.serviceAdjustmentMinor ?? 0 },
+        ownerDiscountMinor: selected.ownerDiscountMinor, minimumChargeAdjustmentMinor: selected.minimumCharge?.serviceAdjustmentMinor ??
+          (selected.upwardRounding?.minimumPriceApplied ? selected.upwardRounding.serviceAdjustmentMinor : 0),
+        upwardRoundingAdjustmentMinor: selected.upwardRounding?.serviceAdjustmentMinor ?? 0 },
       currentTermOnly: true as const, futureCoverageUnchanged: true as const, parentDependent: true as const };
   });
 }
@@ -117,9 +121,11 @@ export async function assertTemporaryUpgradeQuote(db: Prisma.TransactionClient, 
     if (!ready.ready || !ready.policy || temporaryUpgradeDigest(ready.policy) !== context.policyDigest) throw new AppError("appleTemporaryUpgradePolicyUnavailable", "CONFLICT", 409);
     const selected = selectTemporaryUpgradeBand(ready.policy, purchase.amountMinor, context.price.storefrontId, context.price.currency);
     if (temporaryUpgradeDigest({ bandKey: selected.band.key, productId: selected.band.productId, price: selected.price,
-      chargedServiceMinor: selected.chargedServiceMinor, ownerDiscountMinor: selected.ownerDiscountMinor, minimumCharge: selected.minimumCharge }) !==
+      chargedServiceMinor: selected.chargedServiceMinor, ownerDiscountMinor: selected.ownerDiscountMinor, minimumCharge: selected.minimumCharge,
+      roundingMode: selected.roundingMode, upwardRounding: selected.upwardRounding }) !==
       temporaryUpgradeDigest({ bandKey: context.bandKey, productId: context.productId, price: context.price,
-        chargedServiceMinor: context.chargedServiceMinor, ownerDiscountMinor: context.ownerDiscountMinor, minimumCharge: context.minimumCharge }))
+        chargedServiceMinor: context.chargedServiceMinor, ownerDiscountMinor: context.ownerDiscountMinor, minimumCharge: context.minimumCharge,
+        roundingMode: context.roundingMode, upwardRounding: context.upwardRounding }))
       throw new AppError("appleTemporaryUpgradePriceChanged", "CONFLICT", 409);
   }
   const { org, source, fingerprint } = await temporaryUpgradeSource(db, organizationId);

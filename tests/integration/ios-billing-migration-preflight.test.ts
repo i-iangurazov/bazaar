@@ -15,7 +15,7 @@ const audit = async () => {
   const { databaseUrl } = assertSafeTestDatabaseReset();
   const connection = new URL(databaseUrl);
   const args = ["--url-env", "EXPLICIT_OWNED_CI_AUDIT_URL", "--expect-host", connection.hostname, "--expect-port", connection.port || "5432",
-    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_MINIMUM"];
+    "--expect-database", decodeURIComponent(connection.pathname.slice(1)), "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_UPWARD_ROUNDING"];
   if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
   return runIosBillingPreflight(parsePreflightTarget(args, { EXPLICIT_OWNED_CI_AUDIT_URL: databaseUrl }));
 };
@@ -58,7 +58,7 @@ describeDb("named Apple migration aggregate preflight on explicitly owned Postgr
     await prisma.subscriptionContract.create({ data: { organizationId: lifetime.id, catalogVersion: "2026-11", lifetimeAccess: true, termsSnapshot: createContractTerms("2026-11") } });
     const before = await accountingSnapshot();
     const result = await audit();
-    expect(result).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_MINIMUM", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
+    expect(result).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_UPWARD_ROUNDING", transactionReadOnly: true, blockerChecks: 0, skippedChecks: 0 });
     for (const name of ["legacy_contracts_total", "lifetime_contracts_preserved", "future_web_periods_preserved", "legacy_invoices_without_purchase_snapshot"])
       expect(result.checks.find((check) => check.name === name)?.count).toBe(1);
     expect(result.checks.find((check) => check.name === "current_contracts_total")?.count).toBe(2);

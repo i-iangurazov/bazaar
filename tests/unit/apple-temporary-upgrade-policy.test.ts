@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 import { selectTemporaryUpgradeBand, temporaryUpgradePolicy, temporaryUpgradePolicySchema, validTemporaryUpgradePricing } from "@/server/billing/appleTemporaryUpgradePolicy";
 import { purchaseSnapshotSchema, readPurchaseSnapshot } from "@/server/billing/purchaseSnapshot";
+import upCatalog from "@/server/billing/catalogs/kgz-up-2026-11-13.json";
 
 const now = new Date("2026-11-12T12:00:00Z");
 const price = (priceMillis: number) => ({ storefrontId: "143441", currency: "USD", priceMillis,
@@ -106,5 +107,73 @@ describe("explicitly approved temporary-upgrade price bands", () => {
     expect(temporaryUpgradePolicySchema.safeParse(p).success).toBe(false);
     const rates = policy(); rates.bands[1].prices[0].serviceMinorPerUnitNumerator = 9001;
     expect(temporaryUpgradePolicySchema.safeParse(rates).success).toBe(false);
+  });
+});
+
+describe("approved upward rounding without a retained balance", () => {
+  const upPolicy = () => temporaryUpgradePolicySchema.parse(upCatalog.policy);
+  const contextFor = (dueMinor: number) => {
+    const p = upPolicy(), selected = selectTemporaryUpgradeBand(p, dueMinor, "143586", "USD");
+    return { version: 1 as const, policyVersion: p.version, policyDigest: "a".repeat(64), sourceFingerprint: "b".repeat(64),
+      bandKey: selected.band.key, productId: selected.band.productId, price: selected.price, chargedServiceMinor: selected.chargedServiceMinor,
+      ownerDiscountMinor: selected.ownerDiscountMinor, roundingMode: selected.roundingMode, upwardRounding: selected.upwardRounding };
+  };
+  it.each([[75000, 10490], [5000, 690], [208, 290], [3, 290], [8334, 1190]])(
+    "covers the actual positive quote %i with the nearest saved USD price %i", (due, millis) => {
+      const selected = selectTemporaryUpgradeBand(upPolicy(), due, "143586", "USD");
+      expect(selected.price.priceMillis).toBe(millis);
+      expect(selected.ownerDiscountMinor).toBe(0);
+      expect(selected.minimumCharge).toBeUndefined();
+      expect(validTemporaryUpgradePricing(due, contextFor(due))).toBe(true);
+      expect(selected).not.toHaveProperty("balance");
+    },
+  );
+  it("checks every actual price boundary before rounding value into minor units", () => {
+    const p = upPolicy(); expect(p.bands).toHaveLength(800);
+    const sorted = [...p.bands].sort((a, b) => a.prices[0].priceMillis - b.prices[0].priceMillis);
+    for (let index = 0; index < sorted.length; index++) {
+      const band = sorted[index], price = band.prices[0];
+      const upper = Number(BigInt(price.priceMillis) * BigInt(price.serviceMinorPerUnitNumerator) /
+        (1000n * BigInt(price.serviceMinorPerUnitDenominator)));
+      expect(selectTemporaryUpgradeBand(p, upper, "143586", "USD").band.productId).toBe(band.productId);
+      if (index + 1 < sorted.length)
+        expect(selectTemporaryUpgradeBand(p, upper + 1, "143586", "USD").band.productId).toBe(sorted[index + 1].productId);
+      else expect(() => selectTemporaryUpgradeBand(p, upper + 1, "143586", "USD")).toThrow("appleTemporaryUpgradeAboveMaximum");
+    }
+    // 0.29USD retains2155.615385minor, so ceil2156 alone is not funding proof.
+    expect(selectTemporaryUpgradeBand(p, 2155, "143586", "USD").price.priceMillis).toBe(290);
+    expect(selectTemporaryUpgradeBand(p, 2156, "143586", "USD").price.priceMillis).toBe(390);
+    expect(contextFor(2155).upwardRounding?.minimumPriceApplied).toBe(true);
+    expect(contextFor(2156).upwardRounding?.minimumPriceApplied).toBe(false);
+  });
+  it("never turns a zero, a foreign market or an above-ceiling quote into a different charge", () => {
+    const p = upPolicy();
+    for (const due of [0, -1, 0.5, Number.NaN, Infinity])
+      expect(() => selectTemporaryUpgradeBand(p, due, "143586", "USD")).toThrow("billingNoPaidChange");
+    expect(() => selectTemporaryUpgradeBand(p, 1, "143441", "USD")).toThrow("appleTemporaryUpgradeMarketUnavailable");
+    expect(() => selectTemporaryUpgradeBand(p, 1, "143586", "KGS")).toThrow("appleTemporaryUpgradeMarketUnavailable");
+    expect(() => selectTemporaryUpgradeBand(p, 7_433_157, "143586", "USD")).toThrow("appleTemporaryUpgradeAboveMaximum");
+  });
+  it("refuses hidden discounts, a fake minimum marker and underfunding disguised by ceil", () => {
+    const c = contextFor(2156);
+    expect(validTemporaryUpgradePricing(2156, { ...c, ownerDiscountMinor: 1 })).toBe(false);
+    expect(validTemporaryUpgradePricing(2156, { ...c, roundingMode: undefined })).toBe(false);
+    expect(validTemporaryUpgradePricing(2156, { ...c, upwardRounding: undefined })).toBe(false);
+    expect(validTemporaryUpgradePricing(2156, { ...c, minimumCharge: { serviceAdjustmentMinor: c.chargedServiceMinor - 2156 } })).toBe(false);
+    expect(validTemporaryUpgradePricing(2156, { ...c, price: { ...c.price, priceMillis: 290 }, chargedServiceMinor: 2156,
+      upwardRounding: { serviceAdjustmentMinor: 0, minimumPriceApplied: false } })).toBe(false);
+    expect(validTemporaryUpgradePricing(2156, { ...c, upwardRounding: { serviceAdjustmentMinor: 1, minimumPriceApplied: false } })).toBe(false);
+    for (const patch of [{ maxDiscountMinor: 1 }, { maxDiscountBps: 1 }, { minimumPolicy: "BLOCK" }])
+      expect(temporaryUpgradePolicySchema.safeParse({ ...upPolicy(), ...patch }).success).toBe(false);
+  });
+  it("keeps the server file opt-in, bounded to its version and separate from arbitrary JSON", () => {
+    const config = { APPLE_BILLING_TEMPORARY_UPGRADES_CATALOG: "KGZ_UP_2026_11_13_V1" };
+    expect(temporaryUpgradePolicy(config, now).ready).toBe(false);
+    expect(temporaryUpgradePolicy({ ...config, APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "true",
+      APPLE_BILLING_TEMPORARY_UPGRADES_JSON: JSON.stringify(policy()) }, now).ready).toBe(false);
+    expect(temporaryUpgradePolicy({ ...config, APPLE_BILLING_TEMPORARY_UPGRADES_CATALOG: "../../private.json",
+      APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "true" }, now).ready).toBe(false);
+    expect(temporaryUpgradePolicy({ ...config, APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "true" },
+      new Date("2026-12-14T00:00:00Z")).ready).toBe(false);
   });
 });

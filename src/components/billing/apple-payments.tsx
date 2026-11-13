@@ -190,7 +190,8 @@ export function ApplePayments({
     temporaryChange ? temporaryQuote?.quoteToken : needsQuote ? preview.data?.quoteToken : null,
     temporaryChange ? temporaryCatalog.data?.policyVersion : null,
     temporaryChange ? [temporaryCatalog.data?.ready, temporaryCatalog.isError, temporaryPreview.isError, storefront?.id] : null,
-    temporaryChange ? [temporaryQuote?.timing, temporaryQuote?.source, temporaryQuote?.target, constraint] : null]);
+    temporaryChange ? [temporaryQuote?.timing, temporaryQuote?.source, temporaryQuote?.target, constraint,
+      temporaryQuote?.roundingMode, temporaryQuote?.minimumChargeApplied, temporaryQuote?.serviceValue] : null]);
   const consentKey = useRef("");
   const recoveryForCurrentOrganization = recoveringPurchase?.organizationId === catalog.data?.organization.id &&
     recoveringPurchase?.environment === catalog.data?.environment ? recoveringPurchase : null;

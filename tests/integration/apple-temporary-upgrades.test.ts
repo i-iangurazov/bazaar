@@ -116,6 +116,11 @@ const seed = async ({ activateCurrentContract = true }: { activateCurrentContrac
 };
 type Fixture = Awaited<ReturnType<typeof seed>>;
 type Intent = Awaited<ReturnType<typeof createApplePurchaseIntent>>;
+const configureUpward = (f: Fixture, bands = [band]) => {
+  vi.stubEnv("APPLE_BILLING_TEMPORARY_UPGRADES_JSON", JSON.stringify({ ...f.policy,
+    version: "synthetic-up-v1", rounding: "UP_TO_COVER_QUOTE", minimumPolicy: "CHARGE_MINIMUM_FOR_POSITIVE",
+    maxDiscountMinor: 0, maxDiscountBps: 0, validUntil: new Date(Date.now() + DAY).toISOString(), bands }));
+};
 const apply = async (f: Fixture, signed: string, intentId?: string, source: "CLIENT" | "RESTORE" | "NOTIFICATION" = "CLIENT") =>
   applyAppleTransaction(await syntheticAppleVerifier().transaction(signed), { organizationId: f.org.id, intentId, source });
 const signed = (intent: Intent, overrides: Partial<Parameters<typeof syntheticAppleTransaction>[0]> = {}) => {
@@ -166,7 +171,8 @@ const changeIntent = async (f: Fixture, preview: Awaited<ReturnType<typeof previ
 const grantChange = async (f: Fixture, selection = business) => {
   const preview = await previewChange(f, selection), intent = await changeIntent(f, preview), attemptId = randomUUID();
   await authorizeApplePurchase(f.actor, intent.intentId, { attemptId });
-  const payload = signed(intent);
+  const payload = signed(intent, { price: Number(preview.priceConstraint!.priceMillis),
+    currency: preview.priceConstraint!.currency, storefrontId: preview.priceConstraint!.storefrontId });
   expect((await apply(f, payload, intent.intentId)).status).toBe("GRANTED");
   const row = await prisma.appleTransaction.findFirstOrThrow({ where: { intentId: intent.intentId } });
   const period = await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { appleTransactionId: row.id } });
@@ -195,7 +201,8 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks();
   });
 
-  it.each(["GOPAY", "APPLE"] as const)("changes only the current %s term, preserves prepay/reserve/usage, and restores once", async (source) => {
+  it.each((["GOPAY", "APPLE"] as const).flatMap((source) => (["DOWN", "UP"] as const).map((rounding) => ({ source, rounding }))))(
+    "changes only the current $source term with $rounding pricing, preserves prepay/reserve/usage, and restores once", async ({ source, rounding }) => {
     const f = await seed();
     const base = source === "GOPAY" ? await paidWeb(f) : await paidApple(f);
     const originalBase = await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: base.period.id } });
@@ -203,6 +210,11 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     const originalFuture = await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: future.period.id } });
     const originalInvoice = await prisma.subscriptionInvoice.findUniqueOrThrow({ where: { id: future.invoice.id } });
     const originalOrg = await prisma.organization.findUniqueOrThrow({ where: { id: f.org.id } });
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date());
+    if (rounding === "UP") {
+      const due = (await previewChange(f)).serviceValue.incrementalMinor;
+      configureUpward(f, [{ ...band, prices: [{ ...band.prices[0]!, priceMillis: due + 1, serviceMinorPerUnitNumerator: 1000 }] }]);
+    }
     await withSubscriptionUsage({ organizationId: f.org.id, resource: "ai", operationKey: "used-before-C", units: 3 }, async () => true);
     await reserveSubscriptionUsage({ organizationId: f.org.id, resource: "ai", operationKey: "reserved-before-C", units: 2 });
     const beforeBuckets = await bucketRows(f);
@@ -214,6 +226,11 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     expect(change.period.endsAt).toEqual(base.period.endsAt);
     const prior = readPurchaseSnapshot(base.period.purchaseSnapshot)!;
     const purchased = readPurchaseSnapshot(change.period.purchaseSnapshot)!;
+    if (rounding === "UP") {
+      expect(purchased.appleTemporaryUpgrade).toMatchObject({ roundingMode: "UP_TO_COVER_QUOTE", ownerDiscountMinor: 0,
+        upwardRounding: { serviceAdjustmentMinor: 1, minimumPriceApplied: true } });
+      expect(purchased.appleTemporaryUpgrade).not.toHaveProperty("minimumCharge");
+    } else expect(purchased.appleTemporaryUpgrade).not.toHaveProperty("upwardRounding");
     expect(purchased).toMatchObject({ sourcePeriodId: base.period.id, cycleStartsAt: prior.cycleStartsAt,
       cycleEndsAt: prior.cycleEndsAt, anchorDay: prior.anchorDay, extras: business.extras });
     expect(await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: base.period.id } })).toEqual(originalBase);
@@ -231,7 +248,8 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     expect(await bucketRows(f)).toEqual(beforeBuckets);
   });
 
-  it.each(["GOPAY", "APPLE"] as const)("funds a positive below-floor %s upgrade without extending base/future coverage or resetting usage", async (provider) => {
+  it.each((["GOPAY", "APPLE"] as const).flatMap((provider) => (["DOWN", "UP"] as const).map((rounding) => ({ provider, rounding }))))(
+    "funds a positive below-floor $provider upgrade with $rounding pricing without extending coverage or resetting usage", async ({ provider, rounding }) => {
     const f = await seed(), base = provider === "GOPAY" ? await paidWeb(f) : await paidApple(f);
     const future = await paidWeb(f, { ...enterprise, months: 6 }, new Date());
     const originalBase = await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: base.period.id } });
@@ -240,6 +258,7 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(base.period.endsAt.getTime() - 60_000));
     vi.stubEnv("APPLE_BILLING_TEMPORARY_UPGRADES_JSON", JSON.stringify({ ...f.policy, minimumPolicy: "CHARGE_MINIMUM_FOR_POSITIVE",
       validUntil: new Date(Date.now() + DAY).toISOString() }));
+    if (rounding === "UP") configureUpward(f);
     await withSubscriptionUsage({ organizationId: f.org.id, resource: "ai", operationKey: "used-before-minimum", units: 3 }, async () => true);
     await reserveSubscriptionUsage({ organizationId: f.org.id, resource: "ai", operationKey: "reserved-before-minimum", units: 2 });
     const beforeBuckets = await bucketRows(f);
@@ -249,8 +268,13 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     expect(change.preview.serviceValue.incrementalMinor).toBeLessThan(change.preview.serviceValue.chargedServiceMinor);
     expect(change.preview.serviceValue.ownerDiscountMinor).toBe(0);
     const snapshot = readPurchaseSnapshot(change.period.purchaseSnapshot)!;
-    expect(snapshot.appleTemporaryUpgrade?.minimumCharge?.serviceAdjustmentMinor)
-      .toBe(change.preview.serviceValue.chargedServiceMinor - snapshot.amountMinor);
+    const difference = change.preview.serviceValue.chargedServiceMinor - snapshot.amountMinor;
+    if (rounding === "UP") {
+      expect(snapshot.appleTemporaryUpgrade).toMatchObject({ roundingMode: "UP_TO_COVER_QUOTE", ownerDiscountMinor: 0,
+        upwardRounding: { serviceAdjustmentMinor: difference, minimumPriceApplied: true } });
+      expect(snapshot.appleTemporaryUpgrade).not.toHaveProperty("minimumCharge");
+      expect(change.preview.serviceValue.upwardRoundingAdjustmentMinor).toBe(difference);
+    } else expect(snapshot.appleTemporaryUpgrade?.minimumCharge?.serviceAdjustmentMinor).toBe(difference);
     expect(change.period.endsAt).toEqual(base.period.endsAt);
     expect(await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: base.period.id } })).toEqual(originalBase);
     expect(await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: future.period.id } })).toEqual(originalFuture);
@@ -298,6 +322,89 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     } })).rejects.toThrow("Temporary minimum charge requires its exact positive quote");
     expect(await prisma.applePurchaseIntent.count({ where: { organizationId: f.org.id } })).toBe(1);
     expect(await prisma.subscriptionPeriod.count({ where: { parentPeriodId: { not: null } } })).toBe(0);
+  });
+
+  it("uses the least exactly covering UP price instead of a cheaper rational price whose minor-unit ceiling only appears sufficient", async () => {
+    const f = await seed(), base = await paidWeb(f);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date());
+    const amount = (await previewChange(f)).serviceValue.incrementalMinor;
+    expect(amount).toBeGreaterThan(0);
+    const priceAt = (priceMillis: number) => ({ ...band.prices[0]!, priceMillis, serviceMinorPerUnitNumerator: 1 });
+    configureUpward(f, [
+      { key: "more", productId: "synthetic.up.more", prices: [priceAt(amount * 1000 + 1)] },
+      { key: "ceil-only", productId: "synthetic.up.ceil.only", prices: [priceAt(amount * 1000 - 1)] },
+      { key: "exact", productId: "synthetic.up.exact", prices: [priceAt(amount * 1000)] },
+    ]);
+    const change = await grantChange(f);
+    expect(change.preview).toMatchObject({ productId: "synthetic.up.exact", roundingMode: "UP_TO_COVER_QUOTE",
+      minimumChargeApplied: false, serviceValue: { incrementalMinor: amount, chargedServiceMinor: amount,
+        ownerDiscountMinor: 0, upwardRoundingAdjustmentMinor: 0 } });
+    const snapshot = readPurchaseSnapshot(change.period.purchaseSnapshot)!;
+    expect(snapshot.appleTemporaryUpgrade).toMatchObject({ roundingMode: "UP_TO_COVER_QUOTE",
+      upwardRounding: { serviceAdjustmentMinor: 0, minimumPriceApplied: false } });
+    const underCovered = { ...snapshot, appleTemporaryUpgrade: { ...snapshot.appleTemporaryUpgrade!, price: priceAt(amount * 1000 - 1) } };
+    // Both ceil to the same integer. PostgreSQL must still reject the smaller
+    // exact rational value, independently of the server's policy selection.
+    const result = await prisma.$queryRaw<{ valid: boolean }[]>`SELECT "appleTemporaryUpwardRoundingValid"(${JSON.stringify(underCovered)}::jsonb) AS valid`;
+    expect(result).toEqual([{ valid: false }]);
+    expect(change.period.endsAt).toEqual(base.period.endsAt);
+    expect(change.row).toMatchObject({ status: "GRANTED", priceMillis: BigInt(amount * 1000), currency: "USD" });
+  });
+
+  it("rejects mixed UP/minimum/discount markers and malformed bounds at the raw PostgreSQL intent boundary", async () => {
+    const f = await seed(), base = await paidWeb(f);
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(base.period.endsAt.getTime() - 60_000));
+    configureUpward(f);
+    const preview = await previewChange(f), intent = await changeIntent(f, preview);
+    const original = await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } });
+    const purchase = readPurchaseSnapshot(original.purchaseSnapshot)!, context = purchase.appleTemporaryUpgrade!;
+    const altered = [
+      { ...purchase, amountMinor: 0 },
+      { ...purchase, appleTemporaryUpgrade: { ...context, ownerDiscountMinor: 1 } },
+      { ...purchase, appleTemporaryUpgrade: { ...context, minimumCharge: { serviceAdjustmentMinor: context.upwardRounding!.serviceAdjustmentMinor } } },
+      { ...purchase, appleTemporaryUpgrade: { ...context, roundingMode: "DOWN_WITH_OWNER_DISCOUNT" } },
+      { ...purchase, appleTemporaryUpgrade: { ...context, upwardRounding: undefined } },
+      { ...purchase, appleTemporaryUpgrade: { ...context, roundingMode: undefined } },
+      ...[-1, 0.5, Number.MAX_SAFE_INTEGER + 1].map((value) => ({ ...purchase,
+        appleTemporaryUpgrade: { ...context, upwardRounding: { ...context.upwardRounding!, serviceAdjustmentMinor: value } } })),
+      { ...purchase, appleTemporaryUpgrade: { ...context, upwardRounding: { ...context.upwardRounding!, serviceAdjustmentMinor: 0 } } },
+      { ...purchase, appleTemporaryUpgrade: { ...context, price: { ...context.price, serviceMinorPerUnitDenominator: 0 } } },
+      { ...purchase, appleTemporaryUpgrade: { ...context, price: { ...context.price, serviceMinorPerUnitNumerator: 1_000_000_001 } } },
+      { ...purchase, appleTemporaryUpgrade: { ...context, price: { ...context.price, priceMillis: Number.MAX_SAFE_INTEGER + 1 } } },
+    ];
+    for (const snapshot of altered) await expect(prisma.applePurchaseIntent.create({ data: {
+      organizationId: f.org.id, createdById: f.actor.id, idempotencyKey: randomUUID(), scope: "SUBSCRIPTION", action: "CHANGE",
+      offerKey: original.offerKey, productId: original.productId, productType: "NON_RENEWING", environment: original.environment,
+      appAccountToken: original.appAccountToken, purchaseAppAccountToken: randomUUID(), offerSnapshot: json(original.offerSnapshot),
+      purchaseSnapshot: json(snapshot), termsVersion: original.termsVersion, termsUrl: original.termsUrl, expiresAt: original.expiresAt,
+    } })).rejects.toThrow(/Temporary (upward rounding|minimum charge)/);
+    for (const invalidCohort of [{ scope: "WHATSAPP_PACK" }, { action: "RENEW" }, { productType: "CONSUMABLE" }, { purchaseAppAccountToken: null }]) {
+      await expect(prisma.applePurchaseIntent.create({ data: {
+        organizationId: f.org.id, createdById: f.actor.id, idempotencyKey: randomUUID(), scope: "SUBSCRIPTION", action: "CHANGE",
+        offerKey: original.offerKey, productId: original.productId, productType: "NON_RENEWING", environment: original.environment,
+        appAccountToken: original.appAccountToken, purchaseAppAccountToken: randomUUID(), offerSnapshot: json(original.offerSnapshot),
+        purchaseSnapshot: json(purchase), termsVersion: original.termsVersion, termsUrl: original.termsUrl, expiresAt: original.expiresAt,
+        ...invalidCohort,
+      } })).rejects.toThrow(/Temporary upgrade requires|Temporary upward rounding/);
+    }
+    await expect(prisma.applePurchaseIntent.update({ where: { id: original.id }, data: {
+      purchaseSnapshot: json({ ...purchase, appleTemporaryUpgrade: { ...context, policyDigest: "c".repeat(64) } }),
+    } })).rejects.toThrow("Apple purchase intent snapshot is immutable");
+    expect(await prisma.applePurchaseIntent.count({ where: { organizationId: f.org.id } })).toBe(1);
+    expect(await prisma.subscriptionPeriod.count({ where: { parentPeriodId: { not: null } } })).toBe(0);
+    expect(await prisma.applePurchaseIntent.findUniqueOrThrow({ where: { id: intent.intentId } })).toEqual(original);
+  });
+
+  it.each(["ZERO", "ABOVE_MAXIMUM"] as const)("does not create a charge, intent or dependent grant for an UP quote that is %s", async (state) => {
+    const f = await seed(), base = await paidWeb(f);
+    if (state === "ZERO") {
+      vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(base.period.endsAt.getTime() - 1));
+    }
+    configureUpward(f, [{ ...band, prices: [{ ...band.prices[0]!, priceMillis: 1, serviceMinorPerUnitNumerator: 1 }] }]);
+    await expect(previewChange(f)).rejects.toThrow(state === "ZERO" ? "billingNoPaidChange" : "appleTemporaryUpgradeAboveMaximum");
+    expect(await prisma.applePurchaseIntent.count({ where: { organizationId: f.org.id } })).toBe(0);
+    expect(await prisma.subscriptionPeriod.count({ where: { parentPeriodId: { not: null } } })).toBe(0);
+    expect((await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: base.period.id } })).revokedAt).toBeNull();
   });
 
   it("refunds/reverses only an increment and never resets consumption or independent base grants", async () => {
@@ -408,10 +515,13 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     await expect(prisma.store.create({ data: { organizationId: f.org.id, name: "Unfunded extra", code: "C-THIRD" } })).rejects.toThrow("subscriptionCapacityExceeded");
   });
 
-  it("propagates base refund/reversal through two increments without erasing an independent GoPay grant", async () => {
+  it.each(["DOWN", "UP"] as const)("propagates base refund/reversal through two %s increments without erasing an independent GoPay grant", async (rounding) => {
     const f = await seed();
     const independentSnapshot = await calculateSubscriptionQuote(f.org.id, { ...starter, action: "RENEW" }, prisma, new Date(Date.now() - DAY));
-    const base = await paidApple(f), first = await grantChange(f), second = await grantChange(f, enterprise);
+    const base = await paidApple(f);
+    if (rounding === "UP") configureUpward(f, [{ ...band, prices: [{ ...band.prices[0]!, priceMillis: 2_147_483_647,
+      serviceMinorPerUnitNumerator: 1000 }] }]);
+    const first = await grantChange(f), second = await grantChange(f, enterprise);
     expect(second.period.parentPeriodId).toBe(first.period.id);
     await paidWebSnapshot(f, independentSnapshot);
     const refunded = newer(base.payload, { revocationDate: Date.now() });
@@ -798,18 +908,21 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     expect(await prisma.applePurchaseIntent.count()).toBe(0);
   });
 
-  it("accepts a legitimate per-intent C token in the real aggregate read-only migration preflight", async () => {
+  it.each(["DOWN", "UP"] as const)("accepts a legitimate %s per-intent C token in the real aggregate read-only migration preflight", async (rounding) => {
     const { databaseUrl } = assertSafeTestDatabaseReset();
     const connection = new URL(databaseUrl);
     const args = ["--url-env", "EXPLICIT_OWNED_TEMPORARY_UPGRADE_AUDIT_URL",
       "--expect-host", connection.hostname, "--expect-port", connection.port || "5432",
       "--expect-database", decodeURIComponent(connection.pathname.slice(1)),
-      "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_MINIMUM"];
+      "--expect-user", decodeURIComponent(connection.username), "--expect-stage", "POST_TEMPORARY_UPWARD_ROUNDING"];
     // The owned local runner pins its approved binary; ordinary Linux CI can
     // keep the existing psql-on-PATH convention. No implicit database is used.
     if (process.env.IOS_MIGRATION_PREFLIGHT_PSQL) args.push("--psql", process.env.IOS_MIGRATION_PREFLIGHT_PSQL);
     const options = parsePreflightTarget(args, { EXPLICIT_OWNED_TEMPORARY_UPGRADE_AUDIT_URL: databaseUrl });
-    const f = await seed(), base = await paidWeb(f), change = await grantChange(f);
+    const f = await seed(), base = await paidWeb(f);
+    if (rounding === "UP") configureUpward(f, [{ ...band, prices: [{ ...band.prices[0]!, priceMillis: 2_147_483_647,
+      serviceMinorPerUnitNumerator: 1000 }] }]);
+    const change = await grantChange(f);
     const snapshot = async () => ({
       account: await prisma.appleBillingAccount.findUniqueOrThrow({ where: { organizationId: f.org.id } }),
       intents: await prisma.applePurchaseIntent.findMany({ where: { organizationId: f.org.id }, orderBy: { id: "asc" } }),
@@ -825,14 +938,16 @@ describeDb("direct temporary Apple upgrades on isolated PostgreSQL", () => {
     // Execute the actual SQL in a separate psql read-only transaction, without
     // a fake executor, fixture mutations, or disabling any financial guard.
     const report = await runIosBillingPreflight(options);
-    expect(report).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_MINIMUM", transactionReadOnly: true,
+    expect(report).toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_UPWARD_ROUNDING", transactionReadOnly: true,
       blockerChecks: 0, skippedChecks: 0 });
+    expect(report.checks).toHaveLength(101);
     for (const name of ["apple_intent_account_binding_invalid", "apple_transaction_account_binding_invalid",
       "apple_transaction_intent_binding_invalid", "temporary_upgrade_token_namespace_collisions",
       "temporary_upgrade_intent_shape_invalid", "temporary_upgrade_period_binding_invalid",
       "temporary_upgrade_standalone_period_invalid", "temporary_upgrade_dependency_state_invalid",
       "temporary_upgrade_ancestry_invalid", "temporary_upgrade_unserved_dependency_unreviewed",
-      "temporary_minimum_function_bodies_changed", "temporary_minimum_trigger_invalid", "temporary_minimum_quote_invalid"]) {
+      "temporary_minimum_function_bodies_changed", "temporary_minimum_trigger_invalid", "temporary_minimum_quote_invalid",
+      "temporary_upward_function_bodies_changed", "temporary_upward_trigger_invalid", "temporary_upward_quote_invalid"]) {
       expect(report.checks.find((check) => check.name === name)).toMatchObject({ count: 0, skipped: false });
     }
     expect(await snapshot()).toEqual(before);

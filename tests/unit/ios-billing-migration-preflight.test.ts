@@ -134,6 +134,18 @@ describe("explicit read-only iOS migration preflight", () => {
     expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_MINIMUM" }), "POST_CONSUMPTION").ok).toBe(false);
   });
 
+  it("requires the distinct UP stage, retains147 compatibility, and admits only the bounded101-check report", () => {
+    const parsed = parsePreflightTarget([...args, "--expect-stage", "POST_TEMPORARY_UPWARD_ROUNDING"], { EXPLICIT_AUDIT_URL: url });
+    const checks = Array.from({ length: 101 }, (_, index) => ({ name: `synthetic_check_${index}`, severity: "blocker", count: 0, skipped: false }));
+    expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_UPWARD_ROUNDING", checks }), parsed.expectedStage))
+      .toMatchObject({ ok: true, schemaStage: "POST_TEMPORARY_UPWARD_ROUNDING", skippedChecks: 0 });
+    expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_MINIMUM" }), parsed.expectedStage).ok).toBe(false);
+    expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_MINIMUM" }), "POST_TEMPORARY_MINIMUM").ok).toBe(true);
+    expect(parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_UPWARD_ROUNDING" }), "POST_TEMPORARY_MINIMUM").ok).toBe(false);
+    expect(() => parsePreflightReport(report({ schemaStage: "POST_TEMPORARY_UPWARD_ROUNDING", checks: [...checks, checks[0]] })))
+      .toThrow("PREFLIGHT_REPORT_INVALID");
+  });
+
   it("emits only approved report fields and rejects malformed counts or row-shaped output", () => {
     const parsed = parsePreflightReport(report({ extraCustomerData: "person@example.com", checks: [
       { name: "source_binding_invalid", severity: "blocker", count: 0, skipped: false, customerEmail: "person@example.com" },
