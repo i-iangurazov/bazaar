@@ -3,6 +3,27 @@
 Started: 2026-11-11 (Asia/Bishkek).
 Status: **in progress; not ready for submission or release**.
 
+## Owner-facing App Store readiness
+
+At the owner's request on 13 November, every progress update includes this
+fixed ten-gate readiness measure. **30% = three fully completed gates of ten**;
+it measures submission readiness, not code volume, elapsed time or a predicted
+completion date. Partial implementation does not close a gate. Apple approval
+and publication are tracked separately after the owner's submission approval.
+
+| Gate | Acceptance condition | Status |
+| --- | --- | --- |
+| 1 | Developer membership, tax, Paid Apps agreement and banking completed | Complete; owner confirmed |
+| 2 | Correct App Store Connect app, bundle ID and Russian primary language | Complete |
+| 3 | Signed TestFlight build delivered, installed and initially launched on iPhone | Complete; bounded physical checks |
+| 4 | Normal newcomer signup through business/store creation and working-screen login | In progress |
+| 5 | Entire agreed digital catalog, prices and commercial conditions configured for Apple | In progress |
+| 6 | Real Sandbox purchase, restore and refund accepted and reconciled | In progress |
+| 7 | Paid GoPay access works in iOS and Apple access works in web without duplicate payment | In progress; database regressions alone do not close this gate |
+| 8 | Critical iPhone workflows, roles, offline recovery, privacy and deletion accepted | In progress |
+| 9 | Complete App Store materials, disclosures, screenshots and reviewer access | In progress |
+| 10 | Final App Store-eligible Release build and complete release checks | In progress; current build is internal-only |
+
 ## Current checkpoint — updated 2026-11-13
 
 The signed staging build **1.0.0 (111120)** exists for team `DWR6Z246Y8` and
