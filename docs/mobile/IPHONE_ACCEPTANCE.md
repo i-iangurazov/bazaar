@@ -1,7 +1,8 @@
 # Bazaar iPhone acceptance record
 
-Status: **not run**. Compilation, browser checks and synthetic signed fixtures do
-not complete this record. The owner's required delivery order is a complete
+Status: **partial owner-reported TestFlight smoke; full acceptance pending**.
+Compilation, browser checks and synthetic signed fixtures do not complete this
+record. The owner's required delivery order is a complete
 candidate, isolated website/internal TestFlight acceptance, then a separately
 authorized App Store release.
 
@@ -11,8 +12,28 @@ any result passed. Save native screenshots and interruption evidence outside Git
 with the build identity. Current browser screenshot candidates are not native
 App Store screenshots.
 
+## Current physical-device checkpoint — updated 2026-11-13
+
+The owner confirmed Transporter **Delivered**, supplied the App Store Connect
+status **Complete / Internal / Ready to Test**, and installed **1.0.0 (111120)**
+through TestFlight. The app record is **Bazaar POS**, Apple ID **6833508529**,
+bundle ID `kg.bazaar.app`, Russian primary language, team `DWR6Z246Y8`.
+The signed staging IPA comes from native source `56c744aa`; its inspected SHA256
+is `d6ee74fb1ebf68d0183ef1d28a00e1bf9b873182bfe2adb53a27a36c7963d55d`.
+Hosted interface changes are recorded separately in [native page QA](IOS_NATIVE_PAGE_QA.md).
+
+The owner reported a successful login and working screen, product search with
+the keyboard, and a scanner opening after camera permission with a live image.
+No physical-device purchase, barcode decode or complete page pass is inferred.
+Exact device/model/OS and per-case capture times still need to accompany the
+remaining acceptance evidence. Agent-run Simulator checks are separate evidence.
+
+The [commercial catalog](APPLE_CATALOG_PROPOSAL.md) remains unapproved. A private
+145-product registration worksheet and RU/EN/KY draft copy are prepared; actual
+prices, storefronts and product registration are unverified, and sales stay off.
+
 Use only the dedicated preview services and synthetic organizations. Private
-demo and two distinct SELF_SERVE Apple Sandbox logins are in the owner's local
+demo and two distinct SELF_SERVE Bazaar logins for Apple Sandbox scenarios are in the owner's local
 release evidence directory; they must not be copied into Git or public listing
 materials. Use Apple's actual test environment and registered products. Never
 use a customer organization or real GoPay charge for these checks.
@@ -21,7 +42,7 @@ The staging build uses the same `kg.bazaar.app` identity and may replace another
 Bazaar installation. It is explicitly internal-TestFlight-only, and cannot be
 promoted into the public release. See [channel setup](IOS_TESTFLIGHT_STAGING.md).
 
-## Numbered first device run — all results Not run
+## Numbered device acceptance sequence
 
 Prepare isolated synthetic fixtures before starting: **A** with active GoPay-funded
 coverage and known plan/additions/expiry, **B** eligible for an approved Apple
@@ -34,7 +55,9 @@ buyer. Use the same preview website as the staging app, never the customer site.
    install Bazaar Test on iPhone. Record build/source/device details above,
    verify the intended preview organization, and confirm registered Apple products
    are available in Sandbox. An unsigned local rehearsal cannot satisfy this step.
-   **Result: Not run.**
+   **Result: Partial.** Owner confirmed installation of `111120` and successful
+   initial login. Registered-product availability in Sandbox and the complete
+   device evidence record remain unverified.
 2. **Keep existing web-paid access.** Sign into A in the preview website and on
    iPhone. Compare plan, additions and expiry, then open an included paid feature.
    Access must work without buying again through Apple. An automatic subscription
@@ -68,12 +91,14 @@ buyer. Use the same preview website as the staging app, never the customer site.
    **Result: Not run.**
 
 These steps are the first-run sequence, not a replacement for the full matrix.
-Keep every actual result below **Not run** until evidence from the installed
-shipping candidate establishes that individual case.
+Only the explicitly bounded owner-reported checks below have passed. Keep the
+other cases **Not run** until evidence from the installed candidate establishes
+that individual result; a Simulator pass cannot fill a physical-device result.
 
 | Check | Required observed result | Result / evidence |
 | --- | --- | --- |
-| Install, login, logout, password recovery, expired session | The intended organization/role/store appears, cookies survive restart, and protected data is unavailable after logout | Not run |
+| Internal TestFlight installation and initial login | The installed signed build reaches the working screen after login | Owner-reported pass for `1.0.0 (111120)`; full device identity/capture record remains to complete |
+| Logout, password recovery, expired session and restart | Cookies survive restart as intended, recovery works, and protected data is unavailable after logout | Not run |
 | Organization and role boundaries | Owner, manager and employee retain their real permissions; a different login cannot adopt the previous organization's purchases | Not run |
 | Existing GoPay coverage | iPhone shows the current plan/additions/expiry and permits paid features without another Apple charge | Not run |
 | Apple purchase and web access | Localized Apple price and explicit organization/term consent match the sheet; exactly one verified grant appears in iOS and web | Not run |
@@ -95,9 +120,11 @@ shipping candidate establishes that individual case.
 | Out-of-app renewal and provider switching | App Store settings changes and missed/out-of-order notifications reconcile; overlap has a visible management/refund path; Bazaar does not claim it can cancel Apple itself | Not run |
 | Refund/revocation | Only the corresponding rights/unused credit change; independent GoPay periods survive; submitted refund is distinct from Apple's decision | Not run |
 | POS and fractional values | Product search, quantities/prices, payment methods for physical goods, held receipts, return flow and cashier permissions work without changing authoritative amounts | Not run |
-| Products, balances, reports and documents | Create/edit/search, images, KGS/currencies, business dates, report download and document open/share work | Not run |
+| Product search with keyboard | Search accepts keyboard input and finds products in the app | Owner-reported pass for `111120` |
+| Products, balances, reports and documents | Create/edit, images, KGS/currencies, business dates, report download and document open/share work | Not run |
 | Receiving, transfers, write-offs and stock count | Established columns, product selection, actions and mobile behavior remain usable; retries do not duplicate movements | Not run |
-| Camera/scanner/photos/files | Allow/deny/retry, unavailable hardware, barcode found/not found/rapid duplicate and document/photo import have correct results | Not run |
+| Scanner opening and camera permission | Permission can be granted and the scanner displays a live camera image | Owner-reported pass for `111120`; this is not a barcode-decode result |
+| Camera/scanner/photos/files remaining cases | Deny/retry, unavailable hardware, barcode found/not found/rapid duplicate and document/photo import have correct results | Not run |
 | Baam voice and AI privacy | Explicit consent/decline/revoke behaves correctly at the actual provider boundary; voice recording/playback, private photos and shared adopted product photos work with approved test provider setup | Not run |
 | Keyboard, links and backgrounding | Safe areas, keyboard focus, bottom navigation, custom/universal links, lock/unlock and return from background work | Not run |
 | Offline and recovery | Losing connection during relevant mutations never reports a false success; recovery does not repeat a financial or stock operation | Not run |

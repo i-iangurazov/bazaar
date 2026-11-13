@@ -1,22 +1,32 @@
 # Bazaar — App Store listing and review draft
 
-Prepared 2026-11-11. **Draft only; not ready for submission.** A signed
+Prepared 2026-11-11; checkpoint updated 2026-11-13.
+**Draft only; not ready for submission.** A signed
 AppStaging archive and locally exported distribution IPA now exist from source
 `56c744aa`, version `1.0.0`, build `111120`. The export was observed with Apple
 Distribution signing for team `DWR6Z246Y8`, an unexpired distribution profile,
 `get-task-allow=false`, no `ProvisionedDevices`, and the bundled
 `TFInternalTestingOnly=true` restriction.
 
-The IPA has **not been uploaded**: there is no verified TestFlight availability,
-successful physical-iPhone installation/run or completed real Sandbox purchase.
-Whether build number `111120` is unused in App Store Connect remains unverified.
+The owner subsequently confirmed **Delivered** in Transporter and supplied the
+App Store Connect result for **1.0.0 (111120): Complete, Internal, Ready to Test**.
+The owner installed it through the internal group and confirmed login to the
+working screen, product search with the keyboard, and opening the scanner with
+camera permission and a live camera image. These are bounded owner-reported
+physical-iPhone results; they do not establish complete device acceptance or an
+Apple purchase. The exported IPA SHA256 is
+`d6ee74fb1ebf68d0183ef1d28a00e1bf9b873182bfe2adb53a27a36c7963d55d`.
+This build number is already used; any later native upload needs a new number.
 The intended bundle ID `kg.bazaar.app` and the owner's device registration were
 confirmed in the Developer portal. The owner then created the App Store Connect
 record **Bazaar POS**, Apple ID **6833508529**, after Apple rejected the plain
 name Bazaar as already used. This record identity was supplied by the owner;
 automated access to App Store Connect remains denied. No price, public seller
 declaration or release setting has been configured by this work. The complete
-release scope and verification evidence remain in `IOS_RELEASE_PROGRESS.md`.
+release scope and verification evidence remain in [the execution record](IOS_RELEASE_PROGRESS.md)
+and [iPhone acceptance record](IPHONE_ACCEPTANCE.md). Actual Sandbox purchases,
+the remaining device scenarios and the final normal-production Release remain
+open. The internal-only staging IPA cannot become the App Store release.
 
 ## App record proposal
 
@@ -29,7 +39,7 @@ release scope and verification evidence remain in `IOS_RELEASE_PROGRESS.md`.
 | User Access | Full Access, selected by the owner for App Store Connect users; this does not invite TestFlight users or publish the app |
 | Platform / devices | iOS; existing iPhone and iPad support; minimum iOS 15 |
 | Other Apple platforms | Inspect Mac with Apple silicon / Vision Pro availability defaults in the actual account; no compatibility or release on those platforms is claimed by the iPhone/iPad checks |
-| Version / build | Signed archive and local IPA: `1.0.0` / `111120`, source `56c744aa`; availability of this build number in the actual App Store Connect record remains unverified before upload |
+| Version / build | Signed staging `1.0.0` / `111120`, native source `56c744aa`; owner confirmed processed internal TestFlight installation. This number is used; a later native upload needs a new number |
 | Primary category | Business, matching the existing retail operations application |
 | Download price | Proposed free download with approved digital offers sold through Apple; this does not approve any IAP price or offer |
 | Initial territory | Kyrgyzstan is a proposal requiring owner confirmation, not a saved availability setting |
@@ -376,6 +386,14 @@ legacy and WhatsApp configurations. They are not approved prices or registered
 products. Do not omit additions, silently make prepaid terms recurring, use KGS
 service valuations as Apple's charges, or promise instant cross-provider
 upgrades not supported by the approved model.
+
+A separate private registration worksheet now covers all 145 immutable draft
+IDs with their frozen rights and 435 proposed RU/EN/KY text rows. It does not
+register products or approve prices: actual Apple IDs, price points, storefronts
+and approvals remain unset. Kyrgyz text is explicitly for in-app/review use,
+not an unsupported ASC locale. Temporary-upgrade bands remain separate, with
+no actual registered band IDs supplied. See [the commercial proposal](APPLE_CATALOG_PROPOSAL.md)
+and [remaining upgrade decisions](APPLE_TEMPORARY_UPGRADES.md).
 
 For each actually approved SKU, prepare its own display name (2–30 characters),
 description (up to 45), selected term/additions, product type, storefront price,
