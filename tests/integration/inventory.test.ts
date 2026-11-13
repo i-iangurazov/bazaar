@@ -58,6 +58,71 @@ describeDb("inventory service", () => {
     await resetDatabase();
   });
 
+
+  it.each([
+    { type: "STOCK_RECEIVING" as const, quantity: 5.5, amount: 441.1, delta: 5.5 },
+    { type: "WRITE_OFF" as const, quantity: 0.25, amount: 20.05, delta: -0.25 },
+  ])("preserves fractional quantities in the $type journal and document summary", async (expected) => {
+    const { org, store, product, baseUnit, adminUser } = await seedBase();
+    await prisma.unit.update({ where: { id: baseUnit.id }, data: { quantityPrecision: 3 } });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+    const received = await postStockReceiving({
+      storeId: store.id,
+      referenceNumber: "QA-FRACTIONAL-SUMMARY",
+      lines: [{ productId: product.id, quantity: 5.5, unitCost: 80.2 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-fractional-summary-receiving",
+      idempotencyKey: "idem-fractional-summary-receiving",
+    });
+    const writtenOff = expected.type === "WRITE_OFF" ? await postStockWriteOff({
+      storeId: store.id,
+      reason: "Другое",
+      comment: "Fractional summary regression",
+      lines: [{ productId: product.id, qty: 0.25 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-fractional-summary-write-off",
+      idempotencyKey: "idem-fractional-summary-write-off",
+    }) : null;
+    const documentId = writtenOff?.writeOffId ?? received.receivingId;
+    const documentKey = expected.type + ":" + expected.type + ":" + documentId;
+    const movementsBefore = await prisma.stockMovement.findMany({
+      where: { storeId: store.id, productId: product.id }, orderBy: { id: "asc" },
+    });
+    const snapshotBefore = await prisma.inventorySnapshot.findUnique({
+      where: { storeId_productId_variantKey: { storeId: store.id, productId: product.id, variantKey: "BASE" } },
+    });
+
+    const journal = await caller.inventory.productMovements({
+      type: expected.type, search: documentId, page: 1, pageSize: 25,
+    });
+    expect(journal.total).toBe(1);
+    expect(journal.items).toHaveLength(1);
+    expect(journal.items[0]).toMatchObject({
+      positionsCount: 1, totalQuantity: expected.quantity, totalAmount: expected.amount,
+    });
+    const document = await caller.inventory.productMovementDocument({ documentKey });
+    expect(document).toMatchObject({
+      positionsCount: 1, totalQuantity: expected.quantity, totalAmount: expected.amount,
+    });
+    expect(document?.lines).toHaveLength(1);
+    expect(document?.lines[0]).toMatchObject({ qtyDelta: expected.delta, lineTotalKgs: expected.amount });
+    expect(await prisma.stockMovement.findMany({
+      where: { storeId: store.id, productId: product.id }, orderBy: { id: "asc" },
+    })).toEqual(movementsBefore);
+    expect(await prisma.inventorySnapshot.findUnique({
+      where: { storeId_productId_variantKey: { storeId: store.id, productId: product.id, variantKey: "BASE" } },
+    })).toEqual(snapshotBefore);
+    expect(snapshotBefore?.onHand).toBe(expected.type === "WRITE_OFF" ? 5.25 : 5.5);
+  });
+
   it("maintains inventory ledger correctness", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
