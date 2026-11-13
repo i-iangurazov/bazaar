@@ -49,11 +49,28 @@ The actual higher-price request displays a mandatory consumption-information
 capability when No is selected. Its consent-aware implementation is in progress;
 no higher-price request has been submitted.
 
+The owner subsequently requested a commission-covering markup table before any
+price application. The separate private workbook/CSV/JSON preserves all 145
+base/pack configurations and their contract identities, with parallel 30% and
+conditional 15% scenarios. It chooses the first available USD level that covers
+the frozen KGS service valuation after one commission at the dated reference
+rate. Exact rational/Decimal checks cover all 290 scenarios; the workbook's
+formulas/cached prices and desktop rendering were checked. At 30%, 93 candidates
+fit the current grid and 52 exceed USD 1000; at 15%, 102 fit and 43 exceed it.
+Eleven products' own KGZ price grids were read separately and their 22 candidate
+points matched; the remaining 134 own-product grids still require readback.
+Control-product identifiers are not usable as those products' settings. The
+workbook remains unapproved/unapplied and excludes taxes, exchange spreads,
+GoPay/bank fees and the separate temporary-upgrade bands. A markup direction is
+not approval of exact prices, higher-point prices or a future effective rate.
+
 Under the standard Paid Apps terms the commission is 30%. An approved eligible
 Small Business Program participant receives the 15% program rate; Developer
 membership alone does not enroll the account. Eligibility includes associated
 developer accounts, and Apple's published effective date follows approval rather
-than the act of applying. No 15% effective rate is established for this account.
+than the act of applying. The owner submitted the prepared application on
+13 November and the signed-in Apple page confirmed receipt. Approval and the
+effective date are still pending; no 15% effective rate is established.
 See the [Paid Apps agreement, Schedule 2 section 3.4](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/)
 and [Small Business Program](https://developer.apple.com/app-store/small-business-program/).
 

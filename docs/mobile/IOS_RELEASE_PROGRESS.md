@@ -38,15 +38,61 @@ All parent states remained `MISSING_METADATA`; no prices, availability, sales
 approval or review submission were configured by this registration. Kyrgyz
 remains in-app copy because ASC does not offer that localization.
 
-The private USD proposal contains 111 configurations within the observed
-800-point KGZ price range and 34 above its current USD 1000 maximum. It uses a
+The initial private USD proposal contained 111 configurations within the observed
+800-point KGZ price range and 34 above its current USD 1000 maximum. It used a
 dated NBKR reference rate, not a promised Apple exchange rate or payout. Prices,
 per-product price points, territories, Small Business commission eligibility and
 other commercial terms are unapproved. The owner asked to understand commission
-before deciding; that reply is not price approval. The actual higher-price form
-explicitly requires consumption-information capability when its No answer is
-selected. A consent-aware response workflow is being implemented; the request
-has not been submitted and no capability is falsely declared complete.
+before deciding; that reply is not price approval. The owner subsequently
+submitted the prepared Small Business Program application, and the signed-in
+Apple page confirmed receipt; approval and an effective 15% date remain pending.
+The owner then requested a new markup table before application. That separate
+145-row workbook/CSV/JSON has parallel 30% and conditional 15% scenarios, checked
+with exact rational/Decimal arithmetic across all 290 calculations. At 30%, 93
+candidates fit the observed grid and 52 exceed USD 1000; at 15%, 102 fit and 43
+exceed it. The nine base plan/term configurations and two WhatsApp examples had
+their own price grids read from Apple; all 22 candidate points matched. The
+remaining 134 products require their own point readback. The table is unapproved
+and unapplied, excludes tax/FX/bank/GoPay fees, and does not include the separate
+current-term temporary-upgrade bands.
+
+The actual higher-price form explicitly requires consumption-information
+capability when its No answer is selected. The consent-aware server workflow is
+now implemented in `23f20136`, and its optional billing/profile UI in `68c966b4`.
+It records the original purchaser's explicit choice and reported delivery/sample
+answers, queues verified requests with a 12-hour deadline, freezes retry bodies,
+and stops sharing after withdrawal or buyer ineligibility. Refusing/unknown
+answers do not block refunds or paid access. Personal withdrawal remains available
+after role/organization changes without revealing financial history. Outbound
+reporting stays off and no actual consumption response has been sent to Apple.
+The higher-price request has not been submitted.
+
+The first eight-file backend/preflight run had 128 passes and one response-size
+test failure. An explicit UTF-8 byte cap and actual stream case corrected that
+boundary; the affected two files then passed all 36 checks, yielding 130 unique
+passing cases across the latest bounded file results. UI checks passed 70 cases,
+and the local real-component fixture passed 27 desktop/mobile/language checks
+with 34 inspected screenshots, no network requests and no page errors; its
+browser was closed. These fixtures do not establish actual iPhone/WebKit or Apple
+consumption delivery. See [the UI verification record](APPLE_CONSUMPTION_CONSENT_QA.md).
+Additive migration 146 was applied only to the owned localhost CI at this
+checkpoint: all 26 original access/financial/auth/usage/evidence table snapshots
+and historical migration records were preserved, and its three new tables were
+empty immediately after application. The same frozen migration was subsequently
+applied to the independently pinned isolated remote Preview: its 26 original
+table snapshots also remained identical, new consent/request tables were empty,
+and the final read-only `POST_CONSUMPTION` audit had zero blockers, warnings or
+skipped checks. Customer/production databases were not accessed. Two further
+real-PostgreSQL privacy/deletion suites passed nine cases, including withdrawal
+and erasure lock ordering; the existing profile recovery suite passed seven.
+The first integrated typecheck found five constructor/test-query typing errors;
+their focused fixes passed the affected 14 backend and 17 UI cases, then the
+typecheck passed. The initial lint found a type-only import error and a stable
+refetch dependency warning; after scoped corrections lint reported no warnings
+or errors. RU/KG/EN translation validation passed. No SQL was changed after its
+frozen/applied checksum. The owned local PostgreSQL/Redis were stopped with their
+data retained. The immutable production build and Preview update remain pending
+at this source checkpoint.
 
 The app's Sandbox notification URL was saved to the isolated Preview endpoint;
 the production notification URL remains unset. Apple reported one successful
@@ -57,7 +103,12 @@ once as `Sandbox / TEST / PROCESSED`, attempt count one, without an issue, and
 zero Sandbox purchases/intents since the request. The initial local dual-stack
 OCSP timeout is retained as evidence; no shipping verifier or OS setting was
 weakened. This proves TEST delivery and durable processing, not a purchase,
-refund, reconciliation, or the complete lifecycle.
+refund, reconciliation, or the complete lifecycle. A separate single replay of
+that exact online-verified TEST to the pinned Preview returned HTTP 200 with
+`accepted:true`. Read-only before/after snapshots showed the notification still
+PROCESSED once with one attempt/no issue and unchanged Apple transactions,
+purchase intents, subscription periods and WhatsApp credit/use rows. This is
+actual TEST replay idempotency, not evidence of a successful money transaction.
 
 Actual temporary-upgrade band products/prices, remaining commercial decisions,
 protected server configuration and real Sandbox lifecycle checks remain open.
