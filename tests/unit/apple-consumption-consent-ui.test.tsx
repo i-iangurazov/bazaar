@@ -58,7 +58,7 @@ const open = async (locale: keyof typeof copy = "ru") => {
 };
 const choose = async (label: string, option: string) => {
   fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "Enter" });
-  fireEvent.click(await screen.findByRole("option", { name: option, exact: true }));
+  fireEvent.click(await screen.findByRole("option", { name: option }));
 };
 const answer = async (locale: keyof typeof copy = "ru", unknown = false) => {
   const t = copy[locale].appleConsumption;
