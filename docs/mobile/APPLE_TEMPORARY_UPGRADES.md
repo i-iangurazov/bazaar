@@ -23,7 +23,7 @@ inspected three representative images. The preserved `2,99 $` display price was
 synthetic and establishes no actual StoreKit price.
 
 Migration 147, SHA256 `c928c60955d3f34b0a4c919bd40ffa59cc9fec60e3c685e6434ac8585c18b323`,
-was applied only to the owned localhost CI. It preserved all 29 original table
+was first applied to the owned localhost CI. It preserved all 29 original table
 snapshots, 54 existing functions, 1,581 existing triggers and the 146 historical
 migration records; the read-only `POST_TEMPORARY_MINIMUM` audit passed all 98
 checks with zero blockers, warnings or skips. Both PG groups completed; owned
@@ -33,10 +33,17 @@ change that combined digest; all 21 reviewed application/SQL/test files still
 match their recorded hashes. Private check evidence is consolidated in
 `.local/ios-release-20261111/C-minimum-final-quality.json`.
 
-The C-minimum/147 production-mode build has not yet run. Remote Preview remains
-schema146/source `2af628f4`; the separate one-organization/one-Starter candidate
-also uses that older source and does not test this rule. No actual C-band products,
-prices, storefront configuration or remaining commercial terms are approved or
+The reviewed second remote run also applied the frozen migration to the pinned
+isolated Preview, preserving all 29 original table snapshots, the 146 historical
+migration records and existing definitions. Its `POST_TEMPORARY_MINIMUM` audit
+passed all 98 checks without blockers, warnings or skips; the initial failed
+inspection evidence remains retained. The C-minimum/147 production-mode cloud
+build now passes at source `fbb9ae6c`, READY deployment
+`dpl_24gtc81ajWaCYad5vgewkdktVxvm`, actually bound to the dedicated TestFlight
+Preview alias. This later documentation update is not a new deployed source.
+The one-organization/one-Starter Sandbox configuration was preserved and verified
+through normal HTTP login/catalog reads; that is not a purchase of a C band.
+No actual C-band products, prices, storefront configuration or remaining commercial terms are approved or
 enabled. Real Sandbox/device purchases and App Review acceptance remain open.
 
 ## Commercial configuration

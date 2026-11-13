@@ -3,7 +3,9 @@
 Status: commercial draft; 145 base/pack products are registered. The owner-approved
 102 available 15%-scenario prices are configured and read back as Apple drafts;
 43 above-grid prices remain unconfigured/unapproved. Broader terms and catalog
-approval remain open, and sales stay off.
+approval remain open, and public/production sales stay off. A separate isolated
+Preview allows only one synthetic organization's current Starter Sandbox offer;
+it does not enable the complete catalog or establish a successful purchase.
 This does not replace the complete release goal or claim all plan-change paths
 are ready.
 
@@ -157,10 +159,15 @@ the owner's explicit choice: **charge the minimum supported Apple payment while
 keeping the original expiry unchanged**. That rule is now implemented and
 locally verified: 82 unit/UI cases and 146 real-PostgreSQL cases across seven PG
 files passed, with typecheck/lint/RU/KG/EN validation and six localized portrait/
-landscape fixture states. Migration 147 was applied only to owned CI; its 98-check
-read-only audit passed. The C-minimum production-mode build has not yet run, and
-remote Preview remains source `2af628f4` / schema146. See the
-[verification boundaries](APPLE_TEMPORARY_UPGRADES.md). Actual C-band products,
+landscape fixture states. Migration 147 passed its owned-CI and subsequent
+isolated-Preview preservation checks: all 29 existing table snapshots and old
+146 migration records/definitions were retained, with 98 clean read-only audit
+checks. The production-mode cloud build now passes at source `fbb9ae6c` /
+schema147, READY deployment `dpl_24gtc81ajWaCYad5vgewkdktVxvm`, actually bound to
+the dedicated TestFlight Preview alias. This later documentation update is not
+a new deployed source. Normal C HTTP login proves exactly one ready Sandbox
+Starter offer and zero transactions/intents, not an actual StoreKit purchase.
+See the [verification boundaries](APPLE_TEMPORARY_UPGRADES.md). Actual C-band products,
 prices and remaining upgrade terms are still unapproved; sales stay off. No
 goodwill gift policy was selected. Existing paid access and website functionality
 continue.

@@ -5,12 +5,10 @@ Status: **in progress; not ready for submission or release**.
 
 ## Owner-facing App Store readiness
 
-On 13 November the owner requested a readiness percentage. The earlier 70–80%
-estimate was not supported by complete acceptance evidence. The subsequent 30%
-label used a different, equally weighted ten-item checklist and was also
-withdrawn as a misleading overall completion estimate. There is no validated
-numeric estimate. The checklist below records concrete acceptance conditions;
-three are fully closed and the remaining seven contain partial implementation.
+On 13 November the owner requested a readiness percentage. All earlier overall
+percentage estimates have been withdrawn; there is no validated numeric
+estimate. The checklist below records concrete acceptance conditions;
+four are fully closed and the remaining six contain partial implementation.
 Apple approval and publication are tracked separately after owner approval.
 
 | Gate | Acceptance condition | Status |
@@ -18,15 +16,22 @@ Apple approval and publication are tracked separately after owner approval.
 | 1 | Developer membership, tax, Paid Apps agreement and banking completed | Complete; owner confirmed |
 | 2 | Correct App Store Connect app, bundle ID and Russian primary language | Complete |
 | 3 | Signed TestFlight build delivered, installed and initially launched on iPhone | Complete; bounded physical checks |
-| 4 | Normal newcomer signup through business/store creation and working-screen login | In progress |
+| 4 | Normal newcomer signup through business/store creation and working-screen login | Complete; actual iPhone signup, full business fields, login, dashboard/trial7 and two onboarding steps; independent HTTP verification passed |
 | 5 | Entire agreed digital catalog, prices and commercial conditions configured for Apple | In progress |
 | 6 | Real Sandbox purchase, restore and refund accepted and reconciled | In progress |
 | 7 | Paid GoPay access works in iOS and Apple access works in web without duplicate payment | In progress; database regressions alone do not close this gate |
 | 8 | Critical iPhone workflows, roles, offline recovery, privacy and deletion accepted | In progress |
 | 9 | Complete App Store materials, disclosures, screenshots and reviewer access | In progress |
-| 10 | Final App Store-eligible Release build and complete release checks | In progress; current build is internal-only |
+| 10 | Final App Store-eligible Release build and complete release checks | In progress; normal Release `111121` archived/exported and inspected locally; upload, Apple processing and final acceptance remain open |
 
 ## Current checkpoint — updated 2026-11-13
+
+The current isolated web Preview is source **`fbb9ae6c`**, schema **147**,
+READY deployment `dpl_24gtc81ajWaCYad5vgewkdktVxvm`, actually bound to
+`https://bazaar-ios-preview-20261111.vercel.app`. Its production-mode cloud build
+passed. This source includes the minimum-payment rule and isolated newcomer
+registration fix; the present documentation update is later and is not a new
+deployed application source. No customer/production deployment was performed.
 
 The signed staging build **1.0.0 (111120)** exists for team `DWR6Z246Y8` and
 bundle ID `kg.bazaar.app`, from native source `56c744aa`. The inspected Apple
@@ -44,6 +49,18 @@ physical-device results. They do not establish barcode decoding, every page or
 role, real Apple purchases, or complete iPhone acceptance. See the
 [physical-device record](IPHONE_ACCEPTANCE.md) and separate
 [actual Simulator/page checks](IOS_NATIVE_PAGE_QA.md).
+
+The separate normal App Store Release **1.0.0 (111121)** from `fbb9ae6c` has now
+been archived, exported and inspected locally. Its Apple Distribution signature,
+matching distribution profile, `https://www.bazaar.kg/dashboard` origin and
+production channel passed inspection; `TFInternalTestingOnly` is absent and
+the export is not internal-only. IPA SHA256 is
+`838de6fdea80496f50efceb09932c64bc904bafcbe1f6fd6cf99e0d5b4f1038a`.
+The private record is
+`.local/ios-release-20261111/appstore-www-fbb9ae6c-111121/release-summary.json`.
+This IPA has not been uploaded, installed or launched, submitted for App Review,
+or used for a real IAP receipt. Installed TestFlight `111120` remains the staging
+build; it is not evidence that the normal Release connects successfully to www.
 
 The complete Apple-enabled candidate is still unfinished. On 13 November the
 original Chrome access was restored and the owner completed Apple login,
@@ -143,10 +160,10 @@ typecheck passed. The initial lint found a type-only import error and a stable
 refetch dependency warning; after scoped corrections lint reported no warnings
 or errors. RU/KG/EN translation validation passed. No SQL was changed after its
 frozen/applied checksum. The owned local PostgreSQL/Redis were stopped with their
-data retained. The integrated source checkpoint is `2af628f4`. Its immutable
-cloud production-mode build is now READY (compilation took 45 seconds; 133 static
-pages), with typecheck and lint passing. The isolated Preview deployment is
-`dpl_212g4wdwHWWiafPZfH9MQH4NtX4q`, bound to
+data retained. That integrated source checkpoint was `2af628f4`. Its immutable
+cloud production-mode build passed (compilation took 45 seconds; 133 static
+pages), with typecheck and lint passing. That isolated Preview deployment was
+`dpl_212g4wdwHWWiafPZfH9MQH4NtX4q`, then bound to
 `https://bazaar-ios-preview-20261111.vercel.app`. Seven actual HTTP checks passed,
 including two normal logins. Actual Chrome checks passed the Russian profile
 privacy screen on desktop/mobile and its policy link; both sessions were signed
@@ -191,42 +208,76 @@ Independent review found no blockers at file-set digest `d6e1f581…cc76c2`.
 These later documentation changes alter that combined digest only; all 21
 reviewed application/SQL/test files still match their recorded hashes.
 
-Migration 147 (`c928c609…8b323`) was applied **only to owned localhost CI**.
+Migration 147 (`c928c609…8b323`) was first applied to owned localhost CI.
 All 29 table snapshots, 54 existing functions, 1,581 existing triggers and all
 146 historical migration records were preserved. The actual read-only
 `POST_TEMPORARY_MINIMUM` audit passed all 98 checks without blockers, warnings
 or skips. Both PostgreSQL groups finished and the owned PostgreSQL/Redis were
-stopped with their data retained. A production-mode build of the C-minimum/147
-application has **not yet run**. Remote Preview still has schema 146; the
-TestFlight alias uses source `2af628f4` / `dpl_JDzD3en8tWGAuzxoPyMKx8RLac9a`.
+stopped with their data retained. The reviewed second remote run subsequently
+applied the same frozen migration to the pinned isolated Preview: all 29 original
+table snapshots, the 146 historical migration records and existing definitions
+were preserved, with all 98 `POST_TEMPORARY_MINIMUM` checks clean. The original
+failed inspection evidence remains retained separately; no reset was used.
+The C-minimum/147 application production-mode cloud build now passes in the
+current `fbb9ae6c` deployment. Remote proof is private
+`.local/ios-release-20261111/preview-147-r2-migration-evidence.json`.
 The quality record is private
 `.local/ios-release-20261111/C-minimum-final-quality.json`.
 
-A separate source-`2af628f4` Sandbox candidate,
-`dpl_JDzD3en8tWGAuzxoPyMKx8RLac9a`, is READY with one synthetic organization,
+A previous source-`2af628f4` Sandbox candidate,
+`dpl_JDzD3en8tWGAuzxoPyMKx8RLac9a`, was READY with one synthetic organization,
 one current Starter product and the new server key in runtime only. Its
 per-deployment settings leave the saved project environment unchanged. Candidate
 HTTP and independent read-only database checks passed; the dedicated alias was
 then moved to it and one normal C login/catalog check passed there. A's GoPay
-paid periods, future prepayment and usage were preserved; C sees exactly one
-Sandbox Starter offer and has no purchases or pending intents. This deployment
-does not contain migration 147 and no real Sandbox
-purchase has been completed. Actual C-band products/prices and remaining upgrade
-terms remain unapproved and disabled; the minimum-rule decision alone does not
+paid periods, future prepayment and usage were preserved; C saw exactly one
+Sandbox Starter offer and had no purchases or pending intents. It was superseded
+by the current `fbb9ae6c` / schema147 deployment. One normal C login and bounded
+catalog/access read passed on its stable alias: HTTP 200, expected identity,
+exactly one Sandbox Starter offer, no transactions or pending intents, no active
+trial or paid coverage and GoPay checkout unavailable. This is server acceptance;
+the automated native C login did not establish what password was entered. The
+owner subsequently signed in to C on the iPhone, which visibly opened the
+expected synthetic C store. StoreKit returned the current Starter product with
+display price `$24.95`; actual storefront/currency are not yet established and
+this is not proof of the configured Kyrgyzstan `$26.95` price. The owner reported
+completing its Sandbox purchase. The app then showed an Apple verification error;
+actual receipt, grant and recovery remain under investigation. No successful
+purchase or access grant is claimed. Actual C-band products/prices and
+remaining upgrade terms remain unapproved and disabled; the minimum-rule decision alone does not
 approve those commercial settings. No goodwill gift policy was selected.
 
 The last actual Simulator cutout/keyboard/focus recovery checks described in the
-page QA record used `44bf43c3`. They have not been rerun for Preview source
-`2af628f4` and must not be attributed to it.
-The latest physical TestFlight/Mirroring check passed the anonymous login
-screen, invite-only registration notice, empty-email validation and back
-navigation. Credentialed phone-login automation did not establish a successful
-login; the actual password contents in the phone field were not established.
-The same isolated fixture's normal HTTP login passed with status 200 and its
-expected organization. No authenticated phone working-page or StoreKit purchase
-result is claimed; the remaining physical acceptance stays open.
-Production/main, normal App Store Release, submission and publication still
-require their separate authorizations.
+page QA record used `44bf43c3`. They have not been rerun for Preview sources
+`2af628f4` or `fbb9ae6c` and must not be attributed to those sources.
+The current physical TestFlight/Mirroring check on `fbb9ae6c` passed full normal
+newcomer E registration, every business/store field, successful business creation,
+ordinary login, the dashboard with trial7 and two onboarding steps. Evidence is
+private under `.local/ios-release-20261111/iphone-mirroring-page-qa-20261113/`:
+`full-registration-ru-fbb9.png`, `business-created-E-ru-fbb9.png` and
+`newcomer-E-working-screen-ru-fbb9.png`. An independent single ordinary HTTP E
+login with the same saved 20-digit password passed; the identity, all persisted
+business fields and active SELF_SERVE seven-day trial matched. Fresh server
+`/login` HTML contained the Create account link, without Request access; this
+does not prove the cause of the earlier stale phone page.
+
+The registration fix passed 59 focused checks across eight files, including a
+real-PostgreSQL complete signup/business/trial/login flow, plus whole-source
+typecheck, lint and RU/KG/EN validation. The separate candidate HTTP newcomer D
+flow also passed; protected A's paid current/future periods, additions and
+consumed usage remained identical. Private E evidence is
+`.local/ios-release-20261111/phone-E-http-fbb9-schema147-20261113-result.json`.
+The isolated skip of email verification requires the complete existing pinned
+Preview boundary; production email verification remains required. This closes
+checklist gate 4, not the remaining phone/payment or store-materials gates.
+Production/main deployment, App Review submission and publication retain their
+separate authorizations. The App Store draft now has Business category, Russian
+and en-GB subtitle/description/keywords/promotional text and working support/
+privacy URLs. All five changes have actual Apple readback proof; Apple created
+the empty English version row automatically, so it was filled by PATCH rather
+than a duplicate POST. Name, Russian primary language, version `1.0` and release
+settings were preserved. Screenshots, declarations and reviewer acceptance remain
+open; this is not a complete listing/reviewer package.
 
 Earlier entries below are chronological evidence at their named checkpoints.
 Initial missing-signature/device observations and pre-upload statements must not
@@ -299,20 +350,20 @@ synthetic fixture, or browser screenshot is not a verified native release.
 | R04 | No duplicate sale for the same covered period or capabilities | Server purchase checks, organization locks, durable pending intents and concurrent DB tests | Implemented; isolated concurrency/recovery tests pass; actual Sandbox acceptance remains |
 | R05 | Safe provider switching and recovery | Tests for prepaid GoPay remainder, Apple renewal states, pending/stale payments, cancellation and out-of-app renewals | Open |
 | R06 | Purchases cannot move between organizations or unauthorized users | Tests for account/device changes, restore, several organizations, role changes and departing payers | Open |
-| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 base/pack drafts and 290 RU/en-GB localization bindings registered; 102 owner-approved 15%-scenario draft prices have OWN point/write/readback evidence. The 43 above USD 1000 remain unconfigured/unapproved; availability is unspecified, source catalog remains unapproved and sales off. Apple acknowledged the higher-price submission; approval is pending. The minimum-charge/original-expiry rule is implemented with 82 unit/UI and 146 real-PG cases plus a clean owned-CI post147 audit; its production-mode build, actual upgrade-band prices and real Sandbox/device acceptance remain open |
+| R07 | Every permitted current digital offer is available through Apple | Complete versioned offer/SKU matrix, prices, supported storefronts, approved terms and sandbox transactions | 145 base/pack drafts and 290 RU/en-GB localization bindings registered; 102 owner-approved 15%-scenario draft prices have OWN point/write/readback evidence. The 43 above USD 1000 remain unconfigured/unapproved; availability is unspecified, source catalog remains unapproved and public sales off. Apple acknowledged the higher-price submission; approval is pending. The minimum-charge/original-expiry rule has 82 unit/UI and 146 real-PG cases, clean CI/isolated-Preview post147 audits and a passing production-mode cloud build; actual upgrade-band prices and real Sandbox/device acceptance remain open |
 | R08 | Website GoPay and historical reconciliation continue working | Existing and new DB/protocol regressions; provider-specific amounts and histories preserved | Open |
 | R09 | StoreKit 2 purchase, cancellation, pending, restore and management work | Native implementation, StoreKit Testing, sandbox and TestFlight evidence | Signed staging build installed through TestFlight; prior price-policy 35 and journal/boundary 59 checks passed; four earlier local StoreKit purchase cases failed; real Sandbox and physical-device purchase lifecycle remain unrun |
 | R10 | Signed transaction verification, Server API and Notifications V2 are complete | Certificate/app/environment/product/ownership checks, replay/order/missed-event tests, reconciliation | Actual Sandbox TEST delivered, online signature checks passed, exact payload durably PROCESSED once in isolated Preview; no actual purchase/refund/reconciliation acceptance yet. Consent-aware consumption response remains in progress |
 | R11 | Renewals, expiry, grace/retry, plan changes, refund and revocation update only the correct rights | DB lifecycle tests with independent Apple and GoPay grants | Open |
 | R12 | Physical-store customer payments stay separate from Bazaar digital sales | Source and UI review; POS/payment regressions | Open |
-| R13 | Signed, reproducible iOS archive and app registration are ready | Registered intended bundle ID, team/capabilities/profiles, archive/IPA validation and upload processing | Signed internal staging archive/IPA inspected; intended app record created; owner confirmed Delivered, processed Internal/Ready to Test and installation of `111120`. Final normal App Store Release remains open |
+| R13 | Signed, reproducible iOS archive and app registration are ready | Registered intended bundle ID, team/capabilities/profiles, archive/IPA validation and upload processing | Installed staging `111120` remains internal-only. Normal www/Apple Distribution Release `111121` from `fbb9ae6c` now archives/exports and passes local signature/profile/non-internal inspection; upload, Apple processing, install/launch and final release acceptance remain open |
 | R14 | iOS and web maintain all established customer workflows | Native/mobile/desktop checks for POS, prices, products, inventory, documents, reports and enabled integrations | Latest 11 desktop/mobile products/stock/closed-POS checks plus earlier 22 browser and six profile checks pass; native/device acceptance remains open |
 | R15 | Phone features and recovery work | Device checks for camera/scanner/photos/files/voice, keyboard, permissions, links, backgrounding, network loss and retry | Owner reported product search/keyboard and opening the scanner with permission/live image; barcode, other permissions, voice and recovery checks remain open |
 | R16 | Complete own-account deletion preserves required business records | Reauthentication/confirmation, ownership handling, personal-data removal/session invalidation and real-DB tests | Implemented; PostgreSQL and browser dialog checks pass; actual iPhone acceptance remains |
 | R17 | Privacy, AI disclosures/consent and subscription deletion explanations are correct | Data/processor inventory, in-app consent tests, privacy manifest and store declarations reviewed against actual behavior | Implementation, boundary tests and archive manifest inspected; final store declarations/device acceptance remain |
 | R18 | Russian, Kyrgyz and English strings are complete | Translation validation and UI review of new/error/recovery states | Translation validation and focused localized UI tests pass; native localization acceptance remains |
 | R19 | Required application checks and isolated integration tests pass | Typecheck, lint, translation check, relevant tests, web production build, native build; commands/results recorded | Latest whole run has 5,070 passes and one outdated query expectation; corrected file passes all 13 cases; three pooling checks unrun; current quality/cloud/native archive checks pass; native purchase testing remains incomplete |
-| R20 | Real iPhone TestFlight verification is complete | Signed processed build installed on a real iPhone; full owner/device test script completed with evidence | Partial: owner installed `111120` and reported initial login/search/camera smoke. Full device/payment acceptance remains open |
+| R20 | Real iPhone TestFlight verification is complete | Signed processed build installed on a real iPhone; full owner/device test script completed with evidence | Partial: installed `111120`; initial search/camera smoke, plus actual full newcomer E signup/business/login/dashboard/trial7 and two onboarding steps on Preview `fbb9ae6c`. Independent ordinary E HTTP login/full-field verification passed. Full device/payment acceptance remains open |
 | R21 | App Store and IAP review materials are ready | Actual native screenshots, listing/icon/support/privacy, ratings/encryption, review credentials and separate synthetic organization | Open |
 | R22 | Production operations and rollback are prepared | Verified notification/reconciliation monitoring, support playbook, safe server rollout and rollback rehearsal | Open |
 | R23 | Human release/commercial decisions are concrete and reviewable | Review bundle with prices/renewal model, countries/public seller details, source changes, builds, tests and outstanding actions | Open |
