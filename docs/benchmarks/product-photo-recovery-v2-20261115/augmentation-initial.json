@@ -1,0 +1,19 @@
+{
+  "changed": 1,
+  "progress": {
+    "photo-search-field-shop": {
+      "total": 39,
+      "ready": 39,
+      "pending": 0,
+      "failed": 0,
+      "withoutPhoto": 0
+    },
+    "photo-search-browser-shop": {
+      "total": 27,
+      "ready": 27,
+      "pending": 0,
+      "failed": 0,
+      "withoutPhoto": 0
+    }
+  }
+}

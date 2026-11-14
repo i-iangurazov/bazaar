@@ -7,14 +7,21 @@ import { setTimeout as pause } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
 
-const improved = process.argv.includes("--miami-improvement");
+const recovery = process.argv.includes("--recovery-v2");
+const beforeRecovery = process.argv.includes("--before-recovery");
+assert.ok(!beforeRecovery || recovery);
+const improved = process.argv.includes("--miami-improvement") || recovery;
 const cohort = process.argv.find((arg) => arg.startsWith("--cohort="))?.slice(9) ?? "independent";
-assert.ok(["independent", "field", "legacy"].includes(cohort));
+assert.ok(["independent", "field", "legacy", ...(recovery ? ["new-holdout"] : [])].includes(cohort));
 assert.ok(improved || cohort === "independent");
 const photoRoot = resolve(".local/elfbar-independent");
-const root = improved ? resolve(".local/elfbar-pp-improve") : photoRoot;
+const root = recovery ? resolve(".local/elfbar-recovery-v2") : improved ? resolve(".local/elfbar-pp-improve") : photoRoot;
 const storeId = cohort === "legacy" ? "photo-search-browser-shop" : "photo-search-field-shop", organizationId = "photo-search-browser-qa";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const recoveryBytes = recovery ? await readFile("scripts/qa/fixtures/elfbar-recovery-v2.json") : null;
+const recoveryProtocol = recoveryBytes ? JSON.parse(recoveryBytes) : null;
+if (recovery) assert.equal(JSON.parse(await readFile(`${root}/reference-experiment.json`)).protocolSha256, hash(recoveryBytes));
+const outputName = `api-${beforeRecovery ? "before-" : ""}${cohort}`;
 const inputsBytes = await readFile(`${photoRoot}/frozen-inputs.json`), inputs = JSON.parse(inputsBytes);
 const protocol = JSON.parse(await readFile("scripts/qa/fixtures/elfbar-independent-evaluation.json"));
 assert.equal(hash(inputsBytes), protocol.frozenInputSha256);
@@ -55,7 +62,7 @@ try {
   const before = hash(JSON.stringify(await snapshot()));
   if (!improved) assert.equal(before, inputs.catalogHash);
   else {
-    const proof = JSON.parse(await readFile(`${root}/augmentation.json`));
+    const proof = JSON.parse(await readFile(`${beforeRecovery ? ".local/elfbar-pp-improve" : root}/augmentation.json`));
     assert.equal(proof.businessFieldsUnchanged, true); assert.equal(proof.unrelatedProductsUnchanged, true);
   }
   const csrf = await json("/api/auth/csrf");
@@ -64,17 +71,21 @@ try {
   assert.ok(login.url && !login.url.includes("error="));
   const session = await json("/api/auth/session"); assert.equal(session.user.id, user.id); assert.equal(session.user.organizationId, organizationId);
   const status = await json(`/api/products/photo-search?storeId=${storeId}`);
-  const total = cohort === "legacy" ? 26 : 38;
+  const total = (cohort === "legacy" ? 26 : 38) + Number(recovery && !beforeRecovery);
   assert.equal(status.configured, true); assert.equal(status.progress.total, total); assert.equal(status.progress.ready, total);
   const current = await db.product.findMany({ where: { organizationId, isDeleted: false, storeProducts: { some: { organizationId, storeId, isActive: true, isHidden: false } } }, select: { id: true } });
   const allowed = new Set(current.map((p) => p.id)), results = [];
   let queries = inputs.queries;
-  const prior = cohort !== "independent" ? JSON.parse(await readFile(".local/elfbar-model-comparison/frozen-inputs.json")) : null;
+  const prior = ["field", "legacy"].includes(cohort) ? JSON.parse(await readFile(".local/elfbar-model-comparison/frozen-inputs.json")) : null;
   const field = cohort === "field" ? JSON.parse(await readFile("scripts/qa/fixtures/elfbar-photo-field.json")) : null;
   if (prior) queries = prior[cohort === "field" ? "test" : "calibration"].queries;
+  if (cohort === "new-holdout") queries = recoveryProtocol.holdoutQueries.map((row) => ({ ...row, expectedId: null }));
   for (const query of queries) {
     let bytes;
-    if (cohort === "independent") {
+    if (cohort === "new-holdout") {
+      const file = resolve(root, query.file); assert.ok(!relative(root, file).startsWith(".."));
+      bytes = await readFile(file); assert.equal(hash(bytes), query.sha256);
+    } else if (cohort === "independent") {
       const file = resolve(photoRoot, query.originalFile); assert.ok(!relative(photoRoot, file).startsWith(".."));
       bytes = await readFile(file); assert.equal(hash(bytes), query.originalSha256);
     } else if (cohort === "field") {
@@ -85,7 +96,7 @@ try {
       bytes = await readFile(`.local/elfbar-photo-check/queries/${query.id}.jpg`);
     }
     for (const mode of cohort === "field" && query.region ? ["auto", "manual"] : ["auto"]) {
-    const form = new FormData(); form.set("storeId", storeId); form.set("file", new File([bytes], `${query.id}.jpg`, { type: "image/jpeg" }));
+    const form = new FormData(); form.set("storeId", storeId); form.set("file", new File([bytes], `${query.id}.${cohort === "new-holdout" ? "png" : "jpg"}`, { type: cohort === "new-holdout" ? "image/png" : "image/jpeg" }));
     if (mode === "manual") form.set("region", JSON.stringify(query.region));
     const start = performance.now(), body = await json("/api/products/photo-search", { method: "POST", body: form });
     assert.equal(body.storeId, storeId); assert.equal(body.partial, false);
@@ -96,9 +107,9 @@ try {
       assert.equal(scoped.organizationId, organizationId); assert.ok(scoped.isActive && !scoped.isHidden);
     }
     results.push({ query: query.id, mode, multiObject: Boolean(query.multiObject), expectedId: query.expectedId, expectedFlavor: query.expectedFlavor,
-      canonicalInputSha256: query.sha256, ms: performance.now()-start, items: body.items, recognition: body.recognition });
+      canonicalInputSha256: query.canonicalSha256 ?? query.sha256, submittedInputSha256: hash(bytes), ms: performance.now()-start, items: body.items, recognition: body.recognition });
     console.log(JSON.stringify({ query: query.id, first: body.items[0]?.sku ?? null, labelStatus: body.recognition.labelStatus }));
-    await writeFile(`${root}/api-${cohort}-partial.json`, JSON.stringify({ results }, null, 2)+"\n");
+    await writeFile(`${root}/${outputName}-partial.json`, JSON.stringify({ results }, null, 2)+"\n");
     await pause(5250);
     }
   }
@@ -114,8 +125,8 @@ try {
     knownWrongFirst: known.filter((r) => r.items.length && r.items[0]?.id !== r.expectedId).length,
     absent: absent.length, absentWithCandidates: absent.filter((r) => r.items.length).length };
   const evidence = { schema: 1, applicationChanged: improved, cohort, realApplicationApi: true, model: improved ? "PP-ShiTu + PP-OCRv6 medium; improved reference gallery" : "Current PP-ShiTu + existing OCR",
-    storeId, frozenInputSha256: hash(inputsBytes), galleryUnchanged: true, emptyStoreHasNoLeakedCandidates: true,
+    storeId, frozenInputSha256: hash(inputsBytes), ...(recovery ? { recoveryProtocolSha256: hash(recoveryBytes), beforeRecovery } : {}), galleryUnchanged: true, emptyStoreHasNoLeakedCandidates: true,
     catalogWrites: false, authenticationAndRateLimitStateMayChange: true, results, summary };
-  await writeFile(`${root}/${improved ? `api-${cohort}` : "api-results"}.json`, JSON.stringify(evidence, null, 2)+"\n");
+  await writeFile(`${root}/${improved ? outputName : "api-results"}.json`, JSON.stringify(evidence, null, 2)+"\n");
   console.log(JSON.stringify(summary));
 } finally { await db.$disconnect(); }

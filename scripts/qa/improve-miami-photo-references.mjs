@@ -5,9 +5,24 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
-const root = resolve(".local/elfbar-pp-improve"), organizationId = "photo-search-browser-qa", storeId = "photo-search-field-shop";
-const fixture = JSON.parse(await readFile("scripts/qa/fixtures/elfbar-miami-references.json"));
+const recovery = process.argv.includes("--recovery-v2");
+const root = resolve(recovery ? ".local/elfbar-recovery-v2" : ".local/elfbar-pp-improve"), organizationId = "photo-search-browser-qa", storeId = "photo-search-field-shop";
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const protocolBytes = await readFile(recovery ? "scripts/qa/fixtures/elfbar-recovery-v2.json" : "scripts/qa/fixtures/elfbar-miami-references.json");
+const protocol = JSON.parse(protocolBytes);
+const fixture = recovery ? { assets: [protocol.reference], removeReferences: [], expectedGalleryPhotos: 39, expectedOriginalShopPhotos: 27 } : protocol;
+if (recovery) {
+  const experiment = JSON.parse(await readFile(`${root}/reference-experiment.json`));
+  assert.equal(experiment.protocolSha256, hash(protocolBytes));
+  assert.equal(experiment.newHoldoutUsedAsReference, false); assert.equal(experiment.thresholdRetuned, false);
+  for (const row of experiment.summary.filter((row) => row.variant === "miamiRear39")) {
+    assert.equal(row.absentWithCandidates, protocol.acceptance.oldAbsentWithCandidates);
+    assert.equal(row.wrongFirst, protocol.acceptance.knownWrongFirst);
+    if (row.split === "field") assert.ok(row.correctFirst >= protocol.acceptance.singleFieldCorrectMinimum);
+    if (row.split === "external") assert.ok(row.correctFirst >= protocol.acceptance.miamiKnownCorrectMinimum);
+  }
+  assert.equal(experiment.summary.filter((row) => row.variant === "miamiRear39").length, 3);
+}
 assert.match(await readFile(".local/product-photo-search/DISPOSABLE-TEST-ONLY", "utf8"), /^Disposable (?:internal product photo search|China image search) QA; no customer records\n$/);
 const base = new URL(process.env.PRODUCT_PHOTO_QA_BASE_URL);
 assert.equal(base.href, "http://192.168.68.109:3158/");

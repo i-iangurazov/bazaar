@@ -1,0 +1,915 @@
+{
+  "schema": 1,
+  "applicationChanged": true,
+  "cohort": "field",
+  "realApplicationApi": true,
+  "model": "PP-ShiTu + PP-OCRv6 medium; improved reference gallery",
+  "storeId": "photo-search-field-shop",
+  "frozenInputSha256": "c5c7aa95b1929aff2aefefbbbe0a0e5d5ecb0f8b22904116a7bef7330510812f",
+  "recoveryProtocolSha256": "6f54ced63048bc7645f83ea7a018b9526a18ed0470f53f1b93710f799a8394f1",
+  "beforeRecovery": false,
+  "galleryUnchanged": true,
+  "emptyStoreHasNoLeakedCandidates": true,
+  "catalogWrites": false,
+  "authenticationAndRateLimitStateMayChange": true,
+  "results": [
+    {
+      "query": "watermelon-cherry-40",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "2e02be6973ac1ef2756bde2312800b7971086f273612fcb515020aa342a827e9",
+      "submittedInputSha256": "2aed357f6a1152b7793f2d6fa91963f1a756b5c25193b6f5ead7756643847861",
+      "ms": 1095.777416,
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/80f2df4a0735088724e9124a615fea92f9ef2d87.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.5022888779640198,
+          "y": 0.3940802216529846,
+          "width": 0.17235517501831055,
+          "height": 0.42756369709968567
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-40",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "2e02be6973ac1ef2756bde2312800b7971086f273612fcb515020aa342a827e9",
+      "submittedInputSha256": "2aed357f6a1152b7793f2d6fa91963f1a756b5c25193b6f5ead7756643847861",
+      "ms": 485.74583299999995,
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/80f2df4a0735088724e9124a615fea92f9ef2d87.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.49,
+          "y": 0.29,
+          "width": 0.2,
+          "height": 0.53
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-80",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "d8d271f5bb341b0394ef68d2b959d97bb56905814663550094a41203a0d4fd23",
+      "submittedInputSha256": "e831158c5804fd56508c9f6aab955b5f918574cbf9799e37fb4947396576a00a",
+      "ms": 693.2436249999992,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-80",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "d8d271f5bb341b0394ef68d2b959d97bb56905814663550094a41203a0d4fd23",
+      "submittedInputSha256": "e831158c5804fd56508c9f6aab955b5f918574cbf9799e37fb4947396576a00a",
+      "ms": 342.34999999999854,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.51,
+          "y": 0.28,
+          "width": 0.23,
+          "height": 0.6
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-100",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "e9374517b4c6800977c54598ad4616ef666c63361c832db7de4aba3966228e8a",
+      "submittedInputSha256": "53ac87defc654c37b534b1f4a6155dc5b62b5fe0543374fc7b79d208a5129599",
+      "ms": 1110.7959580000024,
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/9066907c12a1ca2ccb5aa4fd450d44f9bbdb45e4.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.510543942451477,
+          "y": 0.32736825942993164,
+          "width": 0.15286794304847717,
+          "height": 0.4305855631828308
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-100",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "e9374517b4c6800977c54598ad4616ef666c63361c832db7de4aba3966228e8a",
+      "submittedInputSha256": "53ac87defc654c37b534b1f4a6155dc5b62b5fe0543374fc7b79d208a5129599",
+      "ms": 445.6742919999997,
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/9066907c12a1ca2ccb5aa4fd450d44f9bbdb45e4.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.52,
+          "y": 0.25,
+          "width": 0.17,
+          "height": 0.57
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-130",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "920d4e2cdd6467a210130bf65ac7db098584195c6d0c48bb48f9f2920168ed6b",
+      "submittedInputSha256": "d888ad4ef58e50aaec87ba2fd34d128aea1d894b09a1d62c4608b8b1cfb7f47f",
+      "ms": 873.2022499999948,
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/80f2df4a0735088724e9124a615fea92f9ef2d87.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.40259575843811035,
+          "y": 0.37520214915275574,
+          "width": 0.18557539582252502,
+          "height": 0.4610801339149475
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-130",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "920d4e2cdd6467a210130bf65ac7db098584195c6d0c48bb48f9f2920168ed6b",
+      "submittedInputSha256": "d888ad4ef58e50aaec87ba2fd34d128aea1d894b09a1d62c4608b8b1cfb7f47f",
+      "ms": 331.5432080000028,
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/146ee986769994ad0d13a3b8f4e65fa9f712afde.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.37,
+          "y": 0.28,
+          "width": 0.22,
+          "height": 0.56
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-300",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "020e5d3bc6edb6273d723f41a45cf1c4a1b5e871a11684c5c931e4c4c41dac0a",
+      "submittedInputSha256": "54139484db56da2694a1467075cf448220763bceb5eeeca616dbefea151a2954",
+      "ms": 627.5185409999976,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-300",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "canonicalInputSha256": "020e5d3bc6edb6273d723f41a45cf1c4a1b5e871a11684c5c931e4c4c41dac0a",
+      "submittedInputSha256": "54139484db56da2694a1467075cf448220763bceb5eeeca616dbefea151a2954",
+      "ms": 218.03258300000016,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.38,
+          "y": 0.09,
+          "width": 0.45,
+          "height": 0.52
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-190",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "5f0b892807a3fc640763d394e4e38b831327a29e5ede544c7d4f7f2e265b93c8",
+      "submittedInputSha256": "89a32b689802fe884248b82c38cd5f0aa20b8c1b691d185bdde5095b3a41d6b9",
+      "ms": 551.9884579999998,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-190",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "5f0b892807a3fc640763d394e4e38b831327a29e5ede544c7d4f7f2e265b93c8",
+      "submittedInputSha256": "89a32b689802fe884248b82c38cd5f0aa20b8c1b691d185bdde5095b3a41d6b9",
+      "ms": 325.2405419999923,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.42,
+          "y": 0.2,
+          "width": 0.15,
+          "height": 0.55
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-210",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "59a59cb2f5f46339478417c8981aec0e70ddcac7bdae5448ea5ffe421029e5c7",
+      "submittedInputSha256": "d4e324bc155a82a8c9c4617efdb0f4a08fc6f528dc3c7a42ae79aeea133f5759",
+      "ms": 721.6838340000104,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-210",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "59a59cb2f5f46339478417c8981aec0e70ddcac7bdae5448ea5ffe421029e5c7",
+      "submittedInputSha256": "d4e324bc155a82a8c9c4617efdb0f4a08fc6f528dc3c7a42ae79aeea133f5759",
+      "ms": 674.5537919999915,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.42,
+          "y": 0.25,
+          "width": 0.16,
+          "height": 0.6
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-290",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "1a92da947e9e9304d16c603e2917ed1fa628e57fd529646475dff13480e4d929",
+      "submittedInputSha256": "9ddfebd34c4e8978f3f51850e8c5de2d5a36b76009724929a5f7b6fd91768227",
+      "ms": 881.0566669999971,
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/215a0f680b98d2d2f64db0ac6e5ed5922c767fb7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.4061155319213867,
+          "y": 0.22789226472377777,
+          "width": 0.21422235667705536,
+          "height": 0.580994188785553
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-290",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "1a92da947e9e9304d16c603e2917ed1fa628e57fd529646475dff13480e4d929",
+      "submittedInputSha256": "9ddfebd34c4e8978f3f51850e8c5de2d5a36b76009724929a5f7b6fd91768227",
+      "ms": 315.9087089999957,
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/215a0f680b98d2d2f64db0ac6e5ed5922c767fb7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.41,
+          "y": 0.1,
+          "width": 0.24,
+          "height": 0.7
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-320",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "e1a8c8c1124cec74b44a737d3544a9106a7c9e42cd1dd45fc1abec88ed8985cd",
+      "submittedInputSha256": "aef84c7b09818d2dd2a64b8327b2bdec293957b6a69e4bb060058ffcc09731d9",
+      "ms": 1160.400250000006,
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4531b8534d4b1238047c22a10d22b4cd22a82431.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.2898644208908081,
+          "y": 0.19516535103321075,
+          "width": 0.27077311277389526,
+          "height": 0.6467554569244385
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-320",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "e1a8c8c1124cec74b44a737d3544a9106a7c9e42cd1dd45fc1abec88ed8985cd",
+      "submittedInputSha256": "aef84c7b09818d2dd2a64b8327b2bdec293957b6a69e4bb060058ffcc09731d9",
+      "ms": 486.2380839999969,
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4531b8534d4b1238047c22a10d22b4cd22a82431.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.26,
+          "y": 0.08,
+          "width": 0.32,
+          "height": 0.82
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-400",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "ed5c95a07bc1fd6cdbd86f8c0aa8c7d0311d63d47c6be1edec5b160f45045be4",
+      "submittedInputSha256": "ffeb119f3cdd81e97e633b8a225aaa38ae8f0ecfe6b7541632303779d24d49d4",
+      "ms": 759.6824590000033,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "BEATLES THE"
+      }
+    },
+    {
+      "query": "strawberry-banana-400",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "canonicalInputSha256": "ed5c95a07bc1fd6cdbd86f8c0aa8c7d0311d63d47c6be1edec5b160f45045be4",
+      "submittedInputSha256": "ffeb119f3cdd81e97e633b8a225aaa38ae8f0ecfe6b7541632303779d24d49d4",
+      "ms": 262.95254200001364,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.27,
+          "y": 0.46,
+          "width": 0.16,
+          "height": 0.36
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-540",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "f5dd1d9a15b444d2d7e249476dcc40ca9f31ef3603474fc8d70868e36402c2a3",
+      "submittedInputSha256": "d478e82fef94bdf6ae655c663e8cc99925a433a090b4f79824bb7cfe4dd46fa3",
+      "ms": 724.6484590000036,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-540",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "f5dd1d9a15b444d2d7e249476dcc40ca9f31ef3603474fc8d70868e36402c2a3",
+      "submittedInputSha256": "d478e82fef94bdf6ae655c663e8cc99925a433a090b4f79824bb7cfe4dd46fa3",
+      "ms": 377.7658749999973,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.12,
+          "y": 0.32,
+          "width": 0.35,
+          "height": 0.2
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-560",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "fc364745721d33deb8fb15b6753a9abce1194e7943817e5ea156c7af0b2f592a",
+      "submittedInputSha256": "b8ebce71b7aadc7b014948a7f44f5a3becf116a88206f8ea8c1114f9cce60a97",
+      "ms": 748.3095829999947,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-560",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "fc364745721d33deb8fb15b6753a9abce1194e7943817e5ea156c7af0b2f592a",
+      "submittedInputSha256": "b8ebce71b7aadc7b014948a7f44f5a3becf116a88206f8ea8c1114f9cce60a97",
+      "ms": 269.5797500000044,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.1,
+          "y": 0.25,
+          "width": 0.42,
+          "height": 0.5
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-600",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "b74869d68f2163b47d3a90339f8d8d8b60cbdde94680807eeb922b77cf4de7fd",
+      "submittedInputSha256": "f368aec90fde08b87cf8926b17487f0b486bb8ead5b11fb0a6ed06d2d66708fa",
+      "ms": 658.9689579999831,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-600",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "b74869d68f2163b47d3a90339f8d8d8b60cbdde94680807eeb922b77cf4de7fd",
+      "submittedInputSha256": "f368aec90fde08b87cf8926b17487f0b486bb8ead5b11fb0a6ed06d2d66708fa",
+      "ms": 206.72795800000313,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.26,
+          "y": 0.5,
+          "width": 0.17,
+          "height": 0.38
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-660",
+      "mode": "auto",
+      "multiObject": true,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "64863b8415cf8749e4ae2ecd804ff95a41cfff54d4bd6ca466e8ce45d6ab168a",
+      "submittedInputSha256": "40c5f44e6c40cf14e61c2935472b521f9fcd0e9030ac2164ecbe8667bfee1f30",
+      "ms": 770.7277499999909,
+      "items": [
+        {
+          "id": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "name": "ELFBAR GH23000 Sakura Grape — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/e6c04f50b94d91c91be785ee91d272f730fc4918.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.43986982107162476,
+          "y": 0.6628133058547974,
+          "width": 0.09326089918613434,
+          "height": 0.31063035130500793
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-660",
+      "mode": "manual",
+      "multiObject": true,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "64863b8415cf8749e4ae2ecd804ff95a41cfff54d4bd6ca466e8ce45d6ab168a",
+      "submittedInputSha256": "40c5f44e6c40cf14e61c2935472b521f9fcd0e9030ac2164ecbe8667bfee1f30",
+      "ms": 248.9996669999964,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.46,
+          "y": 0.65,
+          "width": 0.11,
+          "height": 0.34
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-680",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "cb54059918d98f17e74c7202772d395eb9d707dbe592dfb7686f551a84c65ef6",
+      "submittedInputSha256": "7ab82ee73b54d15813dcff60a3a80ab914617d228b1310af90c472f10c3722bc",
+      "ms": 622.1287500000035,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-680",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "canonicalInputSha256": "cb54059918d98f17e74c7202772d395eb9d707dbe592dfb7686f551a84c65ef6",
+      "submittedInputSha256": "7ab82ee73b54d15813dcff60a3a80ab914617d228b1310af90c472f10c3722bc",
+      "ms": 243.8127080000122,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.2,
+          "y": 0.16,
+          "width": 0.19,
+          "height": 0.42
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-80",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "canonicalInputSha256": "f291b2f9e7cded34211d699877977822fdc09f5bf677b557477500f73a065b1c",
+      "submittedInputSha256": "ce848aeddf6db183398eff9e0ee6e7bc945903021f65e731ebf01a9247cb134a",
+      "ms": 5043.93520800001,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "NEW NEW"
+      }
+    },
+    {
+      "query": "absent-baja-splash-80",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": null,
+      "canonicalInputSha256": "f291b2f9e7cded34211d699877977822fdc09f5bf677b557477500f73a065b1c",
+      "submittedInputSha256": "ce848aeddf6db183398eff9e0ee6e7bc945903021f65e731ebf01a9247cb134a",
+      "ms": 425.21187500000815,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.52,
+          "y": 0.26,
+          "width": 0.18,
+          "height": 0.46
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-110",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "canonicalInputSha256": "33f5b260bd136a9c4ab7862e8f190233faa33640f818472da257e7db077d99e5",
+      "submittedInputSha256": "68458bba14b07565c0ac17f064a0602bdfc7dfb8937724f3359ec4af8dcbe385",
+      "ms": 4386.667749999993,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "EEHE HKOTHH. biBaer"
+      }
+    },
+    {
+      "query": "absent-baja-splash-110",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": null,
+      "canonicalInputSha256": "33f5b260bd136a9c4ab7862e8f190233faa33640f818472da257e7db077d99e5",
+      "submittedInputSha256": "68458bba14b07565c0ac17f064a0602bdfc7dfb8937724f3359ec4af8dcbe385",
+      "ms": 468.5677089999954,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.51,
+          "y": 0.22,
+          "width": 0.17,
+          "height": 0.5
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-140",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "canonicalInputSha256": "df6118f4443273655e1867572ad6a1c2330987c455bbc85aed007b919a8b9474",
+      "submittedInputSha256": "4838e2bad015c7cfc8accffbd791e5c87379e50263159707c2a5cc5d0d77e875",
+      "ms": 4476.6111669999955,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "NEW YERYTHING APP"
+      }
+    },
+    {
+      "query": "absent-baja-splash-140",
+      "mode": "manual",
+      "multiObject": false,
+      "expectedId": null,
+      "canonicalInputSha256": "df6118f4443273655e1867572ad6a1c2330987c455bbc85aed007b919a8b9474",
+      "submittedInputSha256": "4838e2bad015c7cfc8accffbd791e5c87379e50263159707c2a5cc5d0d77e875",
+      "ms": 529.9948340000119,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.28,
+          "y": 0.36,
+          "width": 0.33,
+          "height": 0.3
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "kiwi-dragon-fruit-table",
+      "mode": "auto",
+      "multiObject": true,
+      "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "canonicalInputSha256": "4d3fb409ed0da71307a31adece034f06d65f135aec987e21d1b76b1c42da5d4e",
+      "submittedInputSha256": "2d3afb5a0b46a7d1914cf80a4262c724ea9c9500dfe4fb9bebe95c32b95c10fa",
+      "ms": 1080.340583000012,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "ELFBAR HIWI DRAGON FRUIT BelVaping"
+      }
+    },
+    {
+      "query": "kiwi-dragon-fruit-table",
+      "mode": "manual",
+      "multiObject": true,
+      "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "canonicalInputSha256": "4d3fb409ed0da71307a31adece034f06d65f135aec987e21d1b76b1c42da5d4e",
+      "submittedInputSha256": "2d3afb5a0b46a7d1914cf80a4262c724ea9c9500dfe4fb9bebe95c32b95c10fa",
+      "ms": 562.1329589999805,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.46,
+          "y": 0.13,
+          "width": 0.37,
+          "height": 0.78
+        },
+        "labelStatus": "unmatched",
+        "text": "ELFBAR HIWI DRAGON FRUIT Bel"
+      }
+    },
+    {
+      "query": "grape-ice-table-dark",
+      "mode": "auto",
+      "multiObject": true,
+      "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "canonicalInputSha256": "95ea19a5647a08794bb90cf52d11dc90aa3da03c3af5a9eff72a51484b157601",
+      "submittedInputSha256": "8c6d508685a8249aa2a27f6b808a684688cdb09c18a6a6b41ba08c39306b6243",
+      "ms": 626.8537080000096,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "grape-ice-table-dark",
+      "mode": "manual",
+      "multiObject": true,
+      "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "canonicalInputSha256": "95ea19a5647a08794bb90cf52d11dc90aa3da03c3af5a9eff72a51484b157601",
+      "submittedInputSha256": "8c6d508685a8249aa2a27f6b808a684688cdb09c18a6a6b41ba08c39306b6243",
+      "ms": 212.97016699999222,
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.23,
+          "y": 0.3,
+          "width": 0.56,
+          "height": 0.69
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    }
+  ],
+  "summary": {
+    "known": 34,
+    "knownCorrectFirst": 11,
+    "knownWrongFirst": 0,
+    "absent": 6,
+    "absentWithCandidates": 0
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "applicationChanged": true,
+  "cohort": "new-holdout",
+  "realApplicationApi": true,
+  "model": "PP-ShiTu + PP-OCRv6 medium; improved reference gallery",
+  "storeId": "photo-search-field-shop",
+  "frozenInputSha256": "c5c7aa95b1929aff2aefefbbbe0a0e5d5ecb0f8b22904116a7bef7330510812f",
+  "recoveryProtocolSha256": "6f54ced63048bc7645f83ea7a018b9526a18ed0470f53f1b93710f799a8394f1",
+  "beforeRecovery": false,
+  "galleryUnchanged": true,
+  "emptyStoreHasNoLeakedCandidates": true,
+  "catalogWrites": false,
+  "authenticationAndRateLimitStateMayChange": true,
+  "results": [
+    {
+      "query": "purple-mint-5",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Purple Mint",
+      "canonicalInputSha256": "5977d562c35be20c1b62b85435659e61e2296340004b793470bc01c9d59c71fe",
+      "submittedInputSha256": "b44c10fbc2fd462283971a3d61e684fc853e4207417dabe9ef77a10d48193513",
+      "ms": 640.36625,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "purple-mint-8",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Purple Mint",
+      "canonicalInputSha256": "868d761c9e1436690a7426953de0556304a2e0482f2d9597d98c87f315a36a3e",
+      "submittedInputSha256": "d56fba98426c7edc020950b01e7fcbeb8e62abcbf9ae372fda92d6579e45f6f3",
+      "ms": 730.8462909999998,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "purple-mint-10",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Purple Mint",
+      "canonicalInputSha256": "a08a481bc1b7f0797b6a12e7af01feaeeb7fe67f19a0685fe0b9c288b333b814",
+      "submittedInputSha256": "6069b45c4df1d0ee2af18afd07a5f316fcb67f370c3d0bd82c7eb44e20982415",
+      "ms": 624.6213750000006,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "purple-mint-20",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Purple Mint",
+      "canonicalInputSha256": "b1a7bd3902e965f0bd5dbf95fe3c03bbe1191e25f05eb7d447132a1bb4b6d171",
+      "submittedInputSha256": "c16fc4d5f6906abe237532e71549cfe51b91fd9b4370d458489efc5356a07874",
+      "ms": 609.0382910000008,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    }
+  ],
+  "summary": {
+    "known": 0,
+    "knownCorrectFirst": 0,
+    "knownWrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 0
+  }
+}

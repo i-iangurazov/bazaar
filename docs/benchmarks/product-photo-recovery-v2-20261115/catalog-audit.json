@@ -1,0 +1,12 @@
+{
+  "againstInitialSnapshot": true,
+  "businessFieldsUnchanged": true,
+  "allPrimaryPhotosUnchanged": true,
+  "allExistingImageIdsUrlsPositionsPreserved": true,
+  "existingImageTimestampChanges": 3,
+  "timestampNote": "Existing products.update(imagesOnly) recreates target image associations with their IDs but refreshes createdAt/updatedAt",
+  "unrelatedProductsIncludingStrawberryUnchanged": true,
+  "addedImages": 1,
+  "removedImages": 0,
+  "productCount": 18
+}

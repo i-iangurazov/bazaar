@@ -1,0 +1,55 @@
+{
+  "independentBefore": {
+    "known": 3,
+    "knownCorrectFirst": 1,
+    "knownWrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 0
+  },
+  "independentAfter": {
+    "known": 3,
+    "knownCorrectFirst": 2,
+    "knownWrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 0
+  },
+  "newHoldoutBefore": {
+    "known": 0,
+    "knownCorrectFirst": 0,
+    "knownWrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 0
+  },
+  "newHoldoutAfter": {
+    "known": 0,
+    "knownCorrectFirst": 0,
+    "knownWrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 0
+  },
+  "field": {
+    "auto": {
+      "known": 14,
+      "correctFirst": 5,
+      "wrongFirst": 0
+    },
+    "manual": {
+      "known": 14,
+      "correctFirst": 5,
+      "wrongFirst": 0
+    }
+  },
+  "legacy": {
+    "known": 7,
+    "knownCorrectFirst": 7,
+    "knownWrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 4
+  },
+  "allRequestedFramesRecovered": false,
+  "remainingFrames": [
+    "strawberry-banana-210",
+    "KcMQMyqCO-pmKCQuq1g"
+  ],
+  "newPositiveIndependentShoot": false
+}
