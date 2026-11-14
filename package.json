@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "product-photo:worker": "node --import tsx scripts/product-photo-worker.ts",
     "local": "node --import tsx scripts/local/cli.ts start",
     "local:status": "node --import tsx scripts/local/cli.ts status",
     "local:stop": "node --import tsx scripts/local/cli.ts stop",

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { ProductPhotoSearchButton } from "@/components/products/product-photo-search";
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
@@ -236,6 +237,10 @@ const PosEntryPage = () => {
           </Select>
         </div>
       ) : null}
+
+      <div><ProductPhotoSearchButton identityKey={`${session?.user?.organizationId ?? ""}:${session?.user?.id ?? ""}`}
+        storeId={requestedStoreId || selectedRegister?.store.id || (storeOptions.length === 1 ? storeOptions[0].id : "")}
+        stores={storeOptions} selectionMode="preview" disabled={!session?.user} /></div>
 
       {registersQuery.isError || entryQuery.isError ? (
         <QueryErrorState

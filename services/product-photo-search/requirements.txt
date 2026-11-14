@@ -1,0 +1,5 @@
+paddlepaddle==3.3.1
+numpy==2.5.4
+opencv-python-headless==5.0.0.93
+faiss-cpu==1.16.0
+pillow==13.0.0

@@ -6380,7 +6380,16 @@
     "billingManualRefundReasonInvalid": "Enter refund grounds of 10–500 characters.",
     "billingManualRefundIdempotencyInvalid": "The record identifier could not be created. Close and reopen the form; do not repeat the transfer.",
     "billingManualRefundIdempotencyConflict": "This identifier was already used for different details. Review the history and open a new form if needed.",
-    "billingManualRefundBankOperationUsed": "This bank transaction has already been recorded. Review the history; do not repeat the transfer."
+    "billingManualRefundBankOperationUsed": "This bank transaction has already been recorded. Review the history; do not repeat the transfer.",
+    "photoSearchNotConfigured": "Photo search is not connected yet.",
+    "photoSearchUnavailable": "The search service is temporarily unavailable. Please try again later.",
+    "photoSearchBusy": "Search is processing other photos. Try again in a few seconds.",
+    "photoSearchTimeout": "The search took too long. Please try again.",
+    "photoSearchCatalogTooLarge": "The prototype supports up to 10,000 products and 10,000 photos per store.",
+    "photoSearchRateLimited": "Too many search requests. Please wait a minute.",
+    "photoSearchPreparing": "Product photos are still being prepared. Retry or search ready photos.",
+    "photoSearchPreparingLong": "Preparation is continuing. Retry later or search ready photos.",
+    "photoSearchImagesFailed": "Product photos could not be prepared. Check their availability and retry preparation."
   },
   "adminJobs": {
     "title": "Admin jobs",
@@ -9326,5 +9335,33 @@
     "save": "Save choices",
     "cancel": "Cancel",
     "closeSettings": "Close settings without saving"
+  },
+  "productPhotoSearch": {
+    "selected": "Selected product",
+    "backToResults": "Back to similar products",
+    "open": "Search by photo",
+    "title": "Find a product by photo",
+    "subtitle": "Free on every plan. Choose the right product from similar matches.",
+    "scope": "Search only in the assortment of {store}.",
+    "notConnected": "Photo search is not connected yet. Please contact Bazaar support.",
+    "camera": "Take a photo",
+    "upload": "Upload a photo",
+    "photoHelp": "Show one product close up. The photo is used only for search and is not saved to the product card.",
+    "preview": "Photo for search",
+    "remove": "Remove photo",
+    "preparing": "Preparing product photos: {ready} of {total}",
+    "searching": "Finding similar products…",
+    "preparingHelp": "Initial preparation may take a few minutes. You can cancel the search; preparation will continue.",
+    "search": "Find similar",
+    "useReady": "Search ready photos",
+    "withoutPhoto": "Products without photos: {count}. They are excluded from search.",
+    "partial": "Searched a subset of photos: {ready} of {total}. Failed to process: {failed}.",
+    "retryImages": "Retry photo preparation",
+    "candidatesHelp": "These are similar products. Check the name and photo, then choose the right one.",
+    "noPrice": "No price set",
+    "onHand": "In stock: {count}",
+    "choose": "Choose product {name}",
+    "empty": "No sufficiently similar products found. Try another angle or search by name.",
+    "noPhotos": "There are no products with photos in this store’s assortment yet."
   }
 }

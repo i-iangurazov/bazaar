@@ -505,6 +505,7 @@ enum MobilePlatform {
 }
 
 model Organization {
+  productPhotoFeatures     ProductPhotoFeature[]
   appleBillingAccount      AppleBillingAccount?
   applePurchaseIntents     ApplePurchaseIntent[]
   appleTransactions        AppleTransaction[]
@@ -2043,6 +2044,7 @@ model StoreCategoryPreference {
 }
 
 model Product {
+  photoFeatures      ProductPhotoFeature[]
   priceBookEntries   PriceBookEntry[]
   priceBookItems     PriceBookStoreItem[]
   catalogMemberships ProductCatalogProduct[]
@@ -2097,6 +2099,7 @@ model Product {
   storeProducts          StoreProduct[]
 
   @@unique([organizationId, sku])
+  @@unique([id, organizationId])
   @@index([organizationId])
   @@index([organizationId, isDeleted, name])
   @@index([organizationId, category, isDeleted])
@@ -2178,6 +2181,32 @@ model ProductImage {
 
   @@index([organizationId])
   @@index([productId, position])
+}
+
+// Derived, rebuildable data only. Product/stock records are never changed by search.
+model ProductPhotoFeature {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String
+  sourceKey      String   @db.VarChar(64)
+  sourceUrl      String   @db.Text
+  modelVersion   String
+  status         String   @default("PENDING")
+  embedding      Float[]  @default([]) @db.Real
+  attempts       Int      @default(0)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  retryAfter     DateTime @default(now())
+  errorCode      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, productId, sourceKey, modelVersion], map: "ProductPhotoFeature_source_key")
+  @@index([modelVersion, status, retryAfter])
+  @@index([organizationId, productId])
 }
 
 model ProductImageStudioJob {

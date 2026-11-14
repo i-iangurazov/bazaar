@@ -1,0 +1,20 @@
+// Explicit local model smoke check, separate from mocked automated application tests.
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+const base = "http://127.0.0.1:3160";
+const modelVersion = "ppshitu-v2-pplcnetv2-v1-fp32-224";
+const headers = {Authorization:"Bearer disposable-product-photo-search-service-key","Content-Type":"application/json"};
+const call = (path, body) => fetch(`${base}/${path}`, {headers,method:body?"POST":"GET",body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
+assert.equal((await fetch(`${base}/health`)).status,401);
+const health=await (await call("health")).json(); assert.deepEqual(health,{modelVersion,dimension:512,ready:true});
+assert.equal((await call("embed",{imageBase64:Buffer.from("not a raster").toString("base64")})).status,400);
+const imageBase64=(await readFile(".local/photo-search-benchmark/images/103/103_r0.jpg")).toString("base64");
+const embedded=await (await call("embed",{imageBase64})).json();
+assert.equal(embedded.modelVersion,modelVersion); assert.equal(embedded.embedding.length,512);
+assert.ok(Math.abs(Math.hypot(...embedded.embedding)-1)<0.001);
+const vectors=Buffer.alloc(512*4); embedded.embedding.forEach((n,i)=>vectors.writeFloatLE(n,i*4));
+assert.equal((await call("search",{imageBase64,vectorsBase64:"bad matrix",groups:[0]})).status,400);
+const heldOut=(await readFile(".local/photo-search-benchmark/images/103/103_r30.jpg")).toString("base64");
+const result=await (await call("search",{imageBase64:heldOut,vectorsBase64:vectors.toString("base64"),groups:[0]})).json();
+assert.equal(result.modelVersion,modelVersion); assert.equal(result.matches[0].index,0); assert.ok(result.matches[0].score>0.68);
+console.log(JSON.stringify({unauthorized401:true,invalidImage400:true,invalidMatrix400:true,recoveryAfterInvalidInput:true,realPPShiTuFaiss:true,heldOutMatch:true,score:result.matches[0].score}));
