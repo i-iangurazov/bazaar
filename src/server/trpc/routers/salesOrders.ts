@@ -2,11 +2,6 @@ import { getOrderPaymentInfo, recordOrderPayment } from "@/server/services/sales
 import { CustomerOrderEmailType, CustomerOrderStatus, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
-import {
-  isValidOptionalCustomerAddress,
-  isValidOptionalCustomerPhone,
-} from "@/lib/customerContact";
-
 import { cashierProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
@@ -26,7 +21,9 @@ import {
   createCustomerOrderDraftOperation,
   getSalesOrderMetrics,
   getCustomerOrder,
+  getCustomerOrderLinePrice,
   listCustomerOrders,
+  listCustomerOrderCustomerOptions,
   setCustomerOrderArchived,
   markCustomerOrderReady,
   removeCustomerOrderLine,
@@ -38,6 +35,7 @@ import {
 
 const optionalEmailSchema = z.string().trim().email().max(254).optional().nullable();
 const optionalTrackingTextSchema = z.string().trim().max(512).optional().nullable();
+const optionalUnitPriceSchema = z.number().finite().min(0).max(9_999_999_999.99).optional();
 
 const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   try {
@@ -114,6 +112,44 @@ const assertCustomerOrderLineStoreAccess = async (ctx: SalesOrdersContext, lineI
 };
 
 export const salesOrdersRouter = router({
+  linePrice: salesOrdersProtectedProcedure
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        productId: z.string().min(1),
+        variantId: z.string().min(1).optional().nullable(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await getCustomerOrderLinePrice({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  customerOptions: salesOrdersProtectedProcedure
+    .input(
+      z.object({
+        storeId: z.string().min(1),
+        search: z.string().trim().max(200).optional(),
+        limit: z.number().int().min(1).max(30).default(25),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await listCustomerOrderCustomerOptions({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   setArchived: salesOrdersManagerProcedure
     .input(z.object({ customerOrderId: z.string().min(1), archived: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
@@ -220,20 +256,13 @@ export const salesOrdersRouter = router({
       z.object({
         storeId: z.string().min(1),
         idempotencyKey: z.string().min(8),
-        customerName: z.string().max(160).optional().nullable(),
+        customerId: z.string().min(1).optional().nullable(),
+        customerName: z.string().max(180).optional().nullable(),
         customerEmail: optionalEmailSchema,
-        customerPhone: z
-          .string()
-          .max(64)
-          .refine(isValidOptionalCustomerPhone)
-          .optional()
-          .nullable(),
-        customerAddress: z
-          .string()
-          .max(512)
-          .refine(isValidOptionalCustomerAddress)
-          .optional()
-          .nullable(),
+        // Selected saved contacts may be legacy values. Services validate new
+        // values and only preserve an unchanged contact from the selected row.
+        customerPhone: z.string().max(64).optional().nullable(),
+        customerAddress: z.string().max(512).optional().nullable(),
         notes: z.string().max(2_000).optional().nullable(),
         lines: z
           .array(
@@ -241,6 +270,7 @@ export const salesOrdersRouter = router({
               productId: z.string().min(1),
               variantId: z.string().optional().nullable(),
               qty: z.number().multipleOf(0.001).positive(),
+              unitPriceKgs: optionalUnitPriceSchema,
             }),
           )
           .optional(),
@@ -253,6 +283,7 @@ export const salesOrdersRouter = router({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
           idempotencyKey: input.idempotencyKey,
+          customerId: input.customerId,
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
@@ -272,7 +303,8 @@ export const salesOrdersRouter = router({
     .input(
       z.object({
         customerOrderId: z.string(),
-        customerName: z.string().max(160).optional().nullable(),
+        customerId: z.string().min(1).optional().nullable(),
+        customerName: z.string().max(180).optional().nullable(),
         customerEmail: optionalEmailSchema,
         customerPhone: z.string().max(64).optional().nullable(),
         customerAddress: z.string().max(512).optional().nullable(),
@@ -285,6 +317,7 @@ export const salesOrdersRouter = router({
         return await setCustomerOrderCustomer({
           organizationId: ctx.user.organizationId,
           customerOrderId: input.customerOrderId,
+          customerId: input.customerId,
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
@@ -354,6 +387,7 @@ export const salesOrdersRouter = router({
         productId: z.string(),
         variantId: z.string().optional().nullable(),
         qty: z.number().multipleOf(0.001).positive(),
+        unitPriceKgs: optionalUnitPriceSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -365,6 +399,7 @@ export const salesOrdersRouter = router({
           productId: input.productId,
           variantId: input.variantId,
           qty: input.qty,
+          unitPriceKgs: input.unitPriceKgs,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
         });
@@ -375,10 +410,15 @@ export const salesOrdersRouter = router({
 
   updateLine: salesOrdersProtectedProcedure
     .input(
-      z.object({
-        lineId: z.string(),
-        qty: z.number().multipleOf(0.001).positive(),
-      }),
+      z
+        .object({
+          lineId: z.string(),
+          qty: z.number().multipleOf(0.001).positive().optional(),
+          unitPriceKgs: optionalUnitPriceSchema,
+        })
+        .refine((input) => input.qty !== undefined || input.unitPriceKgs !== undefined, {
+          message: "invalidInput",
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       try {
@@ -387,6 +427,7 @@ export const salesOrdersRouter = router({
           organizationId: ctx.user.organizationId,
           lineId: input.lineId,
           qty: input.qty,
+          unitPriceKgs: input.unitPriceKgs,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
         });

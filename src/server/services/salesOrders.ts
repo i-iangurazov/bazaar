@@ -28,7 +28,11 @@ import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
 import { confirmLoyaltyForOrder } from "@/server/services/loyalty/apply";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
-import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import {
   normalizeOptionalCustomerAddress,
@@ -77,6 +81,104 @@ const normalizeOptionalText = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
 };
+
+const MAX_ORDER_MONEY_KGS = 9_999_999_999.99;
+
+// Ordinary order editing uses the same roles as POS price editing. Read current
+// membership inside the transaction so revoked store access cannot be reused.
+const assertOrderActorStoreAccessTx = async (
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; actorId: string; storeId: string },
+): Promise<StoreAccessUser> => {
+  const actor = await tx.user.findFirst({
+    where: { id: input.actorId, organizationId: input.organizationId, isActive: true },
+    select: { id: true, organizationId: true, role: true, isOrgOwner: true },
+  });
+  if (!actor?.organizationId) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
+  const user = { ...actor, organizationId: actor.organizationId };
+  await assertUserCanAccessStore(tx, user, input.storeId);
+  return user;
+};
+
+const normalizeOrderUnitPrice = (value: number) => {
+  if (!Number.isFinite(value) || value < 0 || value > MAX_ORDER_MONEY_KGS) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  return new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).toNumber();
+};
+
+const orderLineTotal = (unitPriceKgs: number, qty: number) => {
+  const total = new Prisma.Decimal(unitPriceKgs)
+    .mul(qty)
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    .toNumber();
+  if (!Number.isFinite(total) || total < 0 || total > MAX_ORDER_MONEY_KGS) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  return total;
+};
+
+const manualOrderPriceData = (unitPriceKgs: number) => ({
+  manualPrice: true,
+  priceSource: "MANUAL",
+  baseUnitPriceKgs: unitPriceKgs,
+  appliedDiscountType: null,
+  appliedDiscountPercentage: null,
+  appliedDiscountAmountKgs: null,
+});
+
+const selectedOrderCustomerTx = async (
+  tx: Prisma.TransactionClient,
+  user: StoreAccessUser,
+  customerId: string,
+) => {
+  const storeIds = await resolveAccessibleStoreIds(tx, user);
+  const customer = await tx.customer.findFirst({
+    where: {
+      id: customerId,
+      organizationId: user.organizationId,
+      storeId: { in: storeIds },
+      deletedAt: null,
+    },
+    select: { id: true, name: true, email: true, phone: true, address: true },
+  });
+  if (!customer) throw new AppError("customerNotFound", "NOT_FOUND", 404);
+  return customer;
+};
+
+export const listCustomerOrderCustomerOptions = async (input: {
+  organizationId: string;
+  actorId: string;
+  storeId: string;
+  search?: string;
+  limit?: number;
+}) =>
+  prisma.$transaction(async (tx) => {
+    const user = await assertOrderActorStoreAccessTx(tx, input);
+    const storeIds = await resolveAccessibleStoreIds(tx, user);
+    const search = input.search?.trim();
+    return tx.customer.findMany({
+      where: {
+        organizationId: input.organizationId,
+        storeId: { in: storeIds },
+        deletedAt: null,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: "insensitive" as const } },
+                { email: { contains: search, mode: "insensitive" as const } },
+                { phone: { contains: search, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, name: true, email: true, phone: true, address: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      take: Math.min(30, Math.max(1, Math.trunc(input.limit ?? 25))),
+    });
+  });
 
 const restoreCustomerOrderStockOnCancel = async (
   tx: Prisma.TransactionClient,
@@ -193,6 +295,9 @@ const recomputeTotals = async (
     _sum: { lineTotalKgs: true },
   });
   const subtotal = toMoney(aggregate._sum.lineTotalKgs);
+  if (!Number.isFinite(subtotal) || subtotal < 0 || subtotal > MAX_ORDER_MONEY_KGS) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
   return tx.customerOrder.update({
     where: { id: customerOrderId },
     data: {
@@ -288,6 +393,19 @@ const resolveUnitPrice = async (input: {
     isBundle: product.isBundle,
   };
 };
+
+export const getCustomerOrderLinePrice = async (input: {
+  organizationId: string;
+  actorId: string;
+  storeId: string;
+  productId: string;
+  variantId?: string | null;
+}) =>
+  prisma.$transaction(async (tx) => {
+    await assertOrderActorStoreAccessTx(tx, input);
+    const resolved = await resolveUnitPrice({ ...input, tx });
+    return { unitPriceKgs: resolved.unitPrice };
+  });
 
 const resolveUnitCost = async (input: {
   tx: Prisma.TransactionClient;
@@ -705,6 +823,7 @@ export const getSalesOrderMetrics = async (input: {
 export type CreateCustomerOrderDraftInput = {
   organizationId: string;
   storeId: string;
+  customerId?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
@@ -714,6 +833,7 @@ export type CreateCustomerOrderDraftInput = {
     productId: string;
     variantId?: string | null;
     qty: number;
+    unitPriceKgs?: number;
   }>;
   actorId: string;
   requestId: string;
@@ -723,29 +843,24 @@ const createCustomerOrderDraftTx = async (
   tx: Prisma.TransactionClient,
   input: CreateCustomerOrderDraftInput,
 ) => {
-  const customerPhone = normalizeOptionalCustomerPhone(input.customerPhone);
-  const customerAddress = normalizeOptionalCustomerAddress(input.customerAddress);
-  const actor = await tx.user.findFirst({
-    where: {
-      id: input.actorId,
-      organizationId: input.organizationId,
-      isActive: true,
-    },
-    select: {
-      id: true,
-      organizationId: true,
-      role: true,
-      isOrgOwner: true,
-    },
-  });
-  if (!actor || !actor.organizationId) {
-    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
-  }
-  await assertUserCanAccessStore(
-    tx,
-    { ...actor, organizationId: actor.organizationId },
-    input.storeId,
-  );
+  const actor = await assertOrderActorStoreAccessTx(tx, input);
+  const customer = input.customerId
+    ? await selectedOrderCustomerTx(tx, actor, input.customerId)
+    : null;
+  const customerName = input.customerName === undefined ? customer?.name ?? null : input.customerName;
+  const customerEmail = input.customerEmail === undefined ? customer?.email ?? null : input.customerEmail;
+  const customerPhone = customer
+    ? normalizeUpdatedCustomerPhone(
+        input.customerPhone === undefined ? customer.phone : input.customerPhone,
+        customer.phone,
+      )
+    : normalizeOptionalCustomerPhone(input.customerPhone);
+  const customerAddress = customer
+    ? normalizeUpdatedCustomerAddress(
+        input.customerAddress === undefined ? customer.address : input.customerAddress,
+        customer.address,
+      )
+    : normalizeOptionalCustomerAddress(input.customerAddress);
 
   const store = await tx.store.findUnique({ where: { id: input.storeId } });
   if (!store) {
@@ -763,8 +878,9 @@ const createCustomerOrderDraftTx = async (
       storeId: input.storeId,
       number,
       source: CustomerOrderSource.MANUAL,
-      customerName: input.customerName ?? null,
-      customerEmail: input.customerEmail ?? null,
+      customerId: customer?.id ?? null,
+      customerName,
+      customerEmail,
       customerPhone,
       customerAddress,
       notes: input.notes ?? null,
@@ -774,15 +890,22 @@ const createCustomerOrderDraftTx = async (
     },
   });
 
-  await upsertCustomerFromOrderTx(tx, {
-    orderId: order.id,
-    organizationId: input.organizationId,
-    storeId: input.storeId,
-    customerName: input.customerName,
-    customerEmail: input.customerEmail,
-    customerPhone,
-    customerAddress,
-  });
+  if (input.customerId === undefined) {
+    await upsertCustomerFromOrderTx(tx, {
+      orderId: order.id,
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerAddress,
+    });
+  } else if (customer) {
+    await tx.customer.update({
+      where: { id: customer.id },
+      data: { orderCount: { increment: 1 }, lastOrderAt: order.createdAt },
+    });
+  }
 
   if (input.lines?.length) {
     const existingKeys = new Set<string>();
@@ -810,7 +933,10 @@ const createCustomerOrderDraftTx = async (
       }
       existingKeys.add(dedupeKey);
 
-      const lineTotal = resolved.unitPrice * lineInput.qty;
+      const unitPrice = lineInput.unitPriceKgs === undefined
+        ? resolved.unitPrice
+        : normalizeOrderUnitPrice(lineInput.unitPriceKgs);
+      const lineTotal = orderLineTotal(unitPrice, lineInput.qty);
       const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * lineInput.qty);
       await tx.customerOrderLine.create({
         data: {
@@ -823,7 +949,8 @@ const createCustomerOrderDraftTx = async (
           appliedDiscountType: resolved.appliedDiscountType,
           appliedDiscountPercentage: resolved.appliedDiscountPercentage,
           appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
-          unitPriceKgs: resolved.unitPrice,
+          ...(lineInput.unitPriceKgs === undefined ? {} : manualOrderPriceData(unitPrice)),
+          unitPriceKgs: unitPrice,
           lineTotalKgs: lineTotal,
           unitCostKgs: unitCost,
           lineCostTotalKgs: lineCostTotal,
@@ -904,15 +1031,28 @@ export const createCustomerOrderDraftOperation = async (
       payload: {
         version: "v1",
         value: {
-          customerName: input.customerName ?? null,
-          customerEmail: input.customerEmail ?? null,
-          customerPhone: input.customerPhone ?? null,
-          customerAddress: input.customerAddress ?? null,
+          // Preserve legacy request fingerprints. For an explicit selection,
+          // omitted contacts use the saved profile; null explicitly clears them.
+          ...(input.customerId === undefined
+            ? {
+                customerName: input.customerName ?? null,
+                customerEmail: input.customerEmail ?? null,
+                customerPhone: input.customerPhone ?? null,
+                customerAddress: input.customerAddress ?? null,
+              }
+            : {
+                customerId: input.customerId,
+                ...(input.customerName === undefined ? {} : { customerName: input.customerName }),
+                ...(input.customerEmail === undefined ? {} : { customerEmail: input.customerEmail }),
+                ...(input.customerPhone === undefined ? {} : { customerPhone: input.customerPhone }),
+                ...(input.customerAddress === undefined ? {} : { customerAddress: input.customerAddress }),
+              }),
           notes: input.notes ?? null,
           lines: (input.lines ?? []).map((line) => ({
             productId: line.productId,
             variantId: line.variantId ?? null,
             qty: line.qty,
+            ...(line.unitPriceKgs === undefined ? {} : { unitPriceKgs: line.unitPriceKgs }),
           })),
         },
       },
@@ -947,6 +1087,7 @@ export const createCustomerOrderDraftOperation = async (
 export const setCustomerOrderCustomer = async (input: {
   organizationId: string;
   customerOrderId: string;
+  customerId?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
@@ -971,17 +1112,41 @@ export const setCustomerOrderCustomer = async (input: {
 
     assertEditable(order.status);
 
-    const customerPhone = normalizeUpdatedCustomerPhone(input.customerPhone, order.customerPhone);
+    const actor = await assertOrderActorStoreAccessTx(tx, { ...input, storeId: order.storeId });
+    const customer = input.customerId
+      ? await selectedOrderCustomerTx(tx, actor, input.customerId)
+      : null;
+    const sameSelectedCustomer = Boolean(customer && customer.id === order.customerId);
+    const savedPhone = sameSelectedCustomer
+      ? order.customerPhone
+      : customer ? customer.phone : order.customerPhone;
+    const savedAddress = sameSelectedCustomer
+      ? order.customerAddress
+      : customer ? customer.address : order.customerAddress;
+    // Re-selecting the same customer can copy their current profile into an
+    // older order. Both persisted contacts are trusted; new invalid text is not.
+    const phoneBaseline = sameSelectedCustomer && customer && input.customerPhone === customer.phone
+      ? customer.phone
+      : savedPhone;
+    const addressBaseline = sameSelectedCustomer && customer && input.customerAddress === customer.address
+      ? customer.address
+      : savedAddress;
+
+    const customerPhone = normalizeUpdatedCustomerPhone(
+      input.customerPhone === undefined && customer ? savedPhone : input.customerPhone,
+      phoneBaseline,
+    );
     const customerAddress = normalizeUpdatedCustomerAddress(
-      input.customerAddress,
-      order.customerAddress,
+      input.customerAddress === undefined && customer ? savedAddress : input.customerAddress,
+      addressBaseline,
     );
 
     const updated = await tx.customerOrder.update({
       where: { id: order.id },
       data: {
-        customerName: input.customerName ?? null,
-        customerEmail: input.customerEmail ?? null,
+        ...(input.customerId === undefined ? {} : { customerId: customer?.id ?? null }),
+        customerName: input.customerName === undefined ? customer?.name ?? null : input.customerName,
+        customerEmail: input.customerEmail === undefined ? customer?.email ?? null : input.customerEmail,
         customerPhone,
         customerAddress,
         notes: input.notes ?? null,
@@ -989,7 +1154,7 @@ export const setCustomerOrderCustomer = async (input: {
       },
     });
 
-    await upsertCustomerFromOrderTx(tx, {
+    if (input.customerId === undefined) await upsertCustomerFromOrderTx(tx, {
       orderId: updated.id,
       replaceCustomerIdentity: true,
       organizationId: input.organizationId,
@@ -1118,6 +1283,7 @@ export const addCustomerOrderLine = async (input: {
   productId: string;
   variantId?: string | null;
   qty: number;
+  unitPriceKgs?: number;
   actorId: string;
   requestId: string;
 }) => {
@@ -1136,6 +1302,7 @@ export const addCustomerOrderLine = async (input: {
     }
 
     assertEditable(order.status);
+    await assertOrderActorStoreAccessTx(tx, { ...input, storeId: order.storeId });
     if (await tx.salePayment.findFirst({ where: { customerOrderId: order.id } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
     await releaseLoyaltyForOrder(tx, { customerOrderId: order.id });
 
@@ -1147,7 +1314,10 @@ export const addCustomerOrderLine = async (input: {
       productId: input.productId,
       variantId: input.variantId,
     });
-    const { variantKey, unitPrice, isBundle } = resolved;
+    const { variantKey, isBundle } = resolved;
+    const unitPrice = input.unitPriceKgs === undefined
+      ? resolved.unitPrice
+      : normalizeOrderUnitPrice(input.unitPriceKgs);
     const unitCost = await resolveUnitCost({
       tx,
       organizationId: input.organizationId,
@@ -1169,7 +1339,7 @@ export const addCustomerOrderLine = async (input: {
       throw new AppError("duplicateLineItem", "CONFLICT", 409);
     }
 
-    const lineTotal = unitPrice * input.qty;
+    const lineTotal = orderLineTotal(unitPrice, input.qty);
     const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * input.qty);
     const line = await tx.customerOrderLine.create({
       data: {
@@ -1182,6 +1352,7 @@ export const addCustomerOrderLine = async (input: {
         appliedDiscountType: resolved.appliedDiscountType,
         appliedDiscountPercentage: resolved.appliedDiscountPercentage,
         appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
+        ...(input.unitPriceKgs === undefined ? {} : manualOrderPriceData(unitPrice)),
         unitPriceKgs: unitPrice,
         lineTotalKgs: lineTotal,
         unitCostKgs: unitCost,
@@ -1219,7 +1390,8 @@ export const addCustomerOrderLine = async (input: {
 export const updateCustomerOrderLine = async (input: {
   organizationId: string;
   lineId: string;
-  qty: number;
+  qty?: number;
+  unitPriceKgs?: number;
   actorId: string;
   requestId: string;
 }) => {
@@ -1242,19 +1414,30 @@ export const updateCustomerOrderLine = async (input: {
     }
 
     assertEditable(line.customerOrder.status);
-    await assertProductQuantity(tx, input.organizationId, line.productId, input.qty);
+    await assertOrderActorStoreAccessTx(tx, { ...input, storeId: line.customerOrder.storeId });
+    if (input.qty === undefined && input.unitPriceKgs === undefined) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
+    await assertProductQuantity(tx, input.organizationId, line.productId, input.qty ?? line.qty);
+    if (input.unitPriceKgs !== undefined) normalizeOrderUnitPrice(input.unitPriceKgs);
 
     if (await tx.salePayment.findFirst({ where: { customerOrderId: line.customerOrderId } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
     await releaseLoyaltyForOrder(tx, { customerOrderId: line.customerOrderId });
     const restoredLine = await tx.customerOrderLine.findUniqueOrThrow({ where: { id: line.id } });
+    const qty = input.qty ?? restoredLine.qty;
+    const unitPrice = input.unitPriceKgs === undefined
+      ? Number(restoredLine.unitPriceKgs)
+      : normalizeOrderUnitPrice(input.unitPriceKgs);
 
     const nextLine = await tx.customerOrderLine.update({
       where: { id: line.id },
       data: {
-        qty: input.qty,
-        lineTotalKgs: roundMoney(Number(restoredLine.unitPriceKgs) * input.qty),
+        qty,
+        ...(input.unitPriceKgs === undefined ? {} : manualOrderPriceData(unitPrice)),
+        unitPriceKgs: unitPrice,
+        lineTotalKgs: orderLineTotal(unitPrice, qty),
         lineCostTotalKgs:
-          line.unitCostKgs === null ? null : roundMoney(Number(line.unitCostKgs) * input.qty),
+          restoredLine.unitCostKgs === null ? null : roundMoney(Number(restoredLine.unitCostKgs) * qty),
       },
     });
 

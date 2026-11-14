@@ -1643,11 +1643,17 @@
     },
     "detail": {
       "title": "Customer",
-      "subtitle": "Contacts and purchase history in the selected store.",
+      "subtitle": "Customer contacts and purchase history across accessible stores.",
       "contactInfo": "Contact info",
       "summary": "Summary",
       "recentReceipts": "Recent receipts",
-      "noReceipts": "No receipts for this customer yet."
+      "noReceipts": "No receipts for this customer yet.",
+      "recentPurchases": "Recent purchases",
+      "noPurchases": "No completed purchases yet.",
+      "posReceipt": "POS receipt",
+      "customerOrder": "Customer order",
+      "completedPurchases": "Completed purchases",
+      "lastCompletedPurchase": "Last purchase"
     },
     "validation": {
       "nameRequired": "Name is required.",
@@ -5272,12 +5278,12 @@
     "linesTitle": "Order items",
     "noLines": "No order items added yet.",
     "addLine": "Add item",
-    "editLine": "Edit quantity",
+    "editLine": "Edit line",
     "removeLine": "Remove item",
     "confirmRemoveLine": "Remove item from customer order?",
     "lineDialogAddTitle": "New item",
     "lineDialogEditTitle": "Edit item",
-    "lineDialogSubtitle": "Specify product, variant, and quantity.",
+    "lineDialogSubtitle": "Specify the product, variant, quantity, and price.",
     "saveLine": "Save item",
     "lineAdded": "Item added.",
     "lineUpdated": "Item updated.",
@@ -5353,7 +5359,17 @@
       "empty": "No archived orders yet.",
       "saved": "Order archived.",
       "restored": "Order restored from archive."
-    }
+    },
+    "selectCustomer": "Select customer",
+    "selectedCustomer": "Customer selected",
+    "customerSearch": "Customer name, phone or email",
+    "customerSelectionHint": "Choose a customer record to include this order in their history.",
+    "noCustomerMatches": "No customers found. Try another name, phone or email.",
+    "withoutCustomerCard": "Without a customer record",
+    "customerCard": "Customer record",
+    "unitPriceInvalid": "Enter a price of 0 or more with up to two decimal places.",
+    "documentPriceHint": "This price applies to this order only.",
+    "orderWithoutShift": "You can create and complete this order without opening a cash register shift."
   },
   "suppliers": {
     "title": "Suppliers",
