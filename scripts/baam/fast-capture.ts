@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium, type Locator } from "playwright";
 import sharp from "sharp";
@@ -136,6 +136,14 @@ try {
   const uploaded = await upload;
   assert.equal(uploaded.status(), 200);
   const attachment = await uploaded.json();
+  assert.match(attachment.url, /^\/api\/baam\/media\?attachmentId=/);
+  const privatePhoto = await context.request.get(base + attachment.url);
+  assert.equal(privatePhoto.status(), 200);
+  const privateHash = createHash("sha256").update(await privatePhoto.body()).digest("hex");
+  const anonymous = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    assert.equal((await anonymous.request.get(base + attachment.url)).status(), 401);
+  } finally { await anonymous.close(); }
   await page.unroute("**/api/baam/media");
   await photo.locator("img").waitFor();
   await page.screenshot({ path: `${directory}/product-photo-desktop.png` });
@@ -143,7 +151,12 @@ try {
   const product = await prisma.product.findFirstOrThrow({
     where: { organizationId: fixture.organizationId, name: `QA photo ${suffix}` },
   });
-  assert.equal(product.photoUrl, attachment.url);
+  assert.ok(product.photoUrl?.startsWith(`/uploads/imported-products/${fixture.organizationId}/`));
+  assert.notEqual(product.photoUrl, attachment.url);
+  const adoptedPhoto = await context.request.get(base + product.photoUrl);
+  assert.equal(adoptedPhoto.status(), 200);
+  assert.equal(createHash("sha256").update(await adoptedPhoto.body()).digest("hex"), privateHash);
+  assert.ok((await prisma.baamAttachment.findUniqueOrThrow({ where: { id: attachment.id } })).url.startsWith("baam-private:v1:"));
   assert.equal(
     await prisma.product.count({
       where: { organizationId: fixture.organizationId, name: product.name },

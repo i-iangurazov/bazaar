@@ -29,6 +29,9 @@ export function baamTestEnvironment(
     JOBS_SECRET: "baam-isolated-test-jobs",
     CRON_SECRET: "baam-isolated-test-cron-secret",
     NEXTAUTH_SECRET: "baam-isolated-development-only-secret",
+    // Public synthetic key, stable across this fixture's server/seed processes.
+    // Never inherit a real private-media key into the disposable browser suite.
+    BAAM_MEDIA_ENCRYPTION_KEY: Buffer.alloc(32, 73).toString("base64"),
     NEXTAUTH_URL: "http://localhost:3121",
     EMAIL_PROVIDER: "log",
     EMAIL_FROM: "Bazaar Test <test@example.invalid>",

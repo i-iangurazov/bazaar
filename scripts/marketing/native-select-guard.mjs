@@ -16,7 +16,7 @@ export function isHiddenRadixSelect(profile) {
     profile.borderWidth === "0px" &&
     profile.padding === "0px" &&
     profile.margin === "-1px" &&
-    profile.overflow === "hidden" &&
+    ["hidden", "clip"].includes(profile.overflow) &&
     ["rect(0px,0px,0px,0px)", "rect(0,0,0,0)"].includes(profile.clip.replace(/\s/g, "")) &&
     profile.whiteSpace === "nowrap"
   );
@@ -53,6 +53,9 @@ export function verifyNativeSelectGuard() {
   };
   assertOnlyHiddenNativeSelects([], "No native select");
   assertOnlyHiddenNativeSelects([mirror], "Radix form mirror");
+  // Chromium may compute a non-scrolling select's hidden overflow as clip.
+  // Both still require the same inaccessible 1px bounds and zero clipping rect.
+  assertOnlyHiddenNativeSelects([{ ...mirror, overflow: "clip" }], "Clipped Radix form mirror");
   for (const [name, override] of [
     ["visible native select", { width: "96px", height: "40px", rectWidth: 96, rectHeight: 40, clip: "auto" }],
     ["tabbable mirror", { tabIndex: 0 }],
