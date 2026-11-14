@@ -8,6 +8,7 @@ vi.mock("@/server/services/salesAnalytics", async (importOriginal) => ({
 }));
 import { prisma } from "@/server/db/prisma";
 import { baamRouter } from "@/server/trpc/routers/baam";
+import { AI_PRIVACY_CONSENT_VERSION } from "@/lib/aiPrivacy";
 import {
   cleanupCommerceFixtures,
   commerceContext,
@@ -66,6 +67,12 @@ describe("BAAM assistant persisted authorization", () => {
       series: [],
     });
     fixture = await createCommerceFixtures(prisma);
+    // These synthetic provider/authorization scenarios represent consenting
+    // people. Keep the real database-backed consent gate and mocked transport.
+    await prisma.user.updateMany({
+      where: { id: { in: [fixture.tenants.a.users.ADMIN.id, fixture.tenants.a.users.MANAGER.id] } },
+      data: { aiConsentVersion: AI_PRIVACY_CONSENT_VERSION, aiConsentGrantedAt: new Date(), aiConsentRevokedAt: null },
+    });
   });
   afterEach(async () => {
     vi.unstubAllEnvs();
@@ -147,6 +154,13 @@ describe("BAAM assistant persisted authorization", () => {
     });
     await expect(caller("ADMIN").capabilities()).rejects.toThrow("featureLockedAnalytics");
     expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses provider and report access after the synthetic actor withdraws AI consent", async () => {
+    await prisma.user.update({ where: { id: fixture.tenants.a.users.MANAGER.id }, data: { aiConsentRevokedAt: new Date() } });
+    await expect(caller("MANAGER").ask(request)).rejects.toThrow();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.overview).not.toHaveBeenCalled();
   });
 
   it("resolves an explicit date with fresh grants and enforces actual role revocation", async () => {

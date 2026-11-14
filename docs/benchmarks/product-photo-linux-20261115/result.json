@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.36",
+  "python": "3.13.18",
+  "versions": {
+    "paddlepaddle": "3.3.1",
+    "faiss-cpu": "1.16.0",
+    "rapidocr": "3.9.2",
+    "onnxruntime": "1.29.0",
+    "numpy": "2.5.4",
+    "opencv-python": "5.0.0.93"
+  },
+  "realModels": true,
+  "ocrReady": true,
+  "unauthorized401": true,
+  "invalidInputs400": true,
+  "manualRegion": true,
+  "scopeReplacement": true,
+  "vectors10000Ms": 630.5282730000101,
+  "concurrentStatuses": [
+    429,
+    429,
+    429,
+    200,
+    429,
+    429
+  ],
+  "bodyTimeoutMs": 10010.902512,
+  "recoveryAfterTimeout": true,
+  "faissCrashDetectedAndRecovered": true,
+  "containerPeakMemoryMiB": 936.22265625,
+  "outcomes": [
+    {
+      "query": "grocery-6-test-Banana_023.jpg",
+      "first": "grocery-6",
+      "firstScore": 0.761387825012207,
+      "ocrLines": 0,
+      "regionSource": "full",
+      "ms": 1222.1532920000016
+    },
+    {
+      "query": "grocery-39-test-Arla-Lactose-Medium-Fat-Milk_001.jpg",
+      "first": "grocery-39",
+      "firstScore": 0.7498299479484558,
+      "ocrLines": 11,
+      "regionSource": "auto",
+      "ms": 3483.3605550000184
+    },
+    {
+      "query": "aloi-103_r30.jpg",
+      "first": "aloi-103",
+      "firstScore": 0.9239259958267212,
+      "ocrLines": 1,
+      "regionSource": "full",
+      "ms": 1452.4208330000192
+    },
+    {
+      "query": "aloi-577_r30.jpg",
+      "first": "aloi-577",
+      "firstScore": 0.8958405256271362,
+      "ocrLines": 0,
+      "regionSource": "full",
+      "ms": 1373.2925079999916
+    }
+  ],
+  "purpose": "Linux runtime/HTTP/region/OCR compatibility smoke; not a new accuracy benchmark",
+  "commit": "32788641b06175babe0c0e474584e2e9a98cb901",
+  "imageId": "sha256:3092f73cd77cd5e3aa47f766887e38f096afd8c49b2b27b0ef5b8a07075c74e1",
+  "linuxAmd64": true,
+  "imageBytes": 1754366952,
+  "networkDisabledAtInference": true,
+  "readOnlyRoot": true,
+  "nonRoot": "bazaar",
+  "noHostPortsOrDatabases": true,
+  "memoryLimitMiB": 4096,
+  "cpus": 2,
+  "gracefulStop": true,
+  "restartReady": true,
+  "fixtureSha256": "fac9bf44cc3629adc6600185bfe5ecd9f95c323a7d40fcd80eaab613a0410035"
+}
