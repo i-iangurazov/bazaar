@@ -58,6 +58,18 @@ class PipelineTest(unittest.TestCase):
         result = search_views(self.image, self.encoder, searcher, 'scoped', [0], region=self.box)
         self.assertEqual(result['analysis'], {'region': self.box, 'regionSource': 'manual', 'ocrStatus': 'unavailable', 'lines': []})
 
+    def test_subthreshold_background_crop_is_not_presented_as_automatic_product_selection(self):
+        reads = []
+        vision = SimpleNamespace(propose=lambda _: [(.9, self.box)],
+            read=lambda _, region, source: reads.append((region, source)) or {'region': region, 'regionSource': source})
+        searcher = SimpleNamespace(search_many=lambda *args: [[{'index': 0, 'score': .3}], [{'index': 0, 'score': .6}]])
+        result = search_views(self.image, self.encoder, searcher, 'scoped', [0], vision)
+        self.assertEqual(result['analysis'], {'region': None, 'regionSource': 'full'})
+        self.assertEqual(result['matches'], [{'index': 0, 'score': .6}])  # Node still applies the unchanged threshold.
+        self.assertEqual(reads, [(None, 'full')])
+        result = search_views(self.image, self.encoder, searcher, 'scoped', [0], vision, min_score=.6)
+        self.assertEqual(result['analysis']['regionSource'], 'auto')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "baselineGalleryManifestSha256": "cf410ba23a6866311fbdf742fe389f455e5c448bee10fc1b70551e7495aa22a2",
+  "baselineGalleryPhotos": 36,
+  "expectedGalleryPhotos": 38,
+  "purpose": "Approved subset of trial views: keep two Watermelon Cherry references; remove only the two trial images explicitly identified by SHA after a negative-control regression. Original photos and all unrelated images must remain.",
+  "assets": [
+    {
+      "id": "watermelon-cherry-rear-icons",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "media": "qChbS3VN888",
+      "seconds": 110,
+      "pose": "rear-icons",
+      "crop": [
+        0.49,
+        0.2,
+        0.22,
+        0.64
+      ],
+      "frameFile": "recovery/frames/watermelon-cherry-rear-icons.png",
+      "frameSha256": "84662a6d7e6f62dc1b57539f345415a4cdfd8e0e7dd66f2f3f9aacec9810ff0c",
+      "file": "recovery/gallery/watermelon-cherry-rear-icons.jpg",
+      "uploadedSha256": "b2ded8e11805b3208703d8bc81e4e730b3e966d9260dc8202fdef27f7e5b95c3",
+      "width": 422,
+      "height": 691
+    },
+    {
+      "id": "watermelon-cherry-front-hand",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "media": "qChbS3VN888",
+      "seconds": 150,
+      "pose": "front-partly-occluded",
+      "crop": [
+        0.42,
+        0.2,
+        0.25,
+        0.58
+      ],
+      "frameFile": "recovery/frames/watermelon-cherry-front-hand.png",
+      "frameSha256": "cf42c29b6226a6735b945183ae6ca6cb670f16d6097472fd7648723b9254e266",
+      "file": "recovery/gallery/watermelon-cherry-front-hand.jpg",
+      "uploadedSha256": "9bebba065011c25971f8444cd038663e0bd35079590065f482a978fb36b36bf7",
+      "width": 480,
+      "height": 626
+    }
+  ],
+  "rejectedTrialManifestSha256": "a1421885b0f42a2ce1d6e7ec418db8a2fe906cbf5370b39672b2006ca8c30abc",
+  "rejectedAssets": [
+    {
+      "id": "strawberry-banana-display-room",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 350,
+      "pose": "lit-display-room",
+      "crop": [
+        0.08,
+        0.02,
+        0.22,
+        0.8
+      ],
+      "frameFile": "recovery/frames/strawberry-banana-display-room.png",
+      "frameSha256": "70e5d53cb41ae636177c9b237858aabadf0e5be6272725e0de38ac74b9397ea1",
+      "file": "recovery/gallery/strawberry-banana-display-room.jpg",
+      "uploadedSha256": "0e4c6db9f99cdb199612c19c749ea339542fc8279345e31b0c14c352feae3b16",
+      "width": 422,
+      "height": 864
+    },
+    {
+      "id": "sakura-grape-upper-front",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 690,
+      "pose": "partial-front-with-occlusion",
+      "crop": [
+        0.16,
+        0.23,
+        0.24,
+        0.32
+      ],
+      "frameFile": "recovery/frames/sakura-grape-front-pair.png",
+      "frameSha256": "4486551aea49473114015ff51d76573fa1520bdda420c7af27126ef146e5dca5",
+      "file": "recovery/gallery/sakura-grape-upper-front.jpg",
+      "uploadedSha256": "2aaca602578551d85c85a7c5d0bde0240a8ecdcc2175638daabbb1c495b78d3d",
+      "width": 461,
+      "height": 346
+    }
+  ]
+}

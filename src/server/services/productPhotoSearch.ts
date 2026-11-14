@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { prisma } from "@/server/db/prisma";
-import { productPhotoSearchMaxBytes, type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
+import { productPhotoSearchMaxBytes, productPhotoSearchMinScore, type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
 import { prepareProductStudioSource } from "./productImageSourceUpload";
 import { queryProductPhoto } from "./productPhotoSearchEngine";
@@ -39,8 +39,7 @@ export async function findPhotoCandidates(input: { user: StoreAccessUser; storeI
   }
   const { matches, analysis } = await queryProductPhoto(jpeg, scopedRows, input.signal, { region: input.region, autoRegion: input.autoRegion });
   // Experimental laboratory calibration. This ranks candidates, never proves SKU identity.
-  const threshold = 0.68;
-  return { candidates: matches.filter((match) => match.score >= threshold).map((match) => scopedRows[match.index]), analysis };
+  return { candidates: matches.filter((match) => match.score >= productPhotoSearchMinScore).map((match) => scopedRows[match.index]), analysis };
 }
 
 /** Called after revalidating the session again, after inference. No stale prices or grants. */

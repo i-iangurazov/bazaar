@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "queryManifestSha256": "2a861704e04d2b8781874327409e95a859993bef97adb36358aee749f0b92e89",
+  "purpose": "Diagnostic tighter manual boxes reviewed visually before score inspection. Original evaluation regions stay frozen. Never indexed.",
+  "queries": [
+    {
+      "id": "watermelon-cherry-80",
+      "region": {
+        "x": 0.51,
+        "y": 0.43,
+        "width": 0.16,
+        "height": 0.4
+      }
+    },
+    {
+      "id": "watermelon-cherry-100",
+      "region": {
+        "x": 0.5,
+        "y": 0.34,
+        "width": 0.17,
+        "height": 0.45
+      }
+    },
+    {
+      "id": "watermelon-cherry-300",
+      "region": {
+        "x": 0.43,
+        "y": 0.1,
+        "width": 0.36,
+        "height": 0.48
+      }
+    },
+    {
+      "id": "strawberry-banana-190",
+      "region": {
+        "x": 0.43,
+        "y": 0.2,
+        "width": 0.14,
+        "height": 0.57
+      }
+    },
+    {
+      "id": "strawberry-banana-400",
+      "region": {
+        "x": 0.27,
+        "y": 0.46,
+        "width": 0.16,
+        "height": 0.36
+      }
+    },
+    {
+      "id": "sakura-grape-540",
+      "region": {
+        "x": 0.18,
+        "y": 0.46,
+        "width": 0.23,
+        "height": 0.21
+      }
+    },
+    {
+      "id": "sakura-grape-560",
+      "region": {
+        "x": 0.14,
+        "y": 0.28,
+        "width": 0.36,
+        "height": 0.38
+      }
+    },
+    {
+      "id": "sakura-grape-600",
+      "region": {
+        "x": 0.26,
+        "y": 0.58,
+        "width": 0.15,
+        "height": 0.27
+      }
+    },
+    {
+      "id": "sakura-grape-680",
+      "region": {
+        "x": 0.23,
+        "y": 0.16,
+        "width": 0.13,
+        "height": 0.4
+      }
+    }
+  ]
+}

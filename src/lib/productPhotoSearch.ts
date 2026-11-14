@@ -1,5 +1,7 @@
 export const productPhotoSearchModel = "ppshitu-v2-pplcnetv2-v1-fp32-224";
 export const productPhotoSearchDimension = 512;
+// Experimental candidate threshold; not a probability of SKU identity.
+export const productPhotoSearchMinScore = 0.68;
 export const productPhotoSearchMaxBytes = 3 * 1024 * 1024;
 // Technical prototype bounds, identical on every plan.
 export const productPhotoSearchMaxImages = 10_000;

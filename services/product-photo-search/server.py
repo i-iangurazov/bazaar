@@ -4,6 +4,7 @@ import base64
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -97,8 +98,11 @@ def main():
                     automatic = request.get('autoRegion', True)
                     if not isinstance(automatic, bool):
                         raise ValueError('invalidRegion')
+                    min_score = request.get('minScore', 0.68)
+                    if type(min_score) not in (int, float) or not math.isfinite(min_score) or not 0 <= min_score <= 1:
+                        raise ValueError('invalidThreshold')
                     rgb = encoder.decode(data)
-                    result = search_views(rgb, encoder, searcher, request['vectorsBase64'], request['groups'], vision, region, automatic)
+                    result = search_views(rgb, encoder, searcher, request['vectorsBase64'], request['groups'], vision, region, automatic, min_score)
                 self.reply(200, {"modelVersion": MODEL_VERSION, **result})
             except (ValueError, KeyError, TypeError, TimeoutError):
                 self.reply(400, {"error": "invalidInput"})

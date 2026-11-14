@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checkPhotoSearchEngine, embedProductPhoto, matchProductPhoto, queryProductPhoto, validPhotoEmbedding } from "@/server/services/productPhotoSearchEngine";
-import { productPhotoSearchModel as modelVersion } from "@/lib/productPhotoSearch";
+import { productPhotoSearchModel as modelVersion, productPhotoSearchMinScore } from "@/lib/productPhotoSearch";
 const v = [1, ...Array<number>(511).fill(0)];
 beforeEach(() => { vi.stubEnv("PRODUCT_PHOTO_SEARCH_URL", "http://127.0.0.1:3160"); vi.stubEnv("PRODUCT_PHOTO_SEARCH_TOKEN", "private-service-test-token-with-32-characters"); });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
@@ -16,6 +16,7 @@ describe("private PP-ShiTu contract", () => {
     expect(await matchProductPhoto(Buffer.from("jpeg"), [{ productId: "secret-product", embedding: v }, { productId: "secret-product", embedding: v }])).toEqual([{ index: 1, score: 0.9 }]);
     const [url, init] = transport.mock.calls[0]; expect(String(url)).toBe("http://127.0.0.1:3160/search"); expect(init.redirect).toBe("error");
     const body = JSON.parse(init.body); expect(body.groups).toEqual([0,0]); expect(init.body).not.toContain("secret-product");
+    expect(body.minScore).toBe(productPhotoSearchMinScore);
     expect(Buffer.from(body.vectorsBase64, "base64").readFloatLE(0)).toBe(1);
   });
   it("forbids insecure non-local endpoints and never forwards redirect credentials", async () => {

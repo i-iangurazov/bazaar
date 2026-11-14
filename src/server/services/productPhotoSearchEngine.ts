@@ -1,4 +1,4 @@
-import { productPhotoSearchDimension, productPhotoSearchMaxImages, productPhotoSearchModel, validProductPhotoRegion,
+import { productPhotoSearchDimension, productPhotoSearchMaxImages, productPhotoSearchModel, productPhotoSearchMinScore, validProductPhotoRegion,
   type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
 
@@ -87,7 +87,7 @@ export async function queryProductPhoto(jpeg: Buffer, features: { productId: str
     if (!productGroups.has(feature.productId)) productGroups.set(feature.productId, productGroups.size);
     return productGroups.get(feature.productId)!;
   });
-  const result = await requestEngine("search", { imageBase64: jpeg.toString("base64"), vectorsBase64: buffer.toString("base64"), groups, ...(region ? { region } : {}), ...(autoRegion === false ? { autoRegion: false } : {}) }, signal);
+  const result = await requestEngine("search", { imageBase64: jpeg.toString("base64"), vectorsBase64: buffer.toString("base64"), groups, minScore: productPhotoSearchMinScore, ...(region ? { region } : {}), ...(autoRegion === false ? { autoRegion: false } : {}) }, signal);
   if (!Array.isArray(result.matches) || result.matches.length > 8 || result.matches.some((match: { index?: unknown; score?: unknown }) =>
     !Number.isInteger(match.index) || Number(match.index) < 0 || Number(match.index) >= features.length ||
     typeof match.score !== "number" || !Number.isFinite(match.score) || Math.abs(match.score) > 1.001))

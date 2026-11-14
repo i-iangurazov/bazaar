@@ -13,6 +13,11 @@ assert.equal(resolve(ffmpeg), ffmpeg);
 const root = resolve(".local/elfbar-multiview");
 const fixture = JSON.parse(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json", "utf8"));
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+if (process.argv.includes("--recovery-views")) {
+  const extra = JSON.parse(await readFile(process.argv.includes("--approved-views") ? "scripts/qa/fixtures/elfbar-photo-recovery-approved.json" : "scripts/qa/fixtures/elfbar-photo-recovery.json", "utf8"));
+  assert.equal(extra.baselineGalleryManifestSha256, hash(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json")));
+  fixture.assets.push(...extra.assets);
+}
 function local(file) {
   const path = resolve(root, file);
   assert.ok(relative(root, path) && !relative(root, path).startsWith(".."));

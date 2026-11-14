@@ -14,9 +14,30 @@ const bytes = await readFile(manifestPath);
 const fixture = JSON.parse(bytes);
 const runLabel = process.argv.find((value) => value.startsWith("--run="))?.slice(6);
 assert.ok(!runLabel || /^[a-z0-9-]{1,50}$/.test(runLabel), "Invalid run label");
-const multiview = process.argv.includes("--multiview") ? JSON.parse(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json", "utf8")) : null;
-const expectedGalleryPhotos = multiview?.expectedGalleryPhotos ?? fixture.expectedGalleryPhotos;
 const digest = (value) => createHash("sha256").update(value).digest("hex");
+const multiview = process.argv.includes("--multiview") ? JSON.parse(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json", "utf8")) : null;
+const recoveryPath = process.argv.includes("--approved-views") ? "scripts/qa/fixtures/elfbar-photo-recovery-approved.json" : "scripts/qa/fixtures/elfbar-photo-recovery.json";
+const recovery = process.argv.includes("--recovery-views") ? JSON.parse(await readFile(recoveryPath, "utf8")) : null;
+assert.ok(!process.argv.includes("--approved-views") || recovery, "--approved-views requires --recovery-views");
+if (recovery) {
+  assert.ok(multiview, "--recovery-views requires --multiview");
+  assert.equal(recovery.schema, 1);
+  assert.equal(recovery.baselineGalleryManifestSha256, digest(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json")));
+  assert.equal(recovery.baselineGalleryPhotos, multiview.expectedGalleryPhotos);
+  assert.equal(recovery.expectedGalleryPhotos, multiview.expectedGalleryPhotos + recovery.assets.length);
+  if (recovery.rejectedAssets) {
+    const trialBytes = await readFile("scripts/qa/fixtures/elfbar-photo-recovery.json");
+    assert.equal(digest(trialBytes), recovery.rejectedTrialManifestSha256);
+    const trial = JSON.parse(trialBytes);
+    for (const rejected of recovery.rejectedAssets) {
+      assert.ok(trial.assets.some((asset) => asset.sku === rejected.sku && asset.uploadedSha256 === rejected.uploadedSha256));
+      assert.ok(![...multiview.assets, ...fixture.gallery, ...recovery.assets].some((asset) => asset.uploadedSha256 === rejected.uploadedSha256));
+    }
+  }
+  multiview.assets.push(...recovery.assets);
+  multiview.expectedGalleryPhotos = recovery.expectedGalleryPhotos;
+}
+const expectedGalleryPhotos = multiview?.expectedGalleryPhotos ?? fixture.expectedGalleryPhotos;
 const local = (file) => {
   assert.match(file, /^[a-zA-Z0-9_./-]+$/);
   const path = resolve(root, file);
@@ -168,7 +189,7 @@ try {
       }
       assert.ok(existing.has(row.uploadedSha256), "Original reference must be preserved");
       const assets = multiview.assets.filter((asset) => asset.sku === row.sku);
-      assert.equal(assets.length, 3); assert.equal(assets[0].pose, "front");
+      assert.equal(assets.length, 3 + (recovery?.assets.filter((asset) => asset.sku === row.sku).length ?? 0)); assert.equal(assets[0].pose, "front");
       const desired = [];
       for (const asset of assets) {
         let image = existing.get(asset.uploadedSha256);
@@ -181,7 +202,9 @@ try {
         }
         desired.push({ ...(image.id ? { id: image.id } : {}), url: image.url, position: desired.length });
       }
-      for (const image of product.images) if (!desired.some((entry) => entry.url === image.url)) desired.push({ id: image.id, url: image.url, position: desired.length });
+      const rejectedHashes = new Set((recovery?.rejectedAssets ?? []).filter((asset) => asset.sku === row.sku).map((asset) => asset.uploadedSha256));
+      const rejectedIds = new Set([...existing].filter(([hash]) => rejectedHashes.has(hash)).map(([, image]) => image.id));
+      for (const image of product.images) if (!rejectedIds.has(image.id) && !desired.some((entry) => entry.url === image.url)) desired.push({ id: image.id, url: image.url, position: desired.length });
       if (JSON.stringify(desired.map((image) => image.url)) !== JSON.stringify(product.images.map((image) => image.url))) {
         await json("/api/trpc/products.update", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ json: { productId: product.id, sku: product.sku, name: product.name, baseUnitId: product.baseUnitId, expectedUpdatedAt: product.updatedAt.toISOString(), imagesOnly: true, images: desired } }) });
         changed += 1;
@@ -199,7 +222,7 @@ try {
     }
     assert.equal(progress.ready, expectedGalleryPhotos); assert.equal(progress.pending, 0); assert.equal(progress.failed, 0);
     assert.equal(digest(JSON.stringify(await original())), seed.originalShopHash, "The original manual shop changed");
-    await writeFile(`${extraRoot}/augmentation.json`, JSON.stringify({ changed, progress, originalShopUnchanged: true, manifestSha256: digest(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json")) }, null, 2) + "\n");
+    await writeFile(`${extraRoot}/augmentation.json`, JSON.stringify({ changed, progress, originalShopUnchanged: true, manifestSha256: digest(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json")), recoveryManifestSha256: recovery ? digest(await readFile(recoveryPath)) : null }, null, 2) + "\n");
     console.log(JSON.stringify({ changed, progress, originalShopUnchanged: true }));
   } else {
   assert.equal((await db.store.findUniqueOrThrow({ where: { id: storeId } })).organizationId, organizationId);
@@ -230,6 +253,7 @@ try {
       assert.ok(hashes.includes(row.uploadedSha256));
       const assets = multiview.assets.filter((asset) => asset.sku === row.sku);
       for (const asset of assets) assert.ok(hashes.includes(asset.uploadedSha256), `Missing view ${asset.id}`);
+      for (const rejected of (recovery?.rejectedAssets ?? []).filter((asset) => asset.sku === row.sku)) assert.ok(!hashes.includes(rejected.uploadedSha256), `Rejected trial view remains: ${rejected.id}`);
       assert.equal(digest(await readFile(resolve("public", product.photoUrl.slice(1)))), assets[0].uploadedSha256);
     } else assert.equal(digest(await readFile(resolve("public", product.photoUrl.slice(1)))), row.uploadedSha256);
   }
@@ -274,7 +298,7 @@ try {
   const form = new FormData(); form.set("file", new File([await sharp(local(fixture.queries[0].file)).jpeg().toBuffer()], "scope.jpg", { type: "image/jpeg" })); form.set("storeId", emptyStore);
   const control = await json("/api/products/photo-search", { method: "POST", body: form }); assert.deepEqual(control.items, []);
   const engineSources = await Promise.all(["engine.py", "vision.py", "server.py", "pipeline.py", "retrieval.py"].map(async (file) => [file, digest(await readFile(`services/product-photo-search/${file}`))]));
-  const evidence = { schema: 1, at: new Date().toISOString(), applicationCommit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(), baselineApplicationCommit: fixture.applicationCommit, engineSources: Object.fromEntries(engineSources), runLabel, multiviewManifestSha256: multiview ? digest(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json")) : null, manifestSha256: digest(bytes), realApplicationApi: true, model: prior.model, threshold: prior.threshold, visionModelManifestSha256: digest(await readFile("services/product-photo-search/vision-models.json")), storeId, galleryHash, galleryProgress: status.progress, galleryUnchanged: true, originalShopUnchanged: true, emptyStoreHasNoLeakedCandidates: true, sourceMedia: fixture.media.length, uniqueQueries: fixture.queries.length, results };
+  const evidence = { schema: 1, at: new Date().toISOString(), applicationCommit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(), baselineApplicationCommit: fixture.applicationCommit, engineSources: Object.fromEntries(engineSources), runLabel, multiviewManifestSha256: multiview ? digest(await readFile("scripts/qa/fixtures/elfbar-photo-multiview.json")) : null, recoveryManifestSha256: recovery ? digest(await readFile(recoveryPath)) : null, manifestSha256: digest(bytes), realApplicationApi: true, model: prior.model, threshold: prior.threshold, visionModelManifestSha256: digest(await readFile("services/product-photo-search/vision-models.json")), storeId, galleryHash, galleryProgress: status.progress, galleryUnchanged: true, originalShopUnchanged: true, emptyStoreHasNoLeakedCandidates: true, sourceMedia: fixture.media.length, uniqueQueries: fixture.queries.length, results };
   await writeFile(`${root}/results${runLabel ? `-${runLabel}` : ""}.json`, JSON.stringify(evidence, null, 2) + "\n");
   console.log(JSON.stringify({ completed: true, uniqueQueries: fixture.queries.length, requests: results.length, galleryUnchanged: true }));
   }
