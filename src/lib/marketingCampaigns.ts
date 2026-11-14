@@ -33,6 +33,11 @@ const campaigns: readonly {
     source: "instagram", medium: "paid_social", campaign: "kg_store_launch_202611",
     contents: ["ad01_ru", "ad02_ru", "ad01_ru_direct", "ad02_ru_direct"],
   },
+  {
+    // Exact second-ad campaign/ad-set pair observed on the public landing.
+    source: "instagram", medium: "paid_social", campaign: "kg_store_launch_202611",
+    contents: ["ad02_ru"], id: "52574017478097", term: "52574017478697",
+  },
   ...["inventory", "pos", "retail"].map((term) => ({
     source: "google", medium: "cpc", campaign: "kg_store_launch_202611", term,
     contents: [`search_${term}_a`, `search_${term}_b`],

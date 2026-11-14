@@ -1,10 +1,10 @@
 {
   "meta": {
-    "title": "BAZAAR — POS and inventory for shops in Kyrgyzstan",
-    "description": "BAZAAR for shops in Kyrgyzstan: POS, products, stock, receiving, stock counts and analytics. Work in your browser on desktop or mobile.",
+    "title": "BAZAAR — inventory management and POS for shops in Kyrgyzstan",
+    "description": "BAZAAR (Базар) is inventory software for shops in Kyrgyzstan. POS, stock, receiving, transfers and stock counts. Try it free for 7 days, without a card.",
     "socialTitle": "BAZAAR — your entire store in one system",
     "imageAlt": "BAZAAR business dashboard",
-    "structuredDescription": "BAZAAR is a system for shops in Kyrgyzstan: POS, products, inventory, customers, analytics and integrations."
+    "structuredDescription": "BAZAAR (Базар) is inventory management software for shops in Kyrgyzstan, with POS, stock, receiving, stock counts, customers and analytics."
   },
   "nav": {
     "home": "Bazaar home",
@@ -21,9 +21,9 @@
     "start": "Start for free"
   },
   "hero": {
-    "kicker": "A system for the modern store",
+    "kicker": "POS and inventory for your shop",
     "title": "Your entire store. In one system.",
-    "lead": "From the first sale to your next purchasing decision. POS, products, stock and analytics work together — right in your browser.",
+    "lead": "BAZAAR is inventory management software for shops in Kyrgyzstan. Receive products, record sales and track stock together in your browser.",
     "view": "See Bazaar in action",
     "note": "In your browser, on desktop, tablet and phone",
     "desktopAlt": "The actual Bazaar desktop POS with a product catalog and current receipt",
@@ -116,7 +116,11 @@
         "Customer, discount and split payments",
         "Held receipts, returns and journal"
       ],
-      "alt": "Bazaar desktop POS"
+      "alt": "Bazaar desktop POS",
+      "guide": {
+        "label": "How to record a sale",
+        "href": "/help/pos/make-sale"
+      }
     },
     "inventory": {
       "eyebrow": "Inventory",
@@ -127,7 +131,11 @@
         "Receiving, transfers and write-offs",
         "Stock movements and costs"
       ],
-      "alt": "Stock movement history in Bazaar"
+      "alt": "Stock movement history in Bazaar",
+      "guide": {
+        "label": "How to count your stock",
+        "href": "/help/inventory/inventory-count"
+      }
     },
     "analytics": {
       "eyebrow": "Analytics",
@@ -138,7 +146,11 @@
         "Inventory value and potential margin",
         "Top products and store comparisons"
       ],
-      "alt": "Bazaar business dashboard with sales and margins"
+      "alt": "Bazaar business dashboard with sales and margins",
+      "guide": {
+        "label": "How to review sales results",
+        "href": "/help/reports/analytics-basics"
+      }
     }
   },
   "commerce": {
@@ -174,7 +186,7 @@
   },
   "footer": {
     "owner": "Platform owner",
-    "description": "A system for the modern store.",
+    "description": "BAZAAR (Базар) brings inventory management, POS and stock control together for shops in Kyrgyzstan.",
     "product": "Product",
     "solutions": "Solutions",
     "integrations": "Integrations",
@@ -273,6 +285,10 @@
     "eyebrow": "Questions and answers",
     "title": "Before you get started",
     "items": [
+      {
+        "question": "What is BAZAAR (Базар)?",
+        "answer": "BAZAAR, written as «Базар» in Cyrillic, is inventory management and retail automation software for shops in Kyrgyzstan. Products, sales and stock share one catalog. It also includes receiving, write-offs, transfers, stock counts, customers and analytics. The official website is bazaar.kg."
+      },
       {
         "question": "Do I need to install Bazaar?",
         "answer": "You can start in a regular browser. The interface adapts to computers, tablets and phones. On supported devices, you can add Bazaar to your home screen as a PWA."

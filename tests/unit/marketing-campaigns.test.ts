@@ -13,8 +13,48 @@ const observedMetaLabels = () => new URLSearchParams({
   utm_source: "instagram", utm_medium: "paid_social", utm_campaign: "bishkek_take6",
   utm_content: "take6_landing", utm_id: "52573740529697", utm_term: "52573740529897",
 });
+const observedSecondMetaLabels = () => new URLSearchParams({
+  utm_source: "instagram", utm_medium: "paid_social", utm_campaign: "kg_store_launch_202611",
+  utm_content: "ad02_ru", utm_id: "52574017478097", utm_term: "52574017478697",
+});
 
 describe("controlled GA4 campaign export", () => {
+  it("exports exactly the second advertisement's observed campaign/ad-set pair", () => {
+    expect(marketingCampaignOverrides(observedSecondMetaLabels())).toEqual({
+      campaign_source: "instagram", campaign_medium: "paid_social", campaign_name: "kg_store_launch_202611",
+      campaign_content: "ad02_ru", campaign_id: "52574017478097", campaign_term: "52574017478697",
+    });
+  });
+
+  it.each([
+    ["utm_id", "52574017478098"], ["utm_term", "52574017478698"],
+    ["utm_id", "52573740529697"], ["utm_term", "52573740529897"],
+    ["utm_id", "52574017479297"], ["utm_term", "52574017479297"],
+    ["utm_id", "private@example.invalid"], ["utm_term", "996700000000"],
+    ["utm_content", "ad01_ru"], ["utm_campaign", "bishkek_take6"],
+    ["utm_source", "facebook"], ["utm_medium", "organic_social"],
+  ])("does not export a wrong, mixed or mismatched second-ad identifier: %s=%s", (key, value) => {
+    const search = observedSecondMetaLabels();
+    search.set(key, value);
+    expect(marketingCampaignOverrides(search)).toEqual({});
+  });
+
+  it.each(["utm_id", "utm_term"])("requires the second-ad pair to include %s exactly once", key => {
+    const search = observedSecondMetaLabels();
+    search.delete(key);
+    expect(marketingCampaignOverrides(search)).toEqual({});
+    const duplicate = observedSecondMetaLabels();
+    duplicate.append(key, duplicate.get(key)!);
+    expect(marketingCampaignOverrides(duplicate)).toEqual({});
+  });
+
+  it("does not reuse the first advertisement's whole ID pair with second-ad labels", () => {
+    const search = observedSecondMetaLabels();
+    search.set("utm_id", "52573740529697");
+    search.set("utm_term", "52573740529897");
+    expect(marketingCampaignOverrides(search)).toEqual({});
+  });
+
   it("exports only the exact observed Meta campaign/ad-set pair from the registry", () => {
     expect(marketingCampaignOverrides(observedMetaLabels())).toEqual({
       campaign_source: "instagram", campaign_medium: "paid_social", campaign_name: "bishkek_take6",

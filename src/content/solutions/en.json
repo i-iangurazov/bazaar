@@ -1,0 +1,477 @@
+{
+  "ui": {
+    "home": "Home",
+    "solutions": "Solutions",
+    "indexTitle": "Inventory and store management",
+    "indexDescription": "Find a practical approach to inventory, POS, stock movements, groceries, and clothing. Explore BAZAAR workflows and step-by-step guides for daily store operations.",
+    "indexIntro": "Software is useful when it solves a clearly defined task. These pages explain everyday store workflows, from the first product record to reconciling stock and closing a shift.",
+    "primaryCta": "Start free",
+    "pricingLink": "Compare plans",
+    "demoLabel": "BAZAAR demonstration screen",
+    "workflowTitle": "How to get started",
+    "faqTitle": "Frequently asked questions",
+    "relatedTitle": "Other store workflows",
+    "guidesTitle": "Step-by-step guides",
+    "planNote": "Features, additional modules, and limits depend on your plan. See the plan comparison for the current terms of Новичок, Бизнесмен, and Монополист.",
+    "backToSolutions": "All solutions",
+    "breadcrumbLabel": "Breadcrumb navigation",
+    "contentsLabel": "On this page"
+  },
+  "pages": {
+    "inventory": {
+      "title": "Inventory management software for retail stores",
+      "metaTitle": "Store inventory and stock management in Kyrgyzstan | BAZAAR",
+      "description": "Manage products, prices, sales, and stock by store. Learn how to move your spreadsheet into BAZAAR and trace the movements behind each product's recorded quantity.",
+      "eyebrow": "Products and stock",
+      "intro": "BAZAAR connects a product record with its price and stock movements. Instead of maintaining several spreadsheets with different quantities, work from one catalog and investigate why stock changed. Start with one store, then introduce other available workflows when your team is ready.",
+      "sections": [
+        {
+          "title": "Make similar products easy to distinguish",
+          "body": "A clear name, photo, SKU, and barcode help staff select the right item when receiving or selling it. Variants distinguish different versions without combining their stock. Before importing the whole assortment, check a small sample and make sure staff can identify each item consistently.",
+          "items": [
+            "Another delivery of the same product usually needs another receipt of stock, not another product card.",
+            "Map spreadsheet columns and resolve preview errors before importing Excel or CSV data."
+          ]
+        },
+        {
+          "title": "Explain stock through its movements",
+          "body": "Receiving adds stock, a sale or write-off reduces it, and a transfer moves it between stores. A stock count compares records with physical goods. The movement journal helps reconstruct what happened instead of replacing an unexplained number with another number. Check the store and variant on every document.",
+          "items": [
+            "Record sales and damaged goods as different operations because they have different causes.",
+            "Investigate movements and recount the goods before confirming an adjustment for a discrepancy."
+          ]
+        },
+        {
+          "title": "Use quantities and sales for different decisions",
+          "body": "Stock answers what is recorded as available; a period report shows what sold and its product cost. Comparing periods of equal length helps you notice changes in demand. Reliable reporting starts with posted documents and accurate starting data, rather than with the appearance of a dashboard.",
+          "items": [
+            "Verify the store, reporting period, and unit before drawing a conclusion.",
+            "Revenue minus product cost is not the same as the business's overall net profit."
+          ]
+        }
+      ],
+      "workflow": [
+        {
+          "title": "Prepare the assortment",
+          "body": "Standardize names, units, and identifiers. Remove accidental duplicate rows from the source spreadsheet and keep the original file separately."
+        },
+        {
+          "title": "Add your catalog",
+          "body": "Create initial products manually or import a file. Check names, prices, and variants before bringing in the entire assortment."
+        },
+        {
+          "title": "Record verified opening stock",
+          "body": "Receive the checked quantity with its purchase cost. Compare a few products against the shelves and supporting documents."
+        },
+        {
+          "title": "Check the full chain",
+          "body": "After an actual sale, find its record and the resulting stock movement. Continue recording each movement when it happens."
+        }
+      ],
+      "faq": [
+        {
+          "question": "Can I bring products in from Excel?",
+          "answer": "Yes. Excel and CSV import includes column mapping and a preview. Check SKUs, barcodes, and invalid rows before running the import."
+        },
+        {
+          "question": "Do I need to enter the whole store immediately?",
+          "answer": "You can learn the setup with a small product group. Reliable total stock later requires the complete tracked assortment and a check against physical quantities."
+        },
+        {
+          "question": "Can I manage more than one store?",
+          "answer": "Yes, within the selected plan's limits. Stock is tracked by store, and staff receive access to the locations they work with."
+        }
+      ]
+    },
+    "pos": {
+      "title": "POS software for checkout and sales records",
+      "metaTitle": "Retail POS and sales management software in Bishkek | BAZAAR",
+      "description": "Explore BAZAAR POS: products, payments, shifts, held sales, and returns. Understand how checkout connects to stock and the current limits of fiscal integration.",
+      "eyebrow": "Checkout / POS",
+      "intro": "BAZAAR POS is a software workspace for building a cart, recording a sale, and updating inventory. Fiscalization is not currently connected. BAZAAR does not replace a legally required fiscal register or promise submission of fiscal receipts to the tax authority. This page describes internal sales records.",
+      "sections": [
+        {
+          "title": "From selecting a product to completing a sale",
+          "body": "The cashier finds a product, checks its variant, quantity, and price, then chooses a payment method. A completed sale connects the sales amount to a stock deduction. Adding an item to a cart alone is not a sale. Review the complete basket before confirmation, particularly similar names and variants.",
+          "items": [
+            "Check the final amount after a discount before completing the transaction.",
+            "Recording a payment method does not itself confirm that the bank received the money."
+          ]
+        },
+        {
+          "title": "Keep the cart when a customer comes back later",
+          "body": "Hold a cart to serve the next customer without rebuilding the previous basket. A held sale preserves its items without deducting stock yet. When the customer returns, reopen the cart, review the current details, and complete it once. This keeps an unfinished draft distinct from an actual sale.",
+          "items": [
+            "Match a held cart by time, cashier, note, and total.",
+            "For a return, find the original completed sale and select only the goods actually returned."
+          ]
+        },
+        {
+          "title": "Finish the shift with a reconciliation",
+          "body": "At the beginning of work, select the store and register, open a shift, and enter the opening cash. At closing, compare recorded amounts with the actual drawer. Resolve active sales and return drafts first. This routine helps investigate a discrepancy on the day it happened.",
+          "items": [
+            "The cashier's assigned role and store access determine which work is available.",
+            "Reconcile physical cash separately from non-cash payment methods."
+          ]
+        }
+      ],
+      "workflow": [
+        {
+          "title": "Set up the workspace",
+          "body": "Choose the store, available products, and prices. Assign the appropriate staff role and verify access to the correct location."
+        },
+        {
+          "title": "Open the shift",
+          "body": "Choose the register and enter the opening cash amount. Check the active store and shift before serving customers."
+        },
+        {
+          "title": "Record the sale",
+          "body": "Add products, review variants and the total, and confirm payment only after the customer has actually paid."
+        },
+        {
+          "title": "Review the result",
+          "body": "Find the completed sale in history, check the stock change, and reconcile the shift. Link returns to the original sale."
+        }
+      ],
+      "faq": [
+        {
+          "question": "Is this a ready-to-use fiscal online register?",
+          "answer": "No. BAZAAR currently provides POS sales management without a connected fiscal provider. Arrangements for a mandatory fiscal register must be handled separately."
+        },
+        {
+          "question": "Can one sale be paid partly in cash and partly by card?",
+          "answer": "POS supports multiple payment methods for one sale. Check the available methods, both amounts, and actual receipt of payment before confirming."
+        },
+        {
+          "question": "Can I use POS on a phone?",
+          "answer": "The POS interface is available in a mobile browser. Check usability and any equipment on your device beforehand. Fully independent operation without internet is not promised here."
+        }
+      ]
+    },
+    "warehouse": {
+      "title": "Stock control for receiving, transfers, and counts",
+      "metaTitle": "Retail stock control and inventory counts in Kyrgyzstan | BAZAAR",
+      "description": "Record receiving, transfers, write-offs, and stock counts in BAZAAR. Trace a store's quantities through documents and reconcile physical stock without losing history.",
+      "eyebrow": "Stock movements",
+      "intro": "Stock control matters beyond a large warehouse. A small shop also needs to know what arrived, what was transferred, what was written off, and why the shelf count differs. BAZAAR separates these events into documents and preserves the movement history behind the quantities.",
+      "sections": [
+        {
+          "title": "Receiving records what actually arrived",
+          "body": "Choose the store, product, and variant, then enter the received quantity and purchase cost. Compare the delivery with the supplier's documents before posting it. If the package differs from the base unit, check the conversion first: a box and an individual item must not accidentally mean the same quantity.",
+          "items": [
+            "Do not copy the delivery note's quantity when fewer goods physically arrived.",
+            "After posting, check the new stock quantity and the corresponding journal entry."
+          ]
+        },
+        {
+          "title": "Moving stock between stores is its own operation",
+          "body": "A transfer decreases the source store's stock and increases the destination's. It is not another purchase and should not be repeated as a manual receipt. Select different stores and the same product record. If the destination has a restricted assortment, check that the selected products are available to it.",
+          "items": [
+            "Verify the variant and quantity being moved, rather than matching the name alone.",
+            "Products with similar names are not automatically merged; establish which record should be used."
+          ]
+        },
+        {
+          "title": "A count exposes a difference rather than hiding it",
+          "body": "A stock count compares recorded and physical quantities. Review omitted items and large differences before applying the result. Confirmation creates adjustments while retaining original movements. When a known event caused a loss, such as damage, a write-off gives the journal a clearer explanation of what happened.",
+          "items": [
+            "Agree on a counting time: sales made during counting can change physical quantities.",
+            "If connectivity fails, check the document's state before creating or repeating an operation."
+          ]
+        }
+      ],
+      "workflow": [
+        {
+          "title": "Define the scope",
+          "body": "Identify the stores and responsible staff. Check who can receive, transfer, write off, and confirm inventory documents."
+        },
+        {
+          "title": "Receive the delivery",
+          "body": "Verify actual quantities, base units, and purchase cost. Post the document after reviewing its lines and totals."
+        },
+        {
+          "title": "Record later movements",
+          "body": "Use transfers between stores and write-offs for damage or loss. Give each event an understandable operational reason."
+        },
+        {
+          "title": "Reconcile the stock",
+          "body": "Count one selected store, investigate differences, and apply only verified results. Find the resulting adjustments in history."
+        }
+      ],
+      "faq": [
+        {
+          "question": "How is a write-off different from a stock count?",
+          "answer": "A write-off records a known reduction, such as damaged goods. A count compares physical and recorded quantities and helps identify unexplained discrepancies."
+        },
+        {
+          "question": "Should transferred goods be received again manually?",
+          "answer": "No. A posted transfer changes stock at both locations. An additional manual receipt would overstate the destination's quantity."
+        },
+        {
+          "question": "Can I investigate why a quantity changed?",
+          "answer": "Yes, use the movement journal. Verify the store, product, variant, and time period, then inspect the related documents."
+        }
+      ]
+    },
+    "retail": {
+      "title": "How to start managing a store with software",
+      "metaTitle": "Retail store management software in Bishkek and Kyrgyzstan | BAZAAR",
+      "description": "Introduce store software in a practical order: catalog, verified stock, checkout, and staff access. Start BAZAAR with one complete workflow before adding more modules.",
+      "eyebrow": "Putting store operations in order",
+      "intro": "Introducing store software starts with a clear way of working. If product names, stock quantities, and staff responsibilities are unsettled, software simply brings that confusion onto a screen. BAZAAR connects catalog, receiving, sales, stock control, and reporting, with additional workflows introduced when they solve an actual need.",
+      "sections": [
+        {
+          "title": "Start with one complete workflow",
+          "body": "For the first stage, choose a store, a checked assortment, and someone responsible for the change. Decide who creates products, receives deliveries, and records sales. Follow one product from receiving to a completed sale. Bring in the full dataset after testing that path rather than before it.",
+          "items": [
+            "Set a transition date and retain the original spreadsheets separately.",
+            "Explain which records are authoritative so the team does not maintain conflicting stock totals."
+          ]
+        },
+        {
+          "title": "Separate daily tasks from oversight",
+          "body": "A cashier needs their store's products and sales; a stockkeeper needs movements; an owner needs results and team access. Assigned roles and stores help organize this work. When adding another location, recheck the assortment and permissions. When responsibilities change, review the previous employee's access too.",
+          "items": [
+            "Reconcile sales, product stock, and cash as connected but different measures.",
+            "Compare reports for equivalent periods and inspect source documents when figures disagree."
+          ]
+        },
+        {
+          "title": "Expand after the core routine works",
+          "body": "Once everyday records are reliable, consider orders, customers, the online catalog, BAAM, and available integrations. These are separate workflows with their own setup, conditions, and limits. For example, a marketplace export requires prepared product records and seller access to that platform. Not every feature is included in every plan.",
+          "items": [
+            "Choose the next module for a specific recurring task, not the length of a feature list.",
+            "Check plan limits before adding more stores or employees."
+          ]
+        }
+      ],
+      "workflow": [
+        {
+          "title": "Map the current routine",
+          "body": "List where products, sales, and stock are recorded today. Identify duplicate entry and appoint someone responsible for the transition."
+        },
+        {
+          "title": "Prepare one store",
+          "body": "Check the catalog and physical quantities. Add employees with the appropriate roles and access to that location."
+        },
+        {
+          "title": "Complete an operating cycle",
+          "body": "Record receiving, an actual sale, and a reconciliation. Give the team one consistent sequence of actions to follow."
+        },
+        {
+          "title": "Add the next task",
+          "body": "When daily records are dependable, introduce more locations and modules, checking each workflow's setup and plan conditions."
+        }
+      ],
+      "faq": [
+        {
+          "question": "Do all modules need to be enabled immediately?",
+          "answer": "No. Establish products, receiving, and sales first. Additional features become useful when the task, responsible employee, and way to verify the outcome are clear."
+        },
+        {
+          "question": "How should I choose a plan?",
+          "answer": "Compare the number of stores, products, users, and the modules you need. Current prices, limits, and feature availability are shown on this page. Use the plan comparison link for the complete terms and optional add-ons."
+        },
+        {
+          "question": "Does software remove the need to train staff?",
+          "answer": "No. The team still needs a shared process for receiving, sales, returns, and reconciliation. BAZAAR's help guides explain these actions step by step."
+        }
+      ]
+    },
+    "grocery": {
+      "title": "Inventory management for a grocery store",
+      "metaTitle": "Grocery store inventory and sales software | BAZAAR Kyrgyzstan",
+      "description": "Organize grocery products, deliveries, sales, and write-offs. Distinguish package sizes and use BAZAAR movements to check recorded stock against the shelves.",
+      "eyebrow": "Grocery retail",
+      "intro": "Similar product names, different packages, and frequent deliveries can quickly make grocery records confusing. BAZAAR helps distinguish catalog items and connect receiving, sales, and write-offs. The system shows recorded availability; staff still need to check the physical goods and their condition.",
+      "sections": [
+        {
+          "title": "Do not mix different packages",
+          "body": "Milk in different volumes or biscuits from different manufacturers are distinct items even when they share a shelf. Give each a clear name, unit, and barcode. Before importing the catalog, check that a row describes one product or variant rather than a group with several prices.",
+          "items": [
+            "Include volume or package size in the name when leaving it out could cause mistakes.",
+            "Check the base unit: one delivered box is not necessarily one sellable item."
+          ]
+        },
+        {
+          "title": "Check a delivery before posting it",
+          "body": "Receiving should reflect the goods actually accepted and their purchase cost. If fewer goods arrive than the delivery note states, resolve the difference first. After posting, check several quantities. A selling-price change, a delivery quantity, and purchase cost are different fields and should be reviewed separately.",
+          "items": [
+            "Compare products, packages, and quantities, not just the delivery's total value.",
+            "Use write-offs for spoilage and loss so they do not appear as customer sales."
+          ]
+        },
+        {
+          "title": "Combine stock records with a regular physical check",
+          "body": "Sales data helps explain how the assortment moved during a selected period. A count exposes differences between records and shelves, while the journal shows receiving and deductions. Start with products where a discrepancy has appeared. Assess demand using quantities, availability, and write-offs together rather than revenue alone.",
+          "items": [
+            "Follow the store's own procedure for physically checking product condition and expiry dates.",
+            "In the current plan lineup, lot and expiry tracking is available in Монополист when enabled for the store; scale integration is not promised here."
+          ]
+        }
+      ],
+      "workflow": [
+        {
+          "title": "Organize the assortment",
+          "body": "Distinguish similar goods by manufacturer, volume, and packaging. Check names, units, and barcodes before importing the data."
+        },
+        {
+          "title": "Verify opening quantities",
+          "body": "Count the goods and record checked quantities through receiving. Do not transfer unexplained figures from an old spreadsheet."
+        },
+        {
+          "title": "Connect checkout to stock",
+          "body": "Record completed sales in POS and verify selected items. Use the appropriate inventory documents for damage, losses, and transfers."
+        },
+        {
+          "title": "Establish a counting routine",
+          "body": "Choose a frequency and responsible employee. Investigate differences before applying adjustments, then compare the journal with the shelves."
+        }
+      ],
+      "faq": [
+        {
+          "question": "Can a small grocery shop use BAZAAR?",
+          "answer": "The core catalog, receiving, sales, and stock workflows can be used for one location. Available features and limits depend on the selected plan."
+        },
+        {
+          "question": "Can expiry dates be tracked?",
+          "answer": "Монополист includes lot and expiry tracking when enabled for the store. It requires entered dates and does not replace physical inspections. Record identified spoilage as a write-off."
+        },
+        {
+          "question": "Can groceries be sold through BAZAAR POS?",
+          "answer": "POS records sales and their stock changes. Fiscalization is not connected, so a mandatory fiscal register and equipment compatibility must be considered separately."
+        }
+      ]
+    },
+    "clothing": {
+      "title": "Inventory management for a clothing store",
+      "metaTitle": "Clothing sizes, variants, and store inventory | BAZAAR Kyrgyzstan",
+      "description": "Build a clothing catalog with size and color variants. Track receiving, sales, returns, and quantities by store in BAZAAR without combining different versions.",
+      "eyebrow": "Clothing and variants",
+      "intro": "A style's total quantity is not enough when a customer needs a particular size and color. In BAZAAR, products can have variants with their own attributes and SKU. Receiving, selling, and checking stock by the selected variant prevents a style's total from concealing a missing size.",
+      "sections": [
+        {
+          "title": "A product and a variant answer different questions",
+          "body": "The product record describes the item; a variant identifies a particular version, such as a black T-shirt in size M. Agree on attribute names and values first. Inconsistent spelling makes searching and preparing the assortment harder. Start with a few styles and check how staff select them at checkout.",
+          "items": [
+            "Use a consistent order for style, color, and size rather than changing it with each delivery.",
+            "Review SKUs and barcodes during import to avoid creating accidental duplicates."
+          ]
+        },
+        {
+          "title": "Record the specific version that moves",
+          "body": "Receive and sell the actual variant in front of the employee. Two blue items and one black item cannot be accurately described by a total of three alone. A transfer should preserve the selected variant, and a return should remain linked to the original completed sale.",
+          "items": [
+            "Match supplier labels to the selected size and color during receiving.",
+            "Before sending goods to another store, check its assortment and access to the right product record."
+          ]
+        },
+        {
+          "title": "Review sales alongside the sizes still available",
+          "body": "A period report helps assess the assortment, but purchasing decisions also need a look at physical stock. Low sales can mean the required version was unavailable rather than that nobody wanted the style. This is a hypothesis to investigate, not an automatic conclusion made by the software.",
+          "items": [
+            "Count by variant, particularly after returns and transfers.",
+            "Photos help distinguish styles, but a general image does not replace accurate attributes."
+          ]
+        }
+      ],
+      "workflow": [
+        {
+          "title": "Define the catalog structure",
+          "body": "Decide what constitutes a style and which attributes create variants. Use consistent size and color values across the assortment."
+        },
+        {
+          "title": "Add products and variants",
+          "body": "Enter names, photos, and identifiers. When importing, inspect a few rows and the final preview before proceeding."
+        },
+        {
+          "title": "Record quantities by location",
+          "body": "Verify each version's physical quantity and receive it into the correct store. Check the result before beginning sales."
+        },
+        {
+          "title": "Check the daily routine",
+          "body": "Choose the actual variant at checkout. Create returns from the original sale and use transfers to move goods between locations."
+        }
+      ],
+      "faq": [
+        {
+          "question": "Can sizes and colors have separate stock records?",
+          "answer": "Yes. Product variants support attributes such as size and color and their own SKU. Select the variant throughout the related operations to keep quantities accurate."
+        },
+        {
+          "question": "How should a clothing return be recorded?",
+          "answer": "Find the original completed POS sale and choose the goods and quantity actually returned. Verify the variant, refund method, and amount before confirming."
+        },
+        {
+          "question": "Can staff check another store's stock?",
+          "answer": "Stock is tracked by location and shown according to staff permissions. Multi-store operation depends on the plan and the stores assigned to the user."
+        }
+      ]
+    },
+    "store-guide": {
+      "title": "How to keep store records: a practical routine",
+      "metaTitle": "How to keep store inventory records: a practical guide | BAZAAR",
+      "description": "A practical guide to starting store records and checking them each day: products, opening stock, deliveries, sales, returns, cash, and inventory reconciliation.",
+      "eyebrow": "Practical guide",
+      "intro": "Store records are a sequence of facts: goods arrived, sold, came back, moved, or were written off. Their purpose is to explain quantities and operating results. Use this routine to organize records in software and identify which starting data needs attention first.",
+      "sections": [
+        {
+          "title": "Establish a reliable starting point",
+          "body": "Choose a start date and appoint people responsible for products, sales, and reconciliation. Keep old spreadsheets and documents as an opening archive. Prepare a consistent catalog with names, units, SKUs or barcodes, prices, and variants where needed. Then count physical stock. Unverified opening figures will keep producing discrepancies later.",
+          "items": [
+            "Keep purchase cost and selling price as different measures rather than substituting one for the other.",
+            "Maintain each location's stock separately even when the product catalog is shared."
+          ]
+        },
+        {
+          "title": "Record the event, not a convenient final number",
+          "body": "Check a delivery against physical goods before receiving it. Complete a sale after the customer actually pays. Link returns to their original sales and transfers to both stores. Record damaged goods as write-offs with a clear reason. Adjusting quantities to match the shelf without reviewing history hides the cause of mistakes.",
+          "items": [
+            "After a connection failure, establish whether a document posted before repeating the action.",
+            "Verify the date, store, product, variant, quantity, and amount before confirming a document."
+          ]
+        },
+        {
+          "title": "Reconcile goods and money regularly",
+          "body": "At the end of the day, resolve unfinished sales and returns. Compare cash with shift records and non-cash receipts with the relevant payment records. Arrange regular stock counts. When quantities differ, review deliveries, returns, write-offs, and transfers for the same period before confirming an adjustment to physical stock.",
+          "items": [
+            "Revenue is the value of sales; revenue less product cost is still not overall net profit.",
+            "Compare equivalent periods and locations to avoid explaining an apparent change incorrectly."
+          ]
+        }
+      ],
+      "workflow": [
+        {
+          "title": "Before opening",
+          "body": "Check the active store, prices, staff access, and selected stock quantities. If using POS, open the correct shift and enter the opening cash."
+        },
+        {
+          "title": "During the day",
+          "body": "Receive actual deliveries and record completed sales. Handle returns, damage, and transfers separately instead of keeping them in memory until the end of the week."
+        },
+        {
+          "title": "Before closing",
+          "body": "Resolve active drafts, count the money, and review sales history. Record any discrepancies and who will investigate them."
+        },
+        {
+          "title": "On counting day",
+          "body": "Agree on the counting time and count by item and variant. Check omitted goods and large differences, then apply the verified result."
+        }
+      ],
+      "faq": [
+        {
+          "question": "Where should I start if I only used a notebook?",
+          "answer": "Begin with a consistent catalog and a physical count on an agreed date. Decide who records each movement and when. Unverified historical records do not need to be imported immediately."
+        },
+        {
+          "question": "How often should a store count its stock?",
+          "answer": "Choose a frequency based on turnover and the risk of mistakes. Selected product groups can be checked between full counts. Consistency and investigating causes matter more than a formal date."
+        },
+        {
+          "question": "Which figures should an owner review?",
+          "answer": "Completed sales, returns, shift cash, stock quantities, and write-offs. Add product cost and margin when assessing results, and consider business expenses separately from the cost of goods."
+        }
+      ]
+    }
+  }
+}

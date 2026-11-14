@@ -2,8 +2,28 @@ import type { MetadataRoute } from "next";
 
 import { helpCategories, helpGuides } from "@/content/help/catalog";
 import { marketingCanonicalHomes, marketingLanguageAlternates } from "@/lib/marketingSeo";
+import { locales } from "@/lib/locales";
+import {
+  marketingSolutionPath,
+  marketingSolutionsLanguageAlternates,
+  solutionPages,
+} from "@/lib/marketingSolutions";
 
 const sitemap = (): MetadataRoute.Sitemap => [
+  ...locales.flatMap((locale) => [
+    {
+      url: `https://www.bazaar.kg${marketingSolutionPath(locale)}`,
+      changeFrequency: "monthly" as const,
+      priority: 0.8,
+      alternates: { languages: marketingSolutionsLanguageAlternates() },
+    },
+    ...solutionPages.map(({ id }) => ({
+      url: `https://www.bazaar.kg${marketingSolutionPath(locale, id)}`,
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+      alternates: { languages: marketingSolutionsLanguageAlternates(id) },
+    })),
+  ]),
   ...marketingCanonicalHomes.map(({ url }) => ({
     url,
     changeFrequency: "weekly" as const,

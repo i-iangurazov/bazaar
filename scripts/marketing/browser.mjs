@@ -283,10 +283,25 @@ try {
           ),
         "Brand images load",
       );
-      const structured = JSON.parse(
+      const structuredDocument = JSON.parse(
         await page.locator('script[type="application/ld+json"]').textContent(),
       );
-      assert.equal(structured["@type"], "SoftwareApplication");
+      assert.equal(structuredDocument["@context"], "https://schema.org");
+      assert(Array.isArray(structuredDocument["@graph"]), "Linked public identity graph is present");
+      const structured = structuredDocument["@graph"].find(
+        (node) => node["@type"] === "SoftwareApplication",
+      );
+      const website = structuredDocument["@graph"].find((node) => node["@type"] === "WebSite");
+      const organization = structuredDocument["@graph"].find(
+        (node) => node["@type"] === "Organization",
+      );
+      assert(structured && website && organization, "Application, website and publisher are present");
+      assert.equal(structured.name, "BAZAAR");
+      assert.equal(website.name, "BAZAAR");
+      assert.equal(organization.name, "BAZAAR");
+      assert(website.alternateName.includes("Базар"));
+      assert.equal(structured.publisher["@id"], organization["@id"]);
+      assert.equal(website.publisher["@id"], organization["@id"]);
       assert.deepEqual(
         structured.offers.map((offer) => offer.price),
         // Approved public catalog 2026-11; existing contracts retain their own prices.

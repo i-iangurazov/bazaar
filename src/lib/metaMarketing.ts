@@ -6,6 +6,7 @@ const consentKey = "bazaar_meta_measurement_consent_v1";
 const consentLifetime = 180 * 24 * 60 * 60 * 1000;
 const scriptId = "bazaar-meta-measurement";
 const signupDeadline = 1000;
+const publicLandingFragments = ["#platform", "#pos", "#inventory", "#commerce", "#analytics", "#mobile", "#pricing"];
 type Choice = "granted" | "denied";
 type Pixel = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
@@ -69,7 +70,11 @@ export function writeMetaConsent(choice: Choice) {
 // Pixel collects document.location/referrer itself. Never pretend that a custom
 // event property overrides those fields. Reject unsafe contexts before loading.
 function safePublicUrl(url: URL) {
-  if (url.username || url.password || url.hash || !publicMarketingPage(url.pathname)) return false;
+  if (url.username || url.password || !publicMarketingPage(url.pathname)) return false;
+  // These literal anchors are linked by the landing itself, not visitor data.
+  // Never accept arbitrary fragments or carry this exception into signup/privacy.
+  if (url.hash && (!["/", "/ru", "/kg", "/en"].includes(url.pathname) ||
+    !publicLandingFragments.includes(url.hash))) return false;
   const search = url.searchParams;
   const campaignFields = {
     utm_source: "campaign_source", utm_medium: "campaign_medium", utm_campaign: "campaign_name",

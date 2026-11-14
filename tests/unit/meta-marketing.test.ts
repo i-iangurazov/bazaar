@@ -11,6 +11,7 @@ type Pixel = ((...args: unknown[]) => void) & { queue: unknown[][]; callMethod?:
 type PixelWindow = Window & { fbq?: Pixel; _fbq?: Pixel };
 const pixelId = "1635457884748007";
 const observedMetaQuery = "utm_source=instagram&utm_medium=paid_social&utm_campaign=bishkek_take6&utm_content=take6_landing&utm_id=52573740529697&utm_term=52573740529897";
+const observedSecondMetaQuery = "utm_source=instagram&utm_medium=paid_social&utm_campaign=kg_store_launch_202611&utm_content=ad02_ru&utm_id=52574017478097&utm_term=52574017478697";
 const script = () => document.getElementById("bazaar-meta-measurement") as HTMLScriptElement | null;
 const browser = () => window as PixelWindow;
 function sdkLoaded() {
@@ -147,9 +148,13 @@ describe("separate consented Meta registration measurement", () => {
     expect(script()).not.toBeNull();
   });
 
-  it.each(["", "&fbclid=Valid-Meta_Click123"])("measures the observed Instagram landing only after consent, then one new-account conversion: %s", async click => {
+  it.each([
+    ["first", observedMetaQuery], ["second", observedSecondMetaQuery],
+  ].flatMap(([name, query]) => ["", "#platform"].flatMap(fragment =>
+    ["", "&fbclid=Valid-Meta_Click123"].map(click => [name, fragment, click, query] as const),
+  )))("measures the %s observed Instagram landing%s%s only after consent, then one new-account conversion", async (_name, fragment, click, query) => {
     vi.useFakeTimers();
-    window.history.replaceState({}, "", `/ru?${observedMetaQuery}${click}`);
+    window.history.replaceState({}, "", `/ru?${query}${click}${fragment}`);
     Object.defineProperty(document, "referrer", { configurable: true, value: "https://instagram.com/" });
     const meta = await import("@/lib/metaMarketing");
     expect(meta.safeMetaContext()).toBe(true);
@@ -169,14 +174,143 @@ describe("separate consented Meta registration measurement", () => {
     ]);
   });
 
-  it("accepts the observed landing as the same-origin referrer of a fresh signup document", async () => {
+  it.each([
+    ["first", observedMetaQuery], ["second", observedSecondMetaQuery],
+  ].flatMap(([name, query]) =>
+    ["", "#platform", "#pos", "#inventory", "#commerce", "#analytics", "#mobile", "#pricing"].map(fragment => [name, fragment, query] as const),
+  ))("accepts the %s observed landing%s as a fresh signup document's same-origin referrer", async (_name, fragment, query) => {
     const dispatchEvent = window.dispatchEvent.bind(window);
     vi.stubGlobal("window", { location: new URL("https://www.bazaar.kg/signup"), dispatchEvent });
-    Object.defineProperty(document, "referrer", { configurable: true, value: `https://www.bazaar.kg/ru?${observedMetaQuery}&fbclid=Valid-Meta_Click123` });
+    Object.defineProperty(document, "referrer", { configurable: true, value: `https://www.bazaar.kg/ru?${query}&fbclid=Valid-Meta_Click123${fragment}` });
     const meta = await import("@/lib/metaMarketing");
     expect(meta.safeMetaContext()).toBe(true);
     meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/signup");
     expect(script()).not.toBeNull();
+  });
+
+  it.each([
+    ["utm_id", "52574017478098"], ["utm_term", "52574017478698"],
+    ["utm_id", "52573740529697"], ["utm_term", "52573740529897"],
+    ["utm_id", "52574017479297"], ["utm_term", "52574017479297"],
+    ["utm_content", "ad01_ru"], ["utm_campaign", "bishkek_take6"],
+  ])("blocks a wrong or mixed second-ad ID combination even with a public anchor: %s=%s", async (key, value) => {
+    const search = new URLSearchParams(observedSecondMetaQuery);
+    search.set(key, value);
+    window.history.replaceState({}, "", `/ru?${search}&fbclid=Valid-Meta_Click123#platform`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(meta.safeMetaContext()).toBe(false);
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+  });
+
+  it.each(["utm_id", "utm_term"])("blocks missing or duplicate second-ad %s", async key => {
+    const search = new URLSearchParams(observedSecondMetaQuery);
+    search.delete(key);
+    window.history.replaceState({}, "", `/ru?${search}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+    const duplicate = new URLSearchParams(observedSecondMetaQuery);
+    duplicate.append(key, duplicate.get(key)!);
+    window.history.replaceState({}, "", `/ru?${duplicate}`);
+    expect(meta.safeMetaContext()).toBe(false);
+  });
+
+  it.each(["/", "/ru", "/kg", "/en"].flatMap(path =>
+    ["#platform", "#pos", "#inventory", "#commerce", "#analytics", "#mobile", "#pricing"].map(fragment => [path, fragment] as const),
+  ))("allows the landing's literal anchor after consent on %s%s", async (path, fragment) => {
+    window.history.replaceState({}, "", `${path}?${observedMetaQuery}${fragment}`);
+    const meta = await import("@/lib/metaMarketing");
+    expect(meta.safeMetaContext()).toBe(true);
+    meta.synchronizeMetaMeasurement(path);
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement(path);
+    const send = sdkLoaded();
+    expect(send.mock.calls).toEqual([["trackSingle", pixelId, "PageView"]]);
+  });
+
+  it("allows opening the hero's platform anchor before choosing Meta consent", async () => {
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.synchronizeMetaMeasurement("/ru");
+    window.history.pushState({}, "", `#platform`);
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    const send = sdkLoaded();
+    expect(send.mock.calls).toEqual([["trackSingle", pixelId, "PageView"]]);
+  });
+
+  it("sends the first PageView when the platform anchor opens while the consented SDK is loading", async () => {
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    window.history.pushState({}, "", "#platform");
+    const send = sdkLoaded();
+    meta.synchronizeMetaMeasurement("/ru");
+    expect(send.mock.calls).toEqual([["trackSingle", pixelId, "PageView"]]);
+  });
+
+  it("preserves a consented landing through its anchor and signup without another landing view or forced reload", async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    const send = sdkLoaded();
+    const reload = vi.fn();
+    window.history.pushState({}, "", "#platform");
+    meta.synchronizeMetaMeasurement("/ru", reload);
+    window.history.pushState({}, "", "/signup");
+    meta.synchronizeMetaMeasurement("/signup", reload);
+    const measurement = meta.trackMetaSignupBeforeNavigation();
+    await meta.trackMetaSignupBeforeNavigation();
+    await vi.advanceTimersByTimeAsync(150); await measurement;
+    expect(reload).not.toHaveBeenCalled();
+    expect(send.mock.calls).toEqual([
+      ["trackSingle", pixelId, "PageView"], ["trackSingle", pixelId, "PageView"],
+      ["trackSingle", pixelId, "CompleteRegistration"],
+    ]);
+  });
+
+  it.each([
+    "/ru#private-fragment", "/ru#platform-secret", "/ru#platform?email=private@example.invalid",
+    "/ru#Platform", "/ru#%70latform", "/ru#platform/extra", "/ru#platform#private",
+    "/ru#platform&email=private", "/ru#platform%0Aprivatedata",
+    "/signup#platform", "/privacy#pricing", "/products#platform", "/register-business/private-token#platform",
+  ])("keeps unreviewed or non-landing fragments blocked: %s", async candidate => {
+    const url = new URL(candidate, window.location.origin);
+    url.search = observedMetaQuery;
+    window.history.replaceState({}, "", url.href);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement(url.pathname);
+    expect(meta.safeMetaContext()).toBe(false);
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
+  });
+
+  it("still withdraws for an unknown fragment and requires a fresh document after returning to an approved anchor", async () => {
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}#platform`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    const send = sdkLoaded();
+    const reload = vi.fn();
+    window.history.pushState({}, "", "#private-fragment");
+    meta.synchronizeMetaMeasurement("/ru", reload);
+    expect(script()).toBeNull();
+    expect(send.mock.calls.at(-1)).toEqual(["consent", "revoke"]);
+    window.history.pushState({}, "", "#platform");
+    meta.synchronizeMetaMeasurement("/ru", reload);
+    expect(reload).toHaveBeenCalledExactlyOnceWith(window.location.href);
+    expect(script()).toBeNull();
+    expect(send.mock.calls.filter(call => call[2] === "PageView")).toHaveLength(1);
+  });
+
+  it.each([
+    "email=private%40example.invalid", "fbclid=a&fbclid=b",
+    "utm_id=52573740529698", "utm_term=52573740529898",
+  ])("does not use an approved anchor to bypass unsafe query fields: %s", async extra => {
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}&${extra}#platform`);
+    const meta = await import("@/lib/metaMarketing");
+    meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
+    expect(script()).toBeNull(); expect(browser().fbq).toBeUndefined();
   });
 
   it.each([
@@ -224,7 +358,7 @@ describe("separate consented Meta registration measurement", () => {
   });
 
   it.each(["globalPrivacyControl", "doNotTrack"])("honors %s on the observed paid landing", async key => {
-    window.history.replaceState({}, "", `/ru?${observedMetaQuery}`);
+    window.history.replaceState({}, "", `/ru?${observedMetaQuery}#platform`);
     Object.defineProperty(navigator, key, { configurable: true, value: key === "doNotTrack" ? "1" : true });
     const meta = await import("@/lib/metaMarketing");
     meta.writeMetaConsent("granted"); meta.synchronizeMetaMeasurement("/ru");
@@ -234,6 +368,7 @@ describe("separate consented Meta registration measurement", () => {
   it.each([
     "http://localhost:3000/register-business/private-token", "https://l.instagram.com/?u=private",
     "https://unreviewed.invalid/", "https://www.instagram.com/private-profile/",
+    "https://instagram.com/#platform", "http://localhost:3000/ru#private-fragment",
   ])("never exposes a private or unreviewed referrer: %s", async referrer => {
     Object.defineProperty(document, "referrer", { configurable: true, value: referrer });
     const meta = await import("@/lib/metaMarketing");

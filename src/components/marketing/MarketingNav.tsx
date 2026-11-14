@@ -8,12 +8,23 @@ import type { MarketingCopy } from "@/content/marketing";
 
 import styles from "./marketing.module.css";
 
-export const MarketingNav = ({ copy }: { copy: MarketingCopy["nav"] }) => {
+export const MarketingNav = ({
+  copy,
+  homeHref = "/",
+  landingHref = "",
+  solutionsLink,
+}: {
+  copy: MarketingCopy["nav"];
+  homeHref?: string;
+  landingHref?: string;
+  solutionsLink?: { href: string; label: string };
+}) => {
   const links = [
-    { href: "#platform", label: copy.product },
-    { href: "#pos", label: copy.features },
-    { href: "#commerce", label: copy.integrations },
-    { href: "#pricing", label: copy.pricing },
+    { href: `${landingHref}#platform`, label: copy.product },
+    { href: `${landingHref}#pos`, label: copy.features },
+    { href: `${landingHref}#commerce`, label: copy.integrations },
+    ...(solutionsLink ? [solutionsLink] : []),
+    { href: `${landingHref}#pricing`, label: copy.pricing },
   ];
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -149,7 +160,7 @@ export const MarketingNav = ({ copy }: { copy: MarketingCopy["nav"] }) => {
       >
         <div className={styles.navInner}>
           <Link
-            href="/"
+            href={homeHref}
             className={styles.brand}
             aria-label={copy.home}
             onClick={() => setOpen(false)}
@@ -193,8 +204,10 @@ export const MarketingNav = ({ copy }: { copy: MarketingCopy["nav"] }) => {
                 key={link.href}
                 href={link.href}
                 onClick={(event) => {
-                  event.preventDefault();
-                  anchorRef.current = link.href.slice(1);
+                  if (link.href.startsWith("#")) {
+                    event.preventDefault();
+                    anchorRef.current = link.href.slice(1);
+                  }
                   setOpen(false);
                 }}
               >
