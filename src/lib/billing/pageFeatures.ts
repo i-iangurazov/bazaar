@@ -10,6 +10,7 @@ const pages: Array<[string, PlanFeature]> = [
   ["/reports/analytics", "analytics"],
   ["/reports/exports", "exports"],
   ["/operations/integrations/product-image-studio", "imageStudio"],
+  ["/operations/integrations/china-image-search", "marketplaces"],
   ["/operations/integrations/email-marketing", "emailMarketing"],
   ["/operations/integrations/bazaar-catalog", "bazaarCatalog"],
   ["/operations/integrations/bazaar-api", "bazaarApi"],

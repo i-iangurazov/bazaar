@@ -60,6 +60,9 @@ describe.each(["ru", "kg", "en"] as const)("mobile context titles in %s", (local
     expect(getMobilePageTitle("/dev/scanner-test", translate)).toBe(messages.scannerTest.title);
     expect(getMobilePageTitle("/inventory/counts/example", translate)).toBe(messages.nav.inventory);
     expect(getMobilePageTitle("/settings/printing", translate)).toBe(messages.nav.printing);
+    expect(getMobilePageTitle("/operations/integrations/china-image-search", translate)).toBe(
+      messages.breadcrumbs.chinaImageSearch,
+    );
     expect(getMobilePageTitle("/purchase-orders/example", translate)).toBe(
       messages.nav.purchaseOrders,
     );

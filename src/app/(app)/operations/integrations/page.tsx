@@ -113,6 +113,7 @@ const resolveAbsoluteCatalogUrl = (publicUrlPath: string) => {
 const IntegrationsPage = () => {
   const t = useTranslations("integrations");
   const tWhatsApp = useTranslations("whatsappAi");
+  const tImageSearch = useTranslations("chinaImageSearch");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
@@ -259,6 +260,9 @@ const IntegrationsPage = () => {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="grid max-w-[1500px] gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <IntegrationTile title={tImageSearch("title")} description={tImageSearch("subtitle")}
+          status={tImageSearch("prototype")} statusVariant="muted"
+          actions={<ActionLink href="/operations/integrations/china-image-search">{tImageSearch("open")}</ActionLink>} />
         <IntegrationTile title={tWhatsApp("title")} description={tWhatsApp("subtitle")}
           status={tWhatsApp("setupRequired")} statusVariant="muted"
           detail={tWhatsApp("tileHelp")}
