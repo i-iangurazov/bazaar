@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "manifestSha256": "2a861704e04d2b8781874327409e95a859993bef97adb36358aee749f0b92e89",
+  "uniqueInputs": 20,
+  "pairedRequests": 40,
+  "galleryImages": 27,
+  "galleryUnchanged": true,
+  "originalShopUnchanged": true,
+  "perGroup": {
+    "single-target-known": {
+      "auto": {
+        "empty": 13,
+        "correct-first": 1
+      },
+      "manual": {
+        "correct-first": 4,
+        "empty": 10
+      }
+    },
+    "multiple-target-known": {
+      "auto": {
+        "empty": 3
+      },
+      "manual": {
+        "empty": 3
+      }
+    },
+    "absent-flavor": {
+      "auto": {
+        "absent-empty": 3
+      },
+      "manual": {
+        "absent-empty": 3
+      }
+    }
+  }
+}
