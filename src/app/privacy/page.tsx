@@ -23,6 +23,7 @@ const sections = [
   "security",
   "sharing",
   "payments",
+  "appleRefunds",
   "ai",
   "marketing",
   "retention",
@@ -31,6 +32,7 @@ const sections = [
 
 const PrivacyPage = async () => {
   const t = await getTranslations("privacy");
+  const account = await getTranslations("accountPrivacy");
   return (
     <main className="min-h-screen bg-background px-5 py-12 text-foreground sm:px-8 sm:py-16">
       <article className="mx-auto max-w-3xl">
@@ -49,12 +51,24 @@ const PrivacyPage = async () => {
 
         <div className="mt-12 space-y-9">
           {sections.map((section) => (
-            <section key={section}>
+            <section key={section} id={section === "appleRefunds" ? "apple-refund-data" : undefined}>
               <h2 className="text-xl font-semibold text-foreground">{t(`${section}Title`)}</h2>
               <p className="mt-2 leading-7 text-muted-foreground">{t(`${section}Body`)}</p>
             </section>
           ))}
         </div>
+
+        <section className="mt-9 space-y-2">
+          <h2 className="text-xl font-semibold">{account("aiTitle")}</h2>
+          <p className="leading-7 text-muted-foreground">{account("aiChoice")}</p>
+        </section>
+        <section className="mt-9 space-y-2">
+          <h2 className="text-xl font-semibold">{account("deleteTitle")}</h2>
+          <p className="leading-7 text-muted-foreground">{account("deleteSummary")}</p>
+          <p className="leading-7 text-muted-foreground">{account("retention")}</p>
+          <p className="leading-7 text-muted-foreground">{account("appleWarning")}</p>
+          <Link className="inline-flex min-h-11 items-center text-primary underline" href="/settings/profile#privacy-and-account">{account("title")}</Link>
+        </section>
 
         <section className="mt-12 rounded-lg border border-border bg-card p-6">
           <h2 className="text-xl font-semibold">{t("supportTitle")}</h2>

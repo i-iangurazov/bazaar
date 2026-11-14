@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "date": "2026-11-15",
+  "baseCommit": "2f3bc0fe",
+  "preparedBeforeQueryInference": true,
+  "source": {
+    "id": "o9hSTffrwZY",
+    "url": "https://www.youtube.com/watch?v=o9hSTffrwZY",
+    "author": "Será que Pod?",
+    "file": "sources/o9hSTffrwZY-high.mp4",
+    "sha256": "86494a5ca6d97a65750577ff46a34ac15683fd0af09b18b8e11891247391ec2d",
+    "width": 2160,
+    "height": 3630,
+    "labelEvidence": {
+      "seconds": 360,
+      "file": "review/label-proof.png",
+      "sha256": "1291f7f2efdf3911fffb73941f534800581a69c0288b493dd61c7d4a41e0be86",
+      "text": "MIAMI MINT",
+      "method": "Human reading of physical front label in 4K; paired same-video rear. Small slightly blurred label; not inferred solely from color"
+    }
+  },
+  "reference": {
+    "id": "miami-rear",
+    "sku": "PHOTO-ELFBAR-TEST",
+    "seconds": 70,
+    "crop": {
+      "left": 690,
+      "top": 1560,
+      "width": 735,
+      "height": 570
+    },
+    "rotation": 90,
+    "file": "miami-rear.jpg",
+    "sha256": "1205fb024ad7c490b89b4a3dbe5aada2610a04b08e7709ef6c69cf08ae7e975f",
+    "canonicalSha256": "2f2e78ab2ee43d3a82f8d3486877ee75f65ac0829e8b1a6f47a8b40b5f1150d6"
+  },
+  "holdoutSource": {
+    "id": "ekxEXsYUsQo",
+    "url": "https://www.youtube.com/watch?v=ekxEXsYUsQo",
+    "author": "PRO VIAVI",
+    "file": "sources/ekxEXsYUsQo.mp4",
+    "sha256": "71eb5d963cb638ba393912856539015938eb99ee6e59352ccfc751c964bcde70",
+    "width": 854,
+    "height": 480,
+    "labelEvidence": {
+      "seconds": 80,
+      "file": "review/purple-80.png",
+      "sha256": "5feb348b38280f1b39834fbfbe6c4e1598159b5dd687e07e1c62fa1c22848488",
+      "text": "PURPLE MINT",
+      "method": "Physical flavor label on same-review device; queries precede disassembly"
+    },
+    "usedAsReference": false
+  },
+  "holdoutQueries": [
+    {
+      "id": "purple-mint-5",
+      "source": "ekxEXsYUsQo",
+      "seconds": 5,
+      "file": "review/purple-5.png",
+      "sha256": "b44c10fbc2fd462283971a3d61e684fc853e4207417dabe9ef77a10d48193513",
+      "expectedSku": null,
+      "expectedFlavor": "Purple Mint",
+      "pose": "unlit-display-oblique",
+      "scene": "hand-over-white-table",
+      "lighting": "bright-diffuse",
+      "canonicalFile": "canonical/purple-mint-5.jpg",
+      "canonicalSha256": "5977d562c35be20c1b62b85435659e61e2296340004b793470bc01c9d59c71fe"
+    },
+    {
+      "id": "purple-mint-8",
+      "source": "ekxEXsYUsQo",
+      "seconds": 8,
+      "file": "review/purple-8.png",
+      "sha256": "d56fba98426c7edc020950b01e7fcbeb8e62abcbf9ae372fda92d6579e45f6f3",
+      "expectedSku": null,
+      "expectedFlavor": "Purple Mint",
+      "pose": "green-display",
+      "scene": "hand-over-white-table",
+      "lighting": "bright-diffuse",
+      "canonicalFile": "canonical/purple-mint-8.jpg",
+      "canonicalSha256": "868d761c9e1436690a7426953de0556304a2e0482f2d9597d98c87f315a36a3e"
+    },
+    {
+      "id": "purple-mint-10",
+      "source": "ekxEXsYUsQo",
+      "seconds": 10,
+      "file": "review/purple-10.png",
+      "sha256": "6069b45c4df1d0ee2af18afd07a5f316fcb67f370c3d0bd82c7eb44e20982415",
+      "expectedSku": null,
+      "expectedFlavor": "Purple Mint",
+      "pose": "red-display",
+      "scene": "hand-over-white-table",
+      "lighting": "bright-diffuse",
+      "canonicalFile": "canonical/purple-mint-10.jpg",
+      "canonicalSha256": "a08a481bc1b7f0797b6a12e7af01feaeeb7fe67f19a0685fe0b9c288b333b814"
+    },
+    {
+      "id": "purple-mint-20",
+      "source": "ekxEXsYUsQo",
+      "seconds": 20,
+      "file": "review/purple-20.png",
+      "sha256": "c16fc4d5f6906abe237532e71549cfe51b91fd9b4370d458489efc5356a07874",
+      "expectedSku": null,
+      "expectedFlavor": "Purple Mint",
+      "pose": "rear-partly-occluded",
+      "scene": "hand-over-white-table",
+      "lighting": "bright-diffuse",
+      "canonicalFile": "canonical/purple-mint-20.jpg",
+      "canonicalSha256": "b1a7bd3902e965f0bd5dbf95fe3c03bbe1191e25f05eb7d447132a1bb4b6d171"
+    }
+  ],
+  "variants": [
+    "current38",
+    "miamiRear39",
+    "restoreDisplay39",
+    "rearAndDisplay40"
+  ],
+  "threshold": 0.68,
+  "acceptance": {
+    "oldAbsentWithCandidates": 0,
+    "knownWrongFirst": 0,
+    "newAbsentWithCandidates": 0,
+    "singleFieldCorrectMinimum": 5,
+    "miamiKnownCorrectMinimum": 2,
+    "newHoldoutTuningAllowed": false
+  },
+  "limits": [
+    "Four correlated views of one new absent flavor and photographer; no newly obtained positive Miami/Strawberry shoot",
+    "No synthetic query transformations or query indexing",
+    "Three retailer table assets excluded: likely product-image composites",
+    "Age-login sources 6E7SNm_b6Mw, 7hAXihSkntE, xv62HhlxF-0 not used; no cookies or access bypass",
+    "No new model, thresholds or flavor-specific runtime rules"
+  ]
+}

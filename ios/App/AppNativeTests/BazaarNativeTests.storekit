@@ -1,0 +1,31 @@
+{
+  "identifier": "BAZAAR-NATIVE-TESTS-ONLY",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "1.00",
+      "familyShareable": false,
+      "internalID": "BAZAAR-TEST-CONSUMABLE",
+      "localizations": [
+        { "description": "Synthetic StoreKit recovery test. No live sale.", "displayName": "Test consumable", "locale": "en_US" }
+      ],
+      "productID": "kg.bazaar.testing.consumable",
+      "referenceName": "TEST ONLY consumable",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "1.00",
+      "familyShareable": false,
+      "internalID": "BAZAAR-TEST-PERMANENT",
+      "localizations": [
+        { "description": "Synthetic StoreKit acknowledgement test. No live sale.", "displayName": "Test permanent", "locale": "en_US" }
+      ],
+      "productID": "kg.bazaar.testing.permanent",
+      "referenceName": "TEST ONLY non-consumable",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": { "_failTransactionsEnabled": false, "_locale": "en_US", "_storefront": "USA" },
+  "subscriptionGroups": [],
+  "version": { "major": 3, "minor": 0 }
+}

@@ -23,6 +23,8 @@ import {
 import { QueryErrorState } from "@/components/query-error-state";
 import { SubscriptionPreparationNotice } from "@/components/billing/subscription-preparation-notice";
 import { TrialPreparation } from "@/components/billing/trial-preparation";
+import { ApplePayments } from "@/components/billing/apple-payments";
+import { useNativePlatform } from "@/lib/native/useNativePlatform";
 import {
   SubscriptionQuoteSummary,
   type SubscriptionQuote,
@@ -35,16 +37,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function SubscriptionPayments({
-  onUpdated,
-  selectedPlan,
-  onPlanSelected,
-}: {
+type SubscriptionPaymentsProps = {
   onUpdated: () => void;
   selectedPlan?: PlanCode | null;
   onPlanSelected?: (plan: PlanCode) => void;
-}) {
+};
+
+export function SubscriptionPayments(props: SubscriptionPaymentsProps) {
+  const platform = useNativePlatform();
+  const common = useTranslations("common");
+  if (platform === null) return <p role="status">{common("loading")}</p>;
+  if (platform === "ios") return <ApplePayments kind="SUBSCRIPTION" {...props} />;
+  return <WebSubscriptionPayments {...props} />;
+}
+
+function WebSubscriptionPayments({
+  onUpdated,
+  selectedPlan,
+  onPlanSelected,
+}: SubscriptionPaymentsProps) {
   const t = useTranslations("billing.payments");
+  const apple = useTranslations("billingApple");
   const billing = useTranslations("billing");
   const plans = useTranslations("billing.plans");
   const errors = useTranslations("errors");
@@ -80,27 +93,89 @@ export function SubscriptionPayments({
   const [accepted, setAccepted] = useState(false);
   const [notice, setNotice] = useState("");
   const [staleConsent, setStaleConsent] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const requestKey = useRef("");
   const returnChecked = useRef(false);
   const checkoutInFlight = useRef(false);
   const checking = useRef(false);
+  const resumeInFlight = useRef(false);
+  const navigationStarted = useRef(false);
+  const mounted = useRef(true);
   const checkSource = useRef<"manual" | "return" | "poll">("manual");
   const refresh = () => {
     void settings.refetch();
     void history.refetch();
     onUpdated();
   };
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const releaseResume = () => {
+    resumeInFlight.current = false;
+    navigationStarted.current = false;
+    checkoutInFlight.current = false;
+    setResuming(false);
+  };
+  useEffect(() => {
+    mounted.current = true;
+    // A browser back/forward cache can retain refs after leaving for GoPay.
+    const returned = () => {
+      if (!navigationStarted.current) return;
+      releaseResume();
+      refreshRef.current();
+    };
+    window.addEventListener("pageshow", returned);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener("pageshow", returned);
+    };
+  }, []);
+  const resume = trpc.billing.payments.resume.useMutation({
+    onSuccess: (invoice) => {
+      if (!mounted.current) return;
+      refresh();
+      if (invoice.status === "PENDING" && invoice.checkoutUrl) {
+        navigationStarted.current = true;
+        try { window.location.assign(invoice.checkoutUrl); }
+        catch {
+          releaseResume();
+          setNotice(t("linkUnavailable"));
+        }
+        return;
+      }
+      releaseResume();
+      setNotice(t(invoice.status === "PAID" ? invoice.isTest ? "testConfirmed" : "confirmed" :
+        invoice.status === "REVIEW" ? "reviewHint" : "linkUnavailable"));
+    },
+    onError: (error) => {
+      if (!mounted.current) return;
+      releaseResume();
+      setStaleConsent(error.message === "billingQuoteChanged");
+      setNotice(translateError(errors, error));
+      refresh();
+    },
+  });
+  const resumePayment = (invoiceId: string, fromCheckout = false) => {
+    if (resumeInFlight.current || checking.current || (!fromCheckout && checkoutInFlight.current)) return false;
+    resumeInFlight.current = true;
+    setResuming(true);
+    setNotice("");
+    resume.mutate({ invoiceId });
+    return true;
+  };
   const checkout = trpc.billing.payments.checkout.useMutation({
     onSuccess: (invoice) => {
-      checkoutInFlight.current = false;
       requestKey.current = "";
       setConfirmOpen(false);
       setAccepted(false);
       setNotice("");
       refresh();
-      if (invoice.status === "PENDING" && invoice.checkoutUrl)
-        window.location.assign(invoice.checkoutUrl);
-      else
+      if (invoice.status === "PENDING" && invoice.checkoutUrl) {
+        if (!resumePayment(invoice.id, true)) {
+          checkoutInFlight.current = false;
+          setNotice(t("pendingHint"));
+        }
+      } else {
+        checkoutInFlight.current = false;
         setNotice(
           t(
             invoice.status === "PAID"
@@ -112,6 +187,7 @@ export function SubscriptionPayments({
                 : "pendingHint",
           ),
         );
+      }
     },
     onError: (error) => {
       checkoutInFlight.current = false;
@@ -158,7 +234,7 @@ export function SubscriptionPayments({
     },
   });
   const checkInvoice = (invoiceId: string, source: "manual" | "return" | "poll") => {
-    if (checking.current) return;
+    if (checking.current || resumeInFlight.current || checkoutInFlight.current) return;
     checking.current = true;
     checkSource.current = source;
     check.mutate({ invoiceId });
@@ -166,6 +242,8 @@ export function SubscriptionPayments({
   const checkRef = useRef(checkInvoice);
   checkRef.current = checkInvoice;
   const pending = settings.data?.pendingInvoice;
+  const legacyPending = pending?.status === "PENDING" && pending.provider !== "GOPAY";
+  const canResumePending = Boolean(pending?.status === "PENDING" && pending.provider === "GOPAY" && pending.checkoutUrl && !settings.data?.purchaseBlockedReason);
   const pendingId = pending?.id;
   const pendingStatus = pending?.status;
   useEffect(() => {
@@ -256,6 +334,38 @@ export function SubscriptionPayments({
             ) : !settings.data.available ? (
               <p className="text-sm text-muted-foreground">{billing("trial.paymentUnavailable")}</p>
             ) : null}
+            {settings.data.currentPaymentSource === "APPLE" ? (
+              <div
+                className="space-y-2 rounded-md border border-border p-3 text-sm"
+                data-web-apple-access
+              >
+                <p>{apple("source", { provider: "Apple" })}</p>
+                <p>{apple("noRepurchase")}</p>
+                {settings.data.appleCoverageUntil ? (
+                  <p>
+                    {apple("paidUntil", {
+                      date: formatDateTime(settings.data.appleCoverageUntil, locale),
+                    })}
+                  </p>
+                ) : null}
+                {settings.data.appleAutoRenew ? <p>{apple("autoRenewActive")}</p> : null}
+                <Button asChild variant="secondary">
+                  <a
+                    href="https://apps.apple.com/account/subscriptions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {apple("manage")}
+                  </a>
+                </Button>
+              </div>
+            ) : null}
+            {settings.data.purchaseBlockedReason &&
+            errors.has(settings.data.purchaseBlockedReason) ? (
+              <p role="status" className="text-sm">
+                {errors(settings.data.purchaseBlockedReason)}
+              </p>
+            ) : null}
             {settings.data.catalogVersion !== CURRENT_CATALOG_VERSION ? (
               <p className="rounded-md bg-secondary p-3 text-sm text-muted-foreground">
                 {t("legacyExtras")}
@@ -333,31 +443,36 @@ export function SubscriptionPayments({
                       ? "reviewHint"
                       : pending.status === "CREATING"
                         ? "creatingHint"
-                        : pending.checkoutUrl
+                        : pending.checkoutUrl && !legacyPending
                           ? "pendingHint"
                           : "linkUnavailable",
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">{t("checkOnReturn")}</p>
-                {pending.checkoutUrl ? (
+                {pending.checkoutUrl && !legacyPending ? (
                   <p className="text-xs text-muted-foreground">
                     {t("expiresAt", { date: formatDateTime(pending.expiresAt, locale) })}
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
-                  {pending.checkoutUrl ? (
-                    <Button asChild>
-                      <a href={pending.checkoutUrl}>{t("continue")}</a>
+                  {canResumePending ? (
+                    <Button
+                      aria-label={t("continue")}
+                      aria-busy={resuming}
+                      disabled={resuming || checkout.isLoading || check.isLoading}
+                      onClick={() => resumePayment(pending.id)}
+                    >
+                      {resuming ? common("loading") : t("continue")}
                     </Button>
                   ) : null}
                   <Button
                     variant="secondary"
-                    disabled={check.isLoading}
+                    disabled={check.isLoading || resuming || checkout.isLoading}
                     onClick={() => checkRef.current(pending.id, "manual")}
                   >
                     {check.isLoading ? common("loading") : t("check")}
                   </Button>
-                  {pending.status === "REVIEW" ? (
+                  {pending.status === "REVIEW" || legacyPending ? (
                     <Button asChild variant="secondary">
                       <a href="https://wa.me/996709911300" target="_blank" rel="noreferrer">
                         {t("support")}
@@ -548,7 +663,7 @@ export function SubscriptionPayments({
                   ) : null}
                   <Button
                     className="w-full"
-                    disabled={!quote.data || quote.isFetching || quote.isError}
+                    disabled={!quote.data || quote.isFetching || quote.isError || checkout.isLoading || resuming || check.isLoading}
                     onClick={() => {
                       if (!settings.data || !quote.data) return;
                       if (
@@ -757,7 +872,7 @@ export function SubscriptionPayments({
                               icon={RestoreIcon}
                               label={t("check")}
                               variant="secondary"
-                              disabled={check.isLoading}
+                              disabled={check.isLoading || resuming || checkout.isLoading}
                               loading={check.isLoading}
                               onClick={() => checkRef.current(invoice.id, "manual")}
                             />
@@ -783,7 +898,7 @@ export function SubscriptionPayments({
             <Modal
               open={confirmOpen}
               onOpenChange={(open) => {
-                if (!checkout.isLoading) setConfirmOpen(open);
+                if (!checkout.isLoading && !resuming) setConfirmOpen(open);
               }}
               title={t("confirmTitle")}
             >
@@ -796,7 +911,9 @@ export function SubscriptionPayments({
                     !consent ||
                     staleConsent ||
                     checkout.isLoading ||
-                    checkoutInFlight.current
+                    checkoutInFlight.current ||
+                    resumeInFlight.current ||
+                    checking.current
                   )
                     return;
                   checkoutInFlight.current = true;
@@ -849,7 +966,7 @@ export function SubscriptionPayments({
                   <Checkbox
                     id="subscription-terms"
                     checked={accepted}
-                    disabled={checkout.isLoading}
+                    disabled={checkout.isLoading || resuming}
                     onCheckedChange={(value) => setAccepted(value === true)}
                   />
                   <label htmlFor="subscription-terms" className="text-sm">
@@ -890,13 +1007,13 @@ export function SubscriptionPayments({
                   <Button
                     type="button"
                     variant="secondary"
-                    disabled={checkout.isLoading}
+                    disabled={checkout.isLoading || resuming}
                     onClick={() => setConfirmOpen(false)}
                   >
                     {common("cancel")}
                   </Button>
-                  <Button type="submit" disabled={!accepted || staleConsent || checkout.isLoading}>
-                    {checkout.isLoading ? common("loading") : t("goToPayment")}
+                  <Button type="submit" disabled={!accepted || staleConsent || checkout.isLoading || resuming || check.isLoading}>
+                    {checkout.isLoading || resuming ? common("loading") : t("goToPayment")}
                   </Button>
                 </ModalFooter>
               </form>

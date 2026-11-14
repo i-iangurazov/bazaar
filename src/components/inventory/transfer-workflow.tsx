@@ -1155,7 +1155,7 @@ export const InventoryTransfersPage = ({
         </div>
       </Modal>
       <div className="space-y-6">
-        <section className="bazaar-doc-surface p-4">
+        <section className="bazaar-doc-surface min-w-0 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-foreground">{t("transferDetailsTitle")}</h3>
             <Button asChild variant="ghost" size="sm" className="md:hidden">
@@ -1165,8 +1165,8 @@ export const InventoryTransfersPage = ({
               </Link>
             </Button>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="transfer-source">{t("transferSourceStore")}</Label>
               <Select
                 disabled={fieldsLocked}
@@ -1185,7 +1185,7 @@ export const InventoryTransfersPage = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="transfer-destination">{t("transferDestinationStore")}</Label>
               <Select disabled={fieldsLocked} value={toStoreId} onValueChange={handleToStoreChange}>
                 <SelectTrigger id="transfer-destination">
@@ -1200,7 +1200,7 @@ export const InventoryTransfersPage = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 lg:col-span-2">
+            <div className="min-w-0 space-y-2 lg:col-span-2">
               <Label htmlFor="transfer-note">{t("transferNote")}</Label>
               <Textarea
                 id="transfer-note"

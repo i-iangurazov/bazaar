@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "stage": "Exploratory after stage-one model comparison; not a blind test",
+  "baseProtocolSha256": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa",
+  "base": "ppshitu",
+  "baseThreshold": 0.68,
+  "fallback": "dinov2-224",
+  "fallbackThreshold": "Unchanged value frozen using the original calibration negatives before stage-one field tests",
+  "rule": "Keep PP-ShiTu matches above its existing .68 threshold. If none, admit only the DINOv2 top-one product when it exceeds its frozen calibration threshold and equals the PP-ShiTu raw top-one product ID. Never add other DINOv2 neighbors or compare score scales.",
+  "parametersSelectedOnHardEight": false,
+  "modelChoiceInformedByStageOne": true,
+  "activation": "Offline only; no application switch or production deployment"
+}

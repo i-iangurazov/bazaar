@@ -1,1 +1,3 @@
-"NSCameraUsageDescription" = "Allow camera access to scan product barcodes in Bazaar.";
+"NSCameraUsageDescription" = "Use the camera to scan product barcodes and attach photos to products or Baam requests.";
+"NSMicrophoneUsageDescription" = "Record voice requests for the Baam assistant.";
+"NSPhotoLibraryUsageDescription" = "Choose photos to attach to products or Baam requests.";

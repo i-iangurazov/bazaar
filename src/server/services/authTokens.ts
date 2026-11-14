@@ -25,7 +25,14 @@ export const createAuthToken = async (
     requestId?: string;
   },
   db: Prisma.TransactionClient = prisma,
-) => {
+): Promise<{ raw: string; token: AuthToken }> => {
+  if (db === prisma) return prisma.$transaction((tx) => createAuthToken(input, tx));
+  if (input.userId) {
+    await db.$queryRaw`SELECT id FROM "User" WHERE id = ${input.userId} FOR UPDATE`;
+    const user = await db.user.findUnique({ where: { id: input.userId } });
+    if (!user || user.deletedAt || !user.isActive || user.email !== input.email)
+      throw new AppError("tokenInvalid", "NOT_FOUND", 404);
+  }
   const raw = createRawToken();
   const tokenHash = hashToken(raw);
   const expiresAt = buildExpiresAt(input.expiresInMinutes);
@@ -74,7 +81,7 @@ export const consumeAuthToken = async (
   // This also makes invalidating sibling reset links safe under concurrency.
   await transaction.$queryRaw`SELECT id FROM "User" WHERE id = ${record.userId} FOR UPDATE`;
   const user = await transaction.user.findUnique({ where: { id: record.userId } });
-  if (!user || user.email !== record.email) {
+  if (!user || user.deletedAt || user.email !== record.email) {
     throw new AppError("tokenInvalid", "NOT_FOUND", 404);
   }
   if (!user.isActive) {

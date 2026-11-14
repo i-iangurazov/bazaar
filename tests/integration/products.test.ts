@@ -13,6 +13,8 @@ import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
 import { adjustStock } from "@/server/services/inventory";
 import { parseCsvTextRows } from "@/lib/fileExport";
+import { AI_PRIVACY_CONSENT_VERSION } from "@/lib/aiPrivacy";
+import { updateAiConsent, withAiPrivacyIdentity } from "@/server/services/aiPrivacy";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -1007,6 +1009,8 @@ describeDb("products", () => {
 
   it("uses AI image fallback with language-insensitive existing ordinary categories only", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
+    await updateAiConsent({ userId: adminUser.id, organizationId: org.id, granted: true,
+      version: AI_PRIVACY_CONSENT_VERSION, requestId: "fixture-explicit-product-ai-consent" });
     await prisma.productCategory.create({
       data: { organizationId: org.id, name: "Dresses" },
     });
@@ -1072,12 +1076,12 @@ describeDb("products", () => {
       );
     });
 
-    const result = await arrangeClothingCategoriesWithAi({
+    const result = await withAiPrivacyIdentity({ userId: adminUser.id, organizationId: org.id }, () => arrangeClothingCategoriesWithAi({
       organizationId: org.id,
       actorId: adminUser.id,
       requestId: "req-product-ai-arrange-image-run",
       productIds: [product.id],
-    });
+    }));
 
     expect(result).toMatchObject({
       scanned: 1,

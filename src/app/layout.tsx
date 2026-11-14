@@ -60,7 +60,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   const htmlClassName = themeClassName(theme);
 
   return (
-    <html lang={toIntlLocale(locale)} className={htmlClassName} suppressHydrationWarning>
+    <html lang={toIntlLocale(locale)} className={htmlClassName} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <link
           rel="preload"

@@ -227,7 +227,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.isActive) {
+        if (!user || !user.isActive || user.deletedAt) {
           await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
           await registerLoginFailure(loginAttempt);
           return null;
@@ -321,13 +321,14 @@ export const authOptions: NextAuthOptions = {
               role: true,
               organizationId: true,
               isActive: true,
+              deletedAt: true,
               isOrgOwner: true,
               emailVerifiedAt: true,
               sessionVersion: true,
             },
           })
         : null;
-      if (!currentUser?.isActive || !currentUser.organizationId ||
+      if (!currentUser?.isActive || currentUser.deletedAt || !currentUser.organizationId ||
           (isEmailVerificationRequired() && !currentUser.emailVerifiedAt) ||
           !Number.isSafeInteger(token.sessionVersion) || token.sessionVersion !== currentUser.sessionVersion) {
         throw new Error("sessionUserUnavailable");

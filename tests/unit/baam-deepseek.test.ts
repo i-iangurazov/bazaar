@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
-vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
+const mocks = vi.hoisted(() => ({ fetch: vi.fn(), findConsentingUser: vi.fn() }));
+vi.mock("@/server/db/prisma", () => ({ prisma: { user: { findUnique: mocks.findConsentingUser } } }));
 vi.mock("@/server/config/runtime", async (original) => ({
   ...(await original<typeof import("@/server/config/runtime")>()),
   assertExternalProviderCallAllowed: vi.fn(),
 }));
-import { understandBaamIntent, parseBaamFastIntent } from "@/server/services/baamWorkflowIntent";
+import { understandBaamIntent as understandBaamIntentFromService, parseBaamFastIntent } from "@/server/services/baamWorkflowIntent";
 import { parseLocalBaamProductPlan } from "@/server/services/baamProductPlan";
+import { AI_PRIVACY_CONSENT_VERSION } from "@/lib/aiPrivacy";
+import { withAiPrivacyIdentity } from "@/server/services/aiPrivacy";
+const identity = { userId: "synthetic-intent-person", organizationId: "synthetic-intent-org" };
+const understandBaamIntent = (...args: Parameters<typeof understandBaamIntentFromService>) =>
+  withAiPrivacyIdentity(identity, () => understandBaamIntentFromService(...args));
 const args = {
   text: "Synthetic question",
   locale: "ru",
@@ -37,6 +42,9 @@ beforeEach(() => {
   vi.stubEnv("AI_PROVIDER", "deepseek");
   vi.stubEnv("DEEPSEEK_API_KEY", "synthetic");
   vi.stubGlobal("fetch", mocks.fetch);
+  mocks.findConsentingUser.mockResolvedValue({ id: identity.userId, organizationId: identity.organizationId,
+    isActive: true, deletedAt: null, aiConsentVersion: AI_PRIVACY_CONSENT_VERSION,
+    aiConsentGrantedAt: new Date(0), aiConsentRevokedAt: null });
 });
 afterEach(() => {
   vi.unstubAllEnvs();

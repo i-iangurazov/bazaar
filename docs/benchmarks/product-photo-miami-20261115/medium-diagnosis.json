@@ -1,0 +1,65 @@
+[
+  {
+    "id": "lUu7tf54D-VSOsFGuIs",
+    "txts": [
+      "ELFBAR",
+      "GH23000"
+    ],
+    "scores": [
+      0.99996,
+      0.98585
+    ]
+  },
+  {
+    "id": "IZR2bs6DZ-RJbrIXfSB",
+    "txts": [
+      "ELFBAR",
+      "GH23000",
+      "SOUR APPLE ICE"
+    ],
+    "scores": [
+      0.99999,
+      0.9998,
+      0.98493
+    ]
+  },
+  {
+    "id": "KcMQMyqCO-f_xzYny1h9",
+    "txts": [
+      "ELFBAR",
+      "CH23000",
+      "miami mint"
+    ],
+    "scores": [
+      0.99996,
+      0.96117,
+      0.87764
+    ]
+  },
+  {
+    "id": "eDsVLm62O-NkITx8ye8",
+    "txts": [
+      "ELFBAR",
+      "GH23000",
+      "RAINBOW CANDY"
+    ],
+    "scores": [
+      0.99996,
+      0.99978,
+      0.93093
+    ]
+  },
+  {
+    "id": "M2HUviMqu-C1EacroQd",
+    "txts": [
+      "ELFBAR",
+      "GH23000",
+      "ICL POP"
+    ],
+    "scores": [
+      0.99994,
+      0.99886,
+      0.77296
+    ]
+  }
+]

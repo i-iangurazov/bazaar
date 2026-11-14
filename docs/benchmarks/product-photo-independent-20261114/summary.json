@@ -1,0 +1,3042 @@
+{
+  "schema": 1,
+  "protocolSha256": "4e0e417c1f2dff00685754fd96e942fa6d50d9f4c493ffd87df4ee7c5a7d1d3d",
+  "policy": {
+    "schema": 1,
+    "stage": "Prospective external-shoot validation; frozen before encoding any new query",
+    "developmentCommit": "3c8edb1b",
+    "models": [
+      "ppshitu",
+      "dinov2-224"
+    ],
+    "baseThreshold": 0.68,
+    "fallbackThreshold": 0.6742116808891297,
+    "minimumPpProductGap": 0.05,
+    "baselineRule": "Keep accepted PP matches, otherwise admit only DINO top-one above its frozen threshold when it equals PP raw top-one ID",
+    "guardedRule": "Apply the baseline rule; for an agreement fallback additionally require the PP top-one score to exceed the next different product score by at least .05. Abstain if no competing product is available. Preserve existing PP matches.",
+    "selection": "A round .05 product-level PP ambiguity gap was selected using the already observed development confusion (.014 gap after removing Strawberry Banana); old recoveries had .167 and .191 gaps. It is not tuned on the new photographs and is not a proof of open-set correctness.",
+    "gallery": "Frozen 38-photo field shop from the previous experiment; no new query or source shoot is indexed",
+    "views": "Same full frame plus at most five PicoDet proposals for both encoders, no manual regions, no rotations/color synthesis or OCR ranking",
+    "negativeTests": "Real absent flavors; separately remove each present target product and all of its photos in memory",
+    "units": "Unique source photo/frame; report photographer/review/video groups and do not treat neighboring video frames or leave-target-out conditions as independent captures",
+    "activation": "Offline benchmark only; no app change, provider inference, database mutation, deployment or training"
+  },
+  "development": {
+    "pp": {
+      "summary": {
+        "knownSingle": {
+          "queries": 14,
+          "acceptedCorrectFirst": 6,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 6,
+          "withCandidates": 6,
+          "empty": 8
+        },
+        "knownMultiple": {
+          "queries": 3,
+          "acceptedCorrectFirst": 1,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 1,
+          "withCandidates": 1,
+          "empty": 2
+        },
+        "absent": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 17,
+          "withCandidates": 0,
+          "knownSingle": {
+            "queries": 14,
+            "withCandidates": 0
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "withCandidates": 0
+          }
+        },
+        "hardEight": {
+          "queries": 8,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 8
+        },
+        "wrongKnown": [],
+        "absentErrors": [],
+        "removedTargetErrorsSingle": [],
+        "byShootGroup": {}
+      },
+      "rows": [
+        {
+          "id": "watermelon-cherry-40",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.8454717397689819,
+              "sourceIndex": 10
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "watermelon-cherry-80",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "watermelon-cherry-100",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7208673357963562,
+              "sourceIndex": 8
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "watermelon-cherry-130",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7709563970565796,
+              "sourceIndex": 10
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "watermelon-cherry-300",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "strawberry-banana-190",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "strawberry-banana-210",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.8163391947746277,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "strawberry-banana-290",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7512698769569397,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "strawberry-banana-320",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7307412624359131,
+              "sourceIndex": 11
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "strawberry-banana-400",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "sakura-grape-540",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "sakura-grape-560",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "sakura-grape-600",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "sakura-grape-660",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "score": 0.7509942054748535,
+              "sourceIndex": 3
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "sakura-grape-680",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "absent-baja-splash-80",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "absent-baja-splash-110",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "absent-baja-splash-140",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "kiwi-dragon-fruit-table",
+          "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+          "expectedSku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "grape-ice-table-dark",
+          "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+          "expectedSku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        }
+      ]
+    },
+    "agreement": {
+      "summary": {
+        "knownSingle": {
+          "queries": 14,
+          "acceptedCorrectFirst": 8,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 8,
+          "withCandidates": 8,
+          "empty": 6
+        },
+        "knownMultiple": {
+          "queries": 3,
+          "acceptedCorrectFirst": 1,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 1,
+          "withCandidates": 1,
+          "empty": 2
+        },
+        "absent": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 17,
+          "withCandidates": 1,
+          "knownSingle": {
+            "queries": 14,
+            "withCandidates": 1
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "withCandidates": 0
+          }
+        },
+        "hardEight": {
+          "queries": 8,
+          "acceptedCorrectFirst": 2,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 2,
+          "withCandidates": 2,
+          "empty": 6
+        },
+        "wrongKnown": [],
+        "absentErrors": [],
+        "removedTargetErrorsSingle": [
+          {
+            "query": "strawberry-banana-290",
+            "removedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+            "returnedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY"
+          }
+        ],
+        "byShootGroup": {}
+      },
+      "rows": [
+        {
+          "id": "watermelon-cherry-40",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.8454717397689819,
+              "sourceIndex": 10
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-80",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-100",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7208673357963562,
+              "sourceIndex": 8
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-130",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7709563970565796,
+              "sourceIndex": 10
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-300",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7089544534683228,
+              "sourceIndex": 9
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-190",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-210",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.8163391947746277,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-290",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7512698769569397,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.716731071472168,
+              "sourceIndex": 9
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "strawberry-banana-320",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7307412624359131,
+              "sourceIndex": 11
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-400",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-540",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-560",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-600",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-660",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "score": 0.7509942054748535,
+              "sourceIndex": 3
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-680",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "score": 0.6977988481521606,
+              "sourceIndex": 3
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "absent-baja-splash-80",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "absent-baja-splash-110",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "absent-baja-splash-140",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "kiwi-dragon-fruit-table",
+          "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+          "expectedSku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "grape-ice-table-dark",
+          "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+          "expectedSku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        }
+      ]
+    },
+    "guarded": {
+      "summary": {
+        "knownSingle": {
+          "queries": 14,
+          "acceptedCorrectFirst": 8,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 8,
+          "withCandidates": 8,
+          "empty": 6
+        },
+        "knownMultiple": {
+          "queries": 3,
+          "acceptedCorrectFirst": 1,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 1,
+          "withCandidates": 1,
+          "empty": 2
+        },
+        "absent": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 17,
+          "withCandidates": 0,
+          "knownSingle": {
+            "queries": 14,
+            "withCandidates": 0
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "withCandidates": 0
+          }
+        },
+        "hardEight": {
+          "queries": 8,
+          "acceptedCorrectFirst": 2,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 2,
+          "withCandidates": 2,
+          "empty": 6
+        },
+        "wrongKnown": [],
+        "absentErrors": [],
+        "removedTargetErrorsSingle": [],
+        "byShootGroup": {}
+      },
+      "rows": [
+        {
+          "id": "watermelon-cherry-40",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.8454717397689819,
+              "sourceIndex": 10
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-80",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-100",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7208673357963562,
+              "sourceIndex": 8
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-130",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7709563970565796,
+              "sourceIndex": 10
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "watermelon-cherry-300",
+          "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.7089544534683228,
+              "sourceIndex": 9
+            }
+          ],
+          "reason": "guardedAgreement",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-190",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-210",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.8163391947746277,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-290",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7512698769569397,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "ambiguousPP"
+        },
+        {
+          "id": "strawberry-banana-320",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7307412624359131,
+              "sourceIndex": 11
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "strawberry-banana-400",
+          "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-540",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-560",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-600",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-660",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "score": 0.7509942054748535,
+              "sourceIndex": 3
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "sakura-grape-680",
+          "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": true,
+          "labelVisible": null,
+          "matches": [
+            {
+              "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "score": 0.6977988481521606,
+              "sourceIndex": 3
+            }
+          ],
+          "reason": "guardedAgreement",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "absent-baja-splash-80",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "absent-baja-splash-110",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "absent-baja-splash-140",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": false,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "kiwi-dragon-fruit-table",
+          "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+          "expectedSku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "grape-ice-table-dark",
+          "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+          "expectedSku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+          "expectedFlavor": null,
+          "shootGroup": null,
+          "photographerGroup": null,
+          "multiObject": true,
+          "hard": false,
+          "labelVisible": null,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        }
+      ]
+    }
+  },
+  "newPhotographs": {
+    "pp": {
+      "summary": {
+        "knownSingle": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "knownMultiple": {
+          "queries": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 0
+        },
+        "absent": {
+          "queries": 13,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 2,
+          "empty": 11
+        },
+        "leaveTargetOut": {
+          "queries": 3,
+          "withCandidates": 0,
+          "knownSingle": {
+            "queries": 3,
+            "withCandidates": 0
+          },
+          "knownMultiple": {
+            "queries": 0,
+            "withCandidates": 0
+          }
+        },
+        "hardEight": {
+          "queries": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 0
+        },
+        "wrongKnown": [],
+        "absentErrors": [
+          {
+            "query": "eDsVLm62O-VurPQ7l-q",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-YbAwZzw-S",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          }
+        ],
+        "removedTargetErrorsSingle": [],
+        "byShootGroup": {
+          "lUu7tf54D": {
+            "photos": 2,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 2,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 2
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "IZR2bs6DZ": {
+            "photos": 3,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 3
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "KcMQMyqCO": {
+            "photos": 3,
+            "known": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 3
+            },
+            "absent": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "leaveTargetOut": {
+              "queries": 3,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 3,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "eDsVLm62O": {
+            "photos": 3,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 1,
+              "empty": 2
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "M2HUviMqu": {
+            "photos": 5,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 5,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 1,
+              "empty": 4
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          }
+        }
+      },
+      "rows": [
+        {
+          "id": "lUu7tf54D-VSOsFGuIs",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Mr Blue",
+          "shootGroup": "lUu7tf54D",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "lUu7tf54D-uRtPfwfVI",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Mr Blue",
+          "shootGroup": "lUu7tf54D",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "IZR2bs6DZ-CgqrfBFigv",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "IZR2bs6DZ-RJbrIXfSB",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "IZR2bs6DZ-e6QrOI35-",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "KcMQMyqCO-4OgiByvCC",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "KcMQMyqCO-f_xzYny1h9",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "KcMQMyqCO-pmKCQuq1g",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "eDsVLm62O-NkITx8ye8",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "eDsVLm62O-VurPQ7l-q",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6992151737213135,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6992151737213135,
+              "sourceIndex": 12
+            }
+          ],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "eDsVLm62O-o4fnOE9vE",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "M2HUviMqu-C1EacroQd",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "M2HUviMqu-NtKO_H6eO",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "M2HUviMqu-YbAwZzw-S",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7047998905181885,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "baseOnly",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7047998905181885,
+              "sourceIndex": 12
+            }
+          ],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "M2HUviMqu-l2EK1V2U4X",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        },
+        {
+          "id": "M2HUviMqu-piT9-OQkFI",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "baseOnly",
+          "absentMatches": [],
+          "absentReason": "baseOnly"
+        }
+      ]
+    },
+    "agreement": {
+      "summary": {
+        "knownSingle": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 1,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 1,
+          "empty": 2
+        },
+        "knownMultiple": {
+          "queries": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 0
+        },
+        "absent": {
+          "queries": 13,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 10,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 3,
+          "withCandidates": 1,
+          "knownSingle": {
+            "queries": 3,
+            "withCandidates": 1
+          },
+          "knownMultiple": {
+            "queries": 0,
+            "withCandidates": 0
+          }
+        },
+        "hardEight": {
+          "queries": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 0
+        },
+        "wrongKnown": [
+          "KcMQMyqCO-f_xzYny1h9"
+        ],
+        "absentErrors": [
+          {
+            "query": "lUu7tf54D-VSOsFGuIs",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "lUu7tf54D-uRtPfwfVI",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "IZR2bs6DZ-CgqrfBFigv",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "IZR2bs6DZ-RJbrIXfSB",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "eDsVLm62O-NkITx8ye8",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "eDsVLm62O-VurPQ7l-q",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-C1EacroQd",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-NtKO_H6eO",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-YbAwZzw-S",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-l2EK1V2U4X",
+            "returnedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY"
+          }
+        ],
+        "removedTargetErrorsSingle": [
+          {
+            "query": "KcMQMyqCO-f_xzYny1h9",
+            "removedSku": "PHOTO-ELFBAR-TEST",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          }
+        ],
+        "byShootGroup": {
+          "lUu7tf54D": {
+            "photos": 2,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 2,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 2,
+              "empty": 0
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "IZR2bs6DZ": {
+            "photos": 3,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 2,
+              "empty": 1
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "KcMQMyqCO": {
+            "photos": 3,
+            "known": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 1,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 1,
+              "empty": 2
+            },
+            "absent": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "leaveTargetOut": {
+              "queries": 3,
+              "withCandidates": 1,
+              "knownSingle": {
+                "queries": 3,
+                "withCandidates": 1
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "eDsVLm62O": {
+            "photos": 3,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 2,
+              "empty": 1
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "M2HUviMqu": {
+            "photos": 5,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 5,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 4,
+              "empty": 1
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          }
+        }
+      },
+      "rows": [
+        {
+          "id": "lUu7tf54D-VSOsFGuIs",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Mr Blue",
+          "shootGroup": "lUu7tf54D",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7424530386924744,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7424530386924744,
+              "sourceIndex": 14
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "lUu7tf54D-uRtPfwfVI",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Mr Blue",
+          "shootGroup": "lUu7tf54D",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7986558079719543,
+              "sourceIndex": 13
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7986558079719543,
+              "sourceIndex": 13
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "IZR2bs6DZ-CgqrfBFigv",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7446438074111938,
+              "sourceIndex": 13
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7446438074111938,
+              "sourceIndex": 13
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "IZR2bs6DZ-RJbrIXfSB",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.790454089641571,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.790454089641571,
+              "sourceIndex": 14
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "IZR2bs6DZ-e6QrOI35-",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "KcMQMyqCO-4OgiByvCC",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "KcMQMyqCO-f_xzYny1h9",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7531253695487976,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7531253695487976,
+              "sourceIndex": 14
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "KcMQMyqCO-pmKCQuq1g",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "eDsVLm62O-NkITx8ye8",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7831276059150696,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7831276059150696,
+              "sourceIndex": 14
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "eDsVLm62O-VurPQ7l-q",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6992151737213135,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6992151737213135,
+              "sourceIndex": 12
+            }
+          ],
+          "absentReason": "base"
+        },
+        {
+          "id": "eDsVLm62O-o4fnOE9vE",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "M2HUviMqu-C1EacroQd",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7496466636657715,
+              "sourceIndex": 11
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7496466636657715,
+              "sourceIndex": 11
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "M2HUviMqu-NtKO_H6eO",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6978938579559326,
+              "sourceIndex": 13
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6978938579559326,
+              "sourceIndex": 13
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "M2HUviMqu-YbAwZzw-S",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7047998905181885,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7047998905181885,
+              "sourceIndex": 12
+            }
+          ],
+          "absentReason": "base"
+        },
+        {
+          "id": "M2HUviMqu-l2EK1V2U4X",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.6937998533248901,
+              "sourceIndex": 9
+            }
+          ],
+          "reason": "agreement",
+          "absentMatches": [
+            {
+              "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "score": 0.6937998533248901,
+              "sourceIndex": 9
+            }
+          ],
+          "absentReason": "agreement"
+        },
+        {
+          "id": "M2HUviMqu-piT9-OQkFI",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        }
+      ]
+    },
+    "guarded": {
+      "summary": {
+        "knownSingle": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "knownMultiple": {
+          "queries": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 0
+        },
+        "absent": {
+          "queries": 13,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 7,
+          "empty": 6
+        },
+        "leaveTargetOut": {
+          "queries": 3,
+          "withCandidates": 0,
+          "knownSingle": {
+            "queries": 3,
+            "withCandidates": 0
+          },
+          "knownMultiple": {
+            "queries": 0,
+            "withCandidates": 0
+          }
+        },
+        "hardEight": {
+          "queries": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 0
+        },
+        "wrongKnown": [],
+        "absentErrors": [
+          {
+            "query": "lUu7tf54D-uRtPfwfVI",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "IZR2bs6DZ-CgqrfBFigv",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "IZR2bs6DZ-RJbrIXfSB",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "eDsVLm62O-VurPQ7l-q",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-C1EacroQd",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-NtKO_H6eO",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          },
+          {
+            "query": "M2HUviMqu-YbAwZzw-S",
+            "returnedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA"
+          }
+        ],
+        "removedTargetErrorsSingle": [],
+        "byShootGroup": {
+          "lUu7tf54D": {
+            "photos": 2,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 2,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 1,
+              "empty": 1
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "IZR2bs6DZ": {
+            "photos": 3,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 2,
+              "empty": 1
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "KcMQMyqCO": {
+            "photos": 3,
+            "known": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 3
+            },
+            "absent": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "leaveTargetOut": {
+              "queries": 3,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 3,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "eDsVLm62O": {
+            "photos": 3,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 3,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 1,
+              "empty": 2
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          },
+          "M2HUviMqu": {
+            "photos": 5,
+            "known": {
+              "queries": 0,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 0,
+              "empty": 0
+            },
+            "absent": {
+              "queries": 5,
+              "acceptedCorrectFirst": 0,
+              "acceptedWrongFirst": 0,
+              "acceptedCorrectTop5": 0,
+              "withCandidates": 3,
+              "empty": 2
+            },
+            "leaveTargetOut": {
+              "queries": 0,
+              "withCandidates": 0,
+              "knownSingle": {
+                "queries": 0,
+                "withCandidates": 0
+              },
+              "knownMultiple": {
+                "queries": 0,
+                "withCandidates": 0
+              }
+            }
+          }
+        }
+      },
+      "rows": [
+        {
+          "id": "lUu7tf54D-VSOsFGuIs",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Mr Blue",
+          "shootGroup": "lUu7tf54D",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "ambiguousPP",
+          "absentMatches": [],
+          "absentReason": "ambiguousPP"
+        },
+        {
+          "id": "lUu7tf54D-uRtPfwfVI",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Mr Blue",
+          "shootGroup": "lUu7tf54D",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7986558079719543,
+              "sourceIndex": 13
+            }
+          ],
+          "reason": "guardedAgreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7986558079719543,
+              "sourceIndex": 13
+            }
+          ],
+          "absentReason": "guardedAgreement"
+        },
+        {
+          "id": "IZR2bs6DZ-CgqrfBFigv",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7446438074111938,
+              "sourceIndex": 13
+            }
+          ],
+          "reason": "guardedAgreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7446438074111938,
+              "sourceIndex": 13
+            }
+          ],
+          "absentReason": "guardedAgreement"
+        },
+        {
+          "id": "IZR2bs6DZ-RJbrIXfSB",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.790454089641571,
+              "sourceIndex": 14
+            }
+          ],
+          "reason": "guardedAgreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.790454089641571,
+              "sourceIndex": 14
+            }
+          ],
+          "absentReason": "guardedAgreement"
+        },
+        {
+          "id": "IZR2bs6DZ-e6QrOI35-",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Sour Apple Ice",
+          "shootGroup": "IZR2bs6DZ",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "KcMQMyqCO-4OgiByvCC",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "KcMQMyqCO-f_xzYny1h9",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "ambiguousPP",
+          "absentMatches": [],
+          "absentReason": "ambiguousPP"
+        },
+        {
+          "id": "KcMQMyqCO-pmKCQuq1g",
+          "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "expectedSku": "PHOTO-ELFBAR-TEST",
+          "expectedFlavor": "Miami Mint",
+          "shootGroup": "KcMQMyqCO",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "eDsVLm62O-NkITx8ye8",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [],
+          "reason": "ambiguousPP",
+          "absentMatches": [],
+          "absentReason": "ambiguousPP"
+        },
+        {
+          "id": "eDsVLm62O-VurPQ7l-q",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6992151737213135,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6992151737213135,
+              "sourceIndex": 12
+            }
+          ],
+          "absentReason": "base"
+        },
+        {
+          "id": "eDsVLm62O-o4fnOE9vE",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Rainbow Candy",
+          "shootGroup": "eDsVLm62O",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        },
+        {
+          "id": "M2HUviMqu-C1EacroQd",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": true,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7496466636657715,
+              "sourceIndex": 11
+            }
+          ],
+          "reason": "guardedAgreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7496466636657715,
+              "sourceIndex": 11
+            }
+          ],
+          "absentReason": "guardedAgreement"
+        },
+        {
+          "id": "M2HUviMqu-NtKO_H6eO",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6978938579559326,
+              "sourceIndex": 13
+            }
+          ],
+          "reason": "guardedAgreement",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.6978938579559326,
+              "sourceIndex": 13
+            }
+          ],
+          "absentReason": "guardedAgreement"
+        },
+        {
+          "id": "M2HUviMqu-YbAwZzw-S",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7047998905181885,
+              "sourceIndex": 12
+            }
+          ],
+          "reason": "base",
+          "absentMatches": [
+            {
+              "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "score": 0.7047998905181885,
+              "sourceIndex": 12
+            }
+          ],
+          "absentReason": "base"
+        },
+        {
+          "id": "M2HUviMqu-l2EK1V2U4X",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "ambiguousPP",
+          "absentMatches": [],
+          "absentReason": "ambiguousPP"
+        },
+        {
+          "id": "M2HUviMqu-piT9-OQkFI",
+          "expectedId": null,
+          "expectedSku": null,
+          "expectedFlavor": "Ice Pop",
+          "shootGroup": "M2HUviMqu",
+          "photographerGroup": "loox-uploader-1",
+          "multiObject": false,
+          "hard": null,
+          "labelVisible": false,
+          "matches": [],
+          "reason": "rejected",
+          "absentMatches": [],
+          "absentReason": "rejected"
+        }
+      ]
+    }
+  },
+  "cohort": {
+    "photos": 16,
+    "shootGroups": 5,
+    "photographerGroups": 1,
+    "knownFlavors": [
+      "Miami Mint"
+    ],
+    "absentFlavors": [
+      "Ice Pop",
+      "Mr Blue",
+      "Rainbow Candy",
+      "Sour Apple Ice"
+    ]
+  },
+  "resource": {
+    "ppshitu": {
+      "encodingMs": {
+        "count": 16,
+        "mean": 209.24252330951276,
+        "p50": 217.73081248102244,
+        "p95": 260.98265625478234,
+        "p99": 307.17943124182057,
+        "min": 68.10766700073145,
+        "max": 318.7286249885801
+      },
+      "peakQueryRssMiB": 766.3125
+    },
+    "dinov2-224": {
+      "encodingMs": {
+        "count": 16,
+        "mean": 446.56952862533217,
+        "p50": 479.1841039987048,
+        "p95": 496.4279062623973,
+        "p99": 503.5001812604605,
+        "min": 166.8875829782337,
+        "max": 505.2682500099763
+      },
+      "peakQueryRssMiB": 751.125
+    }
+  },
+  "limits": [
+    "Sixteen photos of five flavor/review groups from one public uploader; source independence from gallery is not broad participant diversity",
+    "Only Miami Mint has a matching catalog SKU in this new photographic cohort; Strawberry Banana and Watermelon Cherry have no newly verified independent capture",
+    "All primary photos are in hand; no new independent table-photo cohort",
+    "Other views inherit identity only from a readable same-review front; they are correlated and grouped",
+    "Public reviewers are not Bazaar customers; local research does not assert media redistribution rights"
+  ]
+}

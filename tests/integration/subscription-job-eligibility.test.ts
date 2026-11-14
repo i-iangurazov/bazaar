@@ -14,7 +14,8 @@ import {
   startSubscriptionUsage,
   settleSubscriptionUsage,
 } from "@/server/billing/subscriptionUsage";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 async function fixture() {
   const f = await seedBase({ plan: "BUSINESS" });
   await prisma.organization.update({

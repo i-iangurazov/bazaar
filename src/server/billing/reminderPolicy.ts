@@ -26,7 +26,7 @@ export type ReminderOrganization = {
       paidAt: Date | null;
       providerPaymentId: string | null;
       events: { state: string; source: string }[];
-    };
+    } | null;
   }[];
 };
 const DAY = 86400000;
@@ -49,6 +49,7 @@ export function subscriptionReminderState(
   if (tail) {
     const invoice = tail.invoice;
     if (
+      !invoice ||
       !org.currentPeriodEndsAt ||
       tail.endsAt.getTime() !== org.currentPeriodEndsAt.getTime() ||
       (org.trialEndsAt && tail.endsAt <= org.trialEndsAt) ||

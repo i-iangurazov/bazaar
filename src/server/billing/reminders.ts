@@ -14,6 +14,7 @@ import {
 const organizationInclude = {
   subscriptionContract: true,
   subscriptionPeriods: {
+    where: { revokedAt: null, dependencyRevokedAt: null },
     orderBy: [{ endsAt: "desc" }, { startsAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     take: 1,
     include: {
@@ -34,6 +35,7 @@ const ownerWhere = (organizationId: string, ownerId: string) => ({
   role: "ADMIN" as const,
   isOrgOwner: true,
   isActive: true,
+  deletedAt: null,
   emailVerifiedAt: { not: null },
 });
 
@@ -229,6 +231,11 @@ export async function processSubscriptionReminders(now = new Date()) {
         failed++;
         continue;
       }
+      const stillPermitted = await prisma.subscriptionReminder.findFirst({
+        where: { id: row.id, leaseToken, status: "PROCESSING", owner: { isActive: true, deletedAt: null } },
+        select: { id: true },
+      });
+      if (!stillPermitted) { canceled++; continue; }
       const result = await sendTransactionalEmail({
         to: row.recipientEmail,
         from: row.senderEmail,

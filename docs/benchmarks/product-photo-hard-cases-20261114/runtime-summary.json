@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "model": "ppshitu-v2-pplcnetv2-v1-fp32-224",
+  "threshold": 0.68,
+  "pairs": [
+    [
+      259,
+      262
+    ],
+    [
+      577,
+      617
+    ],
+    [
+      543,
+      546
+    ],
+    [
+      609,
+      618
+    ],
+    [
+      143,
+      19
+    ],
+    [
+      208,
+      321
+    ]
+  ],
+  "products": 12,
+  "galleryPhotos": 24,
+  "heldOutQueries": 60,
+  "rawTop1": 0.9666666666666667,
+  "visibleTop5": 0.8833333333333333,
+  "visibleWrongTop1": 0.016666666666666666,
+  "absentCandidateRate": 0.4166666666666667,
+  "identicalPhotoDifferentSku": {
+    "candidates": 2,
+    "scores": [
+      0.9999999403953552,
+      0.9999999403953552
+    ],
+    "distinguishable": false
+  },
+  "limits": [
+    "Curated 12 public ALOI objects; 154x115 previews, not Bazaar SKU accuracy",
+    "Real pinned runtime and Faiss, Node canonicalization; no database or user gallery changes",
+    "Same input pixels for duplicate-SKU ambiguity is a protocol test, not independent photographic evidence"
+  ],
+  "runtime_results_sha256": "e889c54996150ff4af7ecb0266d49aa278b9665ac36ed1ee93f0a25bb33691c4"
+}

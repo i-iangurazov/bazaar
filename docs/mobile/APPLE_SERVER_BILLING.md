@@ -1,0 +1,64 @@
+# Apple server billing: implementation and release gates
+
+Status: implementation under isolated regression verification. No real App Store purchase, refund, notification delivery, signed sandbox device run, production configuration or commercial catalog approval is claimed by this document.
+
+## Records and trust
+
+- `AppleBillingAccount.appAccountToken` is an immutable UUID for one Bazaar organization. Apple original transaction IDs, environment and account token cannot move to another organization, including through restore, account deletion or a new organization owner.
+- `ApplePurchaseIntent` freezes the organization, buyer, SKU, offer/contract digest, service valuation, consent version, selected store and purchase snapshot before native purchase authorization. Native authorize checks the current active admin, organization, no impersonation, product mapping and rights again. The first `{intentId,prepareOnly:true}` call prepares metadata without setting `authorizedAt`; the second `{intentId,attemptId}` call atomically records durable authorization and its native-generated UUID immediately before the native sheet. Once the final call sets `authorizedAt`, both preparation and final replay are refused with pending-verification guidance, including a replay of the same UUID. Only that successful final response echoes the winning attempt; create/status responses do not disclose it. Signed unfinished receipts remain the purchase recovery mechanism.
+- Apple SDK `@apple/app-store-server-library@3.1.0` verifies ES256 JWS, certificate chain, Apple trust roots, bundle/app ID and environment. Runtime verification always enables online certificate checks. Unverified decoded data cannot enter `applyAppleTransaction`: the receipt carries a private verification marker.
+- `AppleTransaction` and append-only observations retain the signed evidence, original identity, Apple-provided `price` as **milliunits**, and its actual ISO currency. A signed USD price is never stored as a KGS gateway invoice or fed into confirmed KGS MRR. This signed product/offer price is not bank proceeds, commission, tax reporting or a settlement report.
+- Subscription periods and WhatsApp credit lots have an exact one-source invariant: gateway invoice **or** Apple transaction, with composite tenant foreign keys. There are no synthetic gateway invoices for Apple sales. A non-auto intent can fulfill only one distinct transaction: any additional signed charge is retained in review without a second period/credit grant. Refund/replay of another receipt cannot clear that unresolved review.
+- Migration `20261111120000_ios_apple_billing_privacy` adds these records and privacy fields. Follow-up `20261111130000_apple_lifecycle_recovery` adds irreversible same-chain superseding and signed future subscription preferences. Existing gateway financial records are unchanged.
+
+## Purchases, overlap and restoration
+
+The organization row lock serializes Apple intent creation with GoPay checkout. Subscription and WhatsApp pack reservations have separate scopes. An un-authorized intent can expire; **any authorized unresolved intent** retains the provider gate after its 15-minute authorization lifetime. Definite native cancellation is retried through the authenticated native cancel endpoint until acknowledged; it releases only an intent without any durable financial receipt. A late signed approval is still recorded and grants once if rights remain compatible. If web access changed while Apple approval was outstanding, the paid Apple transaction is retained in review with a refund path; it is never silently discarded. There is no atomic transaction spanning GoPay and Apple's out-of-app billing systems. `billing.payments.resume({invoiceId})` rechecks current admin/tenant, unpaid unexpired invoice, Apple obligations, protected access and the frozen purchase boundaries under the shared organization lock immediately before the web client redirects or continues an old GoPay checkout. It never calls the provider, charges or creates a new invoice. This check also applies after initial checkout creation. URLs already copied or opened outside Bazaar cannot be atomically canceled by this server check; a provider cancellation capability is required for that, and verified late receipts remain subject to reconciliation/review.
+
+An authorized intent can be canceled only with its immutable winning `attemptId`, by the original active payer in the original organization, and before any financial receipt exists. Another device's UUID, missing UUID, and historical authorized rows without a UUID fail closed with `applePurchaseAttemptMismatch` (409). Never-authorized soft intents retain the no-attempt cancellation path. A recorded receipt takes precedence and returns `{canceled:false,recorded:true}` without changing its grant or review state. The native journal retries only a definite OS cancellation or a caught abort before the purchase SDK call; timeout, missing history, process death and cold start never establish cancellation.
+
+Automatic subscriptions cannot be started over existing web-paid, prepaid, trial, lifetime or protected manual coverage. An existing web customer keeps access in iOS. A nonrenewing explicit prepayment is appended after existing coverage, using a server-signed date preview that the new client must obtain before consent. The checkout requires `expectedOrganizationId` and the preview token, so a stale organization or coverage change cannot charge a different intended period.
+
+Restores are idempotent and remain attached to the original organization. A bounded batch returns outcomes for each input, including foreign/invalid receipts, so one other organization's purchase does not abort the rest. The client can page native history and resume failed batches. Server ACK checks durable evidence before native `Transaction.finish()`; review also acknowledges recorded money for later recovery.
+
+Refunds revoke only the corresponding Apple period or credit lot. They preserve independent gateway periods, consumed usage and company records. Future gateway credit does not activate an unpaid gap after a current Apple refund. Date-based access that was already approved without a gateway invoice is captured separately in the immutable intent snapshot, so refunding a future Apple prepayment does not erase it.
+
+## Automatic subscription changes
+
+Approved automatic SKUs must belong to one subscription group. Tier, term, store and reserve changes within that group use StoreKit's verified change/proration behavior. An immediate signed replacement atomically supersedes overlapping older periods in the same original chain, even before an older `isUpgraded` notification arrives. `supersededAt` is sticky in the database; old replays or later refund reversal cannot revive credited annual coverage. The monthly usage anchor is preserved during a mid-cycle change.
+
+A signed deferred renewal preference freezes the future offer on the chain. Both server and database capacity/feature guards retain future downgrade limits after the local intent's lifetime. A newer signed cancellation/renewal preference can release or replace them. Changes initiated in Apple's subscription management are recovered only through an explicitly approved SKU in the same frozen group and immutable organization binding; their recovery intents are labelled `APPLE_SUBSCRIPTION_MANAGEMENT`.
+
+Renewal information alone never completes a final-authorized local purchase. In
+particular, renewal-OFF is not proof that an immediate upgrade did not charge;
+its transaction may arrive later, even after the payer leaves. Each unrecorded
+authorization remains protected beyond the old known term. A legitimate deferred
+change can resolve promptly through the separate [earned native deferred-outcome
+protocol](APPLE_DEFERRED_OUTCOMES.md): the exact winning native invocation must
+actually return the existing verified transaction and supply a matching signed
+future preference. It records no new charge or access. Missing or ambiguous
+native outcome evidence retains the hold; this protocol does not manufacture it
+from a renewal notification, empty history, timeout or cold start.
+
+Apple grace follows signed renewal information. Generic web seven-day grace is not invented for Apple. Confirmed refund plus auto-renewal-off releases obsolete Apple coverage for provider switching; refund of an old superseded transaction does not erase a newer chain period.
+
+## Durable lifecycle recovery
+
+`POST /api/billing/apple/notifications` verifies and stores notifications V2 before acknowledging delivery. Its durable queue retries transient verification/database failures. The scheduled `apple-billing-reconcile` job consumes transaction history pages, subscription statuses and retained notification history, verifies each signed object, and uses leases plus idempotent receipt application. Other organizations' tokens/original chains are filtered from customer-wide API responses without changing bindings. Failed batches keep retry state and do not advance successful-check markers.
+
+## Configuration
+
+Sales remain disabled until the reviewed catalog and account configuration are real and approved:
+
+- `APPLE_BILLING_MODE=off|sandbox|live` (default off), `APPLE_APP_ID`, `APPLE_IAP_KEY_ID`, `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_PRIVATE_KEY` in the deployment secret store.
+- `APPLE_BILLING_CATALOG_JSON` is an explicit mapping from complete internal `offerKey` to actual `productId`, `productType`, `approved:true` and, for automatic subscriptions, `subscriptionGroupId`. No guessed product identifiers are generated by the server.
+- `APPLE_BILLING_TERMS_VERSION`, `APPLE_BILLING_TERMS_APPROVED=true`, `APPLE_BILLING_SALES_APPROVED=true`; sandbox grants additionally require the explicit `APPLE_BILLING_SANDBOX_ORGANIZATION_IDS` allowlist. This deployment-owned list also selects **Sandbox** intents for dedicated App Review/TestFlight/demo organizations when `APPLE_BILLING_MODE=live`; ordinary organizations still receive **Production** intents. Catalog and native authorization use the same per-organization selector, never a client-supplied environment. Sandbox mode forbids organizations outside that list. Add only separate synthetic/review organizations: never add a real customer organization or use customer data for App Review.
+- Production native API origin remains `https://www.bazaar.kg`. An exact `APPLE_BILLING_PREVIEW_ORIGIN` is accepted only with `VERCEL_ENV=preview` and `APPLE_BILLING_MODE=sandbox`. The native debug build must independently allow that same exact test origin. No wildcard, HTTP or production preview-origin bypass is enabled.
+
+## Commercial decisions still requiring approval
+
+Apple permits at most 100 subscriptions in one group. The current complete 126-offer grid plus legacy/custom contract variants exceeds that; splitting interchangeable products into overlapping groups is disallowed by this implementation. Nonrenewing 1/6/12-month products can express the full prepayment grid, while an automatic catalog needs an explicitly approved product/pack design. Cross-provider mid-term proration cannot be represented by an arbitrary KGS amount in StoreKit. It remains disabled until there is an approved mechanism to preserve prepaid value; the customer's existing access remains usable.
+
+Apple consumable WhatsApp credits use the explicit Apple-only offer version `2026-11-ios-nonexpiring-v1` and have no expiry. Web GoPay packs keep their existing one-year expiry. This commercial difference requires approval and published corresponding terms before enabling any Apple consumable mapping. Existing provider, worker, connection, privacy and paid-plan gates still apply to purchase/use.
+
+Real sandbox/device purchase, Ask-to-Buy approval, same-group changes, restore across reinstall/account changes, refund/reversal, notification delivery, API key permissions, App Store product approval and TestFlight review remain external release gates. Synthetic tests validate implementation invariants and cryptography, not Apple's account configuration or approval.

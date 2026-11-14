@@ -33,6 +33,7 @@ type MobileAppShellProps = {
   navigationLabel?: string;
   showTopBar?: boolean;
   showAssistant?: boolean;
+  search?: ReactNode;
 };
 
 type MobileTopBarProps = {
@@ -43,6 +44,7 @@ type MobileTopBarProps = {
   moreLabel: string;
   onOpenMore: () => void;
   showAssistant?: boolean;
+  search?: ReactNode;
 };
 
 type MobileBottomNavProps = {
@@ -97,6 +99,7 @@ export const MobileAppShell = ({
   navigationLabel = "Mobile navigation",
   showTopBar = true,
   showAssistant = false,
+  search,
 }: MobileAppShellProps) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActive = useMemo(() => moreItems.some((item) => item.active), [moreItems]);
@@ -112,6 +115,7 @@ export const MobileAppShell = ({
           moreLabel={moreLabel}
           onOpenMore={() => setMoreOpen(true)}
           showAssistant={showAssistant}
+          search={search}
         />
       ) : null}
       <MobileBottomNav
@@ -140,6 +144,7 @@ export const MobileTopBar = ({
   moreLabel,
   onOpenMore,
   showAssistant = false,
+  search,
 }: MobileTopBarProps) => (
   <header
     className="sticky top-0 z-40 border-b border-border/80 bg-card px-4 pb-2 pt-2 shadow-none md:hidden"
@@ -190,6 +195,7 @@ export const MobileTopBar = ({
         </Button>
       </div>
     </div>
+    {search ? <div className="mt-2 flex min-w-0 items-center gap-2" data-mobile-header-search>{search}</div> : null}
   </header>
 );
 

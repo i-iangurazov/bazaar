@@ -32,7 +32,9 @@ import { writeAuditLog } from "@/server/services/audit";
 import { sanitizeSpreadsheetValue, toCsv } from "@/server/services/csv";
 import { toJson } from "@/server/services/json";
 import { registerJob, runJob, type JobPayload } from "@/server/jobs";
+import { keepBackgroundTaskAlive } from "@/server/jobs/background";
 import { assertUserCanAccessStore, type StoreAccessUser } from "@/server/services/storeAccess";
+import { getBlobStoragePath, putManagedBlob, readManagedBlob, statManagedBlob } from "./vercelBlobStorage";
 
 type ExportRequestInput = {
   organizationId: string;
@@ -68,6 +70,7 @@ const MAX_ACTIVE_EXPORT_JOBS_PER_ORG = 20;
 const MAX_EXPORT_JOBS_PER_RUN = 25;
 const EXPORT_JOB_STALE_AFTER_MS = 30 * 60 * 1000;
 const R2_STORAGE_PREFIX = "r2://";
+const BLOB_STORAGE_PREFIX = "vercel-blob:";
 const EXPORT_R2_KEY_PREFIX = "exports";
 
 const formatDay = (date: Date) => date.toISOString().slice(0, 10);
@@ -205,6 +208,16 @@ const buildExportR2Key = (organizationId: string, jobId: string, fileName: strin
 const formatR2StoragePath = (bucketName: string, key: string) =>
   `${R2_STORAGE_PREFIX}${bucketName}/${key}`;
 
+const exportBlobLocation = (storagePath: string, scope: { organizationId: string; jobId: string }) => {
+  const location = storagePath.slice(BLOB_STORAGE_PREFIX.length);
+  const pathname = getBlobStoragePath("exports", location);
+  const prefix = `${EXPORT_R2_KEY_PREFIX}/${normalizePathSegment(scope.organizationId)}/${normalizePathSegment(scope.jobId)}/`;
+  if (!pathname.startsWith(prefix) || !/^[A-Za-z0-9_.-]+\.(?:csv|xlsx)$/.test(pathname.slice(prefix.length))) {
+    throw new AppError("exportFileMissing", "CONFLICT", 410);
+  }
+  return location;
+};
+
 const parseR2StoragePath = (storagePath: string) => {
   if (!storagePath.startsWith(R2_STORAGE_PREFIX)) {
     return null;
@@ -252,6 +265,15 @@ const writeExportArtifact = async (input: {
   content: Buffer;
   mimeType: string;
 }) => {
+  if (process.env.EXPORT_STORAGE_PROVIDER?.trim().toLowerCase() === "vercel-blob") {
+    const url = await putManagedBlob({
+      purpose: "exports",
+      pathname: buildExportR2Key(input.organizationId, input.jobId, input.fileName),
+      body: input.content,
+      contentType: input.mimeType,
+    });
+    return `${BLOB_STORAGE_PREFIX}${url}`;
+  }
   if (shouldUseR2ExportStorage()) {
     const config = resolveExportR2Config();
     if (!config) {
@@ -278,7 +300,13 @@ const writeExportArtifact = async (input: {
 
 const openExportArtifactStream = async (
   storagePath: string,
+  scope: { organizationId: string; jobId: string },
 ): Promise<ExportArtifactStream | null> => {
+  if (storagePath.startsWith(BLOB_STORAGE_PREFIX)) {
+    const result = await readManagedBlob("exports", exportBlobLocation(storagePath, scope));
+    if (!result) return null;
+    return { stream: Readable.fromWeb(result.stream as NodeReadableStream<Uint8Array>), fileSize: result.size };
+  }
   if (storagePath.startsWith(R2_STORAGE_PREFIX)) {
     const location = parseR2StoragePath(storagePath);
     if (!location) {
@@ -307,7 +335,7 @@ const openExportArtifactStream = async (
     }
   }
 
-  const stats = await readExportFileStats(storagePath);
+  const stats = await readExportFileStats(storagePath, scope);
   if (!stats) {
     return null;
   }
@@ -325,9 +353,14 @@ export type ExportJobWithDownloadState = ExportJob & {
 
 const readExportFileStats = async (
   storagePath?: string | null,
+  scope?: { organizationId: string; jobId: string },
 ): Promise<ExportArtifactStats | null> => {
   if (!storagePath) {
     return null;
+  }
+  if (storagePath.startsWith(BLOB_STORAGE_PREFIX)) {
+    if (!scope) return null;
+    return statManagedBlob("exports", exportBlobLocation(storagePath, scope));
   }
   if (storagePath.startsWith(R2_STORAGE_PREFIX)) {
     const location = parseR2StoragePath(storagePath);
@@ -364,7 +397,7 @@ const withDownloadState = async (job: ExportJob): Promise<ExportJobWithDownloadS
     };
   }
 
-  const stats = await readExportFileStats(job.storagePath);
+  const stats = await readExportFileStats(job.storagePath, { organizationId: job.organizationId, jobId: job.id });
   return {
     ...job,
     fileSize: stats?.size ?? job.fileSize,
@@ -2454,7 +2487,8 @@ export const resolveExportJobDownload = async (input: {
     throw new AppError("exportNotReady", "CONFLICT", 409);
   }
 
-  let artifact = job.storagePath ? await openExportArtifactStream(job.storagePath) : null;
+  const scope = { organizationId: input.organizationId, jobId: input.jobId };
+  let artifact = job.storagePath ? await openExportArtifactStream(job.storagePath, scope) : null;
   if (!artifact) {
     await runExportJob(
       {
@@ -2470,7 +2504,7 @@ export const resolveExportJobDownload = async (input: {
         organizationId: input.organizationId,
       },
     });
-    artifact = job?.storagePath ? await openExportArtifactStream(job.storagePath) : null;
+    artifact = job?.storagePath ? await openExportArtifactStream(job.storagePath, scope) : null;
   }
 
   if (!job || !artifact || !job.storagePath) {
@@ -2540,11 +2574,11 @@ export const retryExportJob = async (input: {
   });
 
   if (process.env.NODE_ENV !== "test") {
-    void runJob("export-job", {
+    keepBackgroundTaskAlive(runJob("export-job", {
       jobId: updated.id,
       organizationId: input.organizationId,
       requestId: input.requestId,
-    }).catch(() => null);
+    }).catch(() => null));
   }
 
   return updated;
@@ -2593,11 +2627,11 @@ export const requestExport = async (input: ExportRequestInput) => {
   });
 
   if (process.env.NODE_ENV !== "test") {
-    void runJob("export-job", {
+    keepBackgroundTaskAlive(runJob("export-job", {
       jobId: job.id,
       organizationId: input.organizationId,
       requestId: input.requestId,
-    }).catch(() => null);
+    }).catch(() => null));
   }
 
   return job;

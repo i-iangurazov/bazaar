@@ -1,0 +1,1357 @@
+{
+  "schema": 1,
+  "at": "2026-11-14T15:45:16.938Z",
+  "applicationCommit": "04546f71f6ba1708b8e61e74534bbe0371c5894d",
+  "baselineApplicationCommit": "41dde3fc71c1aaa7d98da8f9bae49d29a844182f",
+  "engineSources": {
+    "engine.py": "04b80d254af50fccca8d23c391a58f48a8f10cc3c84f4f05f314e72dd3d10dad",
+    "vision.py": "2ccbee9a1055b996a0ccddf4b5eb416f759b29bf95e8cf3cc3936fe21822e702",
+    "server.py": "3948faf4e05aef595dd795e96dcf6d44024793402ea4ede5640edf9cce55d26c",
+    "pipeline.py": "e92e786c604babc3ecbc41be7823541f110dfa6d3da9aeb6e5a226aa280af1e9",
+    "retrieval.py": "729de3cb34c0443fd31b02ff8660fe6d40f5817836f0123e544262e5de50b83a"
+  },
+  "runLabel": "multiview-v2",
+  "multiviewManifestSha256": "cf410ba23a6866311fbdf742fe389f455e5c448bee10fc1b70551e7495aa22a2",
+  "manifestSha256": "2a861704e04d2b8781874327409e95a859993bef97adb36358aee749f0b92e89",
+  "realApplicationApi": true,
+  "model": "ppshitu-v2-pplcnetv2-v1-fp32-224",
+  "threshold": 0.68,
+  "visionModelManifestSha256": "3f96552ddd9a5b46f1d87aef89abaa6c506b16f110596f88c1ec252776b6f3c1",
+  "storeId": "photo-search-field-shop",
+  "galleryHash": "7660f167cc20ae124981d9ea7d724952bf22ddb8c0174d9912332cb25439e2f5",
+  "galleryProgress": {
+    "total": 36,
+    "ready": 36,
+    "pending": 0,
+    "failed": 0,
+    "withoutPhoto": 0
+  },
+  "galleryUnchanged": true,
+  "originalShopUnchanged": true,
+  "emptyStoreHasNoLeakedCandidates": true,
+  "sourceMedia": 5,
+  "uniqueQueries": 20,
+  "results": [
+    {
+      "query": "watermelon-cherry-40",
+      "media": "qChbS3VN888",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-oblique",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 761.208625,
+      "inputSha256": "2aed357f6a1152b7793f2d6fa91963f1a756b5c25193b6f5ead7756643847861",
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/80f2df4a0735088724e9124a615fea92f9ef2d87.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.5022888779640198,
+          "y": 0.3940802216529846,
+          "width": 0.17235517501831055,
+          "height": 0.42756369709968567
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-40",
+      "media": "qChbS3VN888",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-oblique",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 342.23004199999923,
+      "inputSha256": "2aed357f6a1152b7793f2d6fa91963f1a756b5c25193b6f5ead7756643847861",
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/80f2df4a0735088724e9124a615fea92f9ef2d87.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.49,
+          "y": 0.29,
+          "width": 0.2,
+          "height": 0.53
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-80",
+      "media": "qChbS3VN888",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-occluded",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 572.9025839999995,
+      "inputSha256": "e831158c5804fd56508c9f6aab955b5f918574cbf9799e37fb4947396576a00a",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.5081759691238403,
+          "y": 0.4878687262535095,
+          "width": 0.14958234131336212,
+          "height": 0.325753390789032
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-80",
+      "media": "qChbS3VN888",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-occluded",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 249.20508300000074,
+      "inputSha256": "e831158c5804fd56508c9f6aab955b5f918574cbf9799e37fb4947396576a00a",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.51,
+          "y": 0.28,
+          "width": 0.23,
+          "height": 0.6
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-100",
+      "media": "qChbS3VN888",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "back",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 599.7509999999966,
+      "inputSha256": "53ac87defc654c37b534b1f4a6155dc5b62b5fe0543374fc7b79d208a5129599",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0,
+          "y": 0.17919249832630157,
+          "width": 0.6484559774398804,
+          "height": 0.7046425938606262
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-100",
+      "media": "qChbS3VN888",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "back",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 802.239375000001,
+      "inputSha256": "53ac87defc654c37b534b1f4a6155dc5b62b5fe0543374fc7b79d208a5129599",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.52,
+          "y": 0.25,
+          "width": 0.17,
+          "height": 0.57
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-130",
+      "media": "qChbS3VN888",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-oblique",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 675.0082079999993,
+      "inputSha256": "d888ad4ef58e50aaec87ba2fd34d128aea1d894b09a1d62c4608b8b1cfb7f47f",
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/80f2df4a0735088724e9124a615fea92f9ef2d87.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.40259575843811035,
+          "y": 0.37520214915275574,
+          "width": 0.18557539582252502,
+          "height": 0.4610801339149475
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-130",
+      "media": "qChbS3VN888",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-oblique",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 246.60687500000495,
+      "inputSha256": "d888ad4ef58e50aaec87ba2fd34d128aea1d894b09a1d62c4608b8b1cfb7f47f",
+      "items": [
+        {
+          "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+          "name": "ELFBAR GH23000 Watermelon Cherry — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/146ee986769994ad0d13a3b8f4e65fa9f712afde.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.37,
+          "y": 0.28,
+          "width": 0.22,
+          "height": 0.56
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-300",
+      "media": "qChbS3VN888",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-horizontal",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 588.2316250000003,
+      "inputSha256": "54139484db56da2694a1467075cf448220763bceb5eeeca616dbefea151a2954",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.707089900970459,
+          "y": 0.2593539357185364,
+          "width": 0.292910099029541,
+          "height": 0.6281242966651917
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "watermelon-cherry-300",
+      "media": "qChbS3VN888",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-overhead-green-mat",
+      "pose": "front-horizontal",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "expectedId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 241.3741250000021,
+      "inputSha256": "54139484db56da2694a1467075cf448220763bceb5eeeca616dbefea151a2954",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.38,
+          "y": 0.09,
+          "width": 0.45,
+          "height": 0.52
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-190",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "muted-overhead-wood",
+      "pose": "back",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 523.0431250000038,
+      "inputSha256": "89a32b689802fe884248b82c38cd5f0aa20b8c1b691d185bdde5095b3a41d6b9",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.2162656933069229,
+          "y": 0.2931409776210785,
+          "width": 0.11914696544408798,
+          "height": 0.16374582052230835
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-190",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "muted-overhead-wood",
+      "pose": "back",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 298.2489160000041,
+      "inputSha256": "89a32b689802fe884248b82c38cd5f0aa20b8c1b691d185bdde5095b3a41d6b9",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.42,
+          "y": 0.2,
+          "width": 0.15,
+          "height": 0.55
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-210",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "muted-overhead-wood",
+      "pose": "screen",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 817.7568339999998,
+      "inputSha256": "d4e324bc155a82a8c9c4617efdb0f4a08fc6f528dc3c7a42ae79aeea133f5759",
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/19d08e0ca4de48824e1ad202da0e89a131c04f68.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.42458638548851013,
+          "y": 0.22491808235645294,
+          "width": 0.11178738623857498,
+          "height": 0.6047308444976807
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-210",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "muted-overhead-wood",
+      "pose": "screen",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 363.64741700000013,
+      "inputSha256": "d4e324bc155a82a8c9c4617efdb0f4a08fc6f528dc3c7a42ae79aeea133f5759",
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/19d08e0ca4de48824e1ad202da0e89a131c04f68.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.42,
+          "y": 0.25,
+          "width": 0.16,
+          "height": 0.6
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-290",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "muted-overhead-wood",
+      "pose": "front-oblique",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 612.0827920000011,
+      "inputSha256": "9ddfebd34c4e8978f3f51850e8c5de2d5a36b76009724929a5f7b6fd91768227",
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/215a0f680b98d2d2f64db0ac6e5ed5922c767fb7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.4061155319213867,
+          "y": 0.22789226472377777,
+          "width": 0.21422235667705536,
+          "height": 0.580994188785553
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-290",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "muted-overhead-wood",
+      "pose": "front-oblique",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 266.73858299999847,
+      "inputSha256": "9ddfebd34c4e8978f3f51850e8c5de2d5a36b76009724929a5f7b6fd91768227",
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/215a0f680b98d2d2f64db0ac6e5ed5922c767fb7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.41,
+          "y": 0.1,
+          "width": 0.24,
+          "height": 0.7
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-320",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-close",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 831.7432089999929,
+      "inputSha256": "aef84c7b09818d2dd2a64b8327b2bdec293957b6a69e4bb060058ffcc09731d9",
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4531b8534d4b1238047c22a10d22b4cd22a82431.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.2898644208908081,
+          "y": 0.19516535103321075,
+          "width": 0.27077311277389526,
+          "height": 0.6467554569244385
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-320",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-close",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 343.66395800000464,
+      "inputSha256": "aef84c7b09818d2dd2a64b8327b2bdec293957b6a69e4bb060058ffcc09731d9",
+      "items": [
+        {
+          "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+          "name": "ELFBAR GH23000 Strawberry Banana — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4531b8534d4b1238047c22a10d22b4cd22a82431.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.26,
+          "y": 0.08,
+          "width": 0.32,
+          "height": 0.82
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-400",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-distant",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 601.2668750000012,
+      "inputSha256": "ffeb119f3cdd81e97e633b8a225aaa38ae8f0ecfe6b7541632303779d24d49d4",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.8677371740341187,
+          "y": 0.6765426993370056,
+          "width": 0.13226282596588135,
+          "height": 0.323457270860672
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "strawberry-banana-400",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-distant",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "expectedId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 223.24854099999357,
+      "inputSha256": "ffeb119f3cdd81e97e633b8a225aaa38ae8f0ecfe6b7541632303779d24d49d4",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.27,
+          "y": 0.46,
+          "width": 0.16,
+          "height": 0.36
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-540",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "horizontal-back",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 591.0494590000017,
+      "inputSha256": "d478e82fef94bdf6ae655c663e8cc99925a433a090b4f79824bb7cfe4dd46fa3",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.8597005009651184,
+          "y": 0.6757522821426392,
+          "width": 0.14029952883720398,
+          "height": 0.3242477476596832
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-540",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "horizontal-back",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 434.49654100000043,
+      "inputSha256": "d478e82fef94bdf6ae655c663e8cc99925a433a090b4f79824bb7cfe4dd46fa3",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.12,
+          "y": 0.32,
+          "width": 0.35,
+          "height": 0.2
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-560",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "screen-diagonal",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 579.3548750000045,
+      "inputSha256": "b8ebce71b7aadc7b014948a7f44f5a3becf116a88206f8ea8c1114f9cce60a97",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.13105084002017975,
+          "y": 0.27900436520576477,
+          "width": 0.2871600091457367,
+          "height": 0.46061190962791443
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-560",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "screen-diagonal",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 284.4122090000019,
+      "inputSha256": "b8ebce71b7aadc7b014948a7f44f5a3becf116a88206f8ea8c1114f9cce60a97",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.1,
+          "y": 0.25,
+          "width": 0.42,
+          "height": 0.5
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-600",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-occluded-distant",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 623.4721669999999,
+      "inputSha256": "f368aec90fde08b87cf8926b17487f0b486bb8ead5b11fb0a6ed06d2d66708fa",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.8530577421188354,
+          "y": 0.6748831868171692,
+          "width": 0.14694228768348694,
+          "height": 0.3251167833805084
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-600",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-occluded-distant",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 230.15762499999255,
+      "inputSha256": "f368aec90fde08b87cf8926b17487f0b486bb8ead5b11fb0a6ed06d2d66708fa",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.26,
+          "y": 0.5,
+          "width": 0.17,
+          "height": 0.38
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-660",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "two-devices",
+      "design": "skull",
+      "multiObject": true,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "correct-first",
+      "rank": 1,
+      "ms": 667.0001250000205,
+      "inputSha256": "40c5f44e6c40cf14e61c2935472b521f9fcd0e9030ac2164ecbe8667bfee1f30",
+      "items": [
+        {
+          "id": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+          "name": "ELFBAR GH23000 Sakura Grape — реальные ракурсы (тест)",
+          "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/e6c04f50b94d91c91be785ee91d272f730fc4918.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.43986982107162476,
+          "y": 0.6628133058547974,
+          "width": 0.09326089918613434,
+          "height": 0.31063035130500793
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-660",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "two-devices",
+      "design": "skull",
+      "multiObject": true,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 260.55187499997555,
+      "inputSha256": "40c5f44e6c40cf14e61c2935472b521f9fcd0e9030ac2164ecbe8667bfee1f30",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.46,
+          "y": 0.65,
+          "width": 0.11,
+          "height": 0.34
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-680",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-occluded",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 628.3314580000006,
+      "inputSha256": "7ab82ee73b54d15813dcff60a3a80ab914617d228b1310af90c472f10c3722bc",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.2155388444662094,
+          "y": 0.19231726229190826,
+          "width": 0.14942419528961182,
+          "height": 0.3643382489681244
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "sakura-grape-680",
+      "media": "q7v-Bj1Kzh8",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "room-purple-blue-background",
+      "pose": "front-occluded",
+      "design": "skull",
+      "multiObject": false,
+      "backgroundBoxes": false,
+      "labelVisible": false,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "expectedId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 234.7304169999843,
+      "inputSha256": "7ab82ee73b54d15813dcff60a3a80ab914617d228b1310af90c472f10c3722bc",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.2,
+          "y": 0.16,
+          "width": 0.19,
+          "height": 0.42
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-80",
+      "media": "-123231694_456239226",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-room-boxes-background",
+      "pose": "front",
+      "design": "space",
+      "multiObject": false,
+      "backgroundBoxes": true,
+      "labelVisible": true,
+      "expectedSku": null,
+      "expectedId": null,
+      "outcome": "absent-empty",
+      "rank": null,
+      "ms": 646.0247920000111,
+      "inputSha256": "ce848aeddf6db183398eff9e0ee6e7bc945903021f65e731ebf01a9247cb134a",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.5422617197036743,
+          "y": 0.14697499573230743,
+          "width": 0.20486417412757874,
+          "height": 0.46226227283477783
+        },
+        "labelStatus": "unmatched",
+        "text": "BAI SPLASH"
+      }
+    },
+    {
+      "query": "absent-baja-splash-80",
+      "media": "-123231694_456239226",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-room-boxes-background",
+      "pose": "front",
+      "design": "space",
+      "multiObject": false,
+      "backgroundBoxes": true,
+      "labelVisible": true,
+      "expectedSku": null,
+      "expectedId": null,
+      "outcome": "absent-empty",
+      "rank": null,
+      "ms": 281.5269579999731,
+      "inputSha256": "ce848aeddf6db183398eff9e0ee6e7bc945903021f65e731ebf01a9247cb134a",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.52,
+          "y": 0.26,
+          "width": 0.18,
+          "height": 0.46
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-110",
+      "media": "-123231694_456239226",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-room-boxes-background",
+      "pose": "screen",
+      "design": "space",
+      "multiObject": false,
+      "backgroundBoxes": true,
+      "labelVisible": false,
+      "expectedSku": null,
+      "expectedId": null,
+      "outcome": "absent-empty",
+      "rank": null,
+      "ms": 893.7143330000108,
+      "inputSha256": "68458bba14b07565c0ac17f064a0602bdfc7dfb8937724f3359ec4af8dcbe385",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.5628740191459656,
+          "y": 0.15320216119289398,
+          "width": 0.06789931654930115,
+          "height": 0.3519744277000427
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-110",
+      "media": "-123231694_456239226",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-room-boxes-background",
+      "pose": "screen",
+      "design": "space",
+      "multiObject": false,
+      "backgroundBoxes": true,
+      "labelVisible": false,
+      "expectedSku": null,
+      "expectedId": null,
+      "outcome": "absent-empty",
+      "rank": null,
+      "ms": 356.79683300000033,
+      "inputSha256": "68458bba14b07565c0ac17f064a0602bdfc7dfb8937724f3359ec4af8dcbe385",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.51,
+          "y": 0.22,
+          "width": 0.17,
+          "height": 0.5
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-140",
+      "media": "-123231694_456239226",
+      "mode": "auto",
+      "scene": "hand",
+      "light": "bright-room-boxes-background",
+      "pose": "horizontal",
+      "design": "space",
+      "multiObject": false,
+      "backgroundBoxes": true,
+      "labelVisible": true,
+      "expectedSku": null,
+      "expectedId": null,
+      "outcome": "absent-empty",
+      "rank": null,
+      "ms": 600.6535840000142,
+      "inputSha256": "4838e2bad015c7cfc8accffbd791e5c87379e50263159707c2a5cc5d0d77e875",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.4692390263080597,
+          "y": 0.282258540391922,
+          "width": 0.22934414446353912,
+          "height": 0.25961023569107056
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "absent-baja-splash-140",
+      "media": "-123231694_456239226",
+      "mode": "manual",
+      "scene": "hand",
+      "light": "bright-room-boxes-background",
+      "pose": "horizontal",
+      "design": "space",
+      "multiObject": false,
+      "backgroundBoxes": true,
+      "labelVisible": true,
+      "expectedSku": null,
+      "expectedId": null,
+      "outcome": "absent-empty",
+      "rank": null,
+      "ms": 335.01545800000895,
+      "inputSha256": "4838e2bad015c7cfc8accffbd791e5c87379e50263159707c2a5cc5d0d77e875",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.28,
+          "y": 0.36,
+          "width": 0.33,
+          "height": 0.3
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "kiwi-dragon-fruit-table",
+      "media": "bel-table-bright",
+      "mode": "auto",
+      "scene": "table",
+      "light": "bright-on-black-table",
+      "pose": "diagonal-front-strap-occlusion",
+      "design": "space",
+      "multiObject": true,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+      "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 646.8587079999852,
+      "inputSha256": "2d3afb5a0b46a7d1914cf80a4262c724ea9c9500dfe4fb9bebe95c32b95c10fa",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.437583863735199,
+          "y": 0.13703419268131256,
+          "width": 0.4545702636241913,
+          "height": 0.7846624255180359
+        },
+        "labelStatus": "unmatched",
+        "text": "ELFBAR HIWI DRAGON FRUIT BelVa"
+      }
+    },
+    {
+      "query": "kiwi-dragon-fruit-table",
+      "media": "bel-table-bright",
+      "mode": "manual",
+      "scene": "table",
+      "light": "bright-on-black-table",
+      "pose": "diagonal-front-strap-occlusion",
+      "design": "space",
+      "multiObject": true,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+      "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 325.237374999997,
+      "inputSha256": "2d3afb5a0b46a7d1914cf80a4262c724ea9c9500dfe4fb9bebe95c32b95c10fa",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.46,
+          "y": 0.13,
+          "width": 0.37,
+          "height": 0.78
+        },
+        "labelStatus": "unmatched",
+        "text": "ELFBAR HIWI DRAGON FRUIT Bel"
+      }
+    },
+    {
+      "query": "grape-ice-table-dark",
+      "media": "bel-table-dark",
+      "mode": "auto",
+      "scene": "table",
+      "light": "dark-red-emissive-keychain",
+      "pose": "diagonal-front-heavy-occlusion",
+      "design": "space",
+      "multiObject": true,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+      "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 563.5210829999996,
+      "inputSha256": "8c6d508685a8249aa2a27f6b808a684688cdb09c18a6a6b41ba08c39306b6243",
+      "items": [],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.07569421082735062,
+          "y": 0.018891533836722374,
+          "width": 0.4630099833011627,
+          "height": 0.7759793996810913
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "grape-ice-table-dark",
+      "media": "bel-table-dark",
+      "mode": "manual",
+      "scene": "table",
+      "light": "dark-red-emissive-keychain",
+      "pose": "diagonal-front-heavy-occlusion",
+      "design": "space",
+      "multiObject": true,
+      "backgroundBoxes": false,
+      "labelVisible": true,
+      "expectedSku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+      "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "outcome": "empty",
+      "rank": null,
+      "ms": 209.81629199997406,
+      "inputSha256": "8c6d508685a8249aa2a27f6b808a684688cdb09c18a6a6b41ba08c39306b6243",
+      "items": [],
+      "recognition": {
+        "regionSource": "manual",
+        "region": {
+          "x": 0.23,
+          "y": 0.3,
+          "width": 0.56,
+          "height": 0.69
+        },
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    }
+  ]
+}

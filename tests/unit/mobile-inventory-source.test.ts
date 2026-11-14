@@ -52,7 +52,7 @@ describe("mobile inventory source", () => {
     expect(inventorySource).toContain("mobileSheet");
     expect(receivingSource).toContain('className="overflow-x-hidden pb-[15rem] md:pb-0"');
     expect(receivingSource).toContain(
-      'className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"',
+      'className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"',
     );
     expect(receivingSource).toContain(
       "md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem]",

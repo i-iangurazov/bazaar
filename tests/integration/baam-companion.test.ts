@@ -16,7 +16,8 @@ import {
 import { proposeBaamAction, executeBaamAction } from "@/server/services/baamActions";
 import { sendBaamMessage } from "@/server/services/baamCompanion";
 import { baamSearch, baamInspect } from "@/server/services/baamReadTools";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 
 const context = (user: User) => ({
   prisma,

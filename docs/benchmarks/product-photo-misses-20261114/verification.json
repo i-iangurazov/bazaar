@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "at": "2026-11-14T16:20:32.013Z",
+  "native": {
+    "unauthorized401": true,
+    "invalidImage400": true,
+    "invalidMatrix400": true,
+    "invalidRegion400": true,
+    "invalidThreshold400": true,
+    "recoveryAfterInvalidInput": true,
+    "realPPShiTuFaiss": true,
+    "vision": true,
+    "heldOutMatch": true,
+    "score": 0.9239259958267212
+  },
+  "python": {
+    "tests": 12,
+    "passed": 12,
+    "realFaiss": true
+  },
+  "applicationRegression": {
+    "databasePort": 55981,
+    "redisPort": 55982,
+    "files": 14,
+    "tests": 80,
+    "passed": 80,
+    "providerCalls": false
+  },
+  "repeatedUI": {
+    "tests": 10,
+    "passed": 10
+  },
+  "field": {
+    "sameFrozenInputs": 20,
+    "newPairedRequests": 120,
+    "thresholdUnchanged": 0.68,
+    "trial40Rejected": true,
+    "finalGalleryPhotos": 38,
+    "finalKnownSingleAutoFirst": 6,
+    "finalKnownSingleQueries": 14,
+    "remainingMisses": 8,
+    "finalAbsentEmpty": {
+      "auto": 3,
+      "manual": 3
+    }
+  },
+  "augmentationRepeat": {
+    "changed": 0,
+    "progress": {
+      "total": 38,
+      "ready": 38,
+      "pending": 0,
+      "failed": 0,
+      "withoutPhoto": 0
+    },
+    "originalShopUnchanged": true,
+    "manifestSha256": "cf410ba23a6866311fbdf742fe389f455e5c448bee10fc1b70551e7495aa22a2",
+    "recoveryManifestSha256": "922135dfd32eae4a679dbd77699281a50c7a5d620b0a3b3b71fd94e8808eed91"
+  },
+  "checks": {
+    "typescript": true,
+    "lint": true,
+    "translations": true,
+    "syntax": true,
+    "diffWhitespace": true,
+    "productionBuild": true,
+    "productionBuildUsesDisposableEnvironment": true,
+    "productionBuildCommand": "node .local/product-photo-search/manual/lan-runner.mjs build"
+  },
+  "browser": {
+    "ownHiddenIAB": true,
+    "desktopRecoveredBack": true,
+    "mobileEmptyWithoutAutomaticFrame": true,
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "scrollWidth": 390
+    },
+    "posExplicitSelection": true,
+    "transactionCreated": false,
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "physicalPhoneCameraTested": false
+  },
+  "sourceSha256": {
+    "services/product-photo-search/pipeline.py": "c165a961f8045777588482f126e2b3298e66339c29877b1357cee51ba5ac8754",
+    "services/product-photo-search/server.py": "17ac8b2a0e98a25814401909bafc3f049d61e9b47b9cc08084bc6451ff9b7a59",
+    "src/lib/productPhotoSearch.ts": "cebc10e509968fac25181585b32cc5288b43c959ce9b48d08d81e3fbc2e03d48",
+    "src/server/services/productPhotoSearch.ts": "1e9c19029902f89bc72bbf38781187e65325bca29e5c1b19e9cc1c11511052be",
+    "src/server/services/productPhotoSearchEngine.ts": "d663fffc5c60291fb52dcc348a0d7087cdb36490756decb74518e8f935afd1ea"
+  },
+  "productionDeployment": false
+}

@@ -14,6 +14,9 @@ import {
   usePwaInstall,
 } from "@/hooks/usePwaInstall";
 
+const nativePlatform = vi.hoisted(() => vi.fn<() => "ios" | "android" | "web">());
+vi.mock("@/lib/native/platform", () => ({ getNativePlatform: nativePlatform }));
+
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) =>
     ({
@@ -86,6 +89,7 @@ const createPromptEvent = (outcome: "accepted" | "dismissed" = "accepted") => {
 
 describe("PWA install utilities", () => {
   beforeEach(() => {
+    nativePlatform.mockReturnValue("web");
     setUserAgent(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36",
     );
@@ -170,6 +174,31 @@ describe("PWA install utilities", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Install app" })).toBeNull();
     });
+  });
+
+  it.each(["ios", "android"] as const)(
+    "hides icon and card installation in native %s even after a browser prompt event",
+    async (platform) => {
+      nativePlatform.mockReturnValue(platform);
+      render(<><PwaInstallButton /><PwaInstallButton presentation="card" /></>);
+      const event = createPromptEvent();
+      await act(async () => { window.dispatchEvent(event); });
+
+      expect(screen.queryByRole("button", { name: "Install app" })).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(event.prompt).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps the web install card connected to the browser installation prompt", async () => {
+    render(<PwaInstallButton presentation="card" />);
+    const event = createPromptEvent();
+    act(() => { window.dispatchEvent(event); });
+    const button = await screen.findByRole("button", { name: "Install app" });
+    await act(async () => { fireEvent.click(button); });
+
+    expect(event.prompt).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("header source keeps install next to existing header actions", () => {

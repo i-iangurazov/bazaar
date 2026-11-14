@@ -14,6 +14,7 @@ import {
   createSubscriptionCheckout,
   getSubscriptionPaymentState,
   listSubscriptionInvoices,
+  resumeSubscriptionCheckout,
 } from "@/server/billing/subscriptionPayments";
 
 const paymentProcedure = adminProcedure.use(({ ctx, next }) => {
@@ -91,6 +92,13 @@ export const subscriptionPaymentsRouter = router({
       } catch (error) {
         throw toTRPCError(error);
       }
+    }),
+  resume: paymentProcedure
+    .use(rateLimit({ max: 12, windowMs: 60_000, prefix: "billing-resume" }))
+    .input(z.object({ invoiceId: z.string().min(1).max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      try { return await resumeSubscriptionCheckout({ organizationId: ctx.user.organizationId, actorId: ctx.user.id, invoiceId: input.invoiceId }); }
+      catch (error) { throw toTRPCError(error); }
     }),
   check: paymentProcedure
     .use(rateLimit({ max: 12, windowMs: 60_000, prefix: "billing-check" }))

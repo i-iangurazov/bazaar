@@ -39,6 +39,7 @@ vi.mock("next-auth/react", () => ({
 }));
 vi.mock("@/components/page-breadcrumbs", () => ({ PageBreadcrumbs: () => null }));
 vi.mock("@/components/billing/payment-reviews", () => ({ PaymentReviews: () => null }));
+vi.mock("@/components/billing/apple-support-cases", () => ({ AppleSupportCases: () => null }));
 vi.mock("@/components/billing/manual-subscription-refunds", () => ({
   ManualSubscriptionRefunds: () => null,
 }));

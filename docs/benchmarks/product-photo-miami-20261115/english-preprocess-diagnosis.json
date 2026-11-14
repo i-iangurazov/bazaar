@@ -1,0 +1,38 @@
+[
+  {
+    "variant": "raw",
+    "texts": [
+      "miami mINT"
+    ],
+    "scores": [
+      0.76396
+    ]
+  },
+  {
+    "variant": "gray",
+    "texts": [
+      "miami mInT"
+    ],
+    "scores": [
+      0.7665
+    ]
+  },
+  {
+    "variant": "contrast",
+    "texts": [
+      "miami mInT"
+    ],
+    "scores": [
+      0.81472
+    ]
+  },
+  {
+    "variant": "padding",
+    "texts": [
+      "miami mnT"
+    ],
+    "scores": [
+      0.82583
+    ]
+  }
+]

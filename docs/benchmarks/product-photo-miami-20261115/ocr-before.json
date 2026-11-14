@@ -1,0 +1,343 @@
+[
+  {
+    "id": "IZR2bs6DZ-RJbrIXfSB",
+    "view": 0,
+    "analysis": {
+      "regionSource": "full",
+      "region": null,
+      "ocrStatus": "ready",
+      "lines": [
+        {
+          "text": "ELFBAR",
+          "confidence": 0.99842,
+          "box": {
+            "x": 0.41600000858306885,
+            "y": 0.3499999940395355,
+            "width": 0.16266666666666665,
+            "height": 0.04
+          }
+        },
+        {
+          "text": "GH23000",
+          "confidence": 0.99407,
+          "box": {
+            "x": 0.36533331871032715,
+            "y": 0.6140000224113464,
+            "width": 0.24266666666666667,
+            "height": 0.056
+          }
+        },
+        {
+          "text": "SOUR APPLE ICE",
+          "confidence": 0.96555,
+          "box": {
+            "x": 0.3973333239555359,
+            "y": 0.6859999895095825,
+            "width": 0.192,
+            "height": 0.03
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "IZR2bs6DZ-RJbrIXfSB",
+    "view": 1,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.2633924186229706,
+        "y": 0.16139039397239685,
+        "width": 0.47723308205604553,
+        "height": 0.663851797580719
+      },
+      "ocrStatus": "ready",
+      "lines": [
+        {
+          "text": "ELFBAR",
+          "confidence": 0.99928,
+          "box": {
+            "x": 0.3222222328186035,
+            "y": 0.2912912964820862,
+            "width": 0.3333333333333333,
+            "height": 0.05105105105105105
+          }
+        },
+        {
+          "text": "GH23000",
+          "confidence": 0.99605,
+          "box": {
+            "x": 0.22777777910232544,
+            "y": 0.684684693813324,
+            "width": 0.5,
+            "height": 0.08108108108108109
+          }
+        },
+        {
+          "text": "SOUR APPLE ICE",
+          "confidence": 0.96596,
+          "box": {
+            "x": 0.2888889014720917,
+            "y": 0.7987987995147705,
+            "width": 0.3888888888888889,
+            "height": 0.036036036036036036
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "IZR2bs6DZ-RJbrIXfSB",
+    "view": 2,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.5494238138198853,
+        "y": 0.8408592343330383,
+        "width": 0.27118390798568726,
+        "height": 0.15914075076580048
+      },
+      "ocrStatus": "ready",
+      "lines": []
+    }
+  },
+  {
+    "id": "IZR2bs6DZ-RJbrIXfSB",
+    "view": 3,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.3538958728313446,
+        "y": 0.16118304431438446,
+        "width": 0.16795377433300018,
+        "height": 0.11503610014915466
+      },
+      "ocrStatus": "ready",
+      "lines": []
+    }
+  },
+  {
+    "id": "KcMQMyqCO-f_xzYny1h9",
+    "view": 0,
+    "analysis": {
+      "regionSource": "full",
+      "region": null,
+      "ocrStatus": "ready",
+      "lines": [
+        {
+          "text": "ELFBAR",
+          "confidence": 0.99915,
+          "box": {
+            "x": 0.3440000116825104,
+            "y": 0.41600000858306885,
+            "width": 0.17066666666666666,
+            "height": 0.034
+          }
+        },
+        {
+          "text": "GH23000",
+          "confidence": 0.96179,
+          "box": {
+            "x": 0.2853333353996277,
+            "y": 0.6740000247955322,
+            "width": 0.264,
+            "height": 0.066
+          }
+        },
+        {
+          "text": "mAm MNT",
+          "confidence": 0.60249,
+          "box": {
+            "x": 0.34933334589004517,
+            "y": 0.7540000081062317,
+            "width": 0.16266666666666665,
+            "height": 0.03
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "KcMQMyqCO-f_xzYny1h9",
+    "view": 1,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.1932060718536377,
+        "y": 0.2933952212333679,
+        "width": 0.5023166537284851,
+        "height": 0.5944781303405762
+      },
+      "ocrStatus": "ready",
+      "lines": [
+        {
+          "text": "ELFBAR",
+          "confidence": 0.99927,
+          "box": {
+            "x": 0.3174603283405304,
+            "y": 0.21140938997268677,
+            "width": 0.3492063492063492,
+            "height": 0.050335570469798654
+          }
+        },
+        {
+          "text": "GH23000",
+          "confidence": 0.97603,
+          "box": {
+            "x": 0.2063492089509964,
+            "y": 0.6442952752113342,
+            "width": 0.5026455026455027,
+            "height": 0.1040268456375839
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "KcMQMyqCO-f_xzYny1h9",
+    "view": 2,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.33841708302497864,
+        "y": 0.0,
+        "width": 0.3508172333240509,
+        "height": 0.24649183452129364
+      },
+      "ocrStatus": "ready",
+      "lines": []
+    }
+  },
+  {
+    "id": "KcMQMyqCO-f_xzYny1h9",
+    "view": 3,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.3551008701324463,
+        "y": 0.547584056854248,
+        "width": 0.15528832376003265,
+        "height": 0.13685424625873566
+      },
+      "ocrStatus": "ready",
+      "lines": []
+    }
+  },
+  {
+    "id": "eDsVLm62O-NkITx8ye8",
+    "view": 0,
+    "analysis": {
+      "regionSource": "full",
+      "region": null,
+      "ocrStatus": "ready",
+      "lines": [
+        {
+          "text": "ELFBAR",
+          "confidence": 0.99951,
+          "box": {
+            "x": 0.3226666748523712,
+            "y": 0.3580000102519989,
+            "width": 0.17333333333333334,
+            "height": 0.044
+          }
+        },
+        {
+          "text": "GH23000",
+          "confidence": 0.99591,
+          "box": {
+            "x": 0.23733332753181458,
+            "y": 0.6380000114440918,
+            "width": 0.2826666666666667,
+            "height": 0.072
+          }
+        },
+        {
+          "text": "RAINBDW CANDY",
+          "confidence": 0.89758,
+          "box": {
+            "x": 0.2693333327770233,
+            "y": 0.7279999852180481,
+            "width": 0.224,
+            "height": 0.032
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "eDsVLm62O-NkITx8ye8",
+    "view": 1,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.3134133815765381,
+        "y": 0.5058358907699585,
+        "width": 0.16579465568065643,
+        "height": 0.14316031336784363
+      },
+      "ocrStatus": "ready",
+      "lines": []
+    }
+  },
+  {
+    "id": "eDsVLm62O-NkITx8ye8",
+    "view": 2,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.11716917157173157,
+        "y": 0.2522713840007782,
+        "width": 0.542471170425415,
+        "height": 0.6298533082008362
+      },
+      "ocrStatus": "ready",
+      "lines": [
+        {
+          "text": "ELFBAR",
+          "confidence": 0.99973,
+          "box": {
+            "x": 0.3853658437728882,
+            "y": 0.1708860695362091,
+            "width": 0.3073170731707317,
+            "height": 0.06329113924050633
+          }
+        },
+        {
+          "text": "GH23000",
+          "confidence": 0.99787,
+          "box": {
+            "x": 0.22926829755306244,
+            "y": 0.6107594966888428,
+            "width": 0.5170731707317073,
+            "height": 0.11708860759493671
+          }
+        },
+        {
+          "text": "RAINBOW CANDY",
+          "confidence": 0.84036,
+          "box": {
+            "x": 0.28780487179756165,
+            "y": 0.7563291192054749,
+            "width": 0.3951219512195122,
+            "height": 0.04746835443037975
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "eDsVLm62O-NkITx8ye8",
+    "view": 3,
+    "analysis": {
+      "regionSource": "auto",
+      "region": {
+        "x": 0.2774578332901001,
+        "y": 0.17354832589626312,
+        "width": 0.17179463803768158,
+        "height": 0.10721058398485184
+      },
+      "ocrStatus": "ready",
+      "lines": []
+    }
+  }
+]

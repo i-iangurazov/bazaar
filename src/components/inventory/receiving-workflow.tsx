@@ -1273,7 +1273,7 @@ export const InventoryReceivingPage = ({
       </div> : null}
       <fieldset disabled={pendingLocked} className="min-w-0">
       <div className="space-y-6">
-        <section className="bazaar-doc-surface p-4">
+        <section className="bazaar-doc-surface min-w-0 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-foreground">
               {t("receivingDetailsTitle")}
@@ -1285,8 +1285,8 @@ export const InventoryReceivingPage = ({
               </Link>
             </Button>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="receiving-store">{tCommon("store")}</Label>
               <Select value={storeId} onValueChange={handleStoreChange}>
                 <SelectTrigger id="receiving-store">
@@ -1301,16 +1301,17 @@ export const InventoryReceivingPage = ({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="receiving-date">{t("receivingDate")}</Label>
               <Input
                 id="receiving-date"
                 type="datetime-local"
+                className="max-w-full"
                 value={dateTime}
                 onChange={(event) => { setExactDateIso(null); setDateTime(event.target.value); }}
               />
             </div>
-            <details className="rounded-lg border border-border/65 bg-muted/25 p-3 lg:hidden">
+            <details className="min-w-0 rounded-lg border border-border/65 bg-muted/25 p-3 lg:hidden">
               <summary className="cursor-pointer text-sm font-semibold text-foreground">
                 {tCommon("additional")}
               </summary>
@@ -1345,7 +1346,7 @@ export const InventoryReceivingPage = ({
                 </div>
               </div>
             </details>
-            <div className="hidden space-y-2 lg:block">
+            <div className="hidden min-w-0 space-y-2 lg:block">
               <Label htmlFor="receiving-supplier">{t("receivingSupplier")}</Label>
               <Input
                 id="receiving-supplier"
@@ -1354,7 +1355,7 @@ export const InventoryReceivingPage = ({
                 placeholder={t("receivingSupplierPlaceholder")}
               />
             </div>
-            <div className="hidden space-y-2 lg:block">
+            <div className="hidden min-w-0 space-y-2 lg:block">
               <Label htmlFor="receiving-reference">{t("receivingReference")}</Label>
               <Input
                 id="receiving-reference"
@@ -1363,7 +1364,7 @@ export const InventoryReceivingPage = ({
                 placeholder={t("receivingReferencePlaceholder")}
               />
             </div>
-            <div className="hidden space-y-2 lg:col-span-2 lg:block">
+            <div className="hidden min-w-0 space-y-2 lg:col-span-2 lg:block">
               <Label htmlFor="receiving-note">{t("receivingNote")}</Label>
               <Textarea
                 id="receiving-note"
@@ -1376,8 +1377,8 @@ export const InventoryReceivingPage = ({
           </div>
         </section>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <section className="bazaar-doc-surface p-4">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingSearchTitle")}
@@ -1501,12 +1502,13 @@ export const InventoryReceivingPage = ({
             </div>
           </section>
 
-          <section className="bazaar-doc-surface p-4">
+          <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">
                 {t("receivingTableTitle")}
               </h3>
-              <Badge variant={validationMessage ? "warning" : "success"}>
+              <Badge variant={validationMessage ? "warning" : "success"}
+                className="h-auto min-h-5 min-w-0 whitespace-normal break-words py-0.5">
                 {validationMessage || t("receivingValidationReady")}
               </Badge>
             </div>

@@ -1,0 +1,1175 @@
+{
+  "schema": 1,
+  "protocolSha256": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa",
+  "inputSha256": "0ceb9311c788332c303ff6dfc5a267e1d8127f7986d82e62a6284c81a244e948",
+  "models": [
+    {
+      "model": "ppshitu",
+      "description": "PP-ShiTuV2 / general_PPLCNetV2_base_pretrained_v1.0",
+      "dimension": 512,
+      "threshold": 0.8224377036094667,
+      "modes": {
+        "auto": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 9,
+            "rawTop5": 12,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 13
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 2,
+            "rawTop5": 3,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 3,
+            "rawTop5": 6,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 8
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 0,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 0
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 0
+            }
+          }
+        },
+        "manual": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 11,
+            "rawTop5": 13,
+            "acceptedCorrectFirst": 2,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 2,
+            "withCandidates": 2,
+            "empty": 12
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 2,
+            "rawTop5": 2,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 5,
+            "rawTop5": 7,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 8
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 0,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 0
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 0
+            }
+          }
+        }
+      },
+      "hardCases": [
+        {
+          "query": "watermelon-cherry-80",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.6128619909286499,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "watermelon-cherry-300",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.4954843521118164,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-190",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "ALOI-19",
+          "targetRank": 6,
+          "targetScore": 0.20709411799907684,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-400",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "ALOI-482",
+          "targetRank": null,
+          "targetScore": null,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-540",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "ALOI-482",
+          "targetRank": 2,
+          "targetScore": 0.3151008188724518,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-560",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "targetRank": 3,
+          "targetScore": 0.34959352016448975,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-600",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "ALOI-482",
+          "targetRank": 2,
+          "targetScore": 0.29519185423851013,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-680",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.603059709072113,
+          "acceptedFirstSku": null
+        }
+      ],
+      "autoEncodingMs": {
+        "count": 20,
+        "mean": 201.57586874993285,
+        "p50": 211.74354149843566,
+        "p95": 216.34136038919678,
+        "p99": 217.6882384644705,
+        "min": 139.1531249973923,
+        "max": 218.0249579832889
+      },
+      "peakQueryRssMiB": 852.8125,
+      "modelLoadSeconds": 1.968717874988215
+    },
+    {
+      "model": "chinese-clip",
+      "description": "Chinese-CLIP ViT-B/16 / official checkpoint / vision encoder only",
+      "dimension": 512,
+      "threshold": 0.8592185974121095,
+      "modes": {
+        "auto": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 10,
+            "rawTop5": 14,
+            "acceptedCorrectFirst": 7,
+            "acceptedWrongFirst": 1,
+            "acceptedCorrectTop5": 7,
+            "withCandidates": 8,
+            "empty": 6
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 1,
+            "rawTop5": 2,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 2
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 5,
+            "rawTop5": 8,
+            "acceptedCorrectFirst": 2,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 2,
+            "withCandidates": 2,
+            "empty": 6
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 1,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 1
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 0
+            }
+          }
+        },
+        "manual": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 11,
+            "rawTop5": 14,
+            "acceptedCorrectFirst": 6,
+            "acceptedWrongFirst": 2,
+            "acceptedCorrectTop5": 7,
+            "withCandidates": 8,
+            "empty": 6
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 2,
+            "rawTop5": 3,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 2
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 6,
+            "rawTop5": 8,
+            "acceptedCorrectFirst": 2,
+            "acceptedWrongFirst": 1,
+            "acceptedCorrectTop5": 2,
+            "withCandidates": 3,
+            "empty": 5
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 2,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 2
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 0
+            }
+          }
+        }
+      },
+      "hardCases": [
+        {
+          "query": "watermelon-cherry-80",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.8297441601753235,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "watermelon-cherry-300",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.9026899337768555,
+          "acceptedFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY"
+        },
+        {
+          "query": "strawberry-banana-190",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 3,
+          "targetScore": 0.7996748685836792,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-400",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 3,
+          "targetScore": 0.6954091191291809,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-540",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.7655544877052307,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-560",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "targetRank": 2,
+          "targetScore": 0.760359525680542,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-600",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.7800049781799316,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-680",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.8705642819404602,
+          "acceptedFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE"
+        }
+      ],
+      "autoEncodingMs": {
+        "count": 20,
+        "mean": 364.91701245104196,
+        "p50": 381.0910625034012,
+        "p95": 394.5393523928942,
+        "p99": 394.7283704770962,
+        "min": 248.38908298988827,
+        "max": 394.77562499814667
+      },
+      "peakQueryRssMiB": 1032.421875,
+      "modelLoadSeconds": 3.714506499993149
+    },
+    {
+      "model": "dinov2-224",
+      "description": "DINOv2 ViT-B/14 / CLS / 224px",
+      "dimension": 768,
+      "threshold": 0.6742116808891297,
+      "modes": {
+        "auto": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 11,
+            "rawTop5": 14,
+            "acceptedCorrectFirst": 6,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 6,
+            "withCandidates": 6,
+            "empty": 8
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 1,
+            "rawTop5": 3,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 2,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 2,
+            "empty": 1
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 5,
+            "rawTop5": 8,
+            "acceptedCorrectFirst": 2,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 2,
+            "withCandidates": 2,
+            "empty": 6
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 4,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 2
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 2
+            }
+          }
+        },
+        "manual": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 11,
+            "rawTop5": 14,
+            "acceptedCorrectFirst": 4,
+            "acceptedWrongFirst": 1,
+            "acceptedCorrectTop5": 5,
+            "withCandidates": 5,
+            "empty": 9
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 1,
+            "rawTop5": 3,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 1,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 2,
+            "empty": 1
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 6,
+            "rawTop5": 8,
+            "acceptedCorrectFirst": 2,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 2,
+            "withCandidates": 2,
+            "empty": 6
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 3,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 1
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 2
+            }
+          }
+        }
+      },
+      "hardCases": [
+        {
+          "query": "watermelon-cherry-80",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.5387828946113586,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "watermelon-cherry-300",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.7089544534683228,
+          "acceptedFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY"
+        },
+        {
+          "query": "strawberry-banana-190",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 3,
+          "targetScore": 0.34419405460357666,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-400",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 2,
+          "targetScore": 0.4359627068042755,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-540",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.486970990896225,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-560",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "targetRank": 2,
+          "targetScore": 0.6355528831481934,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-600",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.5471051931381226,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-680",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.6977988481521606,
+          "acceptedFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE"
+        }
+      ],
+      "autoEncodingMs": {
+        "count": 20,
+        "mean": 469.5789249977679,
+        "p50": 491.5281664871145,
+        "p95": 506.01236489310395,
+        "p99": 510.72927299363073,
+        "min": 329.67929099686444,
+        "max": 511.9085000187624
+      },
+      "peakQueryRssMiB": 755.234375,
+      "modelLoadSeconds": 2.3925688329909462
+    },
+    {
+      "model": "dinov2-518",
+      "description": "DINOv2 ViT-B/14 / CLS / 518px",
+      "dimension": 768,
+      "threshold": 0.7153794765472413,
+      "modes": {
+        "auto": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 10,
+            "rawTop5": 14,
+            "acceptedCorrectFirst": 4,
+            "acceptedWrongFirst": 1,
+            "acceptedCorrectTop5": 5,
+            "withCandidates": 5,
+            "empty": 9
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 1,
+            "rawTop5": 3,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 2
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 5,
+            "rawTop5": 8,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 7
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 3,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 2
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 1
+            }
+          }
+        },
+        "manual": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 11,
+            "rawTop5": 14,
+            "acceptedCorrectFirst": 5,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 5,
+            "withCandidates": 5,
+            "empty": 9
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 1,
+            "rawTop5": 3,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 2
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 5,
+            "rawTop5": 8,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 7
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 1,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 1
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 0
+            }
+          }
+        }
+      },
+      "hardCases": [
+        {
+          "query": "watermelon-cherry-80",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.5263597369194031,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "watermelon-cherry-300",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.6616145968437195,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-190",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 3,
+          "targetScore": 0.3370433449745178,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-400",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 2,
+          "targetScore": 0.4170510470867157,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-540",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.4853973388671875,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-560",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "targetRank": 2,
+          "targetScore": 0.5910739898681641,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-600",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.5144768953323364,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-680",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.762994110584259,
+          "acceptedFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE"
+        }
+      ],
+      "autoEncodingMs": {
+        "count": 20,
+        "mean": 2739.2382895981427,
+        "p50": 2880.9887710085604,
+        "p95": 2924.8747774137883,
+        "p99": 2936.9718554842984,
+        "min": 1912.9571249941364,
+        "max": 2939.996125001926
+      },
+      "peakQueryRssMiB": 835.546875,
+      "modelLoadSeconds": 1.9295045000035316
+    },
+    {
+      "model": "siglip2",
+      "description": "SigLIP 2 ViT-B/16 / image tower / 224px",
+      "dimension": 768,
+      "threshold": 0.8315762281417848,
+      "modes": {
+        "auto": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 8,
+            "rawTop5": 12,
+            "acceptedCorrectFirst": 2,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 2,
+            "withCandidates": 2,
+            "empty": 12
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 1,
+            "rawTop5": 2,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 2
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 3,
+            "rawTop5": 6,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 8
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 0,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 0
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 0
+            }
+          }
+        },
+        "manual": {
+          "knownSingle": {
+            "queries": 14,
+            "rawTop1": 9,
+            "rawTop5": 12,
+            "acceptedCorrectFirst": 3,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 3,
+            "withCandidates": 3,
+            "empty": 11
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "rawTop1": 3,
+            "rawTop5": 3,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 2
+          },
+          "hardEight": {
+            "queries": 8,
+            "rawTop1": 4,
+            "rawTop5": 6,
+            "acceptedCorrectFirst": 1,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 1,
+            "withCandidates": 1,
+            "empty": 7
+          },
+          "absent": {
+            "queries": 3,
+            "rawTop1": 0,
+            "rawTop5": 0,
+            "acceptedCorrectFirst": 0,
+            "acceptedWrongFirst": 0,
+            "acceptedCorrectTop5": 0,
+            "withCandidates": 0,
+            "empty": 3
+          },
+          "leaveTargetOut": {
+            "queries": 17,
+            "withCandidates": 0,
+            "knownSingle": {
+              "queries": 14,
+              "withCandidates": 0
+            },
+            "knownMultiple": {
+              "queries": 3,
+              "withCandidates": 0
+            }
+          }
+        }
+      },
+      "hardCases": [
+        {
+          "query": "watermelon-cherry-80",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": 1,
+          "targetScore": 0.7919100522994995,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "watermelon-cherry-300",
+          "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 2,
+          "targetScore": 0.8015040159225464,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-190",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+          "targetRank": null,
+          "targetScore": null,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "strawberry-banana-400",
+          "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "rawFirstSku": "ALOI-143",
+          "targetRank": null,
+          "targetScore": null,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-540",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "ALOI-143",
+          "targetRank": 2,
+          "targetScore": 0.7313425540924072,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-560",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+          "targetRank": 2,
+          "targetScore": 0.7857012748718262,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-600",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.7641001343727112,
+          "acceptedFirstSku": null
+        },
+        {
+          "query": "sakura-grape-680",
+          "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "rawFirstSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+          "targetRank": 1,
+          "targetScore": 0.8248564600944519,
+          "acceptedFirstSku": null
+        }
+      ],
+      "autoEncodingMs": {
+        "count": 20,
+        "mean": 388.7018479508697,
+        "p50": 400.8991870068712,
+        "p95": 432.32916874403605,
+        "p99": 490.1582337619037,
+        "min": 265.358250006102,
+        "max": 504.6155000163708
+      },
+      "peakQueryRssMiB": 748.796875,
+      "modelLoadSeconds": 3.2242394589993637
+    }
+  ],
+  "currentPPThresholdReference": {
+    "threshold": 0.68,
+    "modes": {
+      "auto": {
+        "knownSingle": {
+          "queries": 14,
+          "rawTop1": 9,
+          "rawTop5": 12,
+          "acceptedCorrectFirst": 6,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 6,
+          "withCandidates": 6,
+          "empty": 8
+        },
+        "hardEight": {
+          "queries": 8,
+          "rawTop1": 3,
+          "rawTop5": 6,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 8
+        },
+        "absent": {
+          "queries": 3,
+          "rawTop1": 0,
+          "rawTop5": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 17,
+          "withCandidates": 0,
+          "knownSingle": {
+            "queries": 14,
+            "withCandidates": 0
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "withCandidates": 0
+          }
+        }
+      },
+      "manual": {
+        "knownSingle": {
+          "queries": 14,
+          "rawTop1": 11,
+          "rawTop5": 13,
+          "acceptedCorrectFirst": 6,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 6,
+          "withCandidates": 6,
+          "empty": 8
+        },
+        "hardEight": {
+          "queries": 8,
+          "rawTop1": 5,
+          "rawTop5": 7,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 8
+        },
+        "absent": {
+          "queries": 3,
+          "rawTop1": 0,
+          "rawTop5": 0,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 17,
+          "withCandidates": 0,
+          "knownSingle": {
+            "queries": 14,
+            "withCandidates": 0
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "withCandidates": 0
+          }
+        }
+      }
+    }
+  },
+  "exploratoryConsensus": {
+    "policy": {
+      "schema": 1,
+      "stage": "Exploratory after stage-one model comparison; not a blind test",
+      "baseProtocolSha256": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa",
+      "base": "ppshitu",
+      "baseThreshold": 0.68,
+      "fallback": "dinov2-224",
+      "fallbackThreshold": "Unchanged value frozen using the original calibration negatives before stage-one field tests",
+      "rule": "Keep PP-ShiTu matches above its existing .68 threshold. If none, admit only the DINOv2 top-one product when it exceeds its frozen calibration threshold and equals the PP-ShiTu raw top-one product ID. Never add other DINOv2 neighbors or compare score scales.",
+      "parametersSelectedOnHardEight": false,
+      "modelChoiceInformedByStageOne": true,
+      "activation": "Offline only; no application switch or production deployment"
+    },
+    "modes": {
+      "auto": {
+        "knownSingle": {
+          "queries": 14,
+          "acceptedCorrectFirst": 8,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 8,
+          "withCandidates": 8,
+          "empty": 6
+        },
+        "hardEight": {
+          "queries": 8,
+          "acceptedCorrectFirst": 2,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 2,
+          "withCandidates": 2,
+          "empty": 6
+        },
+        "absent": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 17,
+          "withCandidates": 1,
+          "knownSingle": {
+            "queries": 14,
+            "withCandidates": 1
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "withCandidates": 0
+          }
+        }
+      },
+      "manual": {
+        "knownSingle": {
+          "queries": 14,
+          "acceptedCorrectFirst": 8,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 8,
+          "withCandidates": 8,
+          "empty": 6
+        },
+        "hardEight": {
+          "queries": 8,
+          "acceptedCorrectFirst": 2,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 2,
+          "withCandidates": 2,
+          "empty": 6
+        },
+        "absent": {
+          "queries": 3,
+          "acceptedCorrectFirst": 0,
+          "acceptedWrongFirst": 0,
+          "acceptedCorrectTop5": 0,
+          "withCandidates": 0,
+          "empty": 3
+        },
+        "leaveTargetOut": {
+          "queries": 17,
+          "withCandidates": 0,
+          "knownSingle": {
+            "queries": 14,
+            "withCandidates": 0
+          },
+          "knownMultiple": {
+            "queries": 3,
+            "withCandidates": 0
+          }
+        }
+      }
+    },
+    "recoveredHardAuto": [
+      "watermelon-cherry-300",
+      "sakura-grape-680"
+    ],
+    "absentErrorsAuto": [
+      {
+        "query": "strawberry-banana-290",
+        "removedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+        "returnedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY"
+      }
+    ]
+  },
+  "limits": [
+    "Known development cases, not a blind independent test",
+    "Video gallery/query frames are correlated; current two added views remain in the fixed gallery",
+    "Calibration contains artwork and a different gallery/domain; its zero empirical false accepts do not guarantee test precision",
+    "Raw top-1/top-5 and accepted results are separate; cosine scores are not SKU probabilities"
+  ]
+}

@@ -108,7 +108,7 @@ function ActionCard({ actionId, c }: { actionId: string; c: BaamController }) {
     </div>
   );
 }
-export function BaamMessageList({ c }: { c: BaamController }) {
+export function BaamMessageList({ c, externalScrollContainer = false }: { c: BaamController; externalScrollContainer?: boolean }) {
   const lastActionMessage = new Map<string, string>();
   const lastWorkflowMessage = new Map<string, string>();
   for (const message of c.messages)
@@ -127,10 +127,10 @@ export function BaamMessageList({ c }: { c: BaamController }) {
   return (
     <>
       <div
-        ref={c.scrollRef}
+        ref={externalScrollContainer ? undefined : c.scrollRef}
         data-baam-history
-        className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5"
-        onScroll={() => {
+        className={cn("min-h-0 space-y-5 px-4 py-5 sm:px-5", externalScrollContainer ? "shrink-0" : "flex-1 overflow-y-auto overscroll-contain")}
+        onScroll={externalScrollContainer ? undefined : () => {
           const el = c.scrollRef.current;
           if (!el) return;
           c.nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;

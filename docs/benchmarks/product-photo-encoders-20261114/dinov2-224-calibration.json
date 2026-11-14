@@ -1,0 +1,26 @@
+{
+  "model": "dinov2-224",
+  "threshold": 0.6742116808891297,
+  "calibrationNegativeTopScores": [
+    0.5926381349563599,
+    0.6742116808891296,
+    0.5323504209518433,
+    0.4649575352668762,
+    0.5693167448043823,
+    0.4560199975967407,
+    0.45584994554519653,
+    0.566617488861084,
+    0.5106719732284546,
+    0.45642632246017456,
+    0.5436116456985474
+  ],
+  "policy": {
+    "queries": 11,
+    "storeId": "photo-search-browser-shop",
+    "galleryPhotos": 24,
+    "negatives": "Four truly absent queries plus seven known queries with the target SKU removed from the calibration gallery",
+    "threshold": "nextafter(maximum of automatic negative top scores, +infinity); freeze before test encoding",
+    "falseAcceptBudget": 0
+  },
+  "protocolSha256": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa"
+}

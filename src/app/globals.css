@@ -77,6 +77,222 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
 }
 
+/* iOS's native date appearance adds intrinsic width/content-box padding to
+   percentage-sized fields (WebKit 301648). Keep the real date input/picker,
+   while letting the shared field's declared size fit its grid column. */
+html.native-ios input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+html.native-ios input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.5em;
+}
+
+/* Radix locks BODY with overflow:hidden. In WKWebView that creates a new
+   scrolling ancestor and detaches the app's sticky header from the viewport.
+   Keep the real document lock on HTML; clip BODY without making it scrollable.
+   The lock attribute also accounts for nested dialogs and is removed by Radix. */
+html.native-ios:has(body[data-scroll-locked]) {
+  overflow: hidden !important;
+}
+
+html.native-ios body[data-scroll-locked] {
+  overflow: clip !important;
+}
+
+/* Keep centered native dialogs inside both safe areas without moving small
+   dialogs or changing their centering. The larger inset is reserved on both
+   sides because these surfaces use a 50% center and translateY(-50%). */
+html.native-ios {
+  --native-safe-area-left: env(safe-area-inset-left, 0px);
+  --native-safe-area-right: env(safe-area-inset-right, 0px);
+  --native-safe-area-width: max(0px, calc(100vw - var(--native-safe-area-left) - var(--native-safe-area-right)));
+  --native-safe-area-center: calc(var(--native-safe-area-left) + var(--native-safe-area-width) / 2);
+  --native-available-height: 100dvh;
+  --native-viewport-offset-top: 0px;
+  --native-dialog-top: var(--native-viewport-offset-top);
+  --native-dialog-height: calc(var(--native-available-height) - var(--native-dialog-top));
+  --native-centered-dialog-safe-height: calc(var(--native-dialog-height) - 2 * max(var(--mobile-top-safe-area), var(--mobile-bottom-safe-area)) - 1rem);
+}
+
+/* Native notices stay inside the visible screen above the keyboard. Keep the
+   shared web placement while giving every iPhone route the same safe top edge. */
+html.native-ios [data-toast-viewport] {
+  top: calc(max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) + 0.75rem);
+  bottom: auto;
+  left: calc(var(--native-safe-area-left) + 1rem);
+  right: calc(var(--native-safe-area-right) + 1rem);
+  width: auto;
+  max-width: 24rem;
+  margin-inline: auto;
+  transform: none;
+  max-height: max(0px, calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) - var(--mobile-bottom-safe-area) - 1.5rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: none;
+}
+
+html.native-ios [data-toast-viewport] .es-toast {
+  align-items: flex-start;
+}
+
+html.native-ios [data-toast-viewport] .es-toast__close {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+}
+
+/* One horizontal fence protects both AppShell branches, including the sticky
+   desktop rail used by landscape iPhones. Do not create a scroll container or
+   a transformed containing block: fixed controls and portals are bounded below. */
+html.native-ios [data-bazaar-app] {
+  padding-left: var(--native-safe-area-left, 0px);
+  padding-right: var(--native-safe-area-right, 0px);
+}
+
+html.native-ios [data-native-bottom-nav] {
+  left: var(--native-safe-area-left, 0px);
+  right: var(--native-safe-area-right, 0px);
+}
+
+html.native-ios .bazaar-doc-mobile-actions {
+  left: calc(var(--native-safe-area-left, 0px) + 0.75rem);
+  right: calc(var(--native-safe-area-right, 0px) + 0.75rem);
+}
+
+html.native-ios [data-bazaar-app] > a[href="#workspace-content"] {
+  left: calc(var(--native-safe-area-left, 0px) + 1rem);
+}
+
+/* Landscape iPhones still use a touch keyboard at desktop breakpoints. Extend
+   the existing mobile text-entry floor without restricting user/browser zoom. */
+html.native-ios input,
+html.native-ios select,
+html.native-ios textarea {
+  font-size: max(16px, 1rem) !important;
+}
+
+/* Preserve each existing width/max-width/variant. Only viewport-sized widths
+   and viewport-edge anchors use the safe horizontal rectangle. Backdrops keep
+   covering the entire viewport; vertical/keyboard bounds remain independent. */
+html.native-ios [role="dialog"][class~="left-1/2"] {
+  left: var(--native-safe-area-center, 50%) !important;
+}
+
+html.native-ios [role="dialog"][class~="w-[calc(100vw-1rem)]"] {
+  width: calc(var(--native-safe-area-width, 100vw) - 1rem) !important;
+}
+
+html.native-ios [role="dialog"][class~="w-[calc(100vw-1.5rem)]"] {
+  width: calc(var(--native-safe-area-width, 100vw) - 1.5rem) !important;
+}
+
+html.native-ios [role="dialog"][class~="w-[min(34rem,calc(100vw-1rem))]"] {
+  width: min(34rem, calc(var(--native-safe-area-width, 100vw) - 1rem)) !important;
+}
+
+html.native-ios [role="dialog"][class~="w-screen"] {
+  width: var(--native-safe-area-width, 100vw) !important;
+}
+
+html.native-ios [role="dialog"]:where([class~="inset-x-0"], [class~="inset-0"], [class~="left-0"][class~="right-0"]) {
+  left: var(--native-safe-area-left, 0px) !important;
+  right: var(--native-safe-area-right, 0px) !important;
+  width: auto !important;
+}
+
+html.native-ios [role="dialog"][class~="inset-y-0"][class~="left-0"] {
+  left: var(--native-safe-area-left, 0px) !important;
+}
+
+html.native-ios [role="dialog"][class~="inset-y-0"][class~="right-0"] {
+  right: var(--native-safe-area-right, 0px) !important;
+}
+
+@media (min-width: 640px) {
+  html.native-ios [role="dialog"][class~="sm:left-1/2"] {
+    left: var(--native-safe-area-center, 50%) !important;
+    right: auto !important;
+  }
+
+  html.native-ios [role="dialog"][class~="sm:w-[calc(100vw-2rem)]"] {
+    width: calc(var(--native-safe-area-width, 100vw) - 2rem) !important;
+  }
+
+  html.native-ios [role="dialog"][data-native-overlay-layout="responsive-bottom"] {
+    width: var(--native-safe-area-width, 100vw) !important;
+  }
+}
+
+html.native-ios[data-native-keyboard="visible"] {
+  --native-dialog-top: max(var(--native-viewport-offset-top), var(--mobile-top-safe-area));
+  --native-centered-dialog-safe-height: max(0px, calc(var(--native-dialog-height) - 1rem));
+}
+
+html.native-ios [role="dialog"][class~="top-1/2"] {
+  top: calc(var(--native-dialog-top) + var(--native-dialog-height) / 2) !important;
+}
+
+html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"] {
+  max-height: var(--native-centered-dialog-safe-height) !important;
+}
+
+html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[85dvh]"] {
+  max-height: min(85dvh, var(--native-centered-dialog-safe-height)) !important;
+}
+
+@media (min-width: 640px) {
+  html.native-ios [role="dialog"][class~="top-1/2"][class~="max-h-[calc(100dvh-1rem)]"] {
+    max-height: min(calc(100dvh - 2rem), var(--native-centered-dialog-safe-height)) !important;
+  }
+
+  html.native-ios [role="dialog"][data-native-overlay-layout="responsive-bottom"] {
+    top: calc(var(--native-dialog-top) + var(--native-dialog-height) / 2) !important;
+    bottom: auto !important;
+    max-height: min(85dvh, var(--native-centered-dialog-safe-height)) !important;
+  }
+}
+
+/* Fixed sheets still use the layout viewport when Capacitor resizes BODY.
+   Move their bottom edge to the measured visible edge, without subtracting
+   the keyboard again when WebKit has already resized its visual viewport. */
+html.native-ios[data-native-keyboard="visible"] [role="dialog"][class~="bottom-0"]:not([data-native-overlay-layout="responsive-bottom"]) {
+  bottom: calc(100dvh - var(--native-available-height)) !important;
+  max-height: max(0px, calc(var(--native-dialog-height) - 1rem)) !important;
+}
+
+html.native-ios[data-native-keyboard="visible"] [role="dialog"][class~="inset-y-0"],
+html.native-ios[data-native-keyboard="visible"] [role="dialog"][class~="h-[100dvh]"] {
+  top: max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) !important;
+  bottom: auto !important;
+  height: max(0px, calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)))) !important;
+  max-height: max(0px, calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)))) !important;
+  --tw-translate-y: 0px;
+}
+
+@media (max-width: 639px) {
+  html.native-ios[data-native-keyboard="visible"] [role="dialog"][data-native-overlay-layout="responsive-bottom"]:not([class~="h-[100dvh]"]) {
+    bottom: calc(100dvh - var(--native-available-height)) !important;
+    max-height: max(0px, calc(var(--native-dialog-height) - 1rem)) !important;
+  }
+
+  /* Only the existing full-viewport dialog variants reach the status bar.
+     Insetting the whole surface also protects sticky headers/absolute close
+     buttons after scrolling; ordinary dialogs and bottom sheets stay as they are. */
+  html.native-ios [role="dialog"][class~="h-[100dvh]"] {
+    top: max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) !important;
+    height: calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top))) !important;
+    max-height: calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top))) !important;
+    --tw-translate-y: 0px;
+  }
+}
+
 @media (min-width: 768px) {
   html:not(.native-app) .pwa-desktop-hidden {
     display: none;

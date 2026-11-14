@@ -512,7 +512,7 @@ const buildProductMovementJournalCte = (input: {
       ln."documentReferenceType",
       ln."documentReferenceId",
       COUNT(*) FILTER (WHERE ABS(ln."netQty") > 0)::int AS "positionsCount",
-      COALESCE(SUM(ABS(ln."netQty")), 0)::int AS "totalQuantity"
+      COALESCE(SUM(ABS(ln."netQty")), 0)::double precision AS "totalQuantity"
     FROM movement_line_net ln
     GROUP BY
       ln."documentType",
@@ -582,7 +582,7 @@ const buildProductMovementJournalCte = (input: {
       g."documentDate",
       g."firstMovementAt",
       COALESCE(lt."positionsCount", 0)::int AS "positionsCount",
-      COALESCE(lt."totalQuantity", 0)::int AS "totalQuantity",
+      COALESCE(lt."totalQuantity", 0)::double precision AS "totalQuantity",
       CASE
         WHEN g."documentType" IN ('STOCK_RECEIVING', 'WRITE_OFF')
         THEN COALESCE(sd."effectiveStoreName", g."storeName")

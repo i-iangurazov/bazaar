@@ -1,4 +1,4 @@
-import { shareBlobNative } from "@/lib/native/files";
+import { shareBlobNative, type NativeShareResult } from "@/lib/native/files";
 import { isNativeApp } from "@/lib/native/platform";
 
 const pdfMimeType = "application/pdf";
@@ -27,8 +27,8 @@ const downloadPdfInBrowser = (blob: Blob, fileName: string) => {
 
 export const downloadPdfBlob = (blob: Blob, fileName: string) => {
   if (isNativeApp()) {
-    void shareBlobNative({ blob, fileName, title: "Bazaar PDF" }).then((shared) => {
-      if (!shared) downloadPdfInBrowser(blob, fileName);
+    void shareBlobNative({ blob, fileName, title: "Bazaar PDF" }).then((result) => {
+      if (result.status === "unavailable" || result.status === "failed") downloadPdfInBrowser(blob, fileName);
     });
     return;
   }
@@ -39,16 +39,22 @@ export type PrintPdfBlobResult = {
   opened: boolean;
   autoPrintAttempted: boolean;
   fallbackUsed: boolean;
+  nativeShareStatus?: NativeShareResult["status"];
 };
 
-export const printPdfBlob = async (blob: Blob) => {
+export const printPdfBlob = async (blob: Blob): Promise<PrintPdfBlobResult> => {
   if (isNativeApp()) {
-    const shared = await shareBlobNative({
+    const result = await shareBlobNative({
       blob,
       fileName: "bazaar-document.pdf",
       title: "Bazaar",
     });
-    return { opened: shared, autoPrintAttempted: false, fallbackUsed: !shared };
+    return {
+      opened: result.status === "shared",
+      autoPrintAttempted: false,
+      fallbackUsed: result.status === "unavailable" || result.status === "failed",
+      nativeShareStatus: result.status,
+    };
   }
   const url = URL.createObjectURL(blob);
   const revokeLater = () => {

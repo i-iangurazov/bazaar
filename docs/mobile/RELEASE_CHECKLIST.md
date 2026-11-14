@@ -5,10 +5,13 @@ Store copy, privacy/billing gates and signing handoff: [store/REVIEW_HANDOFF.md]
 Until approval: [PWA installation](INSTALL_BEFORE_STORE_REVIEW.md).
 
 Unchecked device/store gates remain required even when automated builds pass.
+The current iOS work uses [isolated internal TestFlight](IOS_TESTFLIGHT_STAGING.md)
+and the [iPhone acceptance record](IPHONE_ACCEPTANCE.md). The November 3 status
+above is historical evidence, not approval of this release.
 
 ## Shared gate
 
-- [ ] Exact source SHA and uncommitted changes recorded (current work is on `main` by explicit human instruction); web typecheck, lint, i18n, tests, build and diff-check pass.
+- [ ] Exact source SHA and uncommitted changes recorded on `codex/playground`; web typecheck, lint, i18n, tests, build and diff-check pass. Main/production require the owner's separate authorization.
 - [ ] Additive migrations applied with `prisma migrate deploy`; no pending migrations and no `db push`.
 - [ ] Production, Preview and development mobile base URLs validated.
 - [ ] Native bundle scan contains no DB/Redis/provider/auth/signing secrets.

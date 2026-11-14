@@ -1,11 +1,21 @@
 // @vitest-environment jsdom
+import React from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+
+const nativeState = vi.hoisted(() => ({ native: false, failed: false }));
+vi.mock("@/lib/native/platform", () => ({ isNativeApp: () => {
+  if (nativeState.failed) throw new Error("Native probe unavailable");
+  return nativeState.native;
+} }));
+vi.mock("next/navigation", () => ({ usePathname: () => window.location.pathname }));
 
 type AnalyticsWindow = Window & { dataLayer?: unknown[][]; gtag?: (...args: unknown[]) => void };
 const measurementId = "G-TEST123456";
 const commands = () => ((window as AnalyticsWindow).dataLayer ?? []).map(command => Array.from(command));
 
 beforeEach(() => {
+  nativeState.native = false; nativeState.failed = false;
   vi.resetModules();
   vi.stubEnv("NEXT_PUBLIC_GA4_MEASUREMENT_ID", measurementId);
   vi.stubEnv("NEXT_PUBLIC_GA4_ENABLED", "true");
@@ -21,7 +31,110 @@ beforeEach(() => {
   delete (window as AnalyticsWindow).dataLayer;
   delete (window as AnalyticsWindow).gtag;
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+const inheritedWebsiteConsent = () => localStorage.setItem("bazaar_marketing_consent_v2", JSON.stringify({
+  version: 2, analytics: "granted", advertising: "granted", at: Date.now(),
+}));
+
+describe("native app isolation from website advertising choices", () => {
+  it("does not initialize Google or retain click IDs in a Capacitor app with inherited website grants", async () => {
+    nativeState.native = true;
+    inheritedWebsiteConsent();
+    window.history.replaceState({}, "", "/ru?gclid=SyntheticNativeClick&gad_source=1");
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.synchronizeMarketingAnalytics("/ru");
+    analytics.trackMarketingEvent("contact_whatsapp_click");
+    expect(analytics.marketingMeasurementId()).toBeNull();
+    expect(document.querySelector("script")).toBeNull();
+    expect(commands()).toEqual([]);
+    expect(sessionStorage.getItem("bazaar_google_click_v1")).toBeNull();
+  });
+
+  it("rejects every compiled native UA before the Capacitor bridge is available", async () => {
+    const ua = vi.spyOn(navigator, "userAgent", "get");
+    inheritedWebsiteConsent();
+    window.history.replaceState({}, "", "/signup");
+    for (const suffix of ["BazaarNative/1.0.0 (production)", "BazaarNativeIOS/1.0.0", "BazaarNativeAndroid/1.0.0"]) {
+      vi.resetModules();
+      ua.mockReturnValue(`Mozilla/5.0 ${suffix}`);
+      const analytics = await import("@/lib/marketingAnalytics");
+      analytics.synchronizeMarketingAnalytics("/signup");
+      analytics.trackMarketingEvent("sign_up");
+      expect(analytics.marketingMeasurementId()).toBeNull();
+      expect(document.querySelector("script")).toBeNull();
+      expect(commands()).toEqual([]);
+    }
+  });
+
+  it("fails closed when the native-platform probe is unavailable despite a valid configured stream", async () => {
+    nativeState.failed = true;
+    inheritedWebsiteConsent();
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.synchronizeMarketingAnalytics("/");
+    analytics.trackMarketingEvent("contact_whatsapp_click");
+    expect(analytics.marketingMeasurementId()).toBeNull();
+    expect(document.querySelector("script")).toBeNull();
+    expect(commands()).toEqual([]);
+  });
+
+  it("disables a previously initialized web stream without sending consent pings after entering native", async () => {
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.writeAnalyticsConsent("granted", "granted");
+    analytics.synchronizeMarketingAnalytics("/");
+    const beforeNative = commands();
+    expect(beforeNative.some(command => command[0] === "config")).toBe(true);
+    nativeState.native = true;
+    analytics.synchronizeMarketingAnalytics("/");
+    analytics.writeAnalyticsConsent("denied");
+    analytics.trackMarketingEvent("sign_up");
+    expect(commands()).toEqual(beforeNative);
+    expect(document.querySelector("script")).toBeNull();
+    expect((window as unknown as Record<string, unknown>)[`ga-disable-${measurementId}`]).toBe(true);
+  });
+
+  it("completes native signup measurement immediately and preserves normal SPA registration navigation", async () => {
+    vi.useFakeTimers();
+    nativeState.native = true;
+    inheritedWebsiteConsent();
+    window.history.replaceState({}, "", "/signup");
+    const analytics = await import("@/lib/marketingAnalytics");
+    analytics.synchronizeMarketingAnalytics("/signup");
+    const timersBeforeSignup = vi.getTimerCount();
+    const clockBeforeSignup = Date.now();
+    const completion = analytics.trackSignupBeforeNavigation();
+    expect(vi.getTimerCount()).toBe(timersBeforeSignup);
+    await completion;
+    expect(Date.now()).toBe(clockBeforeSignup);
+    const spa = vi.fn(), hard = vi.fn();
+    analytics.replaceAfterMarketingSuccess("/register-business/synthetic-native-token", spa, hard);
+    expect(spa).toHaveBeenCalledExactlyOnceWith("/register-business/synthetic-native-token");
+    expect(hard).not.toHaveBeenCalled();
+    expect(commands()).toEqual([]);
+  });
+
+  it("keeps the real consent component out of native signup UI with both provider IDs configured", async () => {
+    nativeState.native = true;
+    inheritedWebsiteConsent();
+    localStorage.setItem("bazaar_meta_measurement_consent_v1", JSON.stringify({ version: 1, choice: "granted", at: Date.now() }));
+    vi.stubEnv("NEXT_PUBLIC_META_PIXEL_ID", "1635457884748007");
+    window.history.replaceState({}, "", "/signup");
+    const [{ MarketingAnalytics }, { NextIntlClientProvider }, { default: messages }] = await Promise.all([
+      import("@/components/analytics/marketing-analytics"), import("next-intl"), import("../../messages/ru.json"),
+    ]);
+    const continueSignup = vi.fn();
+    render(React.createElement(NextIntlClientProvider, { locale: "ru", messages, timeZone: "Asia/Bishkek", children:
+      React.createElement(React.Fragment, null, React.createElement("button", { onClick: continueSignup }, "Continue synthetic signup"), React.createElement(MarketingAnalytics)) }));
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: messages.analyticsConsent.settings })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Continue synthetic signup" }));
+    expect(continueSignup).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("script")).toBeNull();
+    expect((window as Window & { fbq?: unknown }).fbq).toBeUndefined();
+    expect(commands()).toEqual([]);
+  });
+});
 
 describe("optional marketing analytics", () => {
   it.each(["disabled", "invalid"])("preserves existing GA cookies when the SDK was never configured: %s", async (mode) => {

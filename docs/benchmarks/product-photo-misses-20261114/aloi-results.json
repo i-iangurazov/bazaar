@@ -1,0 +1,5395 @@
+{
+  "schema": 1,
+  "model": "ppshitu-v2-pplcnetv2-v1-fp32-224",
+  "threshold": 0.68,
+  "withVision": true,
+  "textReranking": false,
+  "pairs": [
+    [
+      259,
+      262
+    ],
+    [
+      577,
+      617
+    ],
+    [
+      543,
+      546
+    ],
+    [
+      609,
+      618
+    ],
+    [
+      143,
+      19
+    ],
+    [
+      208,
+      321
+    ]
+  ],
+  "products": 12,
+  "galleryPhotos": 24,
+  "heldOutQueries": 60,
+  "rawTop1": 0.9666666666666667,
+  "visibleTop5": 0.8833333333333333,
+  "visibleWrongTop1": 0.016666666666666666,
+  "absentCandidateRate": 0.4166666666666667,
+  "identicalPhotoDifferentSku": {
+    "candidates": 2,
+    "scores": [
+      0.9999999403953552,
+      0.9999999403953552
+    ],
+    "distinguishable": false
+  },
+  "limits": [
+    "Curated 12 public ALOI objects; 154x115 previews, not Bazaar SKU accuracy",
+    "Real pinned runtime and Faiss, Node canonicalization; no database or user gallery changes",
+    "Same input pixels for duplicate-SKU ambiguity is a protocol test, not independent photographic evidence"
+  ],
+  "results": [
+    {
+      "id": "aloi-143-i120",
+      "productId": "aloi-143",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 0,
+          "score": 0.9877095222473145,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.44355523586273193,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.3731079399585724,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 12,
+          "score": 0.3367476463317871,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.31909435987472534,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.3102107048034668,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 9,
+          "score": 0.2975893020629883,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 21,
+          "score": 0.2834479510784149,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.44355523586273193,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 13,
+          "score": 0.3731079399585724,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 10,
+          "score": 0.3367476463317871,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 3,
+          "score": 0.31909435987472534,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.3102107048034668,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 7,
+          "score": 0.2975893020629883,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 19,
+          "score": 0.2834479510784149,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.27793413400650024,
+          "productId": "aloi-259"
+        }
+      ]
+    },
+    {
+      "id": "aloi-143-l3c1",
+      "productId": "aloi-143",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 0,
+          "score": 0.9933845400810242,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.42499494552612305,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.37681618332862854,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 12,
+          "score": 0.34864696860313416,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 17,
+          "score": 0.31853199005126953,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 5,
+          "score": 0.31562554836273193,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.30927786231040955,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 20,
+          "score": 0.30316564440727234,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.42499494552612305,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 13,
+          "score": 0.37681618332862854,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 10,
+          "score": 0.34864696860313416,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.31853199005126953,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 3,
+          "score": 0.31562554836273193,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 7,
+          "score": 0.30927786231040955,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.30316564440727234,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.28437769412994385,
+          "productId": "aloi-259"
+        }
+      ]
+    },
+    {
+      "id": "aloi-143-r180",
+      "productId": "aloi-143",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 0,
+          "score": 0.9702395796775818,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.4617350101470947,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.37315839529037476,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 12,
+          "score": 0.3428783118724823,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.3389902114868164,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.3255690038204193,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 21,
+          "score": 0.32043877243995667,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 9,
+          "score": 0.3071373701095581,
+          "productId": "aloi-262"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.4617350101470947,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 13,
+          "score": 0.37315839529037476,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 10,
+          "score": 0.3428783118724823,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 3,
+          "score": 0.3389902114868164,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.3255690038204193,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 19,
+          "score": 0.32043877243995667,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 7,
+          "score": 0.3071373701095581,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.2913391888141632,
+          "productId": "aloi-259"
+        }
+      ]
+    },
+    {
+      "id": "aloi-143-r30",
+      "productId": "aloi-143",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 0,
+          "score": 0.845055341720581,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.5627734661102295,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.3997509777545929,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 5,
+          "score": 0.3421451449394226,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 12,
+          "score": 0.33280590176582336,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 11,
+          "score": 0.32007211446762085,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 9,
+          "score": 0.2890356481075287,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 21,
+          "score": 0.2693755328655243,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 0,
+          "score": 0.5627734661102295,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 13,
+          "score": 0.3997509777545929,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 3,
+          "score": 0.3421451449394226,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 10,
+          "score": 0.33280590176582336,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 9,
+          "score": 0.32007211446762085,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 7,
+          "score": 0.2890356481075287,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 19,
+          "score": 0.2693755328655243,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 15,
+          "score": 0.2650386691093445,
+          "productId": "aloi-577"
+        }
+      ]
+    },
+    {
+      "id": "aloi-143-r60",
+      "productId": "aloi-143",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 1,
+          "score": 0.8377932906150818,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.7108562588691711,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.39761340618133545,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 5,
+          "score": 0.37996944785118103,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 13,
+          "score": 0.36797285079956055,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 6,
+          "score": 0.36445316672325134,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.34978774189949036,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 17,
+          "score": 0.33174896240234375,
+          "productId": "aloi-577"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 0,
+          "score": 0.7108562588691711,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 13,
+          "score": 0.39761340618133545,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 3,
+          "score": 0.37996944785118103,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.36797285079956055,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 4,
+          "score": 0.36445316672325134,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 16,
+          "score": 0.34978774189949036,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 15,
+          "score": 0.33174896240234375,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 19,
+          "score": 0.32590287923812866,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-19-i120",
+      "productId": "aloi-19",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 2,
+          "score": 0.9858556985855103,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 1,
+          "score": 0.7421696186065674,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.47922906279563904,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.4390280246734619,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 23,
+          "score": 0.3718927800655365,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 6,
+          "score": 0.3451247215270996,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 13,
+          "score": 0.32906973361968994,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 18,
+          "score": 0.3255981206893921,
+          "productId": "aloi-609"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.7421696186065674,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.47922906279563904,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.4390280246734619,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 21,
+          "score": 0.3718927800655365,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 4,
+          "score": 0.3451247215270996,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.32906973361968994,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 16,
+          "score": 0.3255981206893921,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 13,
+          "score": 0.3200816512107849,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-19-l3c1",
+      "productId": "aloi-19",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 2,
+          "score": 0.973764181137085,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 1,
+          "score": 0.744037926197052,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.476643830537796,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.42648017406463623,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 23,
+          "score": 0.36942070722579956,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 7,
+          "score": 0.3158910572528839,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 13,
+          "score": 0.3129829466342926,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 18,
+          "score": 0.3077554702758789,
+          "productId": "aloi-609"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.744037926197052,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.476643830537796,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.42648017406463623,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 21,
+          "score": 0.36942070722579956,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 5,
+          "score": 0.3158910572528839,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.3129829466342926,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 16,
+          "score": 0.3077554702758789,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 13,
+          "score": 0.2991749346256256,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-19-r180",
+      "productId": "aloi-19",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 2,
+          "score": 0.9715190529823303,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 1,
+          "score": 0.7381380796432495,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.4681011438369751,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.4429604709148407,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 23,
+          "score": 0.35684114694595337,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 6,
+          "score": 0.3322445750236511,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 13,
+          "score": 0.31865647435188293,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 18,
+          "score": 0.3150991201400757,
+          "productId": "aloi-609"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.7381380796432495,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.4681011438369751,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.4429604709148407,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 21,
+          "score": 0.35684114694595337,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 4,
+          "score": 0.3322445750236511,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.31865647435188293,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 16,
+          "score": 0.3150991201400757,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.31194427609443665,
+          "productId": "aloi-262"
+        }
+      ]
+    },
+    {
+      "id": "aloi-19-r30",
+      "productId": "aloi-19",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 2,
+          "score": 0.8720273971557617,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 1,
+          "score": 0.6411119699478149,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.4189992845058441,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.39093929529190063,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 6,
+          "score": 0.36838299036026,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.36053916811943054,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 11,
+          "score": 0.3484051525592804,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 9,
+          "score": 0.3423396348953247,
+          "productId": "aloi-262"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.6411119699478149,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.4189992845058441,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.39093929529190063,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 4,
+          "score": 0.36838299036026,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 16,
+          "score": 0.36053916811943054,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 9,
+          "score": 0.3484051525592804,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 7,
+          "score": 0.3423396348953247,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.29426395893096924,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-19-r60",
+      "productId": "aloi-19",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 2,
+          "score": 0.9119764566421509,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 1,
+          "score": 0.6761497259140015,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.44280296564102173,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.3907736539840698,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 7,
+          "score": 0.38150423765182495,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.37493082880973816,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 9,
+          "score": 0.3542492985725403,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.35214680433273315,
+          "productId": "aloi-609"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 1,
+          "score": 0.6761497259140015,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 3,
+          "score": 0.44280296564102173,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.3907736539840698,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 5,
+          "score": 0.38150423765182495,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.37493082880973816,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 7,
+          "score": 0.3542492985725403,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 16,
+          "score": 0.35214680433273315,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 11,
+          "score": 0.3038932681083679,
+          "productId": "aloi-543"
+        }
+      ]
+    },
+    {
+      "id": "aloi-208-i120",
+      "productId": "aloi-208",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 4,
+          "score": 0.8652904033660889,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.45351994037628174,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.437286376953125,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 9,
+          "score": 0.39968186616897583,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.39250996708869934,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.39148983359336853,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 2,
+          "score": 0.37940406799316406,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 11,
+          "score": 0.36107930541038513,
+          "productId": "aloi-321"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 4,
+          "score": 0.45351994037628174,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.437286376953125,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 7,
+          "score": 0.39968186616897583,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 16,
+          "score": 0.39250996708869934,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.39148983359336853,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 2,
+          "score": 0.37940406799316406,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 9,
+          "score": 0.36107930541038513,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 0,
+          "score": 0.3506389856338501,
+          "productId": "aloi-143"
+        }
+      ]
+    },
+    {
+      "id": "aloi-208-l3c1",
+      "productId": "aloi-208",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 4,
+          "score": 0.8339565992355347,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.4167781472206116,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.3976607918739319,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 18,
+          "score": 0.36495351791381836,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 2,
+          "score": 0.3588404357433319,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 11,
+          "score": 0.35644856095314026,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 1,
+          "score": 0.348609060049057,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 23,
+          "score": 0.3452647626399994,
+          "productId": "aloi-618"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 4,
+          "score": 0.4167781472206116,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.3976607918739319,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 16,
+          "score": 0.36495351791381836,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 2,
+          "score": 0.3588404357433319,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 9,
+          "score": 0.35644856095314026,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 1,
+          "score": 0.348609060049057,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 21,
+          "score": 0.3452647626399994,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 7,
+          "score": 0.3350054919719696,
+          "productId": "aloi-262"
+        }
+      ]
+    },
+    {
+      "id": "aloi-208-r180",
+      "productId": "aloi-208",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 5,
+          "score": 0.40124794840812683,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.3893758952617645,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 17,
+          "score": 0.38687729835510254,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 11,
+          "score": 0.36496564745903015,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 1,
+          "score": 0.36472514271736145,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.35257962346076965,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 6,
+          "score": 0.333657443523407,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.28412798047065735,
+          "productId": "aloi-609"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 19,
+          "score": 0.3893758952617645,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 15,
+          "score": 0.38687729835510254,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 9,
+          "score": 0.36496564745903015,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 1,
+          "score": 0.36472514271736145,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.35257962346076965,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 4,
+          "score": 0.333657443523407,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 16,
+          "score": 0.28412798047065735,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.28381025791168213,
+          "productId": "aloi-618"
+        }
+      ]
+    },
+    {
+      "id": "aloi-208-r30",
+      "productId": "aloi-208",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 4,
+          "score": 0.8876729011535645,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 7,
+          "score": 0.41808953881263733,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.3798469007015228,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 23,
+          "score": 0.3638075590133667,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3633860647678375,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 20,
+          "score": 0.35480356216430664,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.34075555205345154,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 11,
+          "score": 0.3037976324558258,
+          "productId": "aloi-321"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 5,
+          "score": 0.41808953881263733,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 7,
+          "score": 0.3798469007015228,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 21,
+          "score": 0.3638075590133667,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 16,
+          "score": 0.3633860647678375,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 18,
+          "score": 0.35480356216430664,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.34075555205345154,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 9,
+          "score": 0.3037976324558258,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 1,
+          "score": 0.2845669984817505,
+          "productId": "aloi-143"
+        }
+      ]
+    },
+    {
+      "id": "aloi-208-r60",
+      "productId": "aloi-208",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 4,
+          "score": 0.5630772113800049,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.36434686183929443,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 21,
+          "score": 0.3546640872955322,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 18,
+          "score": 0.34868550300598145,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.3249977231025696,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.3222244083881378,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 11,
+          "score": 0.2884955406188965,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 2,
+          "score": 0.2779359221458435,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 21,
+          "score": 0.36434686183929443,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 19,
+          "score": 0.3546640872955322,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 16,
+          "score": 0.34868550300598145,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.3249977231025696,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 7,
+          "score": 0.3222244083881378,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 9,
+          "score": 0.2884955406188965,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 2,
+          "score": 0.2779359221458435,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.26179319620132446,
+          "productId": "aloi-577"
+        }
+      ]
+    },
+    {
+      "id": "aloi-259-i120",
+      "productId": "aloi-259",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 6,
+          "score": 0.944101095199585,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.7190479040145874,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 23,
+          "score": 0.4541587829589844,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.44081515073776245,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.410305380821228,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.3859531283378601,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 20,
+          "score": 0.3768145442008972,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 13,
+          "score": 0.36550432443618774,
+          "productId": "aloi-543"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.7190479040145874,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 21,
+          "score": 0.4541587829589844,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 16,
+          "score": 0.44081515073776245,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.410305380821228,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.3859531283378601,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 18,
+          "score": 0.3768145442008972,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 11,
+          "score": 0.36550432443618774,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 12,
+          "score": 0.3517989218235016,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-259-l3c1",
+      "productId": "aloi-259",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 6,
+          "score": 0.8960976600646973,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.6763037443161011,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.3896022140979767,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.38949304819107056,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.37761178612709045,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 13,
+          "score": 0.37348228693008423,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 14,
+          "score": 0.34082213044166565,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 17,
+          "score": 0.3388128876686096,
+          "productId": "aloi-577"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.6763037443161011,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.3896022140979767,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.38949304819107056,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 16,
+          "score": 0.37761178612709045,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 11,
+          "score": 0.37348228693008423,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 12,
+          "score": 0.34082213044166565,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 15,
+          "score": 0.3388128876686096,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 18,
+          "score": 0.31551915407180786,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-259-r180",
+      "productId": "aloi-259",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 6,
+          "score": 0.9408726096153259,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.7488912343978882,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.42993780970573425,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.39210474491119385,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3918348550796509,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 13,
+          "score": 0.3869757354259491,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 17,
+          "score": 0.35235655307769775,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 20,
+          "score": 0.3441691994667053,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.7488912343978882,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.42993780970573425,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.39210474491119385,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 16,
+          "score": 0.3918348550796509,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 11,
+          "score": 0.3869757354259491,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.35235655307769775,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 18,
+          "score": 0.3441691994667053,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 12,
+          "score": 0.34170395135879517,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-259-r30",
+      "productId": "aloi-259",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 6,
+          "score": 0.9181872606277466,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.7754027843475342,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.4796738624572754,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.45001211762428284,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.4490487575531006,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 20,
+          "score": 0.3575115501880646,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 13,
+          "score": 0.35353243350982666,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 2,
+          "score": 0.3444265127182007,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.7754027843475342,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.4796738624572754,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.45001211762428284,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 16,
+          "score": 0.4490487575531006,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 18,
+          "score": 0.3575115501880646,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 11,
+          "score": 0.35353243350982666,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 2,
+          "score": 0.3444265127182007,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.3430989682674408,
+          "productId": "aloi-577"
+        }
+      ]
+    },
+    {
+      "id": "aloi-259-r60",
+      "productId": "aloi-259",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 7,
+          "score": 0.9386102557182312,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.7333725690841675,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.4666910171508789,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.4433750808238983,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.41550010442733765,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 13,
+          "score": 0.36771273612976074,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 20,
+          "score": 0.3604937195777893,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.35914045572280884,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 7,
+          "score": 0.7333725690841675,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.4666910171508789,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.4433750808238983,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 16,
+          "score": 0.41550010442733765,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 11,
+          "score": 0.36771273612976074,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 18,
+          "score": 0.3604937195777893,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.35914045572280884,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 9,
+          "score": 0.34070366621017456,
+          "productId": "aloi-321"
+        }
+      ]
+    },
+    {
+      "id": "aloi-262-i120",
+      "productId": "aloi-262",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 8,
+          "score": 0.9485244154930115,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 6,
+          "score": 0.732876181602478,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.3571133017539978,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.35195422172546387,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 4,
+          "score": 0.3511258065700531,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 12,
+          "score": 0.32981395721435547,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 14,
+          "score": 0.3194925785064697,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.3098554313182831,
+          "productId": "aloi-143"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.732876181602478,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 16,
+          "score": 0.3571133017539978,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.35195422172546387,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 4,
+          "score": 0.3511258065700531,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 10,
+          "score": 0.32981395721435547,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 12,
+          "score": 0.3194925785064697,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.3098554313182831,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.2932165861129761,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-262-l3c1",
+      "productId": "aloi-262",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 8,
+          "score": 0.9188289642333984,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 6,
+          "score": 0.7320563197135925,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.354053795337677,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 14,
+          "score": 0.3492526412010193,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 13,
+          "score": 0.3448790907859802,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 18,
+          "score": 0.33212006092071533,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.31927284598350525,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 2,
+          "score": 0.29138293862342834,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.7320563197135925,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.354053795337677,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 12,
+          "score": 0.3492526412010193,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 11,
+          "score": 0.3448790907859802,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 16,
+          "score": 0.33212006092071533,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.31927284598350525,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 2,
+          "score": 0.29138293862342834,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 1,
+          "score": 0.2873377203941345,
+          "productId": "aloi-143"
+        }
+      ]
+    },
+    {
+      "id": "aloi-262-r180",
+      "productId": "aloi-262",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 8,
+          "score": 0.8777675032615662,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 6,
+          "score": 0.7581111192703247,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 12,
+          "score": 0.3720685839653015,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 4,
+          "score": 0.3718101382255554,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.3532785177230835,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 18,
+          "score": 0.34811103343963623,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 20,
+          "score": 0.34727466106414795,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 23,
+          "score": 0.3189224302768707,
+          "productId": "aloi-618"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.7581111192703247,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 10,
+          "score": 0.3720685839653015,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 4,
+          "score": 0.3718101382255554,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 13,
+          "score": 0.3532785177230835,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 16,
+          "score": 0.34811103343963623,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 18,
+          "score": 0.34727466106414795,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 21,
+          "score": 0.3189224302768707,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 2,
+          "score": 0.3174409568309784,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-262-r30",
+      "productId": "aloi-262",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 8,
+          "score": 0.9294354915618896,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 6,
+          "score": 0.7503926753997803,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.36301514506340027,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 18,
+          "score": 0.3465825319290161,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.3415490984916687,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 20,
+          "score": 0.31415310502052307,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 0,
+          "score": 0.3133239448070526,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.3089897036552429,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.7503926753997803,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.36301514506340027,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 16,
+          "score": 0.3465825319290161,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.3415490984916687,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.31415310502052307,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 0,
+          "score": 0.3133239448070526,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.3089897036552429,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 10,
+          "score": 0.29874688386917114,
+          "productId": "aloi-543"
+        }
+      ]
+    },
+    {
+      "id": "aloi-262-r60",
+      "productId": "aloi-262",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 9,
+          "score": 0.8867396712303162,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 7,
+          "score": 0.7495880126953125,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.42968523502349854,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 18,
+          "score": 0.35100436210632324,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 20,
+          "score": 0.3463006913661957,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 13,
+          "score": 0.3425268232822418,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 23,
+          "score": 0.3349916338920593,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 14,
+          "score": 0.3220420777797699,
+          "productId": "aloi-546"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 7,
+          "score": 0.7495880126953125,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.42968523502349854,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 16,
+          "score": 0.35100436210632324,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 18,
+          "score": 0.3463006913661957,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 11,
+          "score": 0.3425268232822418,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 21,
+          "score": 0.3349916338920593,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 12,
+          "score": 0.3220420777797699,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 2,
+          "score": 0.3103582561016083,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-321-i120",
+      "productId": "aloi-321",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 10,
+          "score": 0.9257354736328125,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 20,
+          "score": 0.2713656723499298,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.2504205107688904,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 14,
+          "score": 0.24953952431678772,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 5,
+          "score": 0.2370854616165161,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.2304285764694214,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 12,
+          "score": 0.2241920828819275,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 7,
+          "score": 0.2153288722038269,
+          "productId": "aloi-259"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.2713656723499298,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.2504205107688904,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 12,
+          "score": 0.24953952431678772,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 5,
+          "score": 0.2370854616165161,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.2304285764694214,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 10,
+          "score": 0.2241920828819275,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 7,
+          "score": 0.2153288722038269,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 0,
+          "score": 0.20142774283885956,
+          "productId": "aloi-143"
+        }
+      ]
+    },
+    {
+      "id": "aloi-321-l3c1",
+      "productId": "aloi-321",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 10,
+          "score": 0.9880503416061401,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 5,
+          "score": 0.40205612778663635,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 0,
+          "score": 0.30936533212661743,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 8,
+          "score": 0.2815377712249756,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 16,
+          "score": 0.2785416543483734,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.2746690809726715,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 12,
+          "score": 0.24833126366138458,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.24796628952026367,
+          "productId": "aloi-546"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 5,
+          "score": 0.40205612778663635,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 0,
+          "score": 0.30936533212661743,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 8,
+          "score": 0.2815377712249756,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 14,
+          "score": 0.2785416543483734,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.2746690809726715,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 10,
+          "score": 0.24833126366138458,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 13,
+          "score": 0.24796628952026367,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 6,
+          "score": 0.24161458015441895,
+          "productId": "aloi-259"
+        }
+      ]
+    },
+    {
+      "id": "aloi-321-r180",
+      "productId": "aloi-321",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 0,
+          "score": 0.29170557856559753,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 23,
+          "score": 0.2505863606929779,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 8,
+          "score": 0.24712958931922913,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.24603180587291718,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.23548343777656555,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 6,
+          "score": 0.22914966940879822,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 21,
+          "score": 0.20726782083511353,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 19,
+          "score": 0.2029561996459961,
+          "productId": "aloi-609"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 0,
+          "score": 0.29170557856559753,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 21,
+          "score": 0.2505863606929779,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 8,
+          "score": 0.24712958931922913,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.24603180587291718,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.22914966940879822,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 19,
+          "score": 0.20726782083511353,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 17,
+          "score": 0.2029561996459961,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 12,
+          "score": 0.20004984736442566,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-321-r30",
+      "productId": "aloi-321",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 10,
+          "score": 0.8738096356391907,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 0,
+          "score": 0.320598840713501,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 20,
+          "score": 0.29891467094421387,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 15,
+          "score": 0.2830814719200134,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 12,
+          "score": 0.2818201780319214,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.2695005536079407,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 16,
+          "score": 0.26627326011657715,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.253012478351593,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 0,
+          "score": 0.320598840713501,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 18,
+          "score": 0.29891467094421387,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 13,
+          "score": 0.2830814719200134,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 10,
+          "score": 0.2818201780319214,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.2695005536079407,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 14,
+          "score": 0.26627326011657715,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.253012478351593,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 9,
+          "score": 0.23690330982208252,
+          "productId": "aloi-262"
+        }
+      ]
+    },
+    {
+      "id": "aloi-321-r60",
+      "productId": "aloi-321",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 10,
+          "score": 0.5933129787445068,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 5,
+          "score": 0.4045678973197937,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 2,
+          "score": 0.3332701027393341,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 9,
+          "score": 0.3134348392486572,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 14,
+          "score": 0.3124695122241974,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 1,
+          "score": 0.31051862239837646,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 7,
+          "score": 0.3045637607574463,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 12,
+          "score": 0.30204159021377563,
+          "productId": "aloi-543"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 5,
+          "score": 0.4045678973197937,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 2,
+          "score": 0.3332701027393341,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 9,
+          "score": 0.3134348392486572,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 12,
+          "score": 0.3124695122241974,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 1,
+          "score": 0.31051862239837646,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 7,
+          "score": 0.3045637607574463,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 10,
+          "score": 0.30204159021377563,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 19,
+          "score": 0.29279011487960815,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-543-i120",
+      "productId": "aloi-543",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 12,
+          "score": 0.9436686635017395,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 14,
+          "score": 0.6898353099822998,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 6,
+          "score": 0.34073150157928467,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.3388339877128601,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 20,
+          "score": 0.33085018396377563,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 0,
+          "score": 0.31866422295570374,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.26144182682037354,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 16,
+          "score": 0.2489842176437378,
+          "productId": "aloi-577"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 12,
+          "score": 0.6898353099822998,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 6,
+          "score": 0.34073150157928467,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.3388339877128601,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.33085018396377563,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 0,
+          "score": 0.31866422295570374,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.26144182682037354,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 14,
+          "score": 0.2489842176437378,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 11,
+          "score": 0.22784069180488586,
+          "productId": "aloi-321"
+        }
+      ]
+    },
+    {
+      "id": "aloi-543-l3c1",
+      "productId": "aloi-543",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 12,
+          "score": 0.9401556253433228,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 14,
+          "score": 0.6713449954986572,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.3459056615829468,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 20,
+          "score": 0.3432820439338684,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 8,
+          "score": 0.32334667444229126,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 6,
+          "score": 0.3222404420375824,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 16,
+          "score": 0.29932329058647156,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 5,
+          "score": 0.2958666980266571,
+          "productId": "aloi-208"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 12,
+          "score": 0.6713449954986572,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.3459056615829468,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 18,
+          "score": 0.3432820439338684,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 8,
+          "score": 0.32334667444229126,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 6,
+          "score": 0.3222404420375824,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 14,
+          "score": 0.29932329058647156,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 5,
+          "score": 0.2958666980266571,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 3,
+          "score": 0.24449944496154785,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-543-r180",
+      "productId": "aloi-543",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 12,
+          "score": 0.8801773190498352,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 14,
+          "score": 0.7168669700622559,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.31541943550109863,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 20,
+          "score": 0.31041455268859863,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.30788666009902954,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.3005160391330719,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 17,
+          "score": 0.2827821969985962,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 5,
+          "score": 0.2812565267086029,
+          "productId": "aloi-208"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 12,
+          "score": 0.7168669700622559,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.31541943550109863,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 18,
+          "score": 0.31041455268859863,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.30788666009902954,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.3005160391330719,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 15,
+          "score": 0.2827821969985962,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 5,
+          "score": 0.2812565267086029,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.22487112879753113,
+          "productId": "aloi-321"
+        }
+      ]
+    },
+    {
+      "id": "aloi-543-r30",
+      "productId": "aloi-543",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 12,
+          "score": 0.8751603364944458,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 14,
+          "score": 0.7086929082870483,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.3763149678707123,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 6,
+          "score": 0.34850507974624634,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.33850452303886414,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 20,
+          "score": 0.31866735219955444,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 5,
+          "score": 0.3133929967880249,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.29770907759666443,
+          "productId": "aloi-577"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 12,
+          "score": 0.7086929082870483,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 0,
+          "score": 0.3763149678707123,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 6,
+          "score": 0.34850507974624634,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.33850452303886414,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.31866735219955444,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 5,
+          "score": 0.3133929967880249,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.29770907759666443,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.25251808762550354,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-543-r60",
+      "productId": "aloi-543",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 13,
+          "score": 0.9037343263626099,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.7005424499511719,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 5,
+          "score": 0.4251813590526581,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.41331344842910767,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 1,
+          "score": 0.37414950132369995,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 8,
+          "score": 0.3576606810092926,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 11,
+          "score": 0.33761346340179443,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 20,
+          "score": 0.33621373772621155,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 13,
+          "score": 0.7005424499511719,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 5,
+          "score": 0.4251813590526581,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.41331344842910767,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 1,
+          "score": 0.37414950132369995,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 8,
+          "score": 0.3576606810092926,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 11,
+          "score": 0.33761346340179443,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 18,
+          "score": 0.33621373772621155,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.32960471510887146,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-546-i120",
+      "productId": "aloi-546",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 14,
+          "score": 0.9165880680084229,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 12,
+          "score": 0.6961202621459961,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 6,
+          "score": 0.3434261083602905,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.3408763110637665,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 5,
+          "score": 0.307354599237442,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 1,
+          "score": 0.3036205768585205,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.29028022289276123,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 17,
+          "score": 0.2800614833831787,
+          "productId": "aloi-577"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 12,
+          "score": 0.6961202621459961,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 6,
+          "score": 0.3434261083602905,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.3408763110637665,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 5,
+          "score": 0.307354599237442,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 1,
+          "score": 0.3036205768585205,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.29028022289276123,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 15,
+          "score": 0.2800614833831787,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 18,
+          "score": 0.26695144176483154,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-546-l3c1",
+      "productId": "aloi-546",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 14,
+          "score": 0.9050518274307251,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 12,
+          "score": 0.7119559049606323,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 1,
+          "score": 0.3468412458896637,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.3363235592842102,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.31745901703834534,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.30243101716041565,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 2,
+          "score": 0.2787401080131531,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 11,
+          "score": 0.2540416121482849,
+          "productId": "aloi-321"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 12,
+          "score": 0.7119559049606323,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 1,
+          "score": 0.3468412458896637,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.3363235592842102,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.31745901703834534,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.30243101716041565,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 2,
+          "score": 0.2787401080131531,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 11,
+          "score": 0.2540416121482849,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 18,
+          "score": 0.2514900267124176,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-546-r180",
+      "productId": "aloi-546",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 14,
+          "score": 0.8722888827323914,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 13,
+          "score": 0.7197858095169067,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.436506450176239,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.3998429775238037,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.39533543586730957,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 0,
+          "score": 0.3637249171733856,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.3380325734615326,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 11,
+          "score": 0.3254324495792389,
+          "productId": "aloi-321"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 13,
+          "score": 0.7197858095169067,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.436506450176239,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.3998429775238037,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 8,
+          "score": 0.39533543586730957,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 0,
+          "score": 0.3637249171733856,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.3380325734615326,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 11,
+          "score": 0.3254324495792389,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 18,
+          "score": 0.3219295144081116,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-546-r30",
+      "productId": "aloi-546",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 14,
+          "score": 0.8732191324234009,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 13,
+          "score": 0.7746322154998779,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 6,
+          "score": 0.3748484253883362,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 5,
+          "score": 0.3726951479911804,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 8,
+          "score": 0.34196609258651733,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.30646979808807373,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 11,
+          "score": 0.3024294376373291,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 20,
+          "score": 0.3009028434753418,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 13,
+          "score": 0.7746322154998779,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 6,
+          "score": 0.3748484253883362,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 5,
+          "score": 0.3726951479911804,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 8,
+          "score": 0.34196609258651733,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.30646979808807373,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 11,
+          "score": 0.3024294376373291,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 18,
+          "score": 0.3009028434753418,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.29279035329818726,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-546-r60",
+      "productId": "aloi-546",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 13,
+          "score": 0.8266889452934265,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.6884249448776245,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 6,
+          "score": 0.43056508898735046,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 5,
+          "score": 0.4297303259372711,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 8,
+          "score": 0.36775779724121094,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.3316881060600281,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 11,
+          "score": 0.33084121346473694,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 20,
+          "score": 0.321615070104599,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 13,
+          "score": 0.8266889452934265,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 6,
+          "score": 0.43056508898735046,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 5,
+          "score": 0.4297303259372711,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 8,
+          "score": 0.36775779724121094,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.3316881060600281,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 11,
+          "score": 0.33084121346473694,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 18,
+          "score": 0.321615070104599,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 2,
+          "score": 0.30513066053390503,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-577-i120",
+      "productId": "aloi-577",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 16,
+          "score": 0.9200338125228882,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 20,
+          "score": 0.6539644598960876,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 19,
+          "score": 0.37772709131240845,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.36986470222473145,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 0,
+          "score": 0.34942206740379333,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 11,
+          "score": 0.27906203269958496,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 12,
+          "score": 0.2773403525352478,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.27242565155029297,
+          "productId": "aloi-546"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.6539644598960876,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 17,
+          "score": 0.37772709131240845,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.36986470222473145,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 0,
+          "score": 0.34942206740379333,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 11,
+          "score": 0.27906203269958496,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 12,
+          "score": 0.2773403525352478,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.27242565155029297,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 5,
+          "score": 0.27236807346343994,
+          "productId": "aloi-208"
+        }
+      ]
+    },
+    {
+      "id": "aloi-577-l3c1",
+      "productId": "aloi-577",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 16,
+          "score": 0.9300405979156494,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 20,
+          "score": 0.7344149351119995,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 23,
+          "score": 0.4312538504600525,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 19,
+          "score": 0.4148672819137573,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 12,
+          "score": 0.3306935131549835,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.3141860365867615,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 1,
+          "score": 0.31215667724609375,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 7,
+          "score": 0.3093430995941162,
+          "productId": "aloi-259"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.7344149351119995,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 21,
+          "score": 0.4312538504600525,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 17,
+          "score": 0.4148672819137573,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 12,
+          "score": 0.3306935131549835,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 5,
+          "score": 0.3141860365867615,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 1,
+          "score": 0.31215667724609375,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 7,
+          "score": 0.3093430995941162,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 15,
+          "score": 0.2974337935447693,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-577-r180",
+      "productId": "aloi-577",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 17,
+          "score": 0.5390039682388306,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 20,
+          "score": 0.4944397211074829,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.3898085355758667,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.365016371011734,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3473583459854126,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.32529449462890625,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.30573421716690063,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 9,
+          "score": 0.27943599224090576,
+          "productId": "aloi-262"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.4944397211074829,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.3898085355758667,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.365016371011734,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 16,
+          "score": 0.3473583459854126,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.32529449462890625,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.30573421716690063,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 9,
+          "score": 0.27943599224090576,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 3,
+          "score": 0.26261836290359497,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-577-r30",
+      "productId": "aloi-577",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 16,
+          "score": 0.9005817174911499,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 20,
+          "score": 0.6379431486129761,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 0,
+          "score": 0.31866681575775146,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 19,
+          "score": 0.3172466456890106,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.3126673102378845,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 5,
+          "score": 0.29222017526626587,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.2893591523170471,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 12,
+          "score": 0.2668260931968689,
+          "productId": "aloi-543"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.6379431486129761,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 0,
+          "score": 0.31866681575775146,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 17,
+          "score": 0.3172466456890106,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.3126673102378845,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 5,
+          "score": 0.29222017526626587,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 11,
+          "score": 0.2893591523170471,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 12,
+          "score": 0.2668260931968689,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 6,
+          "score": 0.24978062510490417,
+          "productId": "aloi-259"
+        }
+      ]
+    },
+    {
+      "id": "aloi-577-r60",
+      "productId": "aloi-577",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 16,
+          "score": 0.8308722972869873,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 20,
+          "score": 0.573064923286438,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 5,
+          "score": 0.36259016394615173,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 19,
+          "score": 0.34306401014328003,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.3366745114326477,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 0,
+          "score": 0.31621235609054565,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 6,
+          "score": 0.2640937566757202,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.25202468037605286,
+          "productId": "aloi-321"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.573064923286438,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 5,
+          "score": 0.36259016394615173,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.34306401014328003,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.3366745114326477,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 0,
+          "score": 0.31621235609054565,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 6,
+          "score": 0.2640937566757202,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 11,
+          "score": 0.25202468037605286,
+          "productId": "aloi-321"
+        },
+        {
+          "index": 14,
+          "score": 0.247871994972229,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-609-i120",
+      "productId": "aloi-609",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 18,
+          "score": 0.9498264193534851,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 22,
+          "score": 0.5488181710243225,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 20,
+          "score": 0.38700997829437256,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.3789844214916229,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.3353284001350403,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.33460164070129395,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 17,
+          "score": 0.3010600805282593,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.27934539318084717,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 20,
+          "score": 0.5488181710243225,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.38700997829437256,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.3789844214916229,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.3353284001350403,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.33460164070129395,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 17,
+          "score": 0.3010600805282593,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.27934539318084717,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 0,
+          "score": 0.2760513722896576,
+          "productId": "aloi-143"
+        }
+      ]
+    },
+    {
+      "id": "aloi-609-l3c1",
+      "productId": "aloi-609",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 18,
+          "score": 0.9449856281280518,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.5889174342155457,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 7,
+          "score": 0.4112399220466614,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.36903437972068787,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.3586302399635315,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.35484492778778076,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.3180956542491913,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.2933885157108307,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 21,
+          "score": 0.5889174342155457,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 7,
+          "score": 0.4112399220466614,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.36903437972068787,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.3586302399635315,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.35484492778778076,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.3180956542491913,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.2933885157108307,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 16,
+          "score": 0.278658926486969,
+          "productId": "aloi-577"
+        }
+      ]
+    },
+    {
+      "id": "aloi-609-r180",
+      "productId": "aloi-609",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 19,
+          "score": 0.702501654624939,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.5732112526893616,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 17,
+          "score": 0.4257233440876007,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 6,
+          "score": 0.3891829252243042,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 2,
+          "score": 0.3877459764480591,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 12,
+          "score": 0.3488363027572632,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 1,
+          "score": 0.34129706025123596,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.337868332862854,
+          "productId": "aloi-208"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 21,
+          "score": 0.5732112526893616,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 17,
+          "score": 0.4257233440876007,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 6,
+          "score": 0.3891829252243042,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 2,
+          "score": 0.3877459764480591,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 12,
+          "score": 0.3488363027572632,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 1,
+          "score": 0.34129706025123596,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 5,
+          "score": 0.337868332862854,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 18,
+          "score": 0.33610478043556213,
+          "productId": "aloi-617"
+        }
+      ]
+    },
+    {
+      "id": "aloi-609-r30",
+      "productId": "aloi-609",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 18,
+          "score": 0.8908337950706482,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.5251302719116211,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 20,
+          "score": 0.3371906578540802,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.30431073904037476,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 16,
+          "score": 0.28192228078842163,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 4,
+          "score": 0.2654242217540741,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.24802352488040924,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.2359529584646225,
+          "productId": "aloi-143"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 21,
+          "score": 0.5251302719116211,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3371906578540802,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.30431073904037476,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 16,
+          "score": 0.28192228078842163,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 4,
+          "score": 0.2654242217540741,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.24802352488040924,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 1,
+          "score": 0.2359529584646225,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.2051171064376831,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-609-r60",
+      "productId": "aloi-609",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 18,
+          "score": 0.8488837480545044,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.6212863326072693,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 6,
+          "score": 0.3672265410423279,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.3659319579601288,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 17,
+          "score": 0.32200536131858826,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 9,
+          "score": 0.30604708194732666,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.30187901854515076,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 0,
+          "score": 0.2461092174053192,
+          "productId": "aloi-143"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 21,
+          "score": 0.6212863326072693,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 6,
+          "score": 0.3672265410423279,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.3659319579601288,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 17,
+          "score": 0.32200536131858826,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 9,
+          "score": 0.30604708194732666,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.30187901854515076,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 0,
+          "score": 0.2461092174053192,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 2,
+          "score": 0.23189431428909302,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-617-i120",
+      "productId": "aloi-617",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 20,
+          "score": 0.9386757016181946,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 16,
+          "score": 0.6995744705200195,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 23,
+          "score": 0.4153349697589874,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3950325548648834,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.3739183247089386,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.36328262090682983,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.34475308656692505,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 12,
+          "score": 0.33671221137046814,
+          "productId": "aloi-543"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 16,
+          "score": 0.6995744705200195,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 21,
+          "score": 0.4153349697589874,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3950325548648834,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.3739183247089386,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 6,
+          "score": 0.36328262090682983,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 9,
+          "score": 0.34475308656692505,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 12,
+          "score": 0.33671221137046814,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 0,
+          "score": 0.32365670800209045,
+          "productId": "aloi-143"
+        }
+      ]
+    },
+    {
+      "id": "aloi-617-l3c1",
+      "productId": "aloi-617",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 20,
+          "score": 0.937343955039978,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 16,
+          "score": 0.6654373407363892,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 23,
+          "score": 0.42308861017227173,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 7,
+          "score": 0.40743905305862427,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.3983944058418274,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.39630985260009766,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.38517045974731445,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 12,
+          "score": 0.31799355149269104,
+          "productId": "aloi-543"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 16,
+          "score": 0.6654373407363892,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 21,
+          "score": 0.42308861017227173,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 7,
+          "score": 0.40743905305862427,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 18,
+          "score": 0.3983944058418274,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.39630985260009766,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.38517045974731445,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 12,
+          "score": 0.31799355149269104,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 14,
+          "score": 0.29003170132637024,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-617-r180",
+      "productId": "aloi-617",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 20,
+          "score": 0.5606383681297302,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.4157983362674713,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 17,
+          "score": 0.4107397794723511,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 4,
+          "score": 0.4096212387084961,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.3690323829650879,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.36451345682144165,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 23,
+          "score": 0.3594067692756653,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 14,
+          "score": 0.29366761445999146,
+          "productId": "aloi-546"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 6,
+          "score": 0.4157983362674713,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 17,
+          "score": 0.4107397794723511,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 4,
+          "score": 0.4096212387084961,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.3690323829650879,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 18,
+          "score": 0.36451345682144165,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 21,
+          "score": 0.3594067692756653,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 14,
+          "score": 0.29366761445999146,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 2,
+          "score": 0.28733116388320923,
+          "productId": "aloi-19"
+        }
+      ]
+    },
+    {
+      "id": "aloi-617-r30",
+      "productId": "aloi-617",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 20,
+          "score": 0.8245334625244141,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 16,
+          "score": 0.6639654636383057,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 23,
+          "score": 0.29103344678878784,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.27437707781791687,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.2683609426021576,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.2630077600479126,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 6,
+          "score": 0.24908661842346191,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 12,
+          "score": 0.24564579129219055,
+          "productId": "aloi-543"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 16,
+          "score": 0.6639654636383057,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 21,
+          "score": 0.29103344678878784,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.27437707781791687,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 4,
+          "score": 0.2683609426021576,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 15,
+          "score": 0.2630077600479126,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 6,
+          "score": 0.24908661842346191,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 12,
+          "score": 0.24564579129219055,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 11,
+          "score": 0.24265924096107483,
+          "productId": "aloi-321"
+        }
+      ]
+    },
+    {
+      "id": "aloi-617-r60",
+      "productId": "aloi-617",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 20,
+          "score": 0.8548604249954224,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 16,
+          "score": 0.6814324259757996,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 4,
+          "score": 0.37347355484962463,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 23,
+          "score": 0.36923903226852417,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3609708845615387,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 9,
+          "score": 0.3273736238479614,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 7,
+          "score": 0.3262939155101776,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 15,
+          "score": 0.31563800573349,
+          "productId": "aloi-546"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 16,
+          "score": 0.6814324259757996,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 4,
+          "score": 0.37347355484962463,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 21,
+          "score": 0.36923903226852417,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.3609708845615387,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 9,
+          "score": 0.3273736238479614,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 7,
+          "score": 0.3262939155101776,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 15,
+          "score": 0.31563800573349,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 12,
+          "score": 0.30827292799949646,
+          "productId": "aloi-543"
+        }
+      ]
+    },
+    {
+      "id": "aloi-618-i120",
+      "productId": "aloi-618",
+      "condition": "i120",
+      "matches": [
+        {
+          "index": 22,
+          "score": 0.9534510374069214,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.5017104744911194,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 20,
+          "score": 0.281771183013916,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.27065449953079224,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.21392279863357544,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.19220905005931854,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 9,
+          "score": 0.18304821848869324,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 14,
+          "score": 0.171157106757164,
+          "productId": "aloi-546"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.5017104744911194,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 20,
+          "score": 0.281771183013916,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 6,
+          "score": 0.27065449953079224,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 4,
+          "score": 0.21392279863357544,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.19220905005931854,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 9,
+          "score": 0.18304821848869324,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 14,
+          "score": 0.171157106757164,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 1,
+          "score": 0.1692427694797516,
+          "productId": "aloi-143"
+        }
+      ]
+    },
+    {
+      "id": "aloi-618-l3c1",
+      "productId": "aloi-618",
+      "condition": "l3c1",
+      "matches": [
+        {
+          "index": 22,
+          "score": 0.9401944279670715,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.5576028227806091,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.4251444637775421,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.37025269865989685,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 9,
+          "score": 0.32624608278274536,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.3168172836303711,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.2558622360229492,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.2181820571422577,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.5576028227806091,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.4251444637775421,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.37025269865989685,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 9,
+          "score": 0.32624608278274536,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 4,
+          "score": 0.3168172836303711,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 17,
+          "score": 0.2558622360229492,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.2181820571422577,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 14,
+          "score": 0.2161480188369751,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-618-r180",
+      "productId": "aloi-618",
+      "condition": "r180",
+      "matches": [
+        {
+          "index": 23,
+          "score": 0.5838623046875,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.5435634851455688,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 0,
+          "score": 0.3990824818611145,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 4,
+          "score": 0.3140237331390381,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 7,
+          "score": 0.2983778119087219,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 12,
+          "score": 0.293732613325119,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.2849779427051544,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 21,
+          "score": 0.2818986475467682,
+          "productId": "aloi-617"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.5435634851455688,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 0,
+          "score": 0.3990824818611145,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 4,
+          "score": 0.3140237331390381,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 7,
+          "score": 0.2983778119087219,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 12,
+          "score": 0.293732613325119,
+          "productId": "aloi-543"
+        },
+        {
+          "index": 15,
+          "score": 0.2849779427051544,
+          "productId": "aloi-546"
+        },
+        {
+          "index": 21,
+          "score": 0.2818986475467682,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 9,
+          "score": 0.26298996806144714,
+          "productId": "aloi-262"
+        }
+      ]
+    },
+    {
+      "id": "aloi-618-r30",
+      "productId": "aloi-618",
+      "condition": "r30",
+      "matches": [
+        {
+          "index": 22,
+          "score": 0.8719316720962524,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 18,
+          "score": 0.529209554195404,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.380184143781662,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.32831451296806335,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.30846408009529114,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.2609497606754303,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 16,
+          "score": 0.2277955710887909,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 0,
+          "score": 0.19525909423828125,
+          "productId": "aloi-143"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 18,
+          "score": 0.529209554195404,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 6,
+          "score": 0.380184143781662,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.32831451296806335,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.30846408009529114,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.2609497606754303,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 16,
+          "score": 0.2277955710887909,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 0,
+          "score": 0.19525909423828125,
+          "productId": "aloi-143"
+        },
+        {
+          "index": 15,
+          "score": 0.19258800148963928,
+          "productId": "aloi-546"
+        }
+      ]
+    },
+    {
+      "id": "aloi-618-r60",
+      "productId": "aloi-618",
+      "condition": "r60",
+      "matches": [
+        {
+          "index": 23,
+          "score": 0.8531225919723511,
+          "productId": "aloi-618"
+        },
+        {
+          "index": 19,
+          "score": 0.6393928527832031,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 7,
+          "score": 0.45975151658058167,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.42390528321266174,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.4108222723007202,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.37105560302734375,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 16,
+          "score": 0.34748443961143494,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.3303193151950836,
+          "productId": "aloi-19"
+        }
+      ],
+      "absentMatches": [
+        {
+          "index": 19,
+          "score": 0.6393928527832031,
+          "productId": "aloi-609"
+        },
+        {
+          "index": 7,
+          "score": 0.45975151658058167,
+          "productId": "aloi-259"
+        },
+        {
+          "index": 20,
+          "score": 0.42390528321266174,
+          "productId": "aloi-617"
+        },
+        {
+          "index": 4,
+          "score": 0.4108222723007202,
+          "productId": "aloi-208"
+        },
+        {
+          "index": 9,
+          "score": 0.37105560302734375,
+          "productId": "aloi-262"
+        },
+        {
+          "index": 16,
+          "score": 0.34748443961143494,
+          "productId": "aloi-577"
+        },
+        {
+          "index": 2,
+          "score": 0.3303193151950836,
+          "productId": "aloi-19"
+        },
+        {
+          "index": 1,
+          "score": 0.29863205552101135,
+          "productId": "aloi-143"
+        }
+      ]
+    }
+  ]
+}

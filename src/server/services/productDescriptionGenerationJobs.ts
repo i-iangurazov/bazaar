@@ -34,6 +34,7 @@ import {
   type UsageLease,
 } from "@/server/billing/subscriptionUsage";
 import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
+import { assertAiConsent, withAiPrivacyIdentity } from "./aiPrivacy";
 
 export const PRODUCT_DESCRIPTION_GENERATION_JOB_NAME = "product-description-generation";
 
@@ -230,6 +231,7 @@ export const startProductDescriptionGenerationJob = async (input: {
   runImmediately?: boolean;
 }) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "bulkAiContent" });
+  await assertAiConsent({ userId: input.actorId, organizationId: input.organizationId });
   const productIds = normalizeProductIds(input.productIds);
   await assertActorCanWriteProducts(prisma, input.organizationId, input.actorId, productIds);
   if (!productIds.length) {
@@ -1517,7 +1519,8 @@ const processQueuedProductDescriptionGenerationJob = async (
         });
         const work = { job: { ...job, leaseToken }, item, logger, usageLease: null as UsageLease };
         try {
-          await processJobItem(work);
+          await withAiPrivacyIdentity({ userId: job.createdById, organizationId: job.organizationId },
+            () => processJobItem(work));
         } finally {
           const result = await prisma.productDescriptionGenerationJobItem.findUnique({
             where: { id: item.id },

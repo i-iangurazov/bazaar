@@ -69,7 +69,9 @@ async function verifyPricingPresentation(page, label) {
   assert((await page.locator('#pricing [data-plan="ENTERPRISE"] [data-store-expansion]').innerText()).includes('15'));
   assert.equal(await page.locator('#pricing [data-subscription-addons] [data-addon]').count(), 2);
   assert.equal(await page.locator('#pricing a[href="/billing#subscription-addons"]').count(), 1);
-  const nativeSelects = await page.locator('footer select').evaluateAll(elements => elements.map(el => {
+  // Query and measure in one document snapshot. Hydration can detach the SSR
+  // Radix mirror between locator resolution and evaluation, yielding empty CSS.
+  const nativeSelects = await page.evaluate(() => [...document.querySelectorAll('footer select')].map(el => {
     const style = getComputedStyle(el);
     const rect = el.getBoundingClientRect();
     return {

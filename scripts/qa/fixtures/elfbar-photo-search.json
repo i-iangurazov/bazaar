@@ -1,0 +1,342 @@
+{
+  "schema": 1,
+  "date": "2026-11-14",
+  "sources": [
+    {
+      "url": "https://belvaping.com/reviews/odnorazki-elfbar-gh23000-bar-s-ogonkom/",
+      "author": "Андрей Попко / BelVaping",
+      "published": "2024-11-20",
+      "usage": "Locally cached real device photographs for private test fixtures; no redistribution license asserted"
+    },
+    {
+      "url": "https://www.elfbar.ru/product/gh23000.html",
+      "author": "ELFBAR",
+      "usage": "Manufacturer promotional artwork; test queries only, not independent camera photographs"
+    }
+  ],
+  "protocol": {
+    "gallery": "Five different flavours: real device crops, one source photograph per SKU. Existing user Miami Mint preserved.",
+    "querySelection": "All five gallery flavors queried using separate manufacturer artwork, two separate Ice Mint camera photographs, and four unstocked lookalike flavors. Sources, labels and crops fixed before inference.",
+    "crop": "Normalized [left, top, width, height], axis-aligned ROI only; no recoloring, generation, perspective synthesis or query-photo indexing.",
+    "limits": [
+      "Two independent camera photos cover Ice Mint only, not all flavors or user phone conditions",
+      "Manufacturer artwork cases are a separate domain check, never camera-photo accuracy",
+      "Miami Mint user reference may share the manufacturer render; it is not treated as an independent evaluation query",
+      "No threshold tuning or model training; compare product candidates manually"
+    ]
+  },
+  "assets": [
+    {
+      "id": "Elfbar-GH23000-Grape-Ice-obzor-odnorazok-14-980x551",
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-Grape-Ice-obzor-odnorazok-14-980x551.jpg",
+      "file": "sources/Elfbar-GH23000-Grape-Ice-obzor-odnorazok-14-980x551.jpg",
+      "sha256": "fb7fdd958eeb8949ea0152d9540a985ae45b679f9f8b220164d5b6c740a7639f",
+      "bytes": 111054
+    },
+    {
+      "id": "Elfbar-GH23000-Pineapple-Plums-Lime-Mint-obzor-odnorazok-15-980x551",
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-Pineapple-Plums-Lime-Mint-obzor-odnorazok-15-980x551.jpg",
+      "file": "sources/Elfbar-GH23000-Pineapple-Plums-Lime-Mint-obzor-odnorazok-15-980x551.jpg",
+      "sha256": "201d23c135eb0dd865db990aa89562a25a3ac71e149198d6e6a32202807013f4",
+      "bytes": 107086
+    },
+    {
+      "id": "Elfbar-GH23000-Ice-Mint-obzor-odnorazok-16-980x551",
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-Ice-Mint-obzor-odnorazok-16-980x551.jpg",
+      "file": "sources/Elfbar-GH23000-Ice-Mint-obzor-odnorazok-16-980x551.jpg",
+      "sha256": "f767a8a8a80382fbd76645c1723a2621538225b9f5e7ae684c2be106a3ab62ae",
+      "bytes": 103428
+    },
+    {
+      "id": "Elfbar-GH23000-Peach-Mango-Watermelon-obzor-odnorazok-17",
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-Peach-Mango-Watermelon-obzor-odnorazok-17.jpg",
+      "file": "sources/Elfbar-GH23000-Peach-Mango-Watermelon-obzor-odnorazok-17.jpg",
+      "sha256": "746323fb5e8b82a55dfd981e57df067cb52174c28f43bfb4c7b44c12f53c5240",
+      "bytes": 247593
+    },
+    {
+      "id": "Elfbar-GH23000-Kiwi-Dragon-Fruit-obzor-odnorazok-18",
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-Kiwi-Dragon-Fruit-obzor-odnorazok-18.jpg",
+      "file": "sources/Elfbar-GH23000-Kiwi-Dragon-Fruit-obzor-odnorazok-18.jpg",
+      "sha256": "1b2efce2546a9d4fae8e7f9ba0285462fd7c364aebfda066b15ffbfa62a312bd",
+      "bytes": 247446
+    },
+    {
+      "id": "manufacturer-13",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/13.jpg",
+      "file": "sources/manufacturer-13.jpg",
+      "sha256": "47725a652eab1a1cb3187764e77810dd436360f79c49387a5e8a4c17b05493c3",
+      "bytes": 234164
+    },
+    {
+      "id": "manufacturer-1",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/1.jpg",
+      "file": "sources/manufacturer-1.jpg",
+      "sha256": "318b587248ca479bb691218d881bfe488af236b57748be7efce7ef078ce66048",
+      "bytes": 257011
+    },
+    {
+      "id": "manufacturer-12",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/12.jpg",
+      "file": "sources/manufacturer-12.jpg",
+      "sha256": "83c9e795fc8183f4b009ca056e2409af03a04cb511114ec36abe7fbe3c6b8325",
+      "bytes": 204563
+    },
+    {
+      "id": "manufacturer-14",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/14.jpg",
+      "file": "sources/manufacturer-14.jpg",
+      "sha256": "e39486c26c8b867a224f6505d60ff6d539e7c0fd0e1a5f0108a4713bb4561489",
+      "bytes": 254444
+    },
+    {
+      "id": "manufacturer-6",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/6.jpg",
+      "file": "sources/manufacturer-6.jpg",
+      "sha256": "880f62be599caf48b78a72fdc063d8a855943da7dc77afe444b500d403736f53",
+      "bytes": 186511
+    },
+    {
+      "id": "Elfbar-GH23000-obzor-odnorazok-4-980x551",
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-obzor-odnorazok-4-980x551.jpg",
+      "file": "sources/Elfbar-GH23000-obzor-odnorazok-4-980x551.jpg",
+      "sha256": "ed21788f1c0b8c4415105caa7160a5de46a286e12c03925c499c8d5eca7e5a51",
+      "bytes": 67673
+    },
+    {
+      "id": "Elfbar-GH23000-obzor-odnorazok-12-980x551",
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-obzor-odnorazok-12-980x551.jpg",
+      "file": "sources/Elfbar-GH23000-obzor-odnorazok-12-980x551.jpg",
+      "sha256": "73e8f103e776d1ff8f5b3abd376ac11546c4b6009c54d32b4394723332ee6e27",
+      "bytes": 81300
+    },
+    {
+      "id": "manufacturer-5",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/5.jpg",
+      "file": "sources/manufacturer-5.jpg",
+      "sha256": "9b66d856502883f2fed9cec6b1ab96e7377765d43bd416c7937807758e88c095",
+      "bytes": 242837
+    },
+    {
+      "id": "manufacturer-7",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/7.jpg",
+      "file": "sources/manufacturer-7.jpg",
+      "sha256": "6b17504c0792dd98b561691c57fb27707ffb0f6e79271d7913e3bf5ebc3e117b",
+      "bytes": 276007
+    },
+    {
+      "id": "manufacturer-9",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/9.jpg",
+      "file": "sources/manufacturer-9.jpg",
+      "sha256": "d2566a3df4eba5c06ec10b23cbda1f0716650978b5e1e11f9d533c0b3d532b50",
+      "bytes": 285647
+    },
+    {
+      "id": "manufacturer-15",
+      "url": "https://d6lkeq1iq8oae.cloudfront.net/products/gh23000/p6/15.jpg",
+      "file": "sources/manufacturer-15.jpg",
+      "sha256": "143a836781ba34eeef81e1d6b34d7845a8cd9c0f7a96b799eb944f7c2e4911bb",
+      "bytes": 265918
+    }
+  ],
+  "gallery": [
+    {
+      "id": "grape-ice",
+      "flavor": "Grape Ice",
+      "color": "сиреневый",
+      "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+      "asset": "Elfbar-GH23000-Grape-Ice-obzor-odnorazok-14-980x551",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ]
+    },
+    {
+      "id": "pineapple-plums-lime-mint",
+      "flavor": "Pineapple Plums Lime Mint",
+      "color": "оранжевый",
+      "sku": "QA-ELFBAR-GH23000-PINEAPPLE-PLUMS-LIME-MINT",
+      "asset": "Elfbar-GH23000-Pineapple-Plums-Lime-Mint-obzor-odnorazok-15-980x551",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ]
+    },
+    {
+      "id": "ice-mint",
+      "flavor": "Ice Mint",
+      "color": "бирюзовый",
+      "sku": "QA-ELFBAR-GH23000-ICE-MINT",
+      "asset": "Elfbar-GH23000-Ice-Mint-obzor-odnorazok-16-980x551",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ]
+    },
+    {
+      "id": "peach-mango-watermelon",
+      "flavor": "Peach Mango Watermelon",
+      "color": "оранжевый",
+      "sku": "QA-ELFBAR-GH23000-PEACH-MANGO-WATERMELON",
+      "asset": "Elfbar-GH23000-Peach-Mango-Watermelon-obzor-odnorazok-17",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ]
+    },
+    {
+      "id": "kiwi-dragon-fruit",
+      "flavor": "Kiwi Dragon Fruit",
+      "color": "розовый",
+      "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+      "asset": "Elfbar-GH23000-Kiwi-Dragon-Fruit-obzor-odnorazok-18",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "id": "ice-mint-standing",
+      "expected": "ice-mint",
+      "kind": "independent-device-photo",
+      "asset": "Elfbar-GH23000-obzor-odnorazok-4-980x551",
+      "crop": [
+        0.3,
+        0.06,
+        0.28,
+        0.81
+      ]
+    },
+    {
+      "id": "ice-mint-in-hand",
+      "expected": "ice-mint",
+      "kind": "independent-device-photo",
+      "asset": "Elfbar-GH23000-obzor-odnorazok-12-980x551",
+      "crop": null
+    },
+    {
+      "id": "catalog-grape-ice",
+      "expected": "grape-ice",
+      "kind": "manufacturer-artwork",
+      "asset": "manufacturer-13",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "catalog-pineapple-plums-lime-mint",
+      "expected": "pineapple-plums-lime-mint",
+      "kind": "manufacturer-artwork",
+      "asset": "manufacturer-1",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "catalog-ice-mint",
+      "expected": "ice-mint",
+      "kind": "manufacturer-artwork",
+      "asset": "manufacturer-12",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "catalog-peach-mango-watermelon",
+      "expected": "peach-mango-watermelon",
+      "kind": "manufacturer-artwork",
+      "asset": "manufacturer-14",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "catalog-kiwi-dragon-fruit",
+      "expected": "kiwi-dragon-fruit",
+      "kind": "manufacturer-artwork",
+      "asset": "manufacturer-6",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "absent-green-apple-ice",
+      "expected": null,
+      "flavor": "Green Apple Ice",
+      "kind": "absent-manufacturer-artwork",
+      "asset": "manufacturer-5",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "absent-strawberry-banana",
+      "expected": null,
+      "flavor": "Strawberry Banana",
+      "kind": "absent-manufacturer-artwork",
+      "asset": "manufacturer-7",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "absent-lime-grapefruit-ice",
+      "expected": null,
+      "flavor": "Lime Grapefruit Ice",
+      "kind": "absent-manufacturer-artwork",
+      "asset": "manufacturer-9",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "id": "absent-sakura-grape",
+      "expected": null,
+      "flavor": "Sakura Grape",
+      "kind": "absent-manufacturer-artwork",
+      "asset": "manufacturer-15",
+      "crop": [
+        0.25,
+        0.085,
+        0.5,
+        0.56
+      ]
+    }
+  ]
+}

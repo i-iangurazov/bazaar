@@ -77,7 +77,11 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
       });
       if (mode === "print") {
         const result = await printPdfBlob(blob);
-        if (!result.autoPrintAttempted) {
+        if (
+          !result.autoPrintAttempted &&
+          result.nativeShareStatus !== "cancelled" &&
+          result.nativeShareStatus !== "discarded"
+        ) {
           toast({ variant: "info", description: tPos("sell.receiptPrintFallback") });
         }
       } else {

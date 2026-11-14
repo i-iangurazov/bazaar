@@ -45,6 +45,10 @@ const mocks = vi.hoisted(() => ({
     lifetimeAccess: false,
     canPurchase: true,
     currentPlan: "STARTER",
+    purchaseBlockedReason: null as string | null,
+    currentPaymentSource: "GATEWAY",
+    appleCoverageUntil: null as string | null,
+    appleAutoRenew: false,
     catalogVersion: "2026-10",
     mayChangePlan: true,
     catalog: [{ plan: "STARTER", amountMinor: 175000 }],
@@ -63,9 +67,12 @@ const mocks = vi.hoisted(() => ({
   records: [] as InvoiceFixture[],
   mutate: vi.fn(),
   checkMutate: vi.fn(),
+  resumeMutate: vi.fn(),
+  resumeSuccess: null as null | ((invoice: { id: string; status: string; checkoutUrl: string | null; isTest: boolean }) => void),
+  resumeError: null as null | ((error: { message: string }) => void),
   refetch: vi.fn(),
   success: null as
-    null | ((invoice: { status: string; checkoutUrl: null; syncDelayed: boolean }) => void),
+    null | ((invoice: { id?: string; status: string; checkoutUrl: string | null; syncDelayed: boolean; isTest?: boolean }) => void),
   error: null as null | ((error: { message: string }) => void),
   checkSuccess: null as
     null | ((invoice: { status: string; isTest: boolean; syncDelayed: boolean }) => void),
@@ -144,6 +151,13 @@ vi.mock("@/lib/trpc", () => ({
             return { mutate: mocks.mutate, isLoading: false };
           },
         },
+        resume: {
+          useMutation: (options: { onSuccess: typeof mocks.resumeSuccess; onError: typeof mocks.resumeError }) => {
+            mocks.resumeSuccess = options.onSuccess;
+            mocks.resumeError = options.onError;
+            return { mutate: mocks.resumeMutate, isLoading: false };
+          },
+        },
         check: {
           useMutation: (options: { onSuccess: typeof mocks.checkSuccess }) => {
             mocks.checkSuccess = options.onSuccess;
@@ -214,6 +228,10 @@ beforeEach(() => {
     termsVersion: "qa-v1",
     catalog: [{ plan: "STARTER", amountMinor: 175000 }],
     currentPlan: "STARTER",
+    purchaseBlockedReason: null,
+    currentPaymentSource: "GATEWAY",
+    appleCoverageUntil: null,
+    appleAutoRenew: false,
   });
 });
 afterEach(() => {
@@ -464,7 +482,7 @@ describe("subscription payment consent and recovery", () => {
     Object.assign(mocks.data, { pendingInvoice: invoice(), canPurchase: false });
     mounted.rerender(<SubscriptionPayments onUpdated={vi.fn()} />);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("link", { name: "billing.payments.continue" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "billing.payments.continue" })).toBeTruthy();
     expect(mocks.mutate).toHaveBeenCalledTimes(1);
   });
   it("requires a refreshed quote and new consent after the server rejects stale terms", () => {
@@ -525,7 +543,7 @@ describe("subscription payment consent and recovery", () => {
     expect(dialog.getByText("billing.payments.testPaymentPolicy")).toBeTruthy();
     expect(dialog.queryByText("billing.payments.renewalPolicy")).toBeNull();
   });
-  it("uses the invoice provider for a historical FreedomPay checkout after switching to GoPay", () => {
+  it("keeps historical FreedomPay checking and support without offering an unsupported saved checkout", () => {
     Object.assign(mocks.data, {
       canPurchase: false,
       pendingInvoice: invoice({ provider: "FREEDOMPAY" }),
@@ -541,12 +559,15 @@ describe("subscription payment consent and recovery", () => {
     expect(
       screen.getAllByText('billing.payments.providerDescription {"provider":"FreedomPay"}'),
     ).toHaveLength(1);
-    expect(
-      screen.getByRole("link", { name: "billing.payments.continue" }).getAttribute("href"),
-    ).toBe("https://example.invalid/checkout");
+    expect(screen.queryByRole("button", { name: "billing.payments.continue" })).toBeNull();
+    expect(within(pending).getByText("billing.payments.linkUnavailable")).toBeTruthy();
+    expect(within(pending).getByRole("link", { name: "billing.payments.support" })).toBeTruthy();
+    expect(within(pending).queryByText(/^billing.payments.expiresAt/)).toBeNull();
+    expect(document.querySelector('a[href="https://example.invalid/checkout"]')).toBeNull();
     expect(document.querySelector("[data-checkout-form]")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "billing.payments.check" }));
     expect(mocks.checkMutate).toHaveBeenCalledWith({ invoiceId: "invoice-fixture" });
+    expect(mocks.resumeMutate).not.toHaveBeenCalled();
   });
   it("distinguishes test confirmations and history from real paid invoices", () => {
     mocks.records = [
@@ -601,7 +622,7 @@ describe("subscription payment consent and recovery", () => {
       render(<SubscriptionPayments onUpdated={vi.fn()} />);
       expect(screen.getByText(`billing.payments.${hint}`)).toBeTruthy();
       expect(screen.queryByText(/^billing.payments.expiresAt/)).toBeNull();
-      expect(screen.queryByRole("link", { name: "billing.payments.continue" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "billing.payments.continue" })).toBeNull();
       expect(screen.getByRole("button", { name: "billing.payments.check" })).toBeTruthy();
       if (status === "REVIEW")
         expect(screen.getByRole("link", { name: "billing.payments.support" })).toBeTruthy();
@@ -696,4 +717,81 @@ describe("subscription payment consent and recovery", () => {
     expect(within(addons).getByText("billing.publicPricing.reserveExtra")).toBeTruthy();
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
+
+  it("revalidates the invoice after checkout creation and navigates only to the server-resumed URL", () => {
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    open(); fireEvent.click(screen.getByRole("checkbox")); submit();
+    act(() => mocks.success?.(invoice({ checkoutUrl: "#stale-checkout-url" })));
+    expect(mocks.resumeMutate).toHaveBeenCalledWith({ invoiceId: "invoice-fixture" });
+    expect(window.location.hash).toBe("");
+    act(() => mocks.resumeSuccess?.(invoice({ checkoutUrl: "#validated-after-checkout" })));
+    expect(window.location.hash).toBe("#validated-after-checkout");
+    expect(mocks.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not redirect when fresh resume rejects an invoice returned by checkout", () => {
+    const updated = vi.fn(); render(<SubscriptionPayments onUpdated={updated} />);
+    open(); fireEvent.click(screen.getByRole("checkbox")); submit();
+    act(() => mocks.success?.(invoice({ checkoutUrl: "#unsafe-checkout-url" })));
+    act(() => mocks.resumeError?.({ message: "appleSubscriptionManagedByApple" }));
+    expect(window.location.hash).toBe("");
+    expect(screen.getByText("errors.appleSubscriptionManagedByApple")).toBeTruthy();
+    expect(mocks.refetch).toHaveBeenCalled(); expect(updated).toHaveBeenCalled();
+  });
+
+  it("revalidates Continue once, blocks competing check clicks, and never exposes a cached URL as href", () => {
+    Object.assign(mocks.data, { pendingInvoice: invoice({ checkoutUrl: "#stale-pending-url" }), canPurchase: false });
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "billing.payments.continue" });
+    expect(document.querySelector('a[href="#stale-pending-url"]')).toBeNull();
+    act(() => { fireEvent.click(button); fireEvent.click(button); });
+    expect(mocks.resumeMutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "billing.payments.check" }));
+    fireEvent(window, new Event("focus"));
+    expect(mocks.checkMutate).not.toHaveBeenCalled(); expect(window.location.hash).toBe("");
+    act(() => mocks.resumeSuccess?.(invoice({ checkoutUrl: "#validated-pending-url" })));
+    expect(window.location.hash).toBe("#validated-pending-url");
+  });
+
+  it("translates fresh Continue refusal and permits a later revalidation without creating another invoice", () => {
+    Object.assign(mocks.data, { pendingInvoice: invoice({ checkoutUrl: "#stale-pending-url" }), canPurchase: false });
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "billing.payments.continue" }));
+    act(() => mocks.resumeError?.({ message: "billingQuoteChanged" }));
+    expect(window.location.hash).toBe(""); expect(screen.getByText("errors.billingQuoteChanged")).toBeTruthy();
+    expect(mocks.refetch).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "billing.payments.continue" }));
+    expect(mocks.resumeMutate).toHaveBeenCalledTimes(2); expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["REVIEW", null], ["CREATING", null], ["PAID", null],
+    ["PENDING", "appleSubscriptionManagedByApple"], ["PENDING", "applePaymentNeedsReview"],
+  ])("does not continue %s with Apple block %s even if a stale provider URL remains", (status, blockedReason) => {
+    Object.assign(mocks.data, { pendingInvoice: invoice({ status, checkoutUrl: "#stale-ticket" }), canPurchase: false, purchaseBlockedReason: blockedReason });
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "billing.payments.continue" })).toBeNull();
+    expect(document.querySelector('a[href="#stale-ticket"]')).toBeNull(); expect(mocks.resumeMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "billing.payments.check" })).toBeTruthy();
+  });
+
+  it("does not navigate a completed resume after leaving the billing component", () => {
+    Object.assign(mocks.data, { pendingInvoice: invoice({ checkoutUrl: "#stale-ticket" }), canPurchase: false });
+    const view = render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "billing.payments.continue" }));
+    const completed = mocks.resumeSuccess; view.unmount();
+    act(() => completed?.(invoice({ checkoutUrl: "#obsolete-session-redirect" })));
+    expect(window.location.hash).toBe("");
+  });
+
+  it("restores the check controls when the browser returns from provider navigation", () => {
+    Object.assign(mocks.data, { pendingInvoice: invoice(), canPurchase: false });
+    render(<SubscriptionPayments onUpdated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "billing.payments.continue" }));
+    act(() => mocks.resumeSuccess?.(invoice({ checkoutUrl: "#provider-navigation" })));
+    expect((screen.getByRole("button", { name: "billing.payments.continue" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent(window, new Event("pageshow"));
+    expect(mocks.checkMutate).toHaveBeenCalledWith({ invoiceId: "invoice-fixture" });
+  });
+
 });

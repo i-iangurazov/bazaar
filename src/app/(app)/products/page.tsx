@@ -20,6 +20,7 @@ import { commonListFields, useScopedListState } from "@/lib/useScopedListState";
 import { cn } from "@/lib/utils";
 import { ListViewOptions, ListToolbar, FilterField } from "@/components/list-toolbar";
 import { ProductListSearch } from "@/components/products/product-list-search";
+import { ProductPhotoSearchButton } from "@/components/products/product-photo-search";
 import { PageHeader } from "@/components/page-header";
 import { SubscriptionFeatureAvailability } from "@/components/billing/subscription-feature-lock";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
@@ -3923,6 +3924,8 @@ const ProductsPage = () => {
           disabled={!productsTableStateReady}
           cameraScan={enableBarcode}
         />
+        <ProductPhotoSearchButton identityKey={`${session?.user?.organizationId ?? ""}:${session?.user?.id ?? ""}`}
+          storeId={storeId} stores={stores} disabled={!productsTableStateReady || !session?.user} />
         <FilterField id="products-store" label={tCommon("store")}>
           <Select value={storeId || "all"} onValueChange={setStoreId}>
             <SelectTrigger id="products-store">

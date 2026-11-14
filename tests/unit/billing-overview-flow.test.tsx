@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { NextIntlClientProvider, createTranslator } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ru from "../../messages/ru.json";
@@ -17,7 +17,10 @@ import {
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const mock = vi.hoisted(() => ({ checkout: vi.fn(), check: vi.fn(), refetch: vi.fn() }));
+const mock = vi.hoisted(() => ({ checkout: vi.fn(), check: vi.fn(), resume: vi.fn(), refetch: vi.fn(),
+  resumeSuccess: null as null | ((invoice: { id: string; status: string; checkoutUrl: string | null; isTest: boolean }) => void),
+  resumeError: null as null | ((error: { message: string }) => void),
+}));
 let model = createBillingUiFixture();
 vi.mock("next-auth/react", () => ({
   useSession: () => ({
@@ -54,6 +57,10 @@ vi.mock("@/lib/trpc", () => {
           },
           checkout: { useMutation: () => ({ mutate: mock.checkout, isLoading: false }) },
           check: { useMutation: () => ({ mutate: mock.check, isLoading: false }) },
+          resume: { useMutation: (options: { onSuccess: typeof mock.resumeSuccess; onError: typeof mock.resumeError }) => {
+            mock.resumeSuccess = options.onSuccess; mock.resumeError = options.onError;
+            return { mutate: mock.resume, isLoading: false };
+          } },
         },
       },
     },
@@ -64,6 +71,7 @@ const messages = { ru, kg, en };
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, "", "/billing");
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(billingUiNow);
   vi.stubGlobal(
@@ -95,6 +103,22 @@ const mount = (locale: keyof typeof messages = "ru", state: BillingUiState = "pa
 };
 
 describe("complete billing workspace disclosures", () => {
+  it.each(["ru", "kg", "en"] as const)("retains website current prices and checkout wording in %s", (locale) => {
+    const { container } = mount(locale, "paid");
+    const overview = container.querySelector("[data-subscription-overview]") as HTMLElement;
+    const t = createTranslator({ locale, messages: messages[locale], namespace: "billing" });
+    const currentPrice = t("planPricePrimary", {
+      amount: formatNumber(model.summary.monthlyPriceKgs, locale, { maximumFractionDigits: 2 }),
+    });
+    // Intl uses a nonbreaking grouping space in RU/KG. Compare the actual
+    // price verbatim rather than collapsing only the DOM side of the match.
+    expect(within(overview).getByText(currentPrice, { normalizer: (text) => text })).toBeTruthy();
+    expect(overview.textContent).not.toContain(messages[locale].billingApple.currentAccessPreserved);
+    expect(within(overview).getByRole("link", { name: messages[locale].billing.payments.openCheckout }).getAttribute("href")).toBe("#subscription-checkout");
+    expect(screen.queryByRole("link", { name: messages[locale].billingApple.renewalAndChanges })).toBeNull();
+    expect(mock.checkout).not.toHaveBeenCalled();
+  });
+
   it.each(["ru", "kg", "en"] as const)(
     "distinguishes current trial from the future paid plan and retains details in %s",
     (locale) => {
@@ -204,4 +228,27 @@ describe("complete billing workspace disclosures", () => {
       expect(mock.checkout).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["ru", "kg", "en"] as const)("revalidates a pending invoice before localized Continue navigation in %s", (locale) => {
+    const { container } = mount(locale, "pending");
+    const pending = model.payment.pendingInvoice!;
+    const label = messages[locale].billing.payments.continue;
+    expect(container.querySelector(`a[href="${pending.checkoutUrl}"]`)).toBeNull();
+    const button = screen.getByRole("button", { name: label });
+    act(() => { fireEvent.click(button); fireEvent.click(button); });
+    expect(mock.resume).toHaveBeenCalledTimes(1); expect(mock.resume).toHaveBeenCalledWith({ invoiceId: pending.id });
+    expect(window.location.hash).toBe("");
+    act(() => mock.resumeSuccess?.({ id: pending.id, status: "PENDING", isTest: false, checkoutUrl: "#validated-overview-provider" }));
+    expect(window.location.hash).toBe("#validated-overview-provider"); expect(mock.checkout).not.toHaveBeenCalled();
+  });
+
+  it("retains pending history and translated errors when current Apple coverage prevents continuing GoPay", () => {
+    const { container } = mount("ru", "pending");
+    fireEvent.click(screen.getByRole("button", { name: ru.billing.payments.continue }));
+    act(() => mock.resumeError?.({ message: "appleSubscriptionManagedByApple" }));
+    expect(window.location.hash).toBe(""); expect(screen.getByText(ru.errors.appleSubscriptionManagedByApple)).toBeTruthy();
+    expect(container.querySelector("[data-pending-invoice]")).not.toBeNull();
+    expect(screen.getByRole("region", { name: ru.billing.payments.history })).toBeTruthy(); expect(mock.refetch).toHaveBeenCalled();
+  });
+
 });

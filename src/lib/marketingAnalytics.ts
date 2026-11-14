@@ -5,6 +5,7 @@ import { marketingCampaignOverrides } from "@/lib/marketingCampaigns";
 import { clearMarketingClickIds, marketingClickQuery } from "@/lib/marketingClickIds";
 import { analyticsPrivacyOptOut, publicMarketingPage } from "@/lib/marketingPrivacy";
 import { metaHasInitialized, metaMeasurementId, pauseMetaMeasurement } from "@/lib/metaMarketing";
+import { isNativeApp } from "@/lib/native/platform";
 export { analyticsPrivacyOptOut, publicMarketingPage } from "@/lib/marketingPrivacy";
 
 const legacyConsentKey = "bazaar_analytics_consent_v1";
@@ -36,7 +37,15 @@ let lastPage: string | null = null;
 let documentHasPrivateContext = typeof window !== "undefined" && !publicMarketingPage(window.location.pathname);
 let replacingPrivateDocument = false;
 
+function nativeGoogleContext() {
+  // Website consent on the shared origin does not authorize native app tracking.
+  if (/\bBazaarNative(?:Android|IOS)?\//i.test(navigator.userAgent)) return true;
+  try { return isNativeApp(); }
+  catch { return true; } // A failed native probe never enables measurement.
+}
+
 export function marketingMeasurementId() {
+  if (typeof window !== "undefined" && nativeGoogleContext()) return null;
   // Enable only after the web stream's Enhanced Measurement is disabled and
   // synthetic network QA confirms that private URLs/form data are not sent.
   if (process.env.NEXT_PUBLIC_GA4_ENABLED !== "true") return null;
@@ -183,6 +192,7 @@ function consentAllowsAdvertising() {
 }
 
 function safeConsentCommand(...args: unknown[]) {
+  if (nativeGoogleContext()) return; // No consent pings from a previously initialized native document.
   try { (window as AnalyticsWindow).gtag?.(...args); }
   catch { /* A blocked third-party SDK must never prevent a privacy choice. */ }
 }

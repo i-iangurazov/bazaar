@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "purpose": "Linux runtime/HTTP/region/OCR compatibility smoke; not a new accuracy benchmark",
+  "images": [
+    {
+      "id": "grocery-6-test-Banana_023.jpg",
+      "productId": "grocery-6",
+      "role": "query",
+      "file": "grocery-6-test-Banana_023.jpg",
+      "sha256": "1be9b9ed061a4daac25bad33fdf09cc7f59d3fadb9569181a36f4095bc14fd89",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/test/Fruit/Banana/Banana_023.jpg"
+    },
+    {
+      "id": "grocery-6-iconic-Banana_Iconic.jpg",
+      "productId": "grocery-6",
+      "role": "gallery",
+      "file": "grocery-6-iconic-Banana_Iconic.jpg",
+      "sha256": "5648ef3875dbb4d51a5a764752add7d82af37e7c13330a853ed5958594f52c0e",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/iconic-images-and-descriptions/Fruit/Banana/Banana_Iconic.jpg"
+    },
+    {
+      "id": "grocery-6-train-Banana_002.jpg",
+      "productId": "grocery-6",
+      "role": "gallery",
+      "file": "grocery-6-train-Banana_002.jpg",
+      "sha256": "e600b2a24c23dc9818e19f8f5bd25a8f4d716933cf805a1f57a2b479c012002e",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/train/Fruit/Banana/Banana_002.jpg"
+    },
+    {
+      "id": "grocery-6-train-Banana_025.jpg",
+      "productId": "grocery-6",
+      "role": "gallery",
+      "file": "grocery-6-train-Banana_025.jpg",
+      "sha256": "25d065d979aa14e89306b59937053f2c51d20606ae36c1a561ce9c8a34310637",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/train/Fruit/Banana/Banana_025.jpg"
+    },
+    {
+      "id": "grocery-39-test-Arla-Lactose-Medium-Fat-Milk_001.jpg",
+      "productId": "grocery-39",
+      "role": "query",
+      "file": "grocery-39-test-Arla-Lactose-Medium-Fat-Milk_001.jpg",
+      "sha256": "ebefe83c9f8af39b893276aa629d7cfe38e17ecdf68bedc8ac124efbd8ce950a",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/test/Packages/Milk/Arla-Lactose-Medium-Fat-Milk/Arla-Lactose-Medium-Fat-Milk_001.jpg"
+    },
+    {
+      "id": "grocery-39-iconic-Arla-Lactose-Medium-Fat-Milk_Iconic.jpg",
+      "productId": "grocery-39",
+      "role": "gallery",
+      "file": "grocery-39-iconic-Arla-Lactose-Medium-Fat-Milk_Iconic.jpg",
+      "sha256": "f61cff7fe62614c48e2718c9cfacc32127483deb08391f6eb2a5abe19a475fb3",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/iconic-images-and-descriptions/Packages/Milk/Arla-Lactose-Medium-Fat-Milk/Arla-Lactose-Medium-Fat-Milk_Iconic.jpg"
+    },
+    {
+      "id": "grocery-39-train-Arla-Lactose-Medium-Fat-Milk_016.jpg",
+      "productId": "grocery-39",
+      "role": "gallery",
+      "file": "grocery-39-train-Arla-Lactose-Medium-Fat-Milk_016.jpg",
+      "sha256": "30bbb995b0e6a4c4cbe9be8a24848ee46e70655e45e78721da15fc231b48c14d",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/train/Packages/Milk/Arla-Lactose-Medium-Fat-Milk/Arla-Lactose-Medium-Fat-Milk_016.jpg"
+    },
+    {
+      "id": "grocery-39-train-Arla-Lactose-Medium-Fat-Milk_018.jpg",
+      "productId": "grocery-39",
+      "role": "gallery",
+      "file": "grocery-39-train-Arla-Lactose-Medium-Fat-Milk_018.jpg",
+      "sha256": "b3d22886e4b024f7edcdc3e95470ea63340d9ae51bcf034cc58041d8b8a7bd6a",
+      "url": "https://raw.githubusercontent.com/marcusklasson/GroceryStoreDataset/fc80ba90f803d79d0383df52c5a4ac5de99ff6fc/dataset/train/Packages/Milk/Arla-Lactose-Medium-Fat-Milk/Arla-Lactose-Medium-Fat-Milk_018.jpg"
+    },
+    {
+      "id": "aloi-103_r0.jpg",
+      "productId": "aloi-103",
+      "role": "gallery",
+      "file": "103_r0.jpg",
+      "sha256": "644b291d0eafba6df29887dd39cbe9d4af1be653fe866c2b57e70653070a6268",
+      "url": "https://aloi.science.uva.nl/www-images/103/103_r0.jpg"
+    },
+    {
+      "id": "aloi-103_r30.jpg",
+      "productId": "aloi-103",
+      "role": "query",
+      "file": "103_r30.jpg",
+      "sha256": "476de8a46372389dd6dc43bd83a19e2d8c1515ecf5f94976040579bea80f9276",
+      "url": "https://aloi.science.uva.nl/www-images/103/103_r30.jpg"
+    },
+    {
+      "id": "aloi-577_r0.jpg",
+      "productId": "aloi-577",
+      "role": "gallery",
+      "file": "577_r0.jpg",
+      "sha256": "f7264cda0b8f7494dda43df1926abd38d29de77da01fe2eb7972ca5ab1fe64c5",
+      "url": "https://aloi.science.uva.nl/www-images/577/577_r0.jpg"
+    },
+    {
+      "id": "aloi-577_r30.jpg",
+      "productId": "aloi-577",
+      "role": "query",
+      "file": "577_r30.jpg",
+      "sha256": "8cf677a61fb63393ce3961789cafbf447eed7c6ece9245217f002d6e74d28a91",
+      "url": "https://aloi.science.uva.nl/www-images/577/577_r30.jpg"
+    }
+  ]
+}

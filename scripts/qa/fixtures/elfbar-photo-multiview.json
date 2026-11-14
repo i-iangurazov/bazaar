@@ -1,0 +1,208 @@
+{
+  "schema": 1,
+  "baselineQueryManifestSha256": "2a861704e04d2b8781874327409e95a859993bef97adb36358aee749f0b92e89",
+  "baselineGalleryPhotos": 27,
+  "expectedGalleryPhotos": 36,
+  "preserveOriginalImages": true,
+  "sources": [
+    {
+      "id": "qChbS3VN888",
+      "file": "qChbS3VN888.mp4",
+      "sha256": "26c7af4deaae93dd017b5a9cabcf300ee336290d51aee11fac9159c72c177ccb",
+      "bytes": 138592815,
+      "url": "https://www.youtube.com/watch?v=qChbS3VN888",
+      "author": "Андрей Фурманович",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "id": "q7v-Bj1Kzh8",
+      "file": "q7v-Bj1Kzh8.mp4",
+      "sha256": "b59410d6dcca5266ea8742315836cea5ef6ae74bde6184e49ea7f9689fc6ba6e",
+      "bytes": 69338789,
+      "url": "https://www.youtube.com/watch?v=q7v-Bj1Kzh8",
+      "author": "Clube do Vaping Backup",
+      "width": 1920,
+      "height": 1080
+    }
+  ],
+  "assets": [
+    {
+      "id": "watermelon-cherry-front",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "media": "qChbS3VN888",
+      "seconds": 120,
+      "pose": "front",
+      "crop": [
+        0.43,
+        0.3,
+        0.16,
+        0.47
+      ],
+      "frameFile": "frames/watermelon-cherry-front.png",
+      "frameSha256": "c78e4cd6c8b629622c116dce03dcf697897c94df3b441dc4ee09ae21e8239167",
+      "file": "gallery/watermelon-cherry-front.jpg",
+      "uploadedSha256": "475bbfc5a1837f7c69e4e5cd95d201abed24134a0256d0a340ab76ffa38bff7b",
+      "width": 307,
+      "height": 508
+    },
+    {
+      "id": "watermelon-cherry-display",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "media": "qChbS3VN888",
+      "seconds": 60,
+      "pose": "display-side",
+      "crop": [
+        0.43,
+        0.15,
+        0.33,
+        0.39
+      ],
+      "frameFile": "frames/watermelon-cherry-display.png",
+      "frameSha256": "3b38a406005a2a06b3edc0cf736366cc9c2822aee71fa415e790dcaad65c0316",
+      "file": "gallery/watermelon-cherry-display.jpg",
+      "uploadedSha256": "a696ef9b50abe2f61541122ad280523229f32335a3f3c26c93d03dc34d6d743a",
+      "width": 634,
+      "height": 421
+    },
+    {
+      "id": "watermelon-cherry-back",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "media": "qChbS3VN888",
+      "seconds": 90,
+      "pose": "back",
+      "crop": [
+        0.47,
+        0.31,
+        0.22,
+        0.48
+      ],
+      "frameFile": "frames/watermelon-cherry-back.png",
+      "frameSha256": "ec9f05279f1e7f62a79c84cbf805a0f9e87e6d0460ed169ca8f3d0e3e942325c",
+      "file": "gallery/watermelon-cherry-back.jpg",
+      "uploadedSha256": "069fb26fc3bfe51083704ab47d1958242da6c82ed4e993522e884d099ef22609",
+      "width": 422,
+      "height": 518
+    },
+    {
+      "id": "strawberry-banana-front",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 170,
+      "pose": "front",
+      "crop": [
+        0.39,
+        0.1,
+        0.25,
+        0.72
+      ],
+      "frameFile": "frames/strawberry-banana-front.png",
+      "frameSha256": "fd0ed1f35a60b5db39c2a47fefece428c2d493892676ea71c43a86a29576a579",
+      "file": "gallery/strawberry-banana-front.jpg",
+      "uploadedSha256": "bde4aa2ebee9582e822810ea51f6c8943f0c2267524598ed5772f40ca2be4473",
+      "width": 480,
+      "height": 778
+    },
+    {
+      "id": "strawberry-banana-display",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 200,
+      "pose": "display-side",
+      "crop": [
+        0.43,
+        0.2,
+        0.15,
+        0.66
+      ],
+      "frameFile": "frames/strawberry-banana-display.png",
+      "frameSha256": "71e15ba0eb7effd8bbe6c8929cf6909678f95ff0108da29ff2b9d04cd51f44ab",
+      "file": "gallery/strawberry-banana-display.jpg",
+      "uploadedSha256": "4c86131b75cdc53add270eabb460c4e9f921b44875a7a2d531f4ce3c84379645",
+      "width": 288,
+      "height": 713
+    },
+    {
+      "id": "strawberry-banana-oblique",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 255,
+      "pose": "display-oblique",
+      "crop": [
+        0.47,
+        0.21,
+        0.17,
+        0.75
+      ],
+      "frameFile": "frames/strawberry-banana-oblique.png",
+      "frameSha256": "2695b7491055e4fa8486e07d7de4d38df6a86957da7e86f5be3ef810d9686934",
+      "file": "gallery/strawberry-banana-oblique.jpg",
+      "uploadedSha256": "c6c2375fe896ec0dd4cf998bcd72b3679f8d28546a12affb8c1a64a05c0c7eac",
+      "width": 326,
+      "height": 810
+    },
+    {
+      "id": "sakura-grape-front",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 640,
+      "pose": "front",
+      "crop": [
+        0.54,
+        0.36,
+        0.14,
+        0.36
+      ],
+      "frameFile": "frames/sakura-grape-front.png",
+      "frameSha256": "cb4a1d731e4206d18f4b54f280fde0d6f465c8dd2f863335f677554479197f78",
+      "file": "gallery/sakura-grape-front.jpg",
+      "uploadedSha256": "2119b3fe94228c7aa684231bd12ace3205137f834cb9973bb405a1d71b014cca",
+      "width": 269,
+      "height": 389
+    },
+    {
+      "id": "sakura-grape-tilted",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 550,
+      "pose": "hand-occluded-side",
+      "crop": [
+        0.22,
+        0.39,
+        0.14,
+        0.33
+      ],
+      "frameFile": "frames/sakura-grape-tilted.png",
+      "frameSha256": "e5bdaa8f5ffe8209b06e948ac110e47eb220c0610772aaa998251ebee283bfe5",
+      "file": "gallery/sakura-grape-tilted.jpg",
+      "uploadedSha256": "e79b0f88cdef5a4c743175eb7a9783351b500e9b9d31f55781d30f7fe28b5cdd",
+      "width": 269,
+      "height": 356
+    },
+    {
+      "id": "sakura-grape-oblique",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 575,
+      "pose": "oblique-display",
+      "crop": [
+        0.27,
+        0.43,
+        0.17,
+        0.34
+      ],
+      "frameFile": "frames/sakura-grape-oblique.png",
+      "frameSha256": "fc484d5d535883d2e6f15d7970e783a5e40883a9ed68c8cf1869937cfe6f9a09",
+      "file": "gallery/sakura-grape-oblique.jpg",
+      "uploadedSha256": "4ffed8fe19c2e497b2ebe66daea08d55afe69ca9fc1323ca18044ca105e04880",
+      "width": 326,
+      "height": 367
+    }
+  ],
+  "limits": [
+    "Gallery and queries are different frames from the same public videos, not independent camera sessions",
+    "Three front frames upgrade original reference timestamps at higher source resolution; other views use non-query timestamps",
+    "Sakura Grape remains partially occluded by the hand; high source resolution is not a guarantee of a clean product photo",
+    "Original six ELFBAR photos and the original manual shop are preserved; no query image is indexed"
+  ]
+}

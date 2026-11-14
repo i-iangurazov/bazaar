@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
-  notifications: { findMany: vi.fn(), updateMany: vi.fn() },
-  reminders: { findMany: vi.fn(), updateMany: vi.fn() },
+  notifications: { findMany: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
+  reminders: { findMany: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
   invoice: vi.fn(),
   organization: vi.fn(),
   owner: vi.fn(),
@@ -53,11 +53,15 @@ beforeEach(() => {
   vi.stubEnv("RESEND_API_KEY", "synthetic-not-a-provider-key");
   vi.stubEnv("EMAIL_FROM", "new-sender@example.invalid");
   vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "mock");
+  // A stored retry still has a live lease and an active, undeleted recipient at
+  // the final pre-send check; the frozen content is independent of preferences.
+  mocks.notifications.findFirst.mockResolvedValue({ id: "synthetic-existing-outbox-row" });
+  mocks.reminders.findFirst.mockResolvedValue({ id: "synthetic-existing-outbox-row" });
   mocks.notifications.updateMany.mockResolvedValue({ count: 1 });
   mocks.reminders.updateMany.mockResolvedValue({ count: 1 });
   mocks.dueOwners.mockResolvedValue([]);
   mocks.organization.mockResolvedValue(organization);
-  mocks.owner.mockResolvedValue({ email: "owner@example.invalid", preferredLocale: "en" });
+  mocks.owner.mockResolvedValue({ id: "synthetic-owner", email: "owner@example.invalid", preferredLocale: "en", isActive: true, deletedAt: null });
   mocks.invoice.mockResolvedValue({
     organization,
     period: { startsAt: now, endsAt: end },

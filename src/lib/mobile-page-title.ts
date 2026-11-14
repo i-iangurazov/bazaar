@@ -33,13 +33,15 @@ export function getMobilePageTitle(
   pathname: string,
   translate: {
     nav: Translate<NavTitleKey>;
-    breadcrumbs: Translate<"home" | "settings">;
+    breadcrumbs: Translate<"home" | "settings" | "chinaImageSearch">;
     scanner: Translate<"title">;
   },
 ): string {
   const matches = (prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
   if (pathname === "/" || matches("/dashboard")) return translate.breadcrumbs("home");
   if (matches("/dev/scanner-test")) return translate.scanner("title");
+  if (matches("/operations/integrations/china-image-search"))
+    return translate.breadcrumbs("chinaImageSearch");
   const route = routes.find(([prefix]) => matches(prefix));
   if (route) return translate.nav(route[1]);
   if (matches("/settings")) return translate.breadcrumbs("settings");

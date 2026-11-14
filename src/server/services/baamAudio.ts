@@ -7,6 +7,7 @@ import { prisma } from "@/server/db/prisma";
 import type { Context } from "@/server/trpc/trpc";
 import { baamJson, ownBaamConversation } from "./baamConversations";
 import { AppError } from "./errors";
+import { assertAiConsent } from "./aiPrivacy";
 import {
   reserveSubscriptionUsage,
   startSubscriptionUsage,
@@ -126,6 +127,8 @@ export async function transcribeBaamAudio(
   locale: string,
 ) {
   const { scope } = await ownBaamConversation(ctx, conversationId);
+  await assertAiConsent({ userId: scope.actorId, organizationId: scope.organizationId,
+    impersonating: Boolean(ctx.impersonator) });
   const { duration, mime } = await validateBaamAudio(buffer, mimeType);
   if (!process.env.OPENAI_API_KEY) throw new AppError("baamNotConfigured", "BAD_REQUEST", 400);
   const audioHash = createHash("sha256").update(buffer).digest("hex");
@@ -163,6 +166,7 @@ export async function transcribeBaamAudio(
   }
   let usageLease: UsageLease = null;
   let expense: ProviderExpense | null = null;
+  let outboundStarted = false;
   try {
     usageLease = await reserveSubscriptionUsage({
       organizationId: scope.organizationId,
@@ -222,7 +226,10 @@ export async function transcribeBaamAudio(
       .slice(0, 15);
     for (const keyword of ["Bazaar", "BAAM", ...keywords])
       form.append("keywords[]", keyword.slice(0, 100));
+    await assertAiConsent({ userId: scope.actorId, organizationId: scope.organizationId,
+      impersonating: Boolean(ctx.impersonator) });
     assertExternalProviderCallAllowed("openai");
+    outboundStarted = true;
     const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       redirect: "error",
@@ -264,7 +271,8 @@ export async function transcribeBaamAudio(
     });
     return await prisma.baamTranscription.findUniqueOrThrow({ where: { id: transcription.id } });
   } catch (error) {
-    await settleProviderExpense(expense);
+    if (outboundStarted) await settleProviderExpense(expense);
+    else await settleProviderExpense(expense, 0);
     await settleSubscriptionUsage(usageLease, false);
     await prisma.baamTranscription.updateMany({
       where: { id: transcription.id, status: "PROCESSING", leaseUntil },

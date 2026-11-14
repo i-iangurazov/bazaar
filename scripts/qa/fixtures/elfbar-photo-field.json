@@ -1,0 +1,556 @@
+{
+  "schema": 1,
+  "preparedBeforeInference": true,
+  "applicationCommit": "41dde3fc71c1aaa7d98da8f9bae49d29a844182f",
+  "baselineManifestSha256": "41c060812426774f51b46abdeacfeb43cdc6a4c4f16dbb1734d4d2f2505423a0",
+  "expectedGalleryPhotos": 27,
+  "tools": {
+    "ytDlp": "2026.10.26",
+    "ffmpeg": "ffmpeg version 9.0 Copyright (c) 2000-2026 the FFmpeg developers"
+  },
+  "protocol": {
+    "sampling": "Frames and manual regions selected visually before any search result. No color, rotation, lighting synthesis, model/threshold changes or query-photo indexing. Separate test store; original shop preserved.",
+    "primaryUnit": "Unique camera frame/photo, paired auto/manual requests are not independent samples; frames from each video are correlated. Multi-object auto scenes are reported separately.",
+    "gallery": "24 original ready images plus three real-device video-frame crops in a separate test store; different timestamps from queries, same videos are not independent shoots.",
+    "lighting": "Observed scene descriptions, not measured lux or controlled exposure. Handheld over a table is labelled hand, never a free-standing table photo.",
+    "limits": [
+      "Incomplete matrix: no new in-hand views for original Grape Ice, Kiwi Dragon Fruit, Pineapple Plums Lime Mint, Peach Mango Watermelon",
+      "No new independent table photos for the two original orange flavors; new table images are multi-object scenes",
+      "New three flavors have correlated video-frame references and queries, not independent sessions",
+      "Watermelon Cherry has one bright green-table lighting setup, Sakura Grape one room setup",
+      "No real customer phone capture or general SKU-accuracy claim"
+    ]
+  },
+  "media": [
+    {
+      "id": "qChbS3VN888",
+      "kind": "video",
+      "file": "qChbS3VN888.mp4",
+      "sha256": "c5afe58f2de4affac0a87ed9bba35a5096b02ef9469850d8a95429197c25b4e3",
+      "bytes": 12467261,
+      "url": "https://www.youtube.com/watch?v=qChbS3VN888",
+      "author": "Андрей Фурманович",
+      "published": "20250424",
+      "durationSeconds": 322,
+      "title": "Elfbar GH 23000",
+      "usage": "Locally cached public real-camera video; no redistribution license asserted"
+    },
+    {
+      "id": "q7v-Bj1Kzh8",
+      "kind": "video",
+      "file": "q7v-Bj1Kzh8.mp4",
+      "sha256": "cd8c726027895002454d42b23e73b49aef5e72c6952628f603ce47cac34dbeee",
+      "bytes": 24940968,
+      "url": "https://www.youtube.com/watch?v=q7v-Bj1Kzh8",
+      "author": "Clube do Vaping Backup",
+      "published": "20260313",
+      "durationSeconds": 719,
+      "title": "ELFBAR GH23000 (repost)",
+      "usage": "Locally cached public real-camera video; no redistribution license asserted"
+    },
+    {
+      "id": "-123231694_456239226",
+      "kind": "video",
+      "file": "-123231694_456239226.mp4",
+      "sha256": "12f1a714104e220adc4c92170a5afabaf9ff9ab67767bc89ccac269ac65ef6d4",
+      "bytes": 161052020,
+      "url": "https://vk.com/video-123231694_456239226",
+      "author": "Сладкий пар 18+",
+      "published": "20250606",
+      "durationSeconds": 901,
+      "title": "Обзор одноразок ELFBAR Booster (30000), ICE King (30000) и GH23000",
+      "usage": "Locally cached public real-camera video; no redistribution license asserted"
+    },
+    {
+      "id": "bel-table-bright",
+      "kind": "photo",
+      "file": "sources/Obzor-odnorazok-Elfbar-GH23000-980x551.jpg",
+      "sha256": "530988bfcb6dbc348f4e37e18a5b762588b51b39362e0058b6da2f8f047b3a9f",
+      "bytes": 80070,
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Obzor-odnorazok-Elfbar-GH23000-980x551.jpg",
+      "page": "https://belvaping.com/reviews/odnorazki-elfbar-gh23000-bar-s-ogonkom/",
+      "author": "Андрей Попко / BelVaping",
+      "published": "2024-11-20",
+      "usage": "Locally cached real device photograph; no redistribution license asserted"
+    },
+    {
+      "id": "bel-table-dark",
+      "kind": "photo",
+      "file": "sources/Elfbar-GH23000-obzor-odnorazok-19-980x551.jpg",
+      "sha256": "71f6b7a93a09c73dba7c54eacf6fbf311a8d402b5ca29df5fb29a9608d1a2fda",
+      "bytes": 59199,
+      "url": "https://belvaping.com/wp-content/uploads/2024/11/Elfbar-GH23000-obzor-odnorazok-19-980x551.jpg",
+      "page": "https://belvaping.com/reviews/odnorazki-elfbar-gh23000-bar-s-ogonkom/",
+      "author": "Андрей Попко / BelVaping",
+      "published": "2024-11-20",
+      "usage": "Locally cached real device photograph; no redistribution license asserted"
+    }
+  ],
+  "gallery": [
+    {
+      "id": "reference-watermelon-cherry",
+      "flavor": "Watermelon Cherry",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "media": "qChbS3VN888",
+      "seconds": 120,
+      "crop": [
+        0.43,
+        0.3,
+        0.16,
+        0.47
+      ],
+      "groundTruth": "Readable WATERMELON CHERRY on the physical device at 120 s",
+      "file": "references/reference-watermelon-cherry.png",
+      "sha256": "b16eb723ab47f0cec103b57570b4de0627a8e801cdce0c1da8dad3d7b5c45ec8",
+      "uploadedSha256": "49d3a4f0a7057846bdb07abbcd1e6465b524e7a014a74b742728654fda96a11f"
+    },
+    {
+      "id": "reference-strawberry-banana",
+      "flavor": "Strawberry Banana",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 170,
+      "crop": [
+        0.39,
+        0.1,
+        0.25,
+        0.72
+      ],
+      "groundTruth": "Readable STRAWBERRY BANANA on device at 170 s and package at 130 s",
+      "file": "references/reference-strawberry-banana.png",
+      "sha256": "3cb3a9a63a6be28b594b947e971e151fdf243bc00245e55910424ab14b9b2e16",
+      "uploadedSha256": "3b81cab906d03ad5cc641df1c69a0d034bf639ff0a35ee84f6bfa0799076af05"
+    },
+    {
+      "id": "reference-sakura-grape",
+      "flavor": "Sakura Grape",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 640,
+      "crop": [
+        0.54,
+        0.36,
+        0.14,
+        0.36
+      ],
+      "groundTruth": "Package SAKURA GRAPE at 10 s, continuous orange-device segment after 520 s; flavor text occluded in reference",
+      "limitation": "Single modest-resolution reference with hand occlusion; not a studio product photograph",
+      "file": "references/reference-sakura-grape.png",
+      "sha256": "283bf2fcf102ce0136bced03d84456cfeb4738b91b0cced7805a364352b0e2e4",
+      "uploadedSha256": "f11a9429a35146dd034c0bd8397d04ace886c7d75e0deb60166f3750921f5c51"
+    }
+  ],
+  "queries": [
+    {
+      "id": "watermelon-cherry-40",
+      "media": "qChbS3VN888",
+      "seconds": 40,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "scene": "hand",
+      "pose": "front-oblique",
+      "light": "bright-overhead-green-mat",
+      "region": {
+        "x": 0.49,
+        "y": 0.29,
+        "width": 0.2,
+        "height": 0.53
+      },
+      "labelVisible": true,
+      "design": "skull",
+      "setting": "hands over green tabletop",
+      "file": "queries/watermelon-cherry-40.png",
+      "sha256": "a0d1f9ce014218623f0f940226201b1fd38f5259edfabd4bbbcf13089aed5740"
+    },
+    {
+      "id": "watermelon-cherry-80",
+      "media": "qChbS3VN888",
+      "seconds": 80,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "scene": "hand",
+      "pose": "front-occluded",
+      "light": "bright-overhead-green-mat",
+      "region": {
+        "x": 0.51,
+        "y": 0.28,
+        "width": 0.23,
+        "height": 0.6
+      },
+      "labelVisible": true,
+      "design": "skull",
+      "setting": "hands over green tabletop",
+      "file": "queries/watermelon-cherry-80.png",
+      "sha256": "aa54e23b3746671711b35436f97317dbcd2df7592c2c9c81b73e1dd450e9f275"
+    },
+    {
+      "id": "watermelon-cherry-100",
+      "media": "qChbS3VN888",
+      "seconds": 100,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "scene": "hand",
+      "pose": "back",
+      "light": "bright-overhead-green-mat",
+      "region": {
+        "x": 0.52,
+        "y": 0.25,
+        "width": 0.17,
+        "height": 0.57
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "setting": "hands over green tabletop",
+      "file": "queries/watermelon-cherry-100.png",
+      "sha256": "27f6d4b26cd3dd3bc9cd87ab9660abbe3fdf2e9fa3d054e8c4000fd7189275e7"
+    },
+    {
+      "id": "watermelon-cherry-130",
+      "media": "qChbS3VN888",
+      "seconds": 130,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "scene": "hand",
+      "pose": "front-oblique",
+      "light": "bright-overhead-green-mat",
+      "region": {
+        "x": 0.37,
+        "y": 0.28,
+        "width": 0.22,
+        "height": 0.56
+      },
+      "labelVisible": true,
+      "design": "skull",
+      "setting": "hands over green tabletop",
+      "file": "queries/watermelon-cherry-130.png",
+      "sha256": "da41850deedfeacd2d6016735a83506c7ce0bc0b75a0c5adcdbb440c0f331c29"
+    },
+    {
+      "id": "watermelon-cherry-300",
+      "media": "qChbS3VN888",
+      "seconds": 300,
+      "expectedSku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "scene": "hand",
+      "pose": "front-horizontal",
+      "light": "bright-overhead-green-mat",
+      "region": {
+        "x": 0.38,
+        "y": 0.09,
+        "width": 0.45,
+        "height": 0.52
+      },
+      "labelVisible": true,
+      "design": "skull",
+      "setting": "hands over green tabletop",
+      "file": "queries/watermelon-cherry-300.png",
+      "sha256": "388cc4b98b07bb5421ed79ca8aa0e93e5ffe341cb6334d3b068ad8ba9964d02c"
+    },
+    {
+      "id": "strawberry-banana-190",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 190,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "scene": "hand",
+      "pose": "back",
+      "light": "muted-overhead-wood",
+      "region": {
+        "x": 0.42,
+        "y": 0.2,
+        "width": 0.15,
+        "height": 0.55
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "setting": "held in hand; wood tabletop camera at t<300, room camera afterwards",
+      "file": "queries/strawberry-banana-190.png",
+      "sha256": "3e565bc60aa5b3e137676f3a181cd236de666c01dadc91ebfe4d7b923b87a4fe"
+    },
+    {
+      "id": "strawberry-banana-210",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 210,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "scene": "hand",
+      "pose": "screen",
+      "light": "muted-overhead-wood",
+      "region": {
+        "x": 0.42,
+        "y": 0.25,
+        "width": 0.16,
+        "height": 0.6
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "setting": "held in hand; wood tabletop camera at t<300, room camera afterwards",
+      "file": "queries/strawberry-banana-210.png",
+      "sha256": "1e9aa08d64444da0113f36994d6dbed5fa4a6208270fca28f90618224ccb50eb"
+    },
+    {
+      "id": "strawberry-banana-290",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 290,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "scene": "hand",
+      "pose": "front-oblique",
+      "light": "muted-overhead-wood",
+      "region": {
+        "x": 0.41,
+        "y": 0.1,
+        "width": 0.24,
+        "height": 0.7
+      },
+      "labelVisible": true,
+      "design": "skull",
+      "setting": "held in hand; wood tabletop camera at t<300, room camera afterwards",
+      "file": "queries/strawberry-banana-290.png",
+      "sha256": "27c459903290bc5400a935a186d411629db36235f48e24b3c258952ffe6c0ec5"
+    },
+    {
+      "id": "strawberry-banana-320",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 320,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "scene": "hand",
+      "pose": "front-close",
+      "light": "room-purple-blue-background",
+      "region": {
+        "x": 0.26,
+        "y": 0.08,
+        "width": 0.32,
+        "height": 0.82
+      },
+      "labelVisible": true,
+      "design": "skull",
+      "setting": "held in hand; wood tabletop camera at t<300, room camera afterwards",
+      "file": "queries/strawberry-banana-320.png",
+      "sha256": "395985bb164045ecc39dc4deaef5f5f87277e12fcb5857a4ab9ce14adfe84be9"
+    },
+    {
+      "id": "strawberry-banana-400",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 400,
+      "expectedSku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "scene": "hand",
+      "pose": "front-distant",
+      "light": "room-purple-blue-background",
+      "region": {
+        "x": 0.27,
+        "y": 0.46,
+        "width": 0.16,
+        "height": 0.36
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "setting": "held in hand; wood tabletop camera at t<300, room camera afterwards",
+      "file": "queries/strawberry-banana-400.png",
+      "sha256": "e132fb8ea9c1fe36cbee2d6405a408caa41d00ca0338668855496247c2d862fc"
+    },
+    {
+      "id": "sakura-grape-540",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 540,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "scene": "hand",
+      "pose": "horizontal-back",
+      "light": "room-purple-blue-background",
+      "region": {
+        "x": 0.12,
+        "y": 0.32,
+        "width": 0.35,
+        "height": 0.2
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "multiObject": false,
+      "setting": "held in room",
+      "file": "queries/sakura-grape-540.png",
+      "sha256": "c79c548279ca888d42f7687053d3a4293455619a38b5360906426e5d2453374a"
+    },
+    {
+      "id": "sakura-grape-560",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 560,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "scene": "hand",
+      "pose": "screen-diagonal",
+      "light": "room-purple-blue-background",
+      "region": {
+        "x": 0.1,
+        "y": 0.25,
+        "width": 0.42,
+        "height": 0.5
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "multiObject": false,
+      "setting": "held in room",
+      "file": "queries/sakura-grape-560.png",
+      "sha256": "a786f83158b87d419b65ebdfcc03d699803292ffea3f27433e1045984ceb6b09"
+    },
+    {
+      "id": "sakura-grape-600",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 600,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "scene": "hand",
+      "pose": "front-occluded-distant",
+      "light": "room-purple-blue-background",
+      "region": {
+        "x": 0.26,
+        "y": 0.5,
+        "width": 0.17,
+        "height": 0.38
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "multiObject": false,
+      "setting": "held in room",
+      "file": "queries/sakura-grape-600.png",
+      "sha256": "670ab9ec6cd05e97b58b2b8ca09e8cbfccccd7417d6e5e0a1295b93905642231"
+    },
+    {
+      "id": "sakura-grape-660",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 660,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "scene": "hand",
+      "pose": "two-devices",
+      "light": "room-purple-blue-background",
+      "region": {
+        "x": 0.46,
+        "y": 0.65,
+        "width": 0.11,
+        "height": 0.34
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "multiObject": true,
+      "setting": "held in room",
+      "file": "queries/sakura-grape-660.png",
+      "sha256": "dce0836bc150a6eb53b62c9a04e7b6c326ead0da28c82aad47118daf3c9dd62f"
+    },
+    {
+      "id": "sakura-grape-680",
+      "media": "q7v-Bj1Kzh8",
+      "seconds": 680,
+      "expectedSku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "scene": "hand",
+      "pose": "front-occluded",
+      "light": "room-purple-blue-background",
+      "region": {
+        "x": 0.2,
+        "y": 0.16,
+        "width": 0.19,
+        "height": 0.42
+      },
+      "labelVisible": false,
+      "design": "skull",
+      "multiObject": false,
+      "setting": "held in room",
+      "file": "queries/sakura-grape-680.png",
+      "sha256": "c9c1d6cd057abddf91adfe682bc9634225ae78c659dc4ee4bfb160b1a6e5875f"
+    },
+    {
+      "id": "absent-baja-splash-80",
+      "media": "-123231694_456239226",
+      "seconds": 80,
+      "expectedSku": null,
+      "scene": "hand",
+      "pose": "front",
+      "light": "bright-room-boxes-background",
+      "region": {
+        "x": 0.52,
+        "y": 0.26,
+        "width": 0.18,
+        "height": 0.46
+      },
+      "labelVisible": true,
+      "design": "space",
+      "flavor": "Baja Splash",
+      "backgroundBoxes": true,
+      "setting": "foreground device held above boxes of other flavors",
+      "file": "queries/absent-baja-splash-80.png",
+      "sha256": "031428b478253af2e5cfdf5d9deb30b25dddb17221e41e7c6367734abd980fe8"
+    },
+    {
+      "id": "absent-baja-splash-110",
+      "media": "-123231694_456239226",
+      "seconds": 110,
+      "expectedSku": null,
+      "scene": "hand",
+      "pose": "screen",
+      "light": "bright-room-boxes-background",
+      "region": {
+        "x": 0.51,
+        "y": 0.22,
+        "width": 0.17,
+        "height": 0.5
+      },
+      "labelVisible": false,
+      "design": "space",
+      "flavor": "Baja Splash",
+      "backgroundBoxes": true,
+      "setting": "foreground device held above boxes of other flavors",
+      "file": "queries/absent-baja-splash-110.png",
+      "sha256": "8874e57bf68ffe91b7b13ae8f19ac4656caf6f82bbbf2da51725d9526b7855c3"
+    },
+    {
+      "id": "absent-baja-splash-140",
+      "media": "-123231694_456239226",
+      "seconds": 140,
+      "expectedSku": null,
+      "scene": "hand",
+      "pose": "horizontal",
+      "light": "bright-room-boxes-background",
+      "region": {
+        "x": 0.28,
+        "y": 0.36,
+        "width": 0.33,
+        "height": 0.3
+      },
+      "labelVisible": true,
+      "design": "space",
+      "flavor": "Baja Splash",
+      "backgroundBoxes": true,
+      "setting": "foreground device held above boxes of other flavors",
+      "file": "queries/absent-baja-splash-140.png",
+      "sha256": "69769aa51bde35b404a8618075f749103243679cc4e2f96e72612616017d2aa6"
+    },
+    {
+      "id": "kiwi-dragon-fruit-table",
+      "media": "bel-table-bright",
+      "expectedSku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+      "scene": "table",
+      "pose": "diagonal-front-strap-occlusion",
+      "light": "bright-on-black-table",
+      "region": {
+        "x": 0.46,
+        "y": 0.13,
+        "width": 0.37,
+        "height": 0.78
+      },
+      "labelVisible": true,
+      "design": "space",
+      "multiObject": true,
+      "groundTruth": "KIWI DRAGON FRUIT label readable on pink device; Ice Mint also in full image",
+      "file": "queries/kiwi-dragon-fruit-table.jpg",
+      "sha256": "530988bfcb6dbc348f4e37e18a5b762588b51b39362e0058b6da2f8f047b3a9f"
+    },
+    {
+      "id": "grape-ice-table-dark",
+      "media": "bel-table-dark",
+      "expectedSku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+      "scene": "table",
+      "pose": "diagonal-front-heavy-occlusion",
+      "light": "dark-red-emissive-keychain",
+      "region": {
+        "x": 0.23,
+        "y": 0.3,
+        "width": 0.56,
+        "height": 0.69
+      },
+      "labelVisible": true,
+      "design": "space",
+      "multiObject": true,
+      "groundTruth": "GRAPE ICE label on foreground purple device; multiple devices and glowing keychain in full image",
+      "file": "queries/grape-ice-table-dark.jpg",
+      "sha256": "71f6b7a93a09c73dba7c54eacf6fbf311a8d402b5ca29df5fb29a9608d1a2fda"
+    }
+  ]
+}

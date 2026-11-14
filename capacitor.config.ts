@@ -29,7 +29,7 @@ const config: CapacitorConfig = {
   appId: "kg.bazaar.app",
   appName: "Bazaar",
   webDir: "mobile-shell",
-  backgroundColor: "#071326",
+  backgroundColor: "#ffffff",
   appendUserAgent: ` BazaarNative/${appVersion} (${environment})`,
   loggingBehavior: environment === "production" ? "none" : "debug",
   zoomEnabled: true,
@@ -58,9 +58,11 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchAutoHide: true,
+      // Preserve Android's launch presentation. The isolated iOS bundle copy
+      // disables this duplicate overlay in scripts/mobile/ios-build-config.ts.
       launchShowDuration: 900,
       launchFadeOutDuration: 220,
-      backgroundColor: "#071326",
+      backgroundColor: "#ffffff",
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
       splashFullScreen: true,
@@ -68,8 +70,8 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       overlaysWebView: true,
-      style: "DARK",
-      backgroundColor: "#071326",
+      style: "LIGHT",
+      backgroundColor: "#ffffff",
     },
     Keyboard: {
       resize: "body",

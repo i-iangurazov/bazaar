@@ -1,0 +1,110 @@
+[
+  {
+    "variant": "current38",
+    "split": "field",
+    "known": 14,
+    "correctFirst": 5,
+    "wrongFirst": 0,
+    "absent": 3,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "current38",
+    "split": "external",
+    "known": 3,
+    "correctFirst": 1,
+    "wrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "current38",
+    "split": "new-holdout",
+    "known": 0,
+    "correctFirst": 0,
+    "wrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "miamiRear39",
+    "split": "field",
+    "known": 14,
+    "correctFirst": 5,
+    "wrongFirst": 0,
+    "absent": 3,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "miamiRear39",
+    "split": "external",
+    "known": 3,
+    "correctFirst": 2,
+    "wrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "miamiRear39",
+    "split": "new-holdout",
+    "known": 0,
+    "correctFirst": 0,
+    "wrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "restoreDisplay39",
+    "split": "field",
+    "known": 14,
+    "correctFirst": 6,
+    "wrongFirst": 0,
+    "absent": 3,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "restoreDisplay39",
+    "split": "external",
+    "known": 3,
+    "correctFirst": 1,
+    "wrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 2
+  },
+  {
+    "variant": "restoreDisplay39",
+    "split": "new-holdout",
+    "known": 0,
+    "correctFirst": 0,
+    "wrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "rearAndDisplay40",
+    "split": "field",
+    "known": 14,
+    "correctFirst": 6,
+    "wrongFirst": 0,
+    "absent": 3,
+    "absentWithCandidates": 0
+  },
+  {
+    "variant": "rearAndDisplay40",
+    "split": "external",
+    "known": 3,
+    "correctFirst": 2,
+    "wrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 2
+  },
+  {
+    "variant": "rearAndDisplay40",
+    "split": "new-holdout",
+    "known": 0,
+    "correctFirst": 0,
+    "wrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 0
+  }
+]

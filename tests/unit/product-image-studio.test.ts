@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductImageStudioBackground, ProductImageStudioOutputFormat } from "@prisma/client";
+// These tests isolate provider image behavior for an already-consenting person.
+vi.mock("@/server/services/aiPrivacy", () => ({ assertAiConsent: vi.fn().mockResolvedValue(undefined),
+  withAiPrivacyIdentity: (_identity: unknown, run: () => unknown) => run() }));
 
 vi.mock("@/server/db/prisma", () => ({
   prisma: {},

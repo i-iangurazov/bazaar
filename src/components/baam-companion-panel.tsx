@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ProductMovementIcon as ClockCounterClockwise,
   EditIcon as PencilSimple,
@@ -93,9 +93,15 @@ function History({ c }: { c: BaamController }) {
 export function BaamCompanionPanel({
   identity,
   compact,
+  nativeViewport = false,
+  compactViewport = false,
+  workspaceHeader,
 }: {
   identity: BaamIdentity;
   compact: boolean;
+  nativeViewport?: boolean;
+  compactViewport?: boolean;
+  workspaceHeader?: ReactNode;
 }) {
   const c = useBaamCompanion(identity);
   return (
@@ -108,7 +114,19 @@ export function BaamCompanionPanel({
           : "h-[calc(100dvh-16rem)] min-h-[24rem] sm:h-[min(50rem,78dvh)] sm:min-h-[30rem]",
       )}
     >
-      <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-4 py-2.5">
+      <div
+        ref={nativeViewport ? c.scrollRef : undefined}
+        data-baam-scrollport={nativeViewport ? "workspace" : undefined}
+        className={nativeViewport ? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain" : "contents"}
+        onScroll={nativeViewport ? () => {
+          const element = c.scrollRef.current;
+          if (!element) return;
+          c.nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
+          if (c.nearBottom.current) c.setUnread(false);
+        } : undefined}
+      >
+      {workspaceHeader}
+      <div data-baam-toolbar className="flex shrink-0 items-center gap-2 border-b border-border/70 px-4 py-2.5">
         <Button
           size="sm"
           className="shrink-0 whitespace-nowrap px-2"
@@ -168,6 +186,9 @@ export function BaamCompanionPanel({
       <p className="border-b border-border/60 px-4 py-2 text-xs text-muted-foreground" role="status">
         {c.t(c.capabilities.data?.configured ? "ready" : "localMode")}
       </p>
+      {compactViewport ? <p data-baam-voice-hint className="shrink-0 border-b border-border/60 px-4 py-2 text-[10px] leading-4 text-muted-foreground">
+        {c.t("voiceSupport")}
+      </p> : null}
       {c.showHistory ? (
         <History c={c} />
       ) : (
@@ -244,10 +265,11 @@ export function BaamCompanionPanel({
               </Button>
             </form>
           ) : null}
-          <BaamMessageList c={c} />
-          <BaamComposer c={c} />
+          <BaamMessageList c={c} externalScrollContainer={nativeViewport} />
         </>
       )}
+      </div>
+      {!c.showHistory ? <div data-baam-composer className={nativeViewport ? "min-h-0 shrink-0 overflow-y-auto" : "min-h-0 shrink overflow-y-auto overscroll-contain"}><BaamComposer c={c} inlineControls={compactViewport} /></div> : null}
     </section>
   );
 }

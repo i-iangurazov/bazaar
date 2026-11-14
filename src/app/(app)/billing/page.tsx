@@ -30,6 +30,7 @@ import { SubscriptionPayments } from "@/components/billing/subscription-payments
 import { SubscriptionUsage } from "@/components/billing/subscription-usage";
 import { SubscriptionAccessNotice } from "@/components/billing/subscription-access-banner";
 import { ADDITIONAL_STORE_CAPS, CURRENT_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
+import { useNativePlatform } from "@/lib/native/useNativePlatform";
 
 type PlanTier = PlanCode;
 const planOrder = PLAN_CODES;
@@ -38,6 +39,9 @@ const comparisonFeatures = PLAN_FEATURE_CODES;
 
 const BillingPage = () => {
   const t = useTranslations("billing");
+  const apple = useTranslations("billingApple");
+  const platform = useNativePlatform();
+  const webPayments = platform !== null && platform !== "ios";
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
@@ -76,6 +80,8 @@ const BillingPage = () => {
   } as const;
   const pendingRequest = billingQuery.data?.pendingUpgradeRequest ?? null;
   const currentPlan = billingQuery.data?.planTier ?? null;
+  const hasCurrentGrantedAccess = Boolean(billingQuery.data?.hasAccess && billingQuery.data.subscriptionActive && !billingQuery.data.trialActive);
+  const hasNativeTrialAccess = platform === "ios" && Boolean(billingQuery.data?.hasAccess && billingQuery.data.trialActive && !billingQuery.data.subscriptionActive);
   const requestPlanLabel = useMemo(() => {
     if (!requestedPlan) {
       return "";
@@ -199,11 +205,17 @@ const BillingPage = () => {
                   ) : null}
                 </div>
                 <p className="font-medium text-foreground">
-                  {billingQuery.data.trialOffer
+                  {billingQuery.data.trialOffer || hasNativeTrialAccess
                     ? t("trial.free")
-                    : t("planPricePrimary", {
-                        amount: formatNumber(billingQuery.data.monthlyPriceKgs),
-                      })}
+                    : !webPayments
+                      ? platform === null
+                        ? tCommon("loading")
+                        : hasCurrentGrantedAccess
+                          ? apple("currentAccessPreserved")
+                          : apple("pricesAppStore")
+                      : t("planPricePrimary", {
+                          amount: formatNumber(billingQuery.data.monthlyPriceKgs),
+                        })}
                 </p>
               </div>
               <dl className="grid grid-cols-3 gap-3">
@@ -255,7 +267,7 @@ const BillingPage = () => {
                 billingQuery.data.subscriptionStatus !== "CANCELED" ? (
                   <div className="pt-2">
                     <Button asChild>
-                      <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
+                      <a href="#subscription-checkout">{platform === "ios" ? apple("renewalAndChanges") : t("payments.openCheckout")}</a>
                     </Button>
                   </div>
                 ) : null}
@@ -300,6 +312,7 @@ const BillingPage = () => {
                 const tier = planItem.planTier as PlanTier;
                 const isCurrent = tier === currentPlan;
                 const canRequestUpgrade =
+                  webPayments &&
                   billingQuery.data?.subscriptionBillingMode === "MANUAL" &&
                   !billingQuery.data?.lifetimeAccess &&
                   Boolean(currentPlan) &&
@@ -330,9 +343,13 @@ const BillingPage = () => {
                     <CardContent className="space-y-3 text-sm text-muted-foreground">
                       <div>
                         <p className="text-base font-semibold text-foreground">
-                          {t("planPricePrimary", {
-                            amount: formatNumber(planItem.monthlyPriceKgs),
-                          })}
+                          {!webPayments
+                            ? platform === null
+                              ? tCommon("loading")
+                              : apple("pricesAppStore")
+                            : t("planPricePrimary", {
+                                amount: formatNumber(planItem.monthlyPriceKgs),
+                              })}
                         </p>
                       </div>
                       <div className="space-y-1">
@@ -372,6 +389,7 @@ const BillingPage = () => {
                           </a>
                         </Button>
                       ) : !isCurrent &&
+                        webPayments &&
                         billingQuery.data?.subscriptionBillingMode === "MANUAL" &&
                         !billingQuery.data.lifetimeAccess ? (
                         <Button
@@ -493,41 +511,45 @@ const BillingPage = () => {
             </details>
           </Card>
 
-          <div
-            className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
-            data-billing-upgrade-cta
-          >
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{t("payments.support")}</p>
-              {billingQuery.data.subscriptionBillingMode === "MANUAL" &&
-              !billingQuery.data.lifetimeAccess ? (
-                <p className="text-xs text-muted-foreground">{t("ctaHint")}</p>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild type="button" variant="secondary">
-                <a href={t("ctaWhatsappLink")} target="_blank" rel="noreferrer">
-                  {t("ctaWhatsapp")}
-                </a>
-              </Button>
-              {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
-              !billingQuery.data.lifetimeAccess &&
-              billingQuery.data.subscriptionStatus !== "CANCELED" ? (
-                <Button asChild>
-                  <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
-                </Button>
-              ) : billingQuery.data.subscriptionBillingMode === "MANUAL" &&
+          {webPayments ? (
+            <div
+              className="flex flex-col gap-3 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+              data-billing-upgrade-cta
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{t("payments.support")}</p>
+                {billingQuery.data.subscriptionBillingMode === "MANUAL" &&
                 !billingQuery.data.lifetimeAccess ? (
-                <Button
-                  type="button"
-                  disabled={!currentPlan || currentPlan === "ENTERPRISE" || Boolean(pendingRequest)}
-                  onClick={() => setRequestedPlan("ENTERPRISE")}
-                >
-                  {t("requestUpgrade")}
+                  <p className="text-xs text-muted-foreground">{t("ctaHint")}</p>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild type="button" variant="secondary">
+                  <a href={t("ctaWhatsappLink")} target="_blank" rel="noreferrer">
+                    {t("ctaWhatsapp")}
+                  </a>
                 </Button>
-              ) : null}
+                {billingQuery.data.subscriptionBillingMode === "SELF_SERVE" &&
+                !billingQuery.data.lifetimeAccess &&
+                billingQuery.data.subscriptionStatus !== "CANCELED" ? (
+                  <Button asChild>
+                    <a href="#subscription-checkout">{t("payments.openCheckout")}</a>
+                  </Button>
+                ) : billingQuery.data.subscriptionBillingMode === "MANUAL" &&
+                  !billingQuery.data.lifetimeAccess ? (
+                  <Button
+                    type="button"
+                    disabled={
+                      !currentPlan || currentPlan === "ENTERPRISE" || Boolean(pendingRequest)
+                    }
+                    onClick={() => setRequestedPlan("ENTERPRISE")}
+                  >
+                    {t("requestUpgrade")}
+                  </Button>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">{t("empty")}</p>

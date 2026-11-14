@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "at": "2026-11-14T15:49:42.326Z",
+  "python": {
+    "tests": 11,
+    "passed": 11,
+    "realFaiss": true
+  },
+  "isolatedApplicationRegression": {
+    "port": 55981,
+    "files": 14,
+    "tests": 80,
+    "passed": 80,
+    "providerCalls": false
+  },
+  "repeatedUI": {
+    "tests": 10,
+    "passed": 10
+  },
+  "native": {
+    "unauthorized401": true,
+    "invalidImage400": true,
+    "invalidMatrix400": true,
+    "invalidRegion400": true,
+    "recoveryAfterInvalidInput": true,
+    "realPPShiTuFaiss": true,
+    "vision": true,
+    "heldOutMatch": true,
+    "score": 0.9239259958267212
+  },
+  "augmentationRepeat": {
+    "changed": 0,
+    "progress": {
+      "total": 36,
+      "ready": 36,
+      "pending": 0,
+      "failed": 0,
+      "withoutPhoto": 0
+    },
+    "originalShopUnchanged": true,
+    "manifestSha256": "cf410ba23a6866311fbdf742fe389f455e5c448bee10fc1b70551e7495aa22a2"
+  },
+  "checks": {
+    "typescript": true,
+    "lint": true,
+    "translations": true,
+    "syntax": true,
+    "diffWhitespace": true,
+    "galleryExtractionHashes": true,
+    "productionBuild": true,
+    "productionBuildCommand": "node .local/product-photo-search/manual/lan-runner.mjs build",
+    "productionBuildUsesDisposableEnvironment": true
+  },
+  "browser": {
+    "ownHiddenIAB": true,
+    "catalogPositive": true,
+    "catalogEmpty": true,
+    "posExplicitSelection": true,
+    "salesCreated": false,
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "scrollWidth": 390
+    },
+    "consoleWarnings": 0,
+    "consoleErrors": 0,
+    "physicalPhoneCameraTested": false
+  },
+  "productionDeployment": false
+}

@@ -1,0 +1,23 @@
+{
+  "changed": 0,
+  "progress": {
+    "photo-search-field-shop": {
+      "total": 38,
+      "ready": 38,
+      "pending": 0,
+      "failed": 0,
+      "withoutPhoto": 0
+    },
+    "photo-search-browser-shop": {
+      "total": 26,
+      "ready": 26,
+      "pending": 0,
+      "failed": 0,
+      "withoutPhoto": 0
+    }
+  },
+  "businessFieldsUnchanged": true,
+  "unrelatedProductsUnchanged": true,
+  "primaryPhotosPreserved": true,
+  "removedFilesPreserved": true
+}

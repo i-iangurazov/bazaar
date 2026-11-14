@@ -23,6 +23,7 @@ import {
 } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
+import { withAiPrivacyIdentity } from "@/server/services/aiPrivacy";
 import { getAuthTokenFromCookieHeader } from "@/server/auth/token";
 
 export type AuthUser = {
@@ -80,7 +81,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
       where: { id: impersonationId },
       include: {
         targetUser: {
-          select: { id: true, email: true, role: true, organizationId: true, isOrgOwner: true },
+          select: { id: true, email: true, role: true, organizationId: true, isOrgOwner: true, isActive: true, deletedAt: true },
         },
       },
     });
@@ -90,6 +91,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
       !session.revokedAt &&
       session.expiresAt > new Date() &&
       session.createdById === user.id &&
+      session.targetUser.isActive && !session.targetUser.deletedAt &&
       session.targetUser.organizationId === user.organizationId
     ) {
       impersonation = { impersonator: user, impersonationSessionId: session.id };
@@ -253,10 +255,19 @@ const hasRole = (roles: Role[]) =>
     return next({ ctx: { ...ctx, user: ctx.user } });
   });
 
-const baseProcedure = t.procedure.use(withTiming);
+const baseProcedure = t.procedure.use(withTiming).use(({ ctx, next }) => ctx.user
+  ? withAiPrivacyIdentity({ userId: ctx.user.id, organizationId: ctx.user.organizationId,
+      impersonating: Boolean(ctx.impersonator) }, next)
+  : next());
 
 export const router = t.router;
 export const publicProcedure = baseProcedure;
+// Privacy controls and account erasure must remain available after plan expiry,
+// and an administrator impersonating a person cannot consent or erase for them.
+export const personalAccountProcedure = baseProcedure.use(isAuthed).use(({ ctx, next }) => {
+  if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  return next();
+});
 export const protectedProcedure = baseProcedure.use(isAuthed).use(ensureActivePlan);
 // WhatsApp recovery (stop, human takeover, read history) remains available after expiry.
 // Each service independently checks current role/store and requires a paid plan for costly actions.

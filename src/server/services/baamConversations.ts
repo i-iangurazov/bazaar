@@ -5,6 +5,7 @@ import type { Context } from "@/server/trpc/trpc";
 import { AppError } from "./errors";
 import { getBaamAccessScope } from "./baamMetrics";
 import { baamText, type BaamSend, type BaamPart } from "@/lib/baam/companion";
+import { baamAttachmentHref } from "./baamPrivateMedia";
 
 export const baamJson = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -91,14 +92,16 @@ export async function createBaamConversation(
   input: { locale: string; storeId?: string },
 ) {
   const { scope } = await baamAccess(ctx, input.storeId);
-  return prisma.baamConversation.create({
-    data: {
-      organizationId: scope.organizationId,
-      userId: scope.actorId,
-      storeId: input.storeId,
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${scope.actorId} FOR UPDATE`;
+    const user = await tx.user.findUnique({ where: { id: scope.actorId } });
+    if (!user || !user.isActive || user.deletedAt)
+      throw new AppError("unauthorized", "UNAUTHORIZED", 401);
+    return tx.baamConversation.create({ data: {
+      organizationId: scope.organizationId, userId: scope.actorId, storeId: input.storeId,
       scopeStoreIds: scope.storeIds,
       title: baamText(input.locale, "Новый диалог", "New conversation", "Жаңы маек"),
-    },
+    } });
   });
 }
 
@@ -175,6 +178,7 @@ export async function changeBaamConversation(
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "BaamConversation" WHERE "id" = ${input.id} FOR UPDATE`;
     const current = await tx.baamConversation.findUniqueOrThrow({ where: { id: input.id } });
+    if (current.deletedAt) throw new AppError("baamConversationNotFound", "NOT_FOUND", 404);
     if (current.revision !== input.revision)
       throw new AppError("baamScopeChanged", "CONFLICT", 409);
     if (
@@ -225,7 +229,7 @@ export async function appendBaamMessage(
   },
 ) {
   const conversation = await tx.baamConversation.update({
-    where: { id: input.conversationId },
+    where: { id: input.conversationId, deletedAt: null },
     data: { nextSequence: { increment: 1 } },
   });
   return tx.baamMessage.create({
@@ -306,6 +310,7 @@ export async function claimBaamTurn(ctx: Context, input: BaamSend) {
     }
     const attachments = await tx.baamAttachment.findMany({
       where: { conversationId: conversation.id, id: { in: input.attachmentIds } },
+      select: { id: true, name: true },
     });
     if (attachments.length !== new Set(input.attachmentIds).size)
       throw new AppError("baamAttachmentNotFound", "NOT_FOUND", 404);
@@ -362,7 +367,7 @@ export async function claimBaamTurn(ctx: Context, input: BaamSend) {
           type: "attachment" as const,
           id: a.id,
           name: a.name,
-          url: a.url,
+          url: baamAttachmentHref(a.id),
         })),
         ...(voice?.text
           ? [{ type: "transcription" as const, id: voice.id, text: voice.text }]

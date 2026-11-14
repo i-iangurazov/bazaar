@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "preparedBeforeEncoderComparison": true,
+  "frozenInputSha256": "0ceb9311c788332c303ff6dfc5a267e1d8127f7986d82e62a6284c81a244e948",
+  "modelManifestSha256": "17c17cf3fa1c89fd6f451e263141a7fc400d7489f2674dd3bfa9eae8efe1dcbe",
+  "models": [
+    "ppshitu",
+    "chinese-clip",
+    "dinov2-224",
+    "dinov2-518",
+    "siglip2"
+  ],
+  "threads": 1,
+  "device": "cpu",
+  "precision": "fp32",
+  "automaticViews": "Same full frame plus at most five frozen PicoDet proposals; merge max cosine by product",
+  "manualViews": "Frozen old human regions, reported separately; never used in automatic scores",
+  "calibration": {
+    "queries": 11,
+    "storeId": "photo-search-browser-shop",
+    "galleryPhotos": 24,
+    "negatives": "Four truly absent queries plus seven known queries with the target SKU removed from the calibration gallery",
+    "threshold": "nextafter(maximum of automatic negative top scores, +infinity); freeze before test encoding",
+    "falseAcceptBudget": 0
+  },
+  "test": {
+    "queries": 20,
+    "storeId": "photo-search-field-shop",
+    "galleryPhotos": 38,
+    "hardIds": [
+      "watermelon-cherry-80",
+      "watermelon-cherry-300",
+      "strawberry-banana-190",
+      "strawberry-banana-400",
+      "sakura-grape-540",
+      "sakura-grape-560",
+      "sakura-grape-600",
+      "sakura-grape-680"
+    ],
+    "knownSingle": 14,
+    "knownMultiple": 3,
+    "absent": 3,
+    "extraNegatives": "For every known test query, remove only its target SKU in memory and measure false candidates; do not mutate the catalog"
+  },
+  "scope": "Offline model comparison only; no application/model switching, API providers, catalog writes, deployment or model training",
+  "limits": [
+    "Known development cases, not a blind independent test",
+    "Video gallery/query frames are correlated; current two added views remain in the fixed gallery",
+    "Calibration contains artwork and a different gallery/domain; its zero empirical false accepts do not guarantee test precision",
+    "Raw top-1/top-5 and accepted results are separate; cosine scores are not SKU probabilities"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "stage": "Prospective external-shoot validation; frozen before encoding any new query",
+  "developmentCommit": "3c8edb1b",
+  "models": ["ppshitu", "dinov2-224"],
+  "baseThreshold": 0.68,
+  "fallbackThreshold": 0.6742116808891297,
+  "minimumPpProductGap": 0.05,
+  "baselineRule": "Keep accepted PP matches, otherwise admit only DINO top-one above its frozen threshold when it equals PP raw top-one ID",
+  "guardedRule": "Apply the baseline rule; for an agreement fallback additionally require the PP top-one score to exceed the next different product score by at least .05. Abstain if no competing product is available. Preserve existing PP matches.",
+  "selection": "A round .05 product-level PP ambiguity gap was selected using the already observed development confusion (.014 gap after removing Strawberry Banana); old recoveries had .167 and .191 gaps. It is not tuned on the new photographs and is not a proof of open-set correctness.",
+  "gallery": "Frozen 38-photo field shop from the previous experiment; no new query or source shoot is indexed",
+  "views": "Same full frame plus at most five PicoDet proposals for both encoders, no manual regions, no rotations/color synthesis or OCR ranking",
+  "negativeTests": "Real absent flavors; separately remove each present target product and all of its photos in memory",
+  "units": "Unique source photo/frame; report photographer/review/video groups and do not treat neighboring video frames or leave-target-out conditions as independent captures",
+  "activation": "Offline benchmark only; no app change, provider inference, database mutation, deployment or training"
+}

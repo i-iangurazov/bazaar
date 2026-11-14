@@ -3,14 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <meta name="theme-color" content="#071326" />
+    <meta name="theme-color" content="#ffffff" />
     <title>Bazaar — нет сети</title>
     <style>
-      :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #071326; color: #f8fafc; }
-      main { width: min(84vw, 360px); text-align: center; }
+      :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #ffffff; color: #172337; }
+      main { width: min(84vw, 360px); padding: max(24px, env(safe-area-inset-top)) 0 max(24px, env(safe-area-inset-bottom)); text-align: center; }
       img { width: 88px; height: 88px; border-radius: 22px; }
-      p { color: #a9b7cc; line-height: 1.55; }
+      h1 { font-size: 24px; letter-spacing: -0.02em; }
+      p { color: #556377; line-height: 1.55; }
       button { min-height: 48px; border: 0; border-radius: 12px; padding: 0 22px; background: #1677ff; color: white; font: inherit; font-weight: 700; }
       button:focus-visible { outline: 3px solid #7dd3fc; outline-offset: 3px; }
     </style>
@@ -18,9 +19,23 @@
   <body>
     <main>
       <img src="icon.png" alt="Bazaar" />
-      <h1>Нет подключения</h1>
-      <p>Проверьте интернет и попробуйте снова. Несохранённые операции не считаются выполненными.</p>
-      <button type="button" onclick="location.reload()">Повторить</button>
+      <h1 id="offline-title">Нет подключения</h1>
+      <p id="offline-message">Проверьте интернет и попробуйте снова.</p>
+      <button id="offline-retry" type="button" onclick="location.reload()">Повторить</button>
     </main>
+    <script>
+      const language = (navigator.language || "ru").split("-")[0];
+      const copy = {
+        ru: ["Нет подключения", "Проверьте интернет и попробуйте снова.", "Повторить"],
+        ky: ["Байланыш жок", "Интернет байланышын текшерип, кайра аракет кылыңыз.", "Кайра аракет кылуу"],
+        en: ["No connection", "Check your connection and try again.", "Try again"],
+      };
+      const locale = language === "kg" ? "ky" : language === "ru" || language === "ky" ? language : "en";
+      document.documentElement.lang = locale;
+      document.title = "Bazaar — " + copy[locale][0];
+      document.getElementById("offline-title").textContent = copy[locale][0];
+      document.getElementById("offline-message").textContent = copy[locale][1];
+      document.getElementById("offline-retry").textContent = copy[locale][2];
+    </script>
   </body>
 </html>

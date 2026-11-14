@@ -36,7 +36,7 @@ const sanitizeUser = <T extends { passwordHash?: string }>(user: T) => {
 
 export const getMyProfile = async (input: Pick<UserSettingsScope, "userId" | "organizationId">) => {
   const user = await prisma.user.findUnique({ where: { id: input.userId } });
-  if (!user || user.organizationId !== input.organizationId) {
+  if (!user || user.deletedAt || user.organizationId !== input.organizationId) {
     throw new AppError("userNotFound", "NOT_FOUND", 404);
   }
   return sanitizeUser(user);
@@ -45,7 +45,7 @@ export const getMyProfile = async (input: Pick<UserSettingsScope, "userId" | "or
 export const updateMyProfile = async (input: UpdateMyProfileInput) =>
   prisma.$transaction(async (tx) => {
     const before = await tx.user.findUnique({ where: { id: input.userId } });
-    if (!before || before.organizationId !== input.organizationId) {
+    if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
     }
 
@@ -77,7 +77,7 @@ export const updateMyProfile = async (input: UpdateMyProfileInput) =>
 export const updateMyPreferences = async (input: UpdateMyPreferencesInput) =>
   prisma.$transaction(async (tx) => {
     const before = await tx.user.findUnique({ where: { id: input.userId } });
-    if (!before || before.organizationId !== input.organizationId) {
+    if (!before || before.deletedAt || before.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
     }
 

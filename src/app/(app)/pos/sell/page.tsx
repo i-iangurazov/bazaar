@@ -52,6 +52,7 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { SearchInput } from "@/components/search-input";
 import { ScanInput } from "@/components/ScanInput";
 import { PosPaymentMethodControl } from "@/components/pos/payment-method-control";
+import { PosReturnQuantityInput } from "@/components/pos/return-quantity-input";
 import { QueryErrorState } from "@/components/query-error-state";
 import { PosProductPhotoButton, PosProductPhotoDialog, type PosProductPhoto } from "@/components/pos/product-photo-dialog";
 import { LoyaltyDialog } from "@/components/pos/loyalty-dialog";
@@ -4927,18 +4928,16 @@ const PosSellPage = () => {
                       </Badge>
                     ) : null}
                   </div>
-                  <Input
+                  <PosReturnQuantityInput
                     value={journalReturnQtyByLine[line.id] ?? "0"}
                     aria-label={`${line.product.name}: ${t("history.availableQty")} ${availableQty}`}
-                    onChange={(event) => {
-                      const raw = event.target.value.replace(/[^\d]/g, "");
-                      const parsed = raw ? parseQuantity(raw) ?? 0 : 0;
+                    availableQuantity={availableQty}
+                    onChange={(draft) => {
                       setJournalReturnQtyByLine((current) => ({
                         ...current,
-                        [line.id]: String(Math.min(parsed, availableQty)),
+                        [line.id]: draft,
                       }));
                     }}
-                    inputMode="decimal"
                     className="mt-2"
                     disabled={availableQty <= 0 || isJournalReturnBusy}
                   />

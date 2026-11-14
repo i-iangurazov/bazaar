@@ -23,6 +23,7 @@ import { keepBackgroundTaskAlive } from "@/server/jobs/background";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { aiOutputText, fetchAiResponse, resolveTextAiConfig } from "@/server/services/aiProvider";
+import { assertAiConsent, withAiPrivacyIdentity } from "./aiPrivacy";
 import {
   downloadRemoteImage,
   isManagedProductImageUrl,
@@ -667,18 +668,26 @@ export const callOpenAiImageEnhancement = async (input: {
     }) : null;
     let response: Response;
     let responseBody: OpenAiImageResponseBody | null = null;
+    let outboundStarted = false;
     try {
+      const requestBodyJson = JSON.stringify(requestBody);
+      await assertAiConsent();
       assertExternalProviderCallAllowed("openai");
+      outboundStarted = true;
       response = await fetch(OPENAI_IMAGE_EDITS_URL, {
         method: "POST",
         redirect: "error",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify(requestBody),
+        body: requestBodyJson,
         signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
       });
       responseBody = (await response.json().catch(() => null)) as OpenAiImageResponseBody | null;
     } catch (error) {
-      await settleProviderExpense(expense);
+      if (outboundStarted) await settleProviderExpense(expense);
+      else {
+        await settleProviderExpense(expense, 0);
+        if (error instanceof AppError) throw error;
+      }
       const normalized = normalizeProviderError({ error });
       // A timeout may leave a paid image request running. Never launch another
       // generation after an uncertain network outcome.
@@ -1046,6 +1055,7 @@ export const createProductImageStudioJob = async (input: {
   highQuality?: boolean;
 }) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imageStudio" });
+  await assertAiConsent({ userId: input.actorId, organizationId: input.organizationId });
   const presets: ProductImageStudioPresetInput = {
     backgroundMode: input.backgroundMode,
     outputFormat: input.outputFormat,
@@ -1478,7 +1488,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
       organizationId: running.organizationId,
       sourceImageUrl: running.sourceImageUrl,
     });
-    const providerResult = await withAiOperationBudget({ organizationId: running.organizationId, kind: "image", enabled: usageLease !== null }, () => callOpenAiImageEnhancement({
+    const providerResult = await withAiPrivacyIdentity({ userId: running.createdById, organizationId: running.organizationId }, () => withAiOperationBudget({ organizationId: running.organizationId, kind: "image", enabled: usageLease !== null }, () => callOpenAiImageEnhancement({
       organizationId: usageLease ? running.organizationId : undefined,
       jobId: running.id,
       sourceImage,
@@ -1503,7 +1513,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
         tighterCrop: running.tighterCrop,
         brighterPresentation: running.brighterPresentation,
       },
-    }));
+    })));
     const stillOwned = await prisma.productImageStudioJob.findFirst({
       where: {
         id: running.id,

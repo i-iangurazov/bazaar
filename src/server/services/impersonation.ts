@@ -22,10 +22,11 @@ export const createImpersonationSession = async (input: {
         role: true,
         organizationId: true,
         isActive: true,
+        deletedAt: true,
       },
     });
 
-    if (!target || target.organizationId !== input.organizationId) {
+    if (!target || target.deletedAt || target.organizationId !== input.organizationId) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
     }
 
@@ -101,7 +102,7 @@ export const getActiveImpersonationSession = async (input: {
     where: { id: input.sessionId },
     include: {
       targetUser: {
-        select: { id: true, email: true, name: true, role: true, organizationId: true },
+        select: { id: true, email: true, name: true, role: true, organizationId: true, isActive: true, deletedAt: true },
       },
     },
   });
@@ -110,7 +111,7 @@ export const getActiveImpersonationSession = async (input: {
     return null;
   }
 
-  if (session.revokedAt || session.expiresAt <= new Date()) {
+  if (session.revokedAt || session.expiresAt <= new Date() || !session.targetUser.isActive || session.targetUser.deletedAt) {
     return null;
   }
 

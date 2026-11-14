@@ -1,0 +1,499 @@
+{
+  "schema": 1,
+  "baselineAutomaticPredictionsReproduced": 20,
+  "misses": [
+    {
+      "query": "watermelon-cherry-80",
+      "bestDetectionOracleIoU": 0.7451564131724849,
+      "scores": {
+        "automatic": 0.6128619909286499,
+        "oldManual": 0.5618711113929749,
+        "tighterManual": 0.6575214862823486,
+        "tighterManualHighResolution": 0.6667094230651855,
+        "tighterManualOriginal1080": 0.6610599756240845,
+        "tighterManualOriginal1080Rotations": 0.6610599756240845,
+        "allAutoQuarterTurns": 0.6128619909286499
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    },
+    {
+      "query": "watermelon-cherry-100",
+      "bestDetectionOracleIoU": 0.8146236917315121,
+      "scores": {
+        "automatic": 0.5061679482460022,
+        "oldManual": 0.3718632161617279,
+        "tighterManual": 0.38506263494491577,
+        "tighterManualHighResolution": 0.37590593099594116,
+        "tighterManualOriginal1080": 0.37401580810546875,
+        "tighterManualOriginal1080Rotations": 0.4001905620098114,
+        "allAutoQuarterTurns": 0.5061679482460022
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "correct-first",
+        "correct-first"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "auto",
+        "auto"
+      ]
+    },
+    {
+      "query": "watermelon-cherry-300",
+      "bestDetectionOracleIoU": 0.7886823436394077,
+      "scores": {
+        "automatic": 0.4954843521118164,
+        "oldManual": 0.3907363712787628,
+        "tighterManual": 0.41594547033309937,
+        "tighterManualHighResolution": 0.41284674406051636,
+        "tighterManualOriginal1080": 0.401347815990448,
+        "tighterManualOriginal1080Rotations": 0.43507516384124756,
+        "allAutoQuarterTurns": 0.5245935916900635
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    },
+    {
+      "query": "strawberry-banana-190",
+      "bestDetectionOracleIoU": 0.8174567834344256,
+      "scores": {
+        "automatic": 0.20709411799907684,
+        "oldManual": 0.26362431049346924,
+        "tighterManual": 0.26273077726364136,
+        "tighterManualHighResolution": 0.30710569024086,
+        "tighterManualOriginal1080": 0.30365151166915894,
+        "tighterManualOriginal1080Rotations": 0.3185585141181946,
+        "allAutoQuarterTurns": 0.24499474465847015
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    },
+    {
+      "query": "strawberry-banana-400",
+      "bestDetectionOracleIoU": 0.24058654659116682,
+      "scores": {
+        "automatic": 0.1532532423734665,
+        "oldManual": 0.1020602434873581,
+        "tighterManual": 0.1020602434873581,
+        "tighterManualHighResolution": 0.13367396593093872,
+        "tighterManualOriginal1080": 0.14937880635261536,
+        "tighterManualOriginal1080Rotations": 0.14937880635261536,
+        "allAutoQuarterTurns": 0.1532532423734665
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    },
+    {
+      "query": "sakura-grape-540",
+      "bestDetectionOracleIoU": 0.07695362578906145,
+      "scores": {
+        "automatic": 0.3151008188724518,
+        "oldManual": 0.3421359658241272,
+        "tighterManual": 0.32832396030426025,
+        "tighterManualHighResolution": 0.40711134672164917,
+        "tighterManualOriginal1080": 0.46406295895576477,
+        "tighterManualOriginal1080Rotations": 0.4899209141731262,
+        "allAutoQuarterTurns": 0.3151008188724518
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    },
+    {
+      "query": "sakura-grape-560",
+      "bestDetectionOracleIoU": 0.6472031959882956,
+      "scores": {
+        "automatic": 0.34959346055984497,
+        "oldManual": 0.3360540568828583,
+        "tighterManual": 0.318942666053772,
+        "tighterManualHighResolution": 0.31161969900131226,
+        "tighterManualOriginal1080": 0.3058076798915863,
+        "tighterManualOriginal1080Rotations": 0.32233449816703796,
+        "allAutoQuarterTurns": 0.34959346055984497
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    },
+    {
+      "query": "sakura-grape-600",
+      "bestDetectionOracleIoU": 0.06794213325578922,
+      "scores": {
+        "automatic": 0.29519185423851013,
+        "oldManual": 0.4161915183067322,
+        "tighterManual": 0.4556437134742737,
+        "tighterManualHighResolution": 0.46938657760620117,
+        "tighterManualOriginal1080": 0.45811423659324646,
+        "tighterManualOriginal1080Rotations": 0.4946928918361664,
+        "allAutoQuarterTurns": 0.29519185423851013
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    },
+    {
+      "query": "sakura-grape-680",
+      "bestDetectionOracleIoU": 0.8017331713806469,
+      "scores": {
+        "automatic": 0.603059709072113,
+        "oldManual": 0.5864024758338928,
+        "tighterManual": 0.6345919966697693,
+        "tighterManualHighResolution": 0.6641452312469482,
+        "tighterManualOriginal1080": 0.6423302888870239,
+        "tighterManualOriginal1080Rotations": 0.6503414511680603,
+        "allAutoQuarterTurns": 0.6136088371276855
+      },
+      "automaticOutcomes": [
+        "empty",
+        "empty",
+        "empty",
+        "empty"
+      ],
+      "regionSources": [
+        "auto",
+        "full",
+        "full",
+        "full"
+      ]
+    }
+  ],
+  "exploratoryChineseClip": {
+    "thresholdCalibrated": false,
+    "ppKnownSingleRawTop1": 9,
+    "knownSingleRawTop1": 10,
+    "knownSingleQueries": 14,
+    "absentTopScores": [
+      {
+        "query": "absent-baja-splash-80",
+        "score": 0.7906359434127808
+      },
+      {
+        "query": "absent-baja-splash-110",
+        "score": 0.7663581371307373
+      },
+      {
+        "query": "absent-baja-splash-140",
+        "score": 0.7589603066444397
+      }
+    ]
+  },
+  "runs": [
+    {
+      "label": "multiview-v2",
+      "galleryPhotos": 36,
+      "modes": [
+        {
+          "mode": "auto",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 5,
+            "correctTop5": 5,
+            "empty": 9,
+            "withCandidates": 5,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 1,
+            "correctTop5": 1,
+            "empty": 2,
+            "withCandidates": 1,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          }
+        },
+        {
+          "mode": "manual",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 5,
+            "correctTop5": 5,
+            "empty": 9,
+            "withCandidates": 5,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "misses-fallback36",
+      "galleryPhotos": 36,
+      "modes": [
+        {
+          "mode": "auto",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 5,
+            "correctTop5": 5,
+            "empty": 9,
+            "withCandidates": 5,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 1,
+            "correctTop5": 1,
+            "empty": 2,
+            "withCandidates": 1,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          }
+        },
+        {
+          "mode": "manual",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 5,
+            "correctTop5": 5,
+            "empty": 9,
+            "withCandidates": 5,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "misses-gallery40",
+      "galleryPhotos": 40,
+      "modes": [
+        {
+          "mode": "auto",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 6,
+            "correctTop5": 6,
+            "empty": 8,
+            "withCandidates": 6,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 1,
+            "correctTop5": 1,
+            "empty": 2,
+            "withCandidates": 1,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          }
+        },
+        {
+          "mode": "manual",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 6,
+            "correctTop5": 6,
+            "empty": 8,
+            "withCandidates": 6,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 2,
+            "withCandidates": 1,
+            "wrongFirst": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "misses-approved38",
+      "galleryPhotos": 38,
+      "modes": [
+        {
+          "mode": "auto",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 6,
+            "correctTop5": 6,
+            "empty": 8,
+            "withCandidates": 6,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 1,
+            "correctTop5": 1,
+            "empty": 2,
+            "withCandidates": 1,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          }
+        },
+        {
+          "mode": "manual",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 6,
+            "correctTop5": 6,
+            "empty": 8,
+            "withCandidates": 6,
+            "wrongFirst": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "wrongFirst": 0
+          }
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Known development cases; gallery and query frames are correlated within the same videos",
+    "Tighter boxes are human diagnostic upper bounds, not automatic results",
+    "Higher-resolution variants reuse the same timestamps; not additional independent photographs",
+    "Chinese-CLIP scores and native PP scores are not interchangeable or calibrated as probabilities"
+  ]
+}

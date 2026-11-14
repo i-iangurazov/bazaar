@@ -145,8 +145,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
     inputRef.current?.focus({ preventScroll: true });
   }, [showHistory]);
   useEffect(() => {
-    if (createdLocally.current === identity.activeId) {
-      createdLocally.current = undefined;
+    if (createdLocally.current && createdLocally.current === identity.activeId) {
       return;
     }
     setOlder([]);
@@ -166,6 +165,14 @@ export function useBaamCompanion(identity: BaamIdentity) {
     nearBottom.current = true;
   }, [identity.activeId]);
   useEffect(() => {
+    // Creating the first server conversation promotes the current composer.
+    // Its outbox may already have replaced the copied draft before this effect
+    // runs; reading it back would discard text typed while the send is pending.
+    if (createdLocally.current && createdLocally.current === identity.activeId) {
+      createdLocally.current = undefined;
+      setDraftReady(draftKey);
+      return;
+    }
     try {
       const saved = JSON.parse(sessionStorage.getItem(draftKey) ?? "null") as {
         text?: string;
@@ -185,7 +192,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
       /* Server history remains available if local draft storage is blocked. */
     }
     setDraftReady(draftKey);
-  }, [draftKey, locale]);
+  }, [draftKey, locale, identity.activeId]);
   useEffect(() => {
     if (draftReady !== draftKey) return;
     try {

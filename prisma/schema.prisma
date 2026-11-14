@@ -505,6 +505,11 @@ enum MobilePlatform {
 }
 
 model Organization {
+  productPhotoFeatures     ProductPhotoFeature[]
+  appleBillingAccount      AppleBillingAccount?
+  applePurchaseIntents     ApplePurchaseIntent[]
+  appleTransactions        AppleTransaction[]
+  appleSubscriptionChains  AppleSubscriptionChain[]
   whatsappConnections      WhatsAppConnection[]
   whatsappMonths           WhatsAppMonth[]
   whatsappCreditLots       WhatsAppCreditLot[]
@@ -749,17 +754,27 @@ model SubscriptionPaymentEvent {
 model SubscriptionPeriod {
   id               String              @id @default(cuid())
   organizationId   String
-  invoiceId        String              @unique
+  invoiceId        String?             @unique
+  appleTransactionId String?           @unique
+  revokedAt        DateTime?
+  parentPeriodId   String?
+  dependencyRevokedAt DateTime?
   plan             OrganizationPlan
   startsAt         DateTime
   endsAt           DateTime
   purchaseSnapshot Json?
   createdAt        DateTime            @default(now())
   organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  invoice          SubscriptionInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  invoice          SubscriptionInvoice? @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  appleTransaction AppleTransaction? @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  parentPeriod SubscriptionPeriod? @relation("TemporaryUpgradeFunding", fields: [parentPeriodId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  dependentPeriods SubscriptionPeriod[] @relation("TemporaryUpgradeFunding")
 
+  @@unique([appleTransactionId, organizationId])
+  @@unique([id, organizationId])
   @@unique([invoiceId, organizationId])
   @@index([organizationId, endsAt])
+  @@index([parentPeriodId, organizationId])
 }
 
 // A platform operator records an already executed bank transfer. This is not
@@ -868,6 +883,10 @@ model User {
   jobTitle          String?
   passwordHash      String
   sessionVersion    Int               @default(0)
+  deletedAt         DateTime?
+  aiConsentVersion  String?
+  aiConsentGrantedAt DateTime?
+  aiConsentRevokedAt DateTime?
   role              Role
   isOrgOwner        Boolean           @default(false)
   preferredLocale   String            @default("ru")
@@ -1265,19 +1284,22 @@ model WhatsAppMonth {
 model WhatsAppCreditLot {
   id                    String   @id @default(cuid())
   organizationId        String
-  invoiceId             String   @unique
+  invoiceId             String?  @unique
+  appleTransactionId    String?  @unique
   total                 Int
   used                  Int      @default(0)
   reserved              Int      @default(0)
   revoked               Boolean  @default(false)
-  expiresAt             DateTime
+  expiresAt             DateTime?
   createdAt             DateTime @default(now())
   organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  invoice               WhatsAppInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  invoice               WhatsAppInvoice? @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  appleTransaction      AppleTransaction? @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict)
   uses                  WhatsAppCreditUse[]
 
   @@unique([id, organizationId])
   @@unique([invoiceId, organizationId])
+  @@unique([appleTransactionId, organizationId])
   @@index([organizationId, revoked, expiresAt, createdAt])
 }
 
@@ -2022,6 +2044,7 @@ model StoreCategoryPreference {
 }
 
 model Product {
+  photoFeatures      ProductPhotoFeature[]
   priceBookEntries   PriceBookEntry[]
   priceBookItems     PriceBookStoreItem[]
   catalogMemberships ProductCatalogProduct[]
@@ -2076,6 +2099,7 @@ model Product {
   storeProducts          StoreProduct[]
 
   @@unique([organizationId, sku])
+  @@unique([id, organizationId])
   @@index([organizationId])
   @@index([organizationId, isDeleted, name])
   @@index([organizationId, category, isDeleted])
@@ -2157,6 +2181,32 @@ model ProductImage {
 
   @@index([organizationId])
   @@index([productId, position])
+}
+
+// Derived, rebuildable data only. Product/stock records are never changed by search.
+model ProductPhotoFeature {
+  id             String   @id @default(cuid())
+  organizationId String
+  productId      String
+  sourceKey      String   @db.VarChar(64)
+  sourceUrl      String   @db.Text
+  modelVersion   String
+  status         String   @default("PENDING")
+  embedding      Float[]  @default([]) @db.Real
+  attempts       Int      @default(0)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  retryAfter     DateTime @default(now())
+  errorCode      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, productId, sourceKey, modelVersion], map: "ProductPhotoFeature_source_key")
+  @@index([modelVersion, status, retryAfter])
+  @@index([organizationId, productId])
 }
 
 model ProductImageStudioJob {
@@ -4387,4 +4437,292 @@ model InitialProductImportChunk {
   batch       ImportBatch                 @relation(fields: [batchId], references: [id])
 
   @@unique([sessionId, chunkIndex])
+}
+
+
+// App Store money is recorded in Apple's signed currency and thousandths of a
+// currency unit. It is never represented by a synthetic KGS gateway invoice.
+model AppleBillingAccount {
+  organizationId String @id
+  appAccountToken String @unique @db.Uuid
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model ApplePurchaseIntent {
+  id String @id @default(cuid())
+  organizationId String
+  createdById String
+  idempotencyKey String
+  pendingSlot String? @unique
+  scope String
+  action String @default("RENEW")
+  offerKey String
+  productId String
+  productType String
+  environment String
+  appAccountToken String @db.Uuid
+  purchaseAppAccountToken String? @unique @db.Uuid
+  offerSnapshot Json
+  purchaseSnapshot Json?
+  storeId String?
+  termsVersion String
+  termsUrl String
+  status String @default("PENDING")
+  expiresAt DateTime
+  authorizedAt DateTime?
+  nativeAttemptId String? @unique @db.Uuid
+  completionPublicKey String? @db.VarChar(200)
+  completionKeyFingerprint String? @unique @db.VarChar(64)
+  completionOrigin String?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transactions AppleTransaction[]
+  chains AppleSubscriptionChain[]
+  deferredOutcome AppleNativeDeferredOutcome?
+  nativeCompletion AppleNativeCompletion?
+  @@unique([organizationId, idempotencyKey])
+  @@unique([id, organizationId])
+  @@index([status, expiresAt])
+}
+
+model AppleSubscriptionChain {
+  id String @id @default(cuid())
+  organizationId String
+  originalTransactionId String
+  environment String
+  appAccountToken String @db.Uuid
+  initialIntentId String
+  productId String
+  pendingProductId String?
+  pendingChangeOffer Json?
+  autoRenewEnabled Boolean?
+  expiresAt DateTime?
+  graceExpiresAt DateTime?
+  revokedAt DateTime?
+  lastSignedAt DateTime
+  lastCheckedAt DateTime?
+  nextCheckAt DateTime @default(now())
+  processingToken String?
+  processingUntil DateTime?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  initialIntent ApplePurchaseIntent @relation(fields: [initialIntentId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  deferredOutcomes AppleNativeDeferredOutcome[]
+  @@unique([environment, originalTransactionId])
+  @@unique([id, organizationId])
+  @@index([nextCheckAt, processingUntil])
+  @@index([organizationId, expiresAt])
+}
+
+model AppleTransaction {
+  id String @id @default(cuid())
+  organizationId String
+  intentId String?
+  transactionId String
+  originalTransactionId String
+  environment String
+  appAccountToken String @db.Uuid
+  productId String
+  productType String
+  quantity Int @default(1)
+  purchaseDate DateTime
+  expiresDate DateTime?
+  // Signed price uses milliunits, not minor units (USD 1.00 is 1000).
+  priceMillis BigInt?
+  currency String?
+  storefront String?
+  storefrontId String?
+  ownershipType String?
+  offerSnapshot Json
+  signedTransactionInfo String @db.Text
+  lastSignedAt DateTime
+  revocationDate DateTime?
+  supersededAt DateTime?
+  status String @default("REVIEW")
+  lastIssue String?
+  nextCheckAt DateTime @default(now())
+  processingToken String?
+  processingUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  intent ApplePurchaseIntent? @relation(fields: [intentId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  observations AppleTransactionObservation[]
+  subscriptionPeriod SubscriptionPeriod?
+  whatsappCreditLot WhatsAppCreditLot?
+  deferredOutcomes AppleNativeDeferredOutcome[]
+  consumptionConsent AppleConsumptionConsent?
+  consumptionRequests AppleConsumptionRequest[]
+  @@unique([environment, transactionId])
+  @@unique([id, organizationId])
+  @@index([organizationId, purchaseDate])
+  @@index([status, nextCheckAt])
+}
+
+model AppleTransactionObservation {
+  digest String @id
+  transactionId String
+  source String
+  signedPayload String @db.Text
+  createdAt DateTime @default(now())
+  transaction AppleTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+}
+
+// Earned native purchase-return evidence. This is not a charge or access grant.
+model AppleNativeDeferredOutcome {
+  id String @id @default(cuid())
+  intentId String @unique
+  organizationId String
+  nativeAttemptId String @db.Uuid
+  actorId String
+  chainId String
+  previousTransactionId String
+  environment String
+  originalTransactionId String
+  appAccountToken String @db.Uuid
+  currentProductId String
+  productId String
+  effectiveAt DateTime
+  renewalSignedAt DateTime
+  transactionDigest String @db.VarChar(64)
+  renewalDigest String @db.VarChar(64)
+  signedTransactionInfo String @db.Text
+  signedRenewalInfo String @db.Text
+  createdAt DateTime @default(now())
+  intent ApplePurchaseIntent @relation(fields: [intentId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  chain AppleSubscriptionChain @relation(fields: [chainId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  previousTransaction AppleTransaction @relation(fields: [previousTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleNativeDeferredOutcome_previous_org_fkey")
+  @@unique([intentId, organizationId])
+  @@index([organizationId, createdAt])
+}
+
+// Consumes a device-key challenge for an already earned terminal outcome only.
+model AppleNativeCompletion {
+  id String @id @default(cuid())
+  intentId String @unique
+  organizationId String
+  nativeAttemptId String @db.Uuid
+  keyFingerprint String @db.VarChar(64)
+  origin String
+  outcome String
+  transactionDigest String? @db.VarChar(64)
+  renewalDigest String? @db.VarChar(64)
+  challengeDigest String @unique @db.VarChar(64)
+  challenge String @db.Text
+  signature String @db.VarChar(100)
+  issuedAt DateTime
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  intent ApplePurchaseIntent @relation(fields: [intentId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict)
+  @@unique([intentId, organizationId])
+  @@index([organizationId, createdAt])
+}
+
+model AppleServerNotification {
+  id String @id
+  environment String
+  notificationType String
+  subtype String?
+  signedPayload String @db.Text
+  signedAt DateTime
+  status String @default("PENDING")
+  nextAttemptAt DateTime @default(now())
+  attemptCount Int @default(0)
+  processingToken String?
+  processingUntil DateTime?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  consumptionRequest AppleConsumptionRequest?
+  @@index([status, nextAttemptAt])
+}
+
+// Specific, optional original-purchaser consent. Facts are explicitly reported
+// by the purchaser; they are not Apple-verified quality or inferred usage.
+model AppleConsumptionConsent {
+  id String @id @default(cuid())
+  organizationId String
+  appleTransactionId String @unique
+  purchaserId String
+  policyVersion String
+  consented Boolean @default(false)
+  revision Int @default(1)
+  deliveryStatus String?
+  sampleContentProvided Boolean?
+  evidenceSource String @default("BUYER_REPORTED")
+  grantedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transaction AppleTransaction @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionConsent_transaction_org_fkey")
+  events AppleConsumptionConsentEvent[]
+  @@unique([id, organizationId])
+  @@unique([appleTransactionId, organizationId])
+  @@index([purchaserId, consented])
+}
+
+model AppleConsumptionConsentEvent {
+  id String @id @default(cuid())
+  consentId String
+  organizationId String
+  actorId String
+  revision Int
+  policyVersion String
+  consented Boolean
+  deliveryStatus String?
+  sampleContentProvided Boolean?
+  evidenceSource String @default("BUYER_REPORTED")
+  createdAt DateTime @default(now())
+  consent AppleConsumptionConsent @relation(fields: [consentId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionConsentEvent_consent_org_fkey")
+  @@unique([consentId, revision])
+}
+
+// One response obligation per verified Apple notification UUID. A request with
+// no existing journal binding is retained without granting access or sending.
+model AppleConsumptionRequest {
+  id String @id
+  organizationId String?
+  appleTransactionId String?
+  environment String
+  transactionId String
+  originalTransactionId String
+  productId String
+  appAccountToken String @db.Uuid
+  signedTransactionInfo String @db.Text
+  receivedAt DateTime
+  deadlineAt DateTime
+  status String @default("WAITING_BINDING")
+  nextAttemptAt DateTime @default(now())
+  attemptCount Int @default(0)
+  lastAttemptAt DateTime?
+  processingToken String?
+  processingUntil DateTime?
+  payload Json?
+  payloadDigest String? @db.VarChar(64)
+  consentRevision Int?
+  sentAt DateTime?
+  lastIssue String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  notification AppleServerNotification @relation(fields: [id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionRequest_notification_fkey")
+  transaction AppleTransaction? @relation(fields: [appleTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: Restrict, map: "AppleConsumptionRequest_transaction_org_fkey")
+  @@index([status, nextAttemptAt, processingUntil], map: "AppleConsumptionRequest_recovery_idx")
+  @@index([environment, transactionId])
+}
+
+
+model AccountErasureAsset {
+  id String @id @default(cuid())
+  organizationId String
+  url String @unique @db.Text
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastErrorCode String?
+  createdAt DateTime @default(now())
+  @@index([nextAttemptAt])
 }

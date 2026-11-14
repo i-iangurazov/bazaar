@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { Prisma, SubscriptionInvoice, User } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { Prisma, type SubscriptionInvoice, type User } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
+import { deleteOwnAccount } from "@/server/services/accountDeletion";
 import { getLogger } from "@/server/logging";
 import { appRouter } from "@/server/trpc/routers/_app";
 import { LIFETIME_ORGANIZATION_IDS } from "@/server/billing/lifetimeOrganizations";
@@ -232,6 +234,9 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
         emailVerifiedAt: now,
       },
     });
+    // The test caller's capability flag mirrors actual request construction:
+    // the current active user's email must be on the platform-owner allowlist.
+    vi.stubEnv("PLATFORM_OWNER_EMAILS", operator.email);
     owner = createTestCaller({
       ...operator,
       organizationId: operatorOrg.id,
@@ -726,6 +731,104 @@ describeDb("manual bank accounting for GoPay subscription refunds", () => {
       }),
     ).rejects.toHaveProperty("code", "FORBIDDEN");
     expect(await rows()).toHaveLength(0);
+  });
+
+  it.each(["deactivated", "deleted", "email-removed"] as const)(
+    "rejects an already authenticated refund if the operator is %s while waiting for the customer lock",
+    async (change) => {
+      const invoice = await paidInvoice();
+      const original = request(invoice.id);
+      const password = "Synthetic-refund-operator-erasure-password";
+      if (change === "deleted") {
+        await prisma.user.update({ where: { id: operator.id }, data: { passwordHash: await bcrypt.hash(password, 4) } });
+      }
+      expect(operator.organizationId).not.toBe(invoice.organizationId);
+      const beforePeriod = await prisma.subscriptionPeriod.findUnique({ where: { invoiceId: invoice.id } });
+      const customerLocked = deferred<number>();
+      const releaseCustomer = deferred<void>();
+      const holder = settled(prisma.$transaction(async (tx) => {
+        const [{ pid }] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${invoice.organizationId} FOR UPDATE`;
+        customerLocked.resolve(pid);
+        await releaseCustomer.promise;
+      }, { maxWait: 5_000, timeout: 10_000 }));
+      void holder.then((result) => { if (result.status === "rejected") customerLocked.reject(result.reason); });
+      let attempt: ReturnType<typeof settled<unknown>> | undefined;
+      try {
+        const blockerPid = await customerLocked.promise;
+        // This caller retains the capability from before the identity change.
+        attempt = settled(owner.platformOwner.recordManualRefund({
+          invoiceId: original.invoiceId, amountMinor: original.amountMinor,
+          bankOperationId: original.bankOperationId, bankTransferredOn: original.bankTransferredOn,
+          reason: original.reason, idempotencyKey: original.idempotencyKey, confirmed: true,
+        }));
+        let blocked = false;
+        for (let tries = 0; tries < 200; tries++) {
+          const [state] = await prisma.$queryRaw<{ blocked: boolean }[]>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_stat_activity
+              WHERE ${blockerPid}::int = ANY(pg_blocking_pids(pid))
+            ) AS blocked
+          `;
+          if (state.blocked) { blocked = true; break; }
+          await new Promise<void>((resolve) => setTimeout(resolve, 10));
+        }
+        expect(blocked).toBe(true);
+        if (change === "deleted") {
+          // Actual erasure locks its own org and users. It must finish while
+          // the refund is waiting on a different org, without a lock cycle.
+          await expect(deleteOwnAccount({ userId: operator.id, organizationId: operator.organizationId!,
+            password, confirmation: "DELETE", requestId: randomUUID() })).resolves.toEqual({ deleted: true });
+        } else {
+          await prisma.user.update({ where: { id: operator.id }, data: change === "deactivated"
+            ? { isActive: false } : { email: "former-refund-operator@example.invalid" } });
+        }
+        releaseCustomer.resolve(undefined);
+        expect(await holder).toMatchObject({ status: "fulfilled" });
+        expect(await attempt).toMatchObject({ status: "rejected", reason: { code: "FORBIDDEN", message: "forbidden" } });
+        expect(await rows(invoice.id)).toHaveLength(0);
+        expect(await prisma.auditLog.count({ where: { action: "SUBSCRIPTION_MANUAL_REFUND_RECORDED" } })).toBe(0);
+        expect(await prisma.subscriptionInvoice.findUnique({ where: { id: invoice.id } })).toMatchObject({ status: "PAID", amountMinor: invoice.amountMinor });
+        expect(await prisma.subscriptionPeriod.findUnique({ where: { invoiceId: invoice.id } })).toEqual(beforePeriod);
+      } finally {
+        releaseCustomer.resolve(undefined);
+        await Promise.all([holder, ...(attempt ? [attempt] : [])]);
+      }
+    },
+    15_000,
+  );
+
+  it.each([false, true])("reauthorizes P2002 recovery before an idempotent summary (actor revoked: %s)", async (revoke) => {
+    const invoice = await paidInvoice();
+    const original = request(invoice.id);
+    const committed = await recordManualSubscriptionRefund(original);
+    // Inject the ORM's unique-conflict result at the transaction boundary;
+    // recovery still uses real PG records and a real locked actor read.
+    const transaction = vi.spyOn(prisma, "$transaction").mockImplementationOnce(async () => {
+      if (revoke) await prisma.user.update({ where: { id: operator.id }, data: { isActive: false } });
+      throw new Prisma.PrismaClientKnownRequestError("Synthetic concurrent unique conflict", {
+        code: "P2002", clientVersion: "synthetic-test", meta: { target: ["idempotencyKey"] },
+      });
+    });
+    try {
+      if (revoke) await expect(recordManualSubscriptionRefund(original)).rejects.toMatchObject({ code: "FORBIDDEN", message: "forbidden" });
+      else await expect(recordManualSubscriptionRefund(original)).resolves.toEqual(committed);
+      expect(transaction).toHaveBeenCalledTimes(2);
+    } finally { transaction.mockRestore(); }
+    expect(await rows(invoice.id)).toHaveLength(1);
+    expect(await prisma.auditLog.count({ where: { action: "SUBSCRIPTION_MANUAL_REFUND_RECORDED" } })).toBe(1);
+  });
+
+  it("preserves allowlisted platform capability independently of the ordinary organization role", async () => {
+    const invoice = await paidInvoice();
+    const staffOperator = await prisma.user.update({ where: { id: operator.id }, data: { role: "STAFF" } });
+    const caller = createTestCaller({ ...staffOperator, organizationId: staffOperator.organizationId!, isPlatformOwner: true });
+    const original = request(invoice.id);
+    await expect(caller.platformOwner.recordManualRefund({
+      invoiceId: original.invoiceId, amountMinor: original.amountMinor, bankOperationId: original.bankOperationId,
+      bankTransferredOn: original.bankTransferredOn, reason: original.reason,
+      idempotencyKey: original.idempotencyKey, confirmed: true,
+    })).resolves.toMatchObject({ refundedMinor: original.amountMinor });
   });
 
   it("protects bank accounting, tenant binding and its audit from direct database edits", async () => {

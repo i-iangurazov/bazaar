@@ -1,7 +1,10 @@
+"use client";
+
 import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 
 import { cn } from "@/lib/utils";
+import { useNativeCollisionPadding } from "@/hooks/useNativeCollisionPadding";
 
 export const Popover = PopoverPrimitive.Root;
 export const PopoverTrigger = PopoverPrimitive.Trigger;
@@ -10,13 +13,15 @@ export const PopoverAnchor = PopoverPrimitive.Anchor;
 export const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "center", sideOffset = 6, ...props }, ref) => (
+>(({ className, align = "center", sideOffset = 6, collisionPadding = 8, ...props }, ref) => {
+  const safeCollisionPadding = useNativeCollisionPadding(collisionPadding);
+  return (
   <PopoverPrimitive.Portal>
     <PopoverPrimitive.Content
       ref={ref}
       align={align}
       sideOffset={sideOffset}
-      collisionPadding={8}
+      collisionPadding={safeCollisionPadding}
       className={cn(
         "es-popover relative z-[1100]",
         className,
@@ -24,7 +29,8 @@ export const PopoverContent = React.forwardRef<
       {...props}
     />
   </PopoverPrimitive.Portal>
-));
+  );
+});
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
 export const PopoverSurface = React.forwardRef<

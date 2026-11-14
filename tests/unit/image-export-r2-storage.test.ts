@@ -125,10 +125,37 @@ vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
   };
 });
 
-import { consumeZip, storeZipBuffer } from "@/lib/imageExportStore";
+vi.mock("@vercel/blob", () => ({
+  BlobNotFoundError: class extends Error {},
+  put: async (key: string, body: ReadableStream<Uint8Array>, options: { storeId: string; access: string }) => {
+    expect(options.storeId).toBe("store_testExports");
+    expect(options.access).toBe("private");
+    const bytes = Buffer.from(await new Response(body).arrayBuffer());
+    mocks.objects.set(key, bytes);
+    return { url: `https://testexports.private.blob.vercel-storage.com/${key}` };
+  },
+  get: async (key: string, options: { storeId: string; access: string; useCache: boolean }) => {
+    expect(options).toMatchObject({ storeId: "store_testExports", access: "private", useCache: false });
+    if (mocks.failures.get > 0) { mocks.failures.get--; throw new Error("getFailure"); }
+    const bytes = mocks.objects.get(key);
+    if (!bytes) return null;
+    if (mocks.failures.getWithoutBody > 0) { mocks.failures.getWithoutBody--; return null; }
+    return { statusCode: 200, stream: new Response(new Uint8Array(bytes)).body, blob: { size: bytes.length } };
+  },
+  del: async (key: string) => {
+    if (mocks.failures.delete > 0) { mocks.failures.delete--; throw new Error("deleteFailure"); }
+    mocks.objects.delete(key);
+  },
+  head: vi.fn(),
+}));
+vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: async () => "synthetic-resolved-oidc" }));
 
-describe("R2 image export artifacts", () => {
-  beforeEach(() => {
+let consumeZip: typeof import("@/lib/imageExportStore").consumeZip;
+let storeZipBuffer: typeof import("@/lib/imageExportStore").storeZipBuffer;
+
+describe.each(["r2", "vercel-blob"])("%s image export artifacts", (provider) => {
+  beforeEach(async () => {
+    vi.resetModules();
     mocks.objects.clear();
     mocks.metadata.clear();
     mocks.metadataExpirations.clear();
@@ -142,12 +169,18 @@ describe("R2 image export artifacts", () => {
     mocks.redis.eval.mockClear();
     mocks.redis.zrangebyscore.mockClear();
     mocks.redis.zrem.mockClear();
-    vi.stubEnv("EXPORT_STORAGE_PROVIDER", "r2");
+    vi.stubEnv("EXPORT_STORAGE_PROVIDER", provider);
+    vi.stubEnv("IMAGE_STORAGE_PROVIDER", "vercel-blob");
+    vi.stubEnv("BLOB_IMAGE_STORE_ID", "store_testImages");
+    vi.stubEnv("BLOB_EXPORT_STORE_ID", "store_testExports");
+    vi.stubEnv("VERCEL_OIDC_TOKEN", "synthetic-platform-oidc");
+    vi.stubEnv("HARDENING_PREVIEW_GUARD", "0");
     vi.stubEnv("R2_ACCOUNT_ID", "hardening-account");
     vi.stubEnv("R2_ACCESS_KEY_ID", "hardening-key");
     vi.stubEnv("R2_SECRET_ACCESS_KEY", "hardening-secret");
     vi.stubEnv("R2_BUCKET_NAME", "hardening-bucket");
     vi.stubEnv("R2_ENDPOINT", "https://r2.invalid");
+    ({ consumeZip, storeZipBuffer } = await import("@/lib/imageExportStore"));
   });
 
   afterEach(() => {

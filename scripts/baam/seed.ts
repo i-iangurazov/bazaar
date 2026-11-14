@@ -4,6 +4,7 @@ assertBaamTestDatabase();
 const { prisma } = await import("../../src/server/db/prisma");
 const { seedBase } = await import("../../tests/helpers/db");
 const { default: bcrypt } = await import("bcryptjs");
+const { AI_PRIVACY_CONSENT_VERSION } = await import("../../src/lib/aiPrivacy");
 const { mkdir, writeFile } = await import("node:fs/promises");
 try {
   if (await prisma.organization.count())
@@ -11,6 +12,12 @@ try {
   const base = await seedBase({ plan: "ENTERPRISE" });
   const passwordHash = await bcrypt.hash("BaamCompanion123!", 10);
   await prisma.user.updateMany({ where: { organizationId: base.org.id }, data: { passwordHash } });
+  // The composer/focus browser matrix represents explicitly consenting test
+  // actors; production consent and permission checks stay enabled.
+  await prisma.user.updateMany({
+    where: { id: { in: [base.adminUser.id, base.managerUser.id] } },
+    data: { aiConsentVersion: AI_PRIVACY_CONSENT_VERSION, aiConsentGrantedAt: new Date(), aiConsentRevokedAt: null },
+  });
   await prisma.organization.update({
     where: { id: base.org.id },
     data: { name: "BAAM Test Organization" },

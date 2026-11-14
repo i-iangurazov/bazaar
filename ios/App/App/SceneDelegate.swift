@@ -8,7 +8,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["BAZAAR_NATIVE_STOREKIT_TESTS"] == "1" {
+            // The isolated StoreKit test host never loads a customer website.
+            window?.rootViewController = UIViewController()
+        } else {
+            window?.rootViewController = BazaarBridgeViewController()
+        }
+        #else
+        window?.rootViewController = BazaarBridgeViewController()
+        #endif
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)

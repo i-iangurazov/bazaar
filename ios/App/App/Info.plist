@@ -2,12 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>SKIncludeConsumableInAppPurchaseHistory</key>
+    <true/>
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Bazaar</string>
+        <string>$(BAZAAR_APP_DISPLAY_NAME)</string>
+	<key>BazaarBuildChannel</key>
+	<string>$(BAZAAR_NATIVE_CHANNEL)</string>
+	<key>BazaarAllowedDistribution</key>
+	<string>$(BAZAAR_ALLOWED_DISTRIBUTION)</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -40,7 +46,11 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Разрешите камеру, чтобы сканировать штрихкоды товаров в Bazaar.</string>
+	<string>Use the camera to scan product barcodes and attach photos to products or Baam requests.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record voice requests for the Baam assistant.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose photos to attach to products or Baam requests.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

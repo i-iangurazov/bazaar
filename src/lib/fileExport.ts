@@ -32,8 +32,10 @@ export const sanitizeSpreadsheetValue = (value: unknown) => {
 const triggerDownload = async (blob: Blob, fileName: string, shouldDownload?: () => boolean) => {
   if (shouldDownload && !shouldDownload()) return;
   if (isNativeApp()) {
-    const shared = await shareBlobNative({ blob, fileName, title: "Bazaar export" });
-    if (shared) return;
+    const result = await shareBlobNative({ blob, fileName, title: "Bazaar export", shouldShare: shouldDownload });
+    // Preserve the existing failure/unavailability fallback, but never retry
+    // an explicit cancellation or an export whose audience changed.
+    if (result.status !== "unavailable" && result.status !== "failed") return;
   }
   if (shouldDownload && !shouldDownload()) return;
   const url = URL.createObjectURL(blob);

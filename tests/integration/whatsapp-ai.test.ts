@@ -35,7 +35,8 @@ import * as transport from "@/server/whatsapp/gupshup";
 import * as assistant from "@/server/whatsapp/assistant";
 import * as quota from "@/server/whatsapp/quota";
 import { createTestCaller } from "../helpers/context";
-import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { resetDatabase, shouldRunDbTests } from "../helpers/db";
+import { seedConsentingAiFixture as seedBase } from "../helpers/consentingAiFixture";
 import {
   GOPAY_FIXTURE_API_KEY,
   GOPAY_FIXTURE_API_SECRET,
@@ -143,6 +144,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
       GUPSHUP_UNIVERSAL_TOKEN_EXPIRES_AT: new Date(Date.now() + 7 * 86400_000).toISOString(),
       GUPSHUP_UNIVERSAL_TOKEN: "synthetic-partner-token",
       DEEPSEEK_API_KEY: "synthetic-ai-key",
+      WHATSAPP_DAILY_BUDGET_USD_MICROS: "100000000",
       WHATSAPP_ENCRYPTION_KEY: "ab".repeat(32),
       WHATSAPP_PUBLIC_URL: "https://bazaar.kg",
       HARDENING_EXTERNAL_PROVIDER_MODE: "sandbox",
@@ -312,9 +314,17 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     expect((await reserveWhatsAppUnit(f.org.id, m2.id)).lotId).not.toBeNull();
     await settleWhatsAppUnit(f.org.id, m2.id, true);
     expect((await whatsappQuota(f.org.id)).paidRemaining).toBe(999);
-    await prisma.whatsAppCreditLot.updateMany({ data: { expiresAt: new Date(Date.now() - 1) } });
-    expect((await whatsappQuota(f.org.id)).paidRemaining).toBe(0);
-    await expect(reserveWhatsAppUnit(f.org.id, (await outgoing()).id)).rejects.toThrow(
+    const lot = await prisma.whatsAppCreditLot.findUniqueOrThrow({ where: { invoiceId: bill.id } });
+    expect(lot.expiresAt).not.toBeNull();
+    const afterExpiry = new Date(lot.expiresAt!.getTime() + 1);
+    expect((await whatsappQuota(f.org.id, new Date(lot.expiresAt!.getTime() - 1))).paidRemaining).toBe(999);
+    expect((await whatsappQuota(f.org.id, afterExpiry)).paidRemaining).toBe(0);
+    // Advance the operation's explicit clock instead of rewriting the immutable
+    // paid source. Exhaust that future month's included allowance independently.
+    await prisma.whatsAppMonth.create({
+      data: { organizationId: f.org.id, period: whatsappPeriod(afterExpiry).key, includedUsed: 1000 },
+    });
+    await expect(reserveWhatsAppUnit(f.org.id, (await outgoing()).id, afterExpiry)).rejects.toThrow(
       "whatsappQuotaExhausted",
     );
   });

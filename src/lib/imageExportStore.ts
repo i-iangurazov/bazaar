@@ -25,6 +25,7 @@ import {
 
 import { isProductionRuntime } from "@/server/config/runtime";
 import { getRedisPublisher } from "@/server/redis";
+import { deleteManagedBlob, putManagedBlob, readManagedBlob } from "@/server/services/vercelBlobStorage";
 
 type ZipOwner = { userId: string; organizationId: string };
 type StoredZip = {
@@ -80,12 +81,62 @@ const createR2Client = (config: NonNullable<ReturnType<typeof resolveR2Config>>)
     },
   });
 
+type RemoteZipStorage = {
+  putFile: (path: string, objectKey: string) => Promise<void>;
+  read: (objectKey: string) => Promise<ReadableStream<Uint8Array>>;
+  delete: (objectKey: string) => Promise<void>;
+};
+
+const zipObjectKey = (owner: ZipOwner, token: string) =>
+  `private/image-exports/${owner.organizationId}/${token}.zip`;
+
+const resolveRemoteZipStorage = (): RemoteZipStorage | null => {
+  if (process.env.EXPORT_STORAGE_PROVIDER?.trim().toLowerCase() === "vercel-blob") {
+    return {
+      putFile: async (path, objectKey) => {
+        await putManagedBlob({
+          purpose: "exports", pathname: objectKey,
+          body: streamFromNode(createReadStream(path)), contentType: "application/zip",
+        });
+      },
+      read: async (objectKey) => {
+        const result = await readManagedBlob("exports", objectKey);
+        if (!result) throw new Error("imageExportObjectMissing");
+        return result.stream;
+      },
+      delete: (objectKey) => deleteManagedBlob("exports", objectKey),
+    };
+  }
+  const r2 = resolveR2Config();
+  if (!r2) return null;
+  const client = createR2Client(r2);
+  return {
+    putFile: async (path, objectKey) => {
+      const file = await stat(path);
+      await client.send(new PutObjectCommand({
+        Bucket: r2.bucketName, Key: objectKey, Body: createReadStream(path),
+        ContentLength: file.size, ContentType: "application/zip", CacheControl: "private, no-store",
+      }));
+    },
+    read: async (objectKey) => {
+      const object = await client.send(new GetObjectCommand({ Bucket: r2.bucketName, Key: objectKey }));
+      if (!object.Body) throw new Error("imageExportObjectMissing");
+      const body = object.Body as unknown as Readable & {
+        transformToWebStream?: () => ReadableStream<Uint8Array>;
+      };
+      return body.transformToWebStream?.() ?? streamFromNode(body);
+    },
+    delete: async (objectKey) => {
+      await client.send(new DeleteObjectCommand({ Bucket: r2.bucketName, Key: objectKey }));
+    },
+  };
+};
+
 const expirationMember = (token: string, objectKey: string) => `${token}|${objectKey}`;
 
-const cleanupExpiredR2Artifacts = async (
+const cleanupExpiredRemoteArtifacts = async (
   redis: NonNullable<ReturnType<typeof getRedisPublisher>>,
-  client: S3Client,
-  bucketName: string,
+  storage: RemoteZipStorage,
 ) => {
   const expired = await redis.zrangebyscore(redisExpirationKey, 0, Date.now(), "LIMIT", 0, 20);
   for (const member of expired) {
@@ -93,7 +144,7 @@ const cleanupExpiredR2Artifacts = async (
     const objectKey = separator >= 0 ? member.slice(separator + 1) : "";
     if (objectKey) {
       try {
-        await client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey }));
+        await storage.delete(objectKey);
       } catch {
         continue;
       }
@@ -132,30 +183,19 @@ export const storeZipFile = async (
     throw new Error("imageExportTokenInvalid");
   }
   const ttlMs = options?.ttlMs ?? ZIP_TTL_MS;
-  const r2 = resolveR2Config();
-  if (isProductionRuntime() && !isIsolatedPreview() && !r2) {
+  const remote = resolveRemoteZipStorage();
+  if (isProductionRuntime() && !isIsolatedPreview() && !remote) {
     throw new Error("imageExportStorageUnavailable");
   }
 
-  if (r2) {
+  if (remote) {
     const redis = getRedisPublisher();
     if (!redis) {
       throw new Error("imageExportStorageUnavailable");
     }
-    const objectKey = `private/image-exports/${owner.organizationId}/${token}.zip`;
-    const file = await stat(sourcePath);
-    const client = createR2Client(r2);
-    await cleanupExpiredR2Artifacts(redis, client, r2.bucketName).catch(() => undefined);
-    await client.send(
-      new PutObjectCommand({
-        Bucket: r2.bucketName,
-        Key: objectKey,
-        Body: createReadStream(sourcePath),
-        ContentLength: file.size,
-        ContentType: "application/zip",
-        CacheControl: "private, no-store",
-      }),
-    );
+    const objectKey = zipObjectKey(owner, token);
+    await cleanupExpiredRemoteArtifacts(redis, remote).catch(() => undefined);
+    await remote.putFile(sourcePath, objectKey);
     try {
       const expiresAt = Date.now() + ttlMs;
       const result = await redis
@@ -180,9 +220,7 @@ export const storeZipFile = async (
         throw new Error("imageExportStorageUnavailable");
       }
     } catch (error) {
-      await client
-        .send(new DeleteObjectCommand({ Bucket: r2.bucketName, Key: objectKey }))
-        .catch(() => undefined);
+      await remote.delete(objectKey).catch(() => undefined);
       await redis.zrem(redisExpirationKey, expirationMember(token, objectKey)).catch(() => undefined);
       throw error;
     } finally {
@@ -230,10 +268,10 @@ export const storeZipBuffer = async (
   }
 };
 
-const consumeR2Zip = async (
+const consumeRemoteZip = async (
   token: string,
   owner: ZipOwner,
-  r2: NonNullable<ReturnType<typeof resolveR2Config>>,
+  storage: RemoteZipStorage,
 ): Promise<StoredZip | undefined> => {
   const redis = getRedisPublisher();
   if (!redis) {
@@ -260,6 +298,7 @@ const consumeR2Zip = async (
   if (!claimed?.[0] || !claimed[1]) {
     return undefined;
   }
+  if (claimed[1] !== zipObjectKey(owner, token)) throw new Error("imageExportObjectInvalid");
   const absoluteExpiry = Number(claimed[2]);
   const remainingTtl = Number(claimed[3]);
   const expiryCandidates = [
@@ -294,26 +333,15 @@ const consumeR2Zip = async (
       .zadd(redisExpirationKey, expiresAt, expirationMember(token, claimed[1]))
       .exec();
   };
-  const client = createR2Client(r2);
-  let object;
+  let data: ReadableStream<Uint8Array>;
   try {
-    object = await client.send(
-      new GetObjectCommand({ Bucket: r2.bucketName, Key: claimed[1] }),
-    );
-    if (!object.Body) {
-      throw new Error("imageExportObjectMissing");
-    }
+    data = await storage.read(claimed[1]);
   } catch (error) {
     await restoreClaim().catch(() => undefined);
     throw error;
   }
 
-  const body = object.Body as unknown as Readable & {
-    transformToWebStream?: () => ReadableStream<Uint8Array>;
-  };
-  const data = body.transformToWebStream?.() ?? streamFromNode(body);
-  const deleted = await client
-    .send(new DeleteObjectCommand({ Bucket: r2.bucketName, Key: claimed[1] }))
+  const deleted = await storage.delete(claimed[1])
     .then(() => true)
     .catch(() => false);
   if (deleted) {
@@ -328,12 +356,12 @@ export const consumeZip = async (token: string, owner: ZipOwner): Promise<Stored
   if (!safeToken(token)) {
     return undefined;
   }
-  const r2 = resolveR2Config();
-  if (isProductionRuntime() && !isIsolatedPreview() && !r2) {
+  const remote = resolveRemoteZipStorage();
+  if (isProductionRuntime() && !isIsolatedPreview() && !remote) {
     throw new Error("imageExportStorageUnavailable");
   }
-  if (r2) {
-    return consumeR2Zip(token, owner, r2);
+  if (remote) {
+    return consumeRemoteZip(token, owner, remote);
   }
 
   let metadata: LocalMetadata;

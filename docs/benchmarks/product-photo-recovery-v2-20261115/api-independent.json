@@ -1,0 +1,323 @@
+{
+  "schema": 1,
+  "applicationChanged": true,
+  "cohort": "independent",
+  "realApplicationApi": true,
+  "model": "PP-ShiTu + PP-OCRv6 medium; improved reference gallery",
+  "storeId": "photo-search-field-shop",
+  "frozenInputSha256": "c5c7aa95b1929aff2aefefbbbe0a0e5d5ecb0f8b22904116a7bef7330510812f",
+  "recoveryProtocolSha256": "6f54ced63048bc7645f83ea7a018b9526a18ed0470f53f1b93710f799a8394f1",
+  "beforeRecovery": false,
+  "galleryUnchanged": true,
+  "emptyStoreHasNoLeakedCandidates": true,
+  "catalogWrites": false,
+  "authenticationAndRateLimitStateMayChange": true,
+  "results": [
+    {
+      "query": "lUu7tf54D-VSOsFGuIs",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Mr Blue",
+      "canonicalInputSha256": "9f5d56b671bf243564326b72d8c134ef172f47a60dcccf274cd17befd1574fa8",
+      "submittedInputSha256": "910d0f982a355e2546b22b2cc6a964a021b1380e07f6941e890744ac00fe5f04",
+      "ms": 747.0280839999999,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "lUu7tf54D-uRtPfwfVI",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Mr Blue",
+      "canonicalInputSha256": "fac540913fb46bd2d723a360d880d533bebf7e031cae4ae3c06364defc1074e0",
+      "submittedInputSha256": "2c68fb3b6267764050c0500802b8b7b7727bd9a6a68712f6374175314af6353a",
+      "ms": 558.7209579999999,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "IZR2bs6DZ-CgqrfBFigv",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Sour Apple Ice",
+      "canonicalInputSha256": "19c7b8e69392d5bac574f4c55575202b3c0e91d391a5d3e38cec2c8207bbf7d0",
+      "submittedInputSha256": "88d95e1fed74fc3bbaf562fe40daefa3c2334411b31c68a0a0afb0038bac7fe2",
+      "ms": 572.9773749999986,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "IZR2bs6DZ-RJbrIXfSB",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Sour Apple Ice",
+      "canonicalInputSha256": "727bcf316de37a435de27caeaf24c30d522e8b5f613556fafe3ca4cf1db0aecd",
+      "submittedInputSha256": "0099cd1f7881e43675d09e632d54483f742e5f319c59261fe8225719e46c4432",
+      "ms": 796.7912499999984,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "SOUR APPLE ICE"
+      }
+    },
+    {
+      "query": "IZR2bs6DZ-e6QrOI35-",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Sour Apple Ice",
+      "canonicalInputSha256": "3d8357b7f817f9d2d2a472bde9d25f9d15a5ad7df5f6707cf7bb34980d892bba",
+      "submittedInputSha256": "bb00c2c6f6afe931dab282cb9247165c06c811f2eb67c4f81060c001be4c0a80",
+      "ms": 593.8115830000024,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "KcMQMyqCO-4OgiByvCC",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "expectedFlavor": "Miami Mint",
+      "canonicalInputSha256": "5fa850904a601e3a0677a87309c0896f3a1b30f64b01998e79b2be501b5cf379",
+      "submittedInputSha256": "a5e24ec795741387cb908a4ac59395d2d189a871a46f056df171202fdbcda8ce",
+      "ms": 585.0275419999998,
+      "items": [
+        {
+          "id": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "name": "ELFBAR GH23000 Miami Mint",
+          "sku": "PHOTO-ELFBAR-TEST",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4b72d79317a3b50719114f0e958256756538005b.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "KcMQMyqCO-f_xzYny1h9",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "expectedFlavor": "Miami Mint",
+      "canonicalInputSha256": "748cd126ff52e0d9f7e5e903f6d54d92cdf8445ffed16af23e694e1a17bdc068",
+      "submittedInputSha256": "785730ae7f382c6af47380f7fc534c2252e8c5d9a08aab28910a55ca9145a016",
+      "ms": 1092.6539580000026,
+      "items": [
+        {
+          "id": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+          "name": "ELFBAR GH23000 Miami Mint",
+          "sku": "PHOTO-ELFBAR-TEST",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/1f52f43bf8cd1341659233514868641e92ea2e0b.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "photo-text"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.1932060718536377,
+          "y": 0.2933952212333679,
+          "width": 0.5023166537284851,
+          "height": 0.5944781303405762
+        },
+        "labelStatus": "matched",
+        "text": "miami mint"
+      }
+    },
+    {
+      "query": "KcMQMyqCO-pmKCQuq1g",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "expectedFlavor": "Miami Mint",
+      "canonicalInputSha256": "612ada21aae0dbca204e563576ec6fab46b9beecbb6bbf5cd95d11784132e546",
+      "submittedInputSha256": "71f3f6a0360cc51c3b6f31a6cf5b87db6f55bcd5b9c3afa45beb5a405589fef6",
+      "ms": 594.8015840000007,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "eDsVLm62O-NkITx8ye8",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Rainbow Candy",
+      "canonicalInputSha256": "d4f640e9ccea3e27de4ff80ea2e9e89a04de63773d87d8fe44c0515f43e28fa0",
+      "submittedInputSha256": "fcba10e31726fdb11e21f1d82735ce046dcbf9ed489bf5d210ce2e3f8a33cdc3",
+      "ms": 801.6542090000003,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "RAINBOW CANDY"
+      }
+    },
+    {
+      "query": "eDsVLm62O-VurPQ7l-q",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Rainbow Candy",
+      "canonicalInputSha256": "f450a18ddb3fe0923342e30f3a9060a9f07b93dd65f204ab4d99d4e6f59cbb4e",
+      "submittedInputSha256": "7f32ef2f6455b160309a2fc7df9f9ab42efe1a6a54bf324924cb9b75ebfb0bb4",
+      "ms": 674.7069169999959,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "eDsVLm62O-o4fnOE9vE",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Rainbow Candy",
+      "canonicalInputSha256": "95aa21d80b44027a559d8f68804f625da74cf0cca0095d206a367dc8b1b17779",
+      "submittedInputSha256": "72c5e0ac4be1a5120b3a3e47bae260f73c98f64bfd2340b39e5520471bdf8664",
+      "ms": 561.5561250000028,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "M2HUviMqu-C1EacroQd",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Ice Pop",
+      "canonicalInputSha256": "0d7ce43b0a5936034a6a816100271a6257f0a0efc38fb6616a166523fc7d19a5",
+      "submittedInputSha256": "e9ff113fc3baf30d430da7fe8efed4263f2dce64059de32cf7c24d4c549fd7b2",
+      "ms": 754.5556250000081,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "M2HUviMqu-NtKO_H6eO",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Ice Pop",
+      "canonicalInputSha256": "21349cce18c5c35cd0cf681b8703bb17d9ebd73b8878d52d7507b7ab9a697491",
+      "submittedInputSha256": "5ff0a60bc47dc2e9a8393662d4e6fa6cbb5508b08cc9c18cc38c30f7ca299e6d",
+      "ms": 574.0501249999943,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "M2HUviMqu-YbAwZzw-S",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Ice Pop",
+      "canonicalInputSha256": "ad16b163bf1b0f7077168c67c40d1b4c7b4ca1e347af27bc83a696145e02f212",
+      "submittedInputSha256": "a18739c9a8c854f4d53f2f115318a8f5774b31a65162b3aed528f92b3dabf1c7",
+      "ms": 1049.208707999991,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "M2HUviMqu-l2EK1V2U4X",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Ice Pop",
+      "canonicalInputSha256": "2c039a9bf27fbd013a12952e640b797162096112f61f8f184d0fa6a261af225a",
+      "submittedInputSha256": "92b17724e8e75eb0e475928e8902fbf50e9bd0d1ef3b94b4d6ddb60f678b31a8",
+      "ms": 610.8443750000006,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    },
+    {
+      "query": "M2HUviMqu-piT9-OQkFI",
+      "mode": "auto",
+      "multiObject": false,
+      "expectedId": null,
+      "expectedFlavor": "Ice Pop",
+      "canonicalInputSha256": "5fc0cd6b2696782d96574cb6ecaadb16490b0b0188393911019391f89a9186e3",
+      "submittedInputSha256": "1d389f0f5df764becc89090ea78f1c454b08410ac5a62541001163c35d8458af",
+      "ms": 613.797040999998,
+      "items": [],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unreadable",
+        "text": ""
+      }
+    }
+  ],
+  "summary": {
+    "known": 3,
+    "knownCorrectFirst": 2,
+    "knownWrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 0
+  }
+}

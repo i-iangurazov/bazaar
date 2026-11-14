@@ -220,6 +220,10 @@ const imageTaskScope = (payload: JobPayload) =>
     ? payload.jobId
     : undefined;
 const jobs: Record<string, JobDefinition> = {
+  "account-asset-erasure": {
+    handler: async () => (await import("@/server/services/accountErasureAssets")).eraseAccountAssets(),
+    maxAttempts: 1,
+  },
   "subscription-payment-notifications": {
     handler: async () => {
       const { processSubscriptionPaymentNotifications } =
@@ -241,6 +245,14 @@ const jobs: Record<string, JobDefinition> = {
         await import("@/server/billing/subscriptionPayments");
       return reconcileSubscriptionPayments();
     },
+  },
+  "apple-billing-reconcile": {
+    handler: async () => {
+      const { reconcileAppleBilling } = await import("@/server/billing/appleLifecycle");
+      const details = await reconcileAppleBilling();
+      return { job: "apple-billing-reconcile", status: "ok" as const, details };
+    },
+    maxAttempts: 1,
   },
   "whatsapp-payment-reconcile": {
     handler: async () => {

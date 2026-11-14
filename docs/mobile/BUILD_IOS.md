@@ -25,3 +25,13 @@ Server release configuration needs `APPLE_TEAM_ID` for AASA and APNs `TEAM_ID`, 
 Camera permission is requested only when scanning, with English, Russian and Kyrgyz system descriptions. Notification permission follows an in-app explanation. App Store export-compliance metadata declares no non-exempt bundled encryption; confirm this against the final binary and service before submission.
 
 Use `pnpm mobile:release ios unsigned` for a Release archive rehearsal and `pnpm mobile:release ios signed` with installed certificates/profiles and `APPLE_TEAM_ID` for archive plus local App Store export. Both require full Xcode with iOS SDK 26+. Neither uploads. See [store handoff](store/REVIEW_HANDOFF.md) for remaining review gates. The app resource manifest declares Filesystem timestamp use; App Privacy answers still need a separate complete service data review.
+
+## Isolated internal TestFlight
+
+Use the explicit `staging-testflight` argument for `AppStaging` /
+`ReleaseStaging`; it pins the isolated preview and Sandbox authorization without
+changing normal Release. Its inspected export is restricted to internal
+TestFlight and cannot be used for the App Store path. Follow the
+[staging build and verification guide](IOS_TESTFLIGHT_STAGING.md), including its
+separate output directory, shared build-number sequence and pending signing /
+real-device requirements. No helper uploads automatically.

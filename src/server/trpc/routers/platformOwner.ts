@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { OrganizationSubscriptionStatus, PlanUpgradeRequestStatus } from "@prisma/client";
 
-import { platformOwnerProcedure, router } from "@/server/trpc/trpc";
+import { platformOwnerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { toPlanTier } from "@/server/services/planLimits";
@@ -26,6 +26,13 @@ import {
   lookupManualSubscriptionRefundInvoice,
   recordManualSubscriptionRefund,
 } from "@/server/billing/manualSubscriptionRefunds";
+import { appleSupportCaseIdSchema, appleSupportListInputSchema, getAppleSupportCase, importAppleSupportEvidence,
+  listAppleSupportCases, recheckAppleSupportCase } from "@/server/billing/appleSupportCases";
+
+const appleSupportProcedure = platformOwnerProcedure.use(({ ctx, next }) => {
+  if (ctx.impersonator) throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
+  return next();
+});
 
 export const platformOwnerRouter = router({
   summary: platformOwnerProcedure.query(async ({ ctx }) => {
@@ -78,6 +85,22 @@ export const platformOwnerRouter = router({
   listUpgradeRequests: platformOwnerProcedure.query(async () => listPendingPlanUpgradeRequests()),
 
   paymentReviews: platformOwnerProcedure.query(() => listSubscriptionPaymentReviews()),
+
+  appleCases: appleSupportProcedure.input(appleSupportListInputSchema).query(async ({ ctx, input }) => {
+    try { return await listAppleSupportCases(ctx.user.id, input); } catch (e) { throw toTRPCError(e); }
+  }),
+  appleCase: appleSupportProcedure.input(z.object({ caseId: appleSupportCaseIdSchema }).strict()).query(async ({ ctx, input }) => {
+    try { return await getAppleSupportCase(ctx.user.id, input.caseId); } catch (e) { throw toTRPCError(e); }
+  }),
+  recheckAppleCase: appleSupportProcedure.use(rateLimit({ prefix: "apple-support-recheck", max: 10, windowMs: 60_000 }))
+    .input(z.object({ caseId: appleSupportCaseIdSchema }).strict()).mutation(async ({ ctx, input }) => {
+      try { return await recheckAppleSupportCase({ id: ctx.user.id, requestId: ctx.requestId, caseId: input.caseId }); } catch (e) { throw toTRPCError(e); }
+    }),
+  importAppleEvidence: appleSupportProcedure.use(rateLimit({ prefix: "apple-support-import", max: 10, windowMs: 60_000 }))
+    .input(z.object({ caseId: appleSupportCaseIdSchema, signedTransactionInfo: z.string().min(30).max(100_000) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      try { return await importAppleSupportEvidence({ id: ctx.user.id, requestId: ctx.requestId, caseId: input.caseId }, input.signedTransactionInfo); } catch (e) { throw toTRPCError(e); }
+    }),
 
   refundInvoice: platformOwnerProcedure
     .input(z.object({ orderId: z.string().trim().min(1).max(128) }))

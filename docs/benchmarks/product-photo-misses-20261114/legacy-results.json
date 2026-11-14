@@ -1,0 +1,441 @@
+{
+  "schema": 1,
+  "at": "2026-11-14T16:17:07.658Z",
+  "fixtureManifestSha256": "41c060812426774f51b46abdeacfeb43cdc6a4c4f16dbb1734d4d2f2505423a0",
+  "realApplicationApi": true,
+  "model": "ppshitu-v2-pplcnetv2-v1-fp32-224",
+  "threshold": 0.68,
+  "galleryProgress": {
+    "total": 24,
+    "ready": 24,
+    "pending": 0,
+    "failed": 0,
+    "withoutPhoto": 0
+  },
+  "originalPreserved": true,
+  "storeScopeVerified": true,
+  "emptyStoreHasNoLeakedCandidates": true,
+  "gallery": [
+    {
+      "fixtureId": "grape-ice",
+      "productId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "sourceSha256": "fb7fdd958eeb8949ea0152d9540a985ae45b679f9f8b220164d5b6c740a7639f",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ],
+      "uploadedSha256": "051503b07bf83709771f87338ce7c68af0ecf2b4a83a3355d5264848f40728ba",
+      "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/b44d01b39e57c09ae30c31bf7dc4c865160e2a6e.jpg"
+    },
+    {
+      "fixtureId": "pineapple-plums-lime-mint",
+      "productId": "bf9b66f0-1255-4695-a5bb-f02a6ad0700e",
+      "sourceSha256": "201d23c135eb0dd865db990aa89562a25a3ac71e149198d6e6a32202807013f4",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ],
+      "uploadedSha256": "9e6b656286c5cae4e6f05c2b8b2b3d683f7e7382cde4fc9d9c2d39f47b1dbf22",
+      "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4219d3ac522c17b881638fe1b7045acbc3ca30eb.jpg"
+    },
+    {
+      "fixtureId": "ice-mint",
+      "productId": "3c5beb21-2104-43c6-8755-e9121d789c61",
+      "sourceSha256": "f767a8a8a80382fbd76645c1723a2621538225b9f5e7ae684c2be106a3ab62ae",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ],
+      "uploadedSha256": "1e4c2c5c2acf4d3da1e80cf7b05a2ee3777eb5e283e3fc1d0a10a26526547d65",
+      "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/55b060e02e440c466da56e990463b74b2b5919f7.jpg"
+    },
+    {
+      "fixtureId": "peach-mango-watermelon",
+      "productId": "c27a7695-3e12-474d-b2a0-be00ae276c5f",
+      "sourceSha256": "746323fb5e8b82a55dfd981e57df067cb52174c28f43bfb4c7b44c12f53c5240",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ],
+      "uploadedSha256": "2d14d87f981ecfdc217f45fadf74023ebef5f45912e5a292e663a48a4008dc08",
+      "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/721f682483e26405b663f407b282a9c5cac67b2e.jpg"
+    },
+    {
+      "fixtureId": "kiwi-dragon-fruit",
+      "productId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "sourceSha256": "1b2efce2546a9d4fae8e7f9ba0285462fd7c364aebfda066b15ffbfa62a312bd",
+      "crop": [
+        0.53,
+        0.31,
+        0.25,
+        0.64
+      ],
+      "uploadedSha256": "4fe249f31277135e40c4da259e9697993a20a7c68bf601473f12a4af170eaea1",
+      "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/ad7aa4bb0be249f9a4a8eb0056249f418f4d6821.jpg"
+    }
+  ],
+  "summaries": [
+    {
+      "kind": "independent-device-photo",
+      "queries": 2,
+      "top1": 2,
+      "top5": 2,
+      "queriesWithCandidates": 2,
+      "queriesWithTextConfirmation": 2
+    },
+    {
+      "kind": "manufacturer-artwork",
+      "queries": 5,
+      "top1": 5,
+      "top5": 5,
+      "queriesWithCandidates": 5,
+      "queriesWithTextConfirmation": 5
+    },
+    {
+      "kind": "absent-manufacturer-artwork",
+      "queries": 4,
+      "top1": 0,
+      "top5": 0,
+      "queriesWithCandidates": 4,
+      "queriesWithTextConfirmation": 0
+    }
+  ],
+  "limitations": [
+    "Two independent camera photos cover Ice Mint only, not all flavors or user phone conditions",
+    "Manufacturer artwork cases are a separate domain check, never camera-photo accuracy",
+    "Miami Mint user reference may share the manufacturer render; it is not treated as an independent evaluation query",
+    "No threshold tuning or model training; compare product candidates manually"
+  ],
+  "results": [
+    {
+      "query": "ice-mint-standing",
+      "kind": "independent-device-photo",
+      "expected": "ice-mint",
+      "expectedId": "3c5beb21-2104-43c6-8755-e9121d789c61",
+      "rank": 1,
+      "ms": 591.234584,
+      "items": [
+        {
+          "id": "3c5beb21-2104-43c6-8755-e9121d789c61",
+          "name": "ELFBAR GH23000 Ice Mint — тест",
+          "sku": "QA-ELFBAR-GH23000-ICE-MINT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/55b060e02e440c466da56e990463b74b2b5919f7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "photo-text"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "matched",
+        "text": "ICE MINT"
+      }
+    },
+    {
+      "query": "ice-mint-in-hand",
+      "kind": "independent-device-photo",
+      "expected": "ice-mint",
+      "expectedId": "3c5beb21-2104-43c6-8755-e9121d789c61",
+      "rank": 1,
+      "ms": 686.5626660000007,
+      "items": [
+        {
+          "id": "3c5beb21-2104-43c6-8755-e9121d789c61",
+          "name": "ELFBAR GH23000 Ice Mint — тест",
+          "sku": "QA-ELFBAR-GH23000-ICE-MINT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/55b060e02e440c466da56e990463b74b2b5919f7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "text"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "matched",
+        "text": "ICE MINT"
+      }
+    },
+    {
+      "query": "catalog-grape-ice",
+      "kind": "manufacturer-artwork",
+      "expected": "grape-ice",
+      "expectedId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "rank": 1,
+      "ms": 538.3062500000015,
+      "items": [
+        {
+          "id": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+          "name": "ELFBAR GH23000 Grape Ice — тест",
+          "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/b44d01b39e57c09ae30c31bf7dc4c865160e2a6e.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "photo-text"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "matched",
+        "text": "GRAPE ICE"
+      }
+    },
+    {
+      "query": "catalog-pineapple-plums-lime-mint",
+      "kind": "manufacturer-artwork",
+      "expected": "pineapple-plums-lime-mint",
+      "expectedId": "bf9b66f0-1255-4695-a5bb-f02a6ad0700e",
+      "rank": 1,
+      "ms": 526.5964160000003,
+      "items": [
+        {
+          "id": "bf9b66f0-1255-4695-a5bb-f02a6ad0700e",
+          "name": "ELFBAR GH23000 Pineapple Plums Lime Mint — тест",
+          "sku": "QA-ELFBAR-GH23000-PINEAPPLE-PLUMS-LIME-MINT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4219d3ac522c17b881638fe1b7045acbc3ca30eb.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "photo-text"
+        },
+        {
+          "id": "c27a7695-3e12-474d-b2a0-be00ae276c5f",
+          "name": "ELFBAR GH23000 Peach Mango Watermelon — тест",
+          "sku": "QA-ELFBAR-GH23000-PEACH-MANGO-WATERMELON",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/721f682483e26405b663f407b282a9c5cac67b2e.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "matched",
+        "text": "PINEAPPLE PLUMS LIME MINT"
+      }
+    },
+    {
+      "query": "catalog-ice-mint",
+      "kind": "manufacturer-artwork",
+      "expected": "ice-mint",
+      "expectedId": "3c5beb21-2104-43c6-8755-e9121d789c61",
+      "rank": 1,
+      "ms": 1884.5945420000025,
+      "items": [
+        {
+          "id": "3c5beb21-2104-43c6-8755-e9121d789c61",
+          "name": "ELFBAR GH23000 Ice Mint — тест",
+          "sku": "QA-ELFBAR-GH23000-ICE-MINT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/55b060e02e440c466da56e990463b74b2b5919f7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "photo-text"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "matched",
+        "text": "ICE MINT"
+      }
+    },
+    {
+      "query": "catalog-peach-mango-watermelon",
+      "kind": "manufacturer-artwork",
+      "expected": "peach-mango-watermelon",
+      "expectedId": "c27a7695-3e12-474d-b2a0-be00ae276c5f",
+      "rank": 1,
+      "ms": 619.1719589999993,
+      "items": [
+        {
+          "id": "c27a7695-3e12-474d-b2a0-be00ae276c5f",
+          "name": "ELFBAR GH23000 Peach Mango Watermelon — тест",
+          "sku": "QA-ELFBAR-GH23000-PEACH-MANGO-WATERMELON",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/721f682483e26405b663f407b282a9c5cac67b2e.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "photo-text"
+        },
+        {
+          "id": "bf9b66f0-1255-4695-a5bb-f02a6ad0700e",
+          "name": "ELFBAR GH23000 Pineapple Plums Lime Mint — тест",
+          "sku": "QA-ELFBAR-GH23000-PINEAPPLE-PLUMS-LIME-MINT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4219d3ac522c17b881638fe1b7045acbc3ca30eb.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "matched",
+        "text": "PEACH MANGO WATERMELON"
+      }
+    },
+    {
+      "query": "catalog-kiwi-dragon-fruit",
+      "kind": "manufacturer-artwork",
+      "expected": "kiwi-dragon-fruit",
+      "expectedId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "rank": 1,
+      "ms": 604.6997080000001,
+      "items": [
+        {
+          "id": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+          "name": "ELFBAR GH23000 Kiwi Dragon Fruit — тест",
+          "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/ad7aa4bb0be249f9a4a8eb0056249f418f4d6821.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": true,
+          "matchSource": "photo-text"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "matched",
+        "text": "KIWI DRAGON FRUIT"
+      }
+    },
+    {
+      "query": "absent-green-apple-ice",
+      "kind": "absent-manufacturer-artwork",
+      "expected": "Green Apple Ice",
+      "expectedId": null,
+      "rank": null,
+      "ms": 555.533792000002,
+      "items": [
+        {
+          "id": "3c5beb21-2104-43c6-8755-e9121d789c61",
+          "name": "ELFBAR GH23000 Ice Mint — тест",
+          "sku": "QA-ELFBAR-GH23000-ICE-MINT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/55b060e02e440c466da56e990463b74b2b5919f7.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "GREEM APPLE ICE"
+      }
+    },
+    {
+      "query": "absent-strawberry-banana",
+      "kind": "absent-manufacturer-artwork",
+      "expected": "Strawberry Banana",
+      "expectedId": null,
+      "rank": null,
+      "ms": 619.5647499999977,
+      "items": [
+        {
+          "id": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+          "name": "ELFBAR GH23000 Kiwi Dragon Fruit — тест",
+          "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/ad7aa4bb0be249f9a4a8eb0056249f418f4d6821.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "STRAWBERRY BANANA"
+      }
+    },
+    {
+      "query": "absent-lime-grapefruit-ice",
+      "kind": "absent-manufacturer-artwork",
+      "expected": "Lime Grapefruit Ice",
+      "expectedId": null,
+      "rank": null,
+      "ms": 555.8563749999958,
+      "items": [
+        {
+          "id": "bf9b66f0-1255-4695-a5bb-f02a6ad0700e",
+          "name": "ELFBAR GH23000 Pineapple Plums Lime Mint — тест",
+          "sku": "QA-ELFBAR-GH23000-PINEAPPLE-PLUMS-LIME-MINT",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/4219d3ac522c17b881638fe1b7045acbc3ca30eb.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        },
+        {
+          "id": "c27a7695-3e12-474d-b2a0-be00ae276c5f",
+          "name": "ELFBAR GH23000 Peach Mango Watermelon — тест",
+          "sku": "QA-ELFBAR-GH23000-PEACH-MANGO-WATERMELON",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/721f682483e26405b663f407b282a9c5cac67b2e.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "full",
+        "region": null,
+        "labelStatus": "unmatched",
+        "text": "LIME GRAPEFRUIT ICE"
+      }
+    },
+    {
+      "query": "absent-sakura-grape",
+      "kind": "absent-manufacturer-artwork",
+      "expected": "Sakura Grape",
+      "expectedId": null,
+      "rank": null,
+      "ms": 657.1848339999997,
+      "items": [
+        {
+          "id": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+          "name": "ELFBAR GH23000 Grape Ice — тест",
+          "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+          "imageUrl": "/uploads/imported-products/photo-search-browser-qa/products/unassigned/b44d01b39e57c09ae30c31bf7dc4c865160e2a6e.jpg",
+          "priceKgs": null,
+          "onHand": 0,
+          "labelMatched": false,
+          "matchSource": "photo"
+        }
+      ],
+      "recognition": {
+        "regionSource": "auto",
+        "region": {
+          "x": 0.0005684898933395743,
+          "y": 0,
+          "width": 0.9486335515975952,
+          "height": 1
+        },
+        "labelStatus": "unmatched",
+        "text": "SAKURA GRAPE"
+      }
+    }
+  ],
+  "visionModelManifestSha256": "3f96552ddd9a5b46f1d87aef89abaa6c506b16f110596f88c1ec252776b6f3c1"
+}

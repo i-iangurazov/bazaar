@@ -255,7 +255,7 @@ const ProductDetailPage = () => {
   }, [productQuery.data?.updatedAt, productFormDirty, cardVersion]);
   const bundleComponentsQuery = trpc.bundles.listComponents.useQuery(
     { bundleProductId: productId },
-    { enabled: Boolean(productId) },
+    { enabled: Boolean(productId) && Boolean(productQuery.data?.isBundle || showBundle || componentDialogOpen || assembleOpen) },
   );
   const pricingQuery = trpc.products.pricing.useQuery(
     { productId, storeId: pricingStoreId || undefined },

@@ -311,7 +311,9 @@
       },
       {
         "question": "How do I choose and pay for a plan?",
-        "answer": "Compare limits and capabilities in the pricing section. Contact support to activate or renew your plan; public online subscription payments are not enabled yet."
+        "answer": "Compare limits and capabilities in the pricing section. Contact support to activate or renew your plan; public online subscription payments are not enabled yet.",
+        "iosAnswer": "In the Bazaar app, open Subscription and billing. Available purchases use the App Store, with Apple's actual price shown there before confirmation. If your organization's access is already paid for, you do not need to buy that access again.",
+        "pendingAnswer": "Subscription information is available in Bazaar's Subscription and billing section."
       }
     ]
   }

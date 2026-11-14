@@ -18,7 +18,7 @@ export async function whatsappQuota(
       where: { organizationId_period: { organizationId, period: period.key } },
     }),
     db.whatsAppCreditLot.findMany({
-      where: { organizationId, revoked: false, expiresAt: { gt: now } },
+      where: { organizationId, revoked: false, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
       orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
     }),
     getOrganizationPlan(organizationId, db),
@@ -81,7 +81,7 @@ export async function reserveWhatsAppUnit(
       });
     } else {
       const lots = await tx.whatsAppCreditLot.findMany({
-        where: { organizationId, revoked: false, expiresAt: { gt: now } },
+        where: { organizationId, revoked: false, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
         orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
       });
       const lot = lots.find((item) => item.used + item.reserved < item.total);

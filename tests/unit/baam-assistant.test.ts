@@ -6,9 +6,10 @@ const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   providerGuard: vi.fn(),
   fetch: vi.fn(),
+  findConsentingUser: vi.fn(),
 }));
 vi.mock("@/server/services/baamProducts", () => ({ executeBaamProductPlan: mocks.products }));
-vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
+vi.mock("@/server/db/prisma", () => ({ prisma: { user: { findUnique: mocks.findConsentingUser } } }));
 vi.mock("@/server/services/baamMetrics", () => ({
   getBaamSalesMetrics: mocks.metrics,
   getBaamAccessScope: mocks.access,
@@ -17,12 +18,14 @@ vi.mock("@/server/config/runtime", () => ({
   assertExternalProviderCallAllowed: mocks.providerGuard,
 }));
 import {
-  askBaam,
+  askBaam as askBaamFromService,
   baamAskSchema,
   getBaamCapabilities,
   previousBaamPeriod,
 } from "@/server/services/baamAssistant";
 import { baamProductFollowUps } from "@/server/services/baamFollowUps";
+import { AI_PRIVACY_CONSENT_VERSION } from "@/lib/aiPrivacy";
+import { withAiPrivacyIdentity } from "@/server/services/aiPrivacy";
 
 const input = {
   actorId: "server-actor",
@@ -41,6 +44,11 @@ const scope = {
   storeIds: ["private-store"],
   availableStores: [{ id: "private-store", name: "Private Store Name" }],
 };
+// This provider/answer suite models an explicitly consenting authenticated
+// caller. The real consent boundary still runs; no server gate is mocked out.
+const askBaam = (...args: Parameters<typeof askBaamFromService>) => withAiPrivacyIdentity({
+  userId: args[0].actorId, organizationId: scope.organizationId,
+}, () => askBaamFromService(...args));
 const report = (dateFrom: string, dateTo: string, previous = false) => ({
   version: "completed-sales-kgs-v1",
   queryHash: previous ? "previous-hash" : "current-hash",
@@ -82,6 +90,8 @@ describe("BAAM question interpretation and authoritative answers", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.stubEnv("OPENAI_API_KEY", "synthetic-model-key");
+    vi.stubEnv("AI_PROVIDER", "openai");
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
     vi.stubEnv("NEXTAUTH_SECRET", "synthetic-context-secret");
     vi.stubEnv("OPENAI_MODEL", "gpt-5-mini");
     vi.stubGlobal("fetch", mocks.fetch);
@@ -89,6 +99,10 @@ describe("BAAM question interpretation and authoritative answers", () => {
       report(args.dateFrom, args.dateTo, args.dateFrom !== input.dateFrom),
     );
     mocks.access.mockResolvedValue(scope);
+    mocks.findConsentingUser.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === input.actorId ? { id: input.actorId, organizationId: scope.organizationId,
+        isActive: true, deletedAt: null, aiConsentVersion: AI_PRIVACY_CONSENT_VERSION,
+        aiConsentGrantedAt: new Date(0), aiConsentRevokedAt: null } : null);
     mocks.fetch.mockImplementation(async () => response(plan()));
   });
   afterEach(() => {

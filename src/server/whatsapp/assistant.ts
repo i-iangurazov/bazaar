@@ -10,6 +10,8 @@ import {
 } from "./catalog";
 import { renderWhatsAppAnswer, whatsappAnswerSchema } from "./answer";
 import { recordWhatsAppEstimate } from "./quota";
+import { assertAiConsent } from "@/server/services/aiPrivacy";
+import { AI_PRIVACY_CONSENT_VERSION } from "@/lib/aiPrivacy";
 
 const outputSchema = {
   type: "object",
@@ -80,7 +82,7 @@ async function reserveAiExpense(organizationId: string, micros: number) {
     });
   });
   let finished = false;
-  return async (actual?: { input: number; output: number }) => {
+  const finish = async (actual?: { input: number; output: number }) => {
     if (finished) return;
     finished = true;
     const expense = actual ? Math.ceil((actual.input * 3 + actual.output * 12) / 10) : micros;
@@ -89,6 +91,18 @@ async function reserveAiExpense(organizationId: string, micros: number) {
       data: { spentMicros: { increment: BigInt(expense - micros) } },
     });
     await recordWhatsAppEstimate(organizationId, expense, actual);
+  };
+  return {
+    finish,
+    cancel: async () => {
+      if (finished) return;
+      finished = true;
+      // No request reached the processor: undo only this reservation and do
+      // not create a provider-usage record for an operation that never ran.
+      await prisma.whatsAppWorkerState.update({
+        where: { id }, data: { spentMicros: { decrement: BigInt(micros) } },
+      });
+    },
   };
 }
 
@@ -244,6 +258,17 @@ VERIFIED RECENT / IDENTIFIER OFFERS (refreshed now): ${JSON.stringify([...offers
     outputUsed = 0,
     callsUsed = 0;
   for (let round = 0; round < 3; round++) {
+    // The organization owner's explicit processor consent supplements the
+    // existing WhatsApp privacy launch approval; neither replaces the merchant's
+    // duty to inform its customers about automated processing.
+    const authorizer = await prisma.user.findFirst({
+      where: { organizationId: input.organizationId, isOrgOwner: true,
+        isActive: true, deletedAt: null, aiConsentVersion: AI_PRIVACY_CONSENT_VERSION,
+        aiConsentGrantedAt: { not: null }, aiConsentRevokedAt: null },
+      select: { id: true },
+    });
+    if (!authorizer) throw new AppError("aiConsentRequired", "FORBIDDEN", 403);
+    await assertAiConsent({ userId: authorizer.id, organizationId: input.organizationId });
     const textSize = Buffer.byteLength(
       instructions +
         JSON.stringify(messages, (key, value) => (key === "image_url" ? "[image]" : value)),
@@ -252,13 +277,14 @@ VERIFIED RECENT / IDENTIFIER OFFERS (refreshed now): ${JSON.stringify([...offers
     if (inputUsed + estimatedInput > 30000 || outputUsed >= 2000)
       throw new AppError("whatsappContextLimit", "CONFLICT", 409);
     const maxOutput = Math.min(1000, 2000 - outputUsed);
-    const finish = await reserveAiExpense(
+    const expense = await reserveAiExpense(
       input.organizationId,
       Math.ceil((estimatedInput * 3 + maxOutput * 12) / 10),
     );
     let result: ModelResponse;
+    let outboundStarted = false;
     try {
-      const response = await fetch("https://api.deepseek.com/responses", {
+      const request: RequestInit = {
         method: "POST",
         cache: "no-store",
         redirect: "error",
@@ -318,7 +344,11 @@ VERIFIED RECENT / IDENTIFIER OFFERS (refreshed now): ${JSON.stringify([...offers
             },
           },
         }),
-      });
+      };
+      await assertAiConsent({ userId: authorizer.id, organizationId: input.organizationId });
+      request.signal?.throwIfAborted();
+      outboundStarted = true;
+      const response = await fetch("https://api.deepseek.com/responses", request);
       if (!response.ok || Number(response.headers.get("content-length") ?? 0) > 262144)
         throw new Error("provider");
       const reader = response.body?.getReader();
@@ -345,13 +375,17 @@ VERIFIED RECENT / IDENTIFIER OFFERS (refreshed now): ${JSON.stringify([...offers
         usedOutput! < 0
       )
         throw new Error("usage");
-      await finish({ input: usedInput!, output: usedOutput! });
+      await expense.finish({ input: usedInput!, output: usedOutput! });
       inputUsed += usedInput!;
       outputUsed += usedOutput!;
       if (inputUsed > 30000 || outputUsed > 2000 || result.status !== "completed")
         throw new Error("limits");
-    } catch {
-      await finish();
+    } catch (error) {
+      if (outboundStarted) await expense.finish();
+      else {
+        await expense.cancel();
+        if (error instanceof AppError) throw error;
+      }
       throw new AppError("whatsappAiUnavailable", "INTERNAL_SERVER_ERROR", 502);
     }
     const functions = result.output?.filter((item) => item.type === "function_call") ?? [];

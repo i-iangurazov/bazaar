@@ -1,0 +1,231 @@
+{
+  "schema": 1,
+  "date": "2026-11-15",
+  "branch": "codex/playground",
+  "baseCommit": "2f3bc0febed56fa0edcf53877a8770c3dc908925",
+  "sourceSha256": {
+    "scripts/benchmarks/product-photo/recover-elfbar-views.py": "3e74cd054b7e3f1fcc728aecb9f970bc7082082ac439e71f80e83587681603ae",
+    "scripts/qa/fixtures/elfbar-recovery-v2.json": "6f54ced63048bc7645f83ea7a018b9526a18ed0470f53f1b93710f799a8394f1",
+    "scripts/qa/prepare-elfbar-recovery-v2.mjs": "8693e5de49b69080f55af3d9e24f0c4572845b9205e6ef6f7a3072b9cab85285",
+    "scripts/qa/improve-miami-photo-references.mjs": "a0fb7bf93e69330a291479e0059a2cf9ed0152ed4d06182e4680c90458c9e4fc",
+    "scripts/qa/check-independent-elfbar-api.mjs": "02a7880078520950112418ceebb047d26ad56dfb2794666b3024f35cc6ddaf4b"
+  },
+  "applicationCodeChanged": false,
+  "modelWeightsChanged": false,
+  "thresholdChanged": false,
+  "paidInferenceCalls": false,
+  "productionDeployed": false,
+  "mainMerged": false,
+  "newGalleryImageCount": 1,
+  "checks": [
+    {
+      "command": "node scripts/qa/prepare-elfbar-recovery-v2.mjs --ffmpeg=<pinned local imageio ffmpeg 9.0>",
+      "exitCode": 0,
+      "sources": 2,
+      "cropAndQueryHashesReproduced": true,
+      "log": ".local/elfbar-recovery-v2/prepare.log",
+      "logSha256": "14291879b35127c57d9fac07ebace03789cf19c59c9eb46adcbbaf6fa85f5f5e"
+    },
+    {
+      "command": ".local/product-photo-search/runtime/venv/bin/python scripts/benchmarks/product-photo/recover-elfbar-views.py",
+      "exitCode": 0,
+      "nativeModels": true,
+      "variants": 4,
+      "queriesPerVariant": 40,
+      "log": ".local/elfbar-recovery-v2/experiment.log",
+      "logSha256": "0a292a7a5661816e535ec58bf39cc5ec09a0674b1bc4ade4084b8d127b498e08"
+    },
+    {
+      "command": "node scripts/qa/improve-miami-photo-references.mjs --recovery-v2",
+      "exitCode": 0,
+      "changedProducts": 1,
+      "addedPhotos": 1,
+      "log": ".local/elfbar-recovery-v2/augmentation.log",
+      "logSha256": "534d6e330ede9632d4b445ee1dceba4a7963ac5334c1bfdf67a9160c66ca07e4"
+    },
+    {
+      "command": "same image updater, replay",
+      "exitCode": 0,
+      "changedProducts": 0,
+      "log": ".local/elfbar-recovery-v2/augmentation-replay.log",
+      "logSha256": "693f62feaeef749b5b3d0818ddcd2d5303f67f1f6480dfb88ef10e73f486d98b"
+    },
+    {
+      "command": ".local/product-photo-search/runtime/venv/bin/python -m unittest discover -s services/product-photo-search -p test_*.py",
+      "exitCode": 0,
+      "tests": 15,
+      "log": ".local/elfbar-recovery-v2/native-tests.log",
+      "logSha256": "fad375db7a598c82f9981a45149c71cd7d4addcf6c178d2b2ade8d5497142210"
+    },
+    {
+      "command": "node .local/product-photo-hard-cases/qa.mjs test tests/integration/product-photo-search.test.ts tests/integration/product-search-context.test.ts tests/integration/product-search-consistency.test.ts tests/integration/store-product-visibility.test.ts tests/integration/bundles.test.ts tests/unit/product-photo-label.test.ts tests/unit/product-photo-search-ui.test.tsx tests/unit/product-photo-search-engine.test.ts tests/unit/client-request-headers.test.ts tests/unit/pos-read-transport.test.ts tests/unit/role-access.test.ts tests/unit/product-image-changes.test.ts tests/unit/product-image-upload-route.test.ts tests/unit/pos-product-photo-button.test.tsx",
+      "exitCode": 0,
+      "tests": 80,
+      "files": 14,
+      "isolatedDatabasePort": 55981,
+      "log": ".local/elfbar-recovery-v2/regression.log",
+      "logSha256": "ebeaac48d86180fb84a0d172f5d335a68c7ec93e2d1ce61541e92f961952a6dc"
+    },
+    {
+      "command": "node scripts/qa/product-photo-search-engine.mjs",
+      "exitCode": 0,
+      "realNativePPFaiss": true,
+      "log": ".local/elfbar-recovery-v2/engine-tests.log",
+      "logSha256": "1de5d4d5b8fe200c324620bbed92d6d4312fd6b32b61b2433ea4528ef26c0684"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit",
+      "exitCode": 0,
+      "log": ".local/elfbar-recovery-v2/typecheck.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0,
+      "log": ".local/elfbar-recovery-v2/lint.log",
+      "logSha256": "0c3c984925f00fb3efef6a4d8a4d21e92044c9ee3a8a6e50ba6e49315fb24e71"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "exitCode": 0,
+      "log": ".local/elfbar-recovery-v2/i18n.log",
+      "logSha256": "7928e029387f03e9d2782197363680f8181899bdb69c80bfc76625f6f40c69cd"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --recovery-v2 --cohort=independent",
+      "exitCode": 0,
+      "photoQueries": 16,
+      "allHttp200": true,
+      "emptyStoreControl": true,
+      "sourceSnapshotStable": true,
+      "log": ".local/elfbar-recovery-v2/api-independent.log",
+      "logSha256": "d6a7c14372d85eeeb100ad6f77d8dbed3ca30aa21522de6e388c9a17eaba7bf7"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --recovery-v2 --cohort=field",
+      "exitCode": 0,
+      "photoQueries": 40,
+      "allHttp200": true,
+      "emptyStoreControl": true,
+      "sourceSnapshotStable": true,
+      "log": ".local/elfbar-recovery-v2/api-field.log",
+      "logSha256": "9fbfed84ed6976b4ba6942a1d3c91311aa94ea91c0a3edae46d3bfa7af8f6160"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --recovery-v2 --cohort=legacy",
+      "exitCode": 0,
+      "photoQueries": 11,
+      "allHttp200": true,
+      "emptyStoreControl": true,
+      "sourceSnapshotStable": true,
+      "log": ".local/elfbar-recovery-v2/api-legacy.log",
+      "logSha256": "d2852a139cf8e5ef7f110f794eac274bb7dc5e7a71b4e44c796b79a928ff34ae"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --recovery-v2 --cohort=new-holdout",
+      "exitCode": 0,
+      "photoQueries": 4,
+      "allHttp200": true,
+      "emptyStoreControl": true,
+      "sourceSnapshotStable": true,
+      "log": ".local/elfbar-recovery-v2/api-new-holdout.log",
+      "logSha256": "8a631e374baeb7da500ef303102cd64581468378c03b73b45464e775bc3cd45d"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --recovery-v2 --before-recovery --cohort=new-holdout",
+      "exitCode": 0,
+      "photoQueries": 4,
+      "allHttp200": true,
+      "emptyStoreControl": true,
+      "sourceSnapshotStable": true,
+      "log": ".local/elfbar-recovery-v2/api-before-new-holdout.log",
+      "logSha256": "8a631e374baeb7da500ef303102cd64581468378c03b73b45464e775bc3cd45d"
+    },
+    {
+      "command": "Node syntax, Python AST and git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "api": {
+    "photoQueries": 75,
+    "afterPhotoQueries": 71,
+    "beforePhotoQueries": 4,
+    "emptyStoreControls": 5,
+    "legacyApplicationChangedFlag": "The API helper retains its historical improved-stack flag relative to the original pre-medium baseline; no app code changed in this iteration"
+  },
+  "data": {
+    "newHoldoutPhotos": 4,
+    "newHoldoutObjects": 1,
+    "newHoldoutPhotographers": 1,
+    "newHoldoutFlavor": "Purple Mint",
+    "newHoldoutExpectedAbsent": true,
+    "newHoldoutUsedAsReference": false,
+    "newHoldoutTuning": false,
+    "newPositiveIndependentShoot": false,
+    "referenceSourceSeparateFromTestSources": true,
+    "protocolSha256": "6f54ced63048bc7645f83ea7a018b9526a18ed0470f53f1b93710f799a8394f1"
+  },
+  "catalog": {
+    "disposableDatabasePort": 55991,
+    "organization": "photo-search-browser-qa",
+    "initialSnapshotSha256": "a7050b4ca740a09015fc399df8ef77ef09ada378a4708729b1604615ae2f2a25",
+    "audit": "catalog-audit.json",
+    "fieldReadyPhotos": 39,
+    "originalStoreReadyPhotos": 27,
+    "changedProducts": 1,
+    "replayChangedProducts": 0
+  },
+  "ui": {
+    "ownHiddenBrowser": true,
+    "desktopSearch": true,
+    "mobileViewport": {
+      "width": 390,
+      "height": 844
+    },
+    "selectionOpenedCorrectProduct": true,
+    "returnAndNewUpload": true,
+    "emptyPurpleResults": true,
+    "horizontalOverflow": false,
+    "consoleWarnings": 0,
+    "consoleErrors": 0,
+    "viewportReset": true,
+    "screenshots": {
+      ".local/elfbar-recovery-v2/ui-rear-desktop.png": "45a31f54771de9b34b2b18a693b022c324fae57e4edb9f569c66ed6be55bc43c",
+      ".local/elfbar-recovery-v2/ui-selected-mobile.png": "5aa5927a99ee41219c3e045db88500e634dfe602b3611142afc5f06e01ed18ec",
+      ".local/elfbar-recovery-v2/ui-purple-empty-mobile.png": "5a7a3e556c5c061c4857120e9b7dd53d2342c5bca1a970a868af1797e431f16f"
+    }
+  },
+  "runtime": {
+    "url": "http://192.168.68.109:3158",
+    "httpStatus": 200,
+    "processesRunning": {
+      "lan": true,
+      "engine": true,
+      "worker": true
+    }
+  },
+  "resolvedChecks": [
+    "Initial offline attempt used the HTTP JPEG decoder for cached PNG views; switched offline decoding to verified PNG pixels, before new holdout evaluation",
+    "Strict initial image-record audit detected existing update API timestamp recreation; image IDs/URLs/positions and all business fields verified separately, timestamp changes explicitly recorded"
+  ],
+  "notRun": {
+    "productionBuild": "Only references, QA scripts and docs changed; app/service/UI unchanged from preceding verified build",
+    "newPositiveIndependentShoot": "New sources requiring age login were not used; new held-out data is absent Purple Mint only",
+    "targetServerLoad": "No Linux capacity/concurrency benchmark",
+    "unrecoverableDisplayViews": "Restoring Strawberry screen reference reintroduces two false positives; remaining Miami display lacks safe retrieval"
+  },
+  "evidenceSha256": {
+    "api-before-new-holdout.json": "8fe75fd3d8087e912bf61034956d9b3e9d8af9ee2031971bbcf9c783105c1f7b",
+    "api-field.json": "b527c86b1181fce1b2873b46d031cc5f20b4a73e188d4a362b078eac87f03238",
+    "api-independent.json": "fa21d7e84e0b6e5e0dfef38d8aa753e77e3e72a1f5b9be100f43f39d8ca6a7cf",
+    "api-legacy.json": "1f6e5825dd84001ad31d8062a81692d2d59d228101779bd7c10c2a3501752536",
+    "api-new-holdout.json": "63ccaa33a85bed367d4d77b70e4d31da196ccc20337794c9cf0b179b17771121",
+    "augmentation-initial.json": "ef60d5682b49c271124353d1ef9f4016ea1e9aa62ccf989308e4af78ad821fac",
+    "augmentation.json": "35de99e8dd1bcf45400b82b5d82226645a125b975def3e9bafa45df73cca6849",
+    "catalog-audit.json": "e6d16f92b5d1ecccda1fe0f72db487416f3f8cd89e86ddf86715d236b29b77ac",
+    "offline-summary.json": "e8c5ef64572aa8590b77da1bc89b928d4e67b5bacc0a897a51b8b60bd6689fab",
+    "reference-experiment.json.gz": "a43da03d5146a45e5387177d8ead170aab36fb42057ca047bf0aeaa58bbfa96c",
+    "summary.json": "791a361cdacb219a77814577ffe37535fe56aecda040c724eaaa8faf050dd446",
+    "ui-console.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  }
+}

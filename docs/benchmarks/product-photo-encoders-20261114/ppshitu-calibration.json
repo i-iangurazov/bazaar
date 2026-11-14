@@ -1,0 +1,26 @@
+{
+  "model": "ppshitu",
+  "threshold": 0.8224377036094667,
+  "calibrationNegativeTopScores": [
+    0.5496310591697693,
+    0.5255563855171204,
+    0.5316197276115417,
+    0.7884520292282104,
+    0.6132241487503052,
+    0.8033493161201477,
+    0.5661774277687073,
+    0.80837482213974,
+    0.8224377036094666,
+    0.7971514463424683,
+    0.777121901512146
+  ],
+  "policy": {
+    "queries": 11,
+    "storeId": "photo-search-browser-shop",
+    "galleryPhotos": 24,
+    "negatives": "Four truly absent queries plus seven known queries with the target SKU removed from the calibration gallery",
+    "threshold": "nextafter(maximum of automatic negative top scores, +infinity); freeze before test encoding",
+    "falseAcceptBudget": 0
+  },
+  "protocolSha256": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa"
+}

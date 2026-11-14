@@ -44,6 +44,7 @@ vi.mock("@/components/page-header", () => ({
   ),
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/components/billing/apple-support-cases", () => ({ AppleSupportCases: () => null }));
 vi.mock("@/lib/trpc", () => {
   const paths = [
     "adminJobs.list",
@@ -61,6 +62,7 @@ vi.mock("@/lib/trpc", () => {
     "billing.payments.quote",
     "billing.payments.invoices",
     "billing.payments.checkout",
+    "billing.payments.resume",
     "billing.payments.check",
     "onboarding.get",
     "onboarding.skipStep",

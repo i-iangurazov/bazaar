@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "independentBefore": {
+    "known": 3,
+    "correctFirst": 0,
+    "wrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 2
+  },
+  "independentAfter": {
+    "known": 3,
+    "correctFirst": 1,
+    "wrongFirst": 0,
+    "absent": 13,
+    "absentWithCandidates": 0
+  },
+  "field": {
+    "auto": {
+      "before": {
+        "known": 14,
+        "correctFirst": 6,
+        "wrongFirst": 0,
+        "absent": 3,
+        "absentWithCandidates": 0
+      },
+      "after": {
+        "known": 14,
+        "correctFirst": 5,
+        "wrongFirst": 0,
+        "absent": 3,
+        "absentWithCandidates": 0
+      },
+      "lost": [
+        "strawberry-banana-210"
+      ]
+    },
+    "manual": {
+      "before": {
+        "known": 14,
+        "correctFirst": 6,
+        "wrongFirst": 0,
+        "absent": 3,
+        "absentWithCandidates": 0
+      },
+      "after": {
+        "known": 14,
+        "correctFirst": 5,
+        "wrongFirst": 0,
+        "absent": 3,
+        "absentWithCandidates": 0
+      },
+      "lost": [
+        "strawberry-banana-210"
+      ]
+    }
+  },
+  "legacyAfter": {
+    "known": 7,
+    "knownCorrectFirst": 7,
+    "knownWrongFirst": 0,
+    "absent": 4,
+    "absentWithCandidates": 4
+  },
+  "threshold": 0.68,
+  "newMiamiSource": "One retail stock illustration, two registered crops; not two independent angles",
+  "sourceDisjoint": true,
+  "newBlindTest": false
+}

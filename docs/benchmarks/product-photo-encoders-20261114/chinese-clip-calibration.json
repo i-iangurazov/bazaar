@@ -1,0 +1,26 @@
+{
+  "model": "chinese-clip",
+  "threshold": 0.8592185974121095,
+  "calibrationNegativeTopScores": [
+    0.8448046445846558,
+    0.7881796956062317,
+    0.8141682147979736,
+    0.8209192752838135,
+    0.8305261135101318,
+    0.7972707748413086,
+    0.8249561190605164,
+    0.8242533802986145,
+    0.8592185974121094,
+    0.7851784229278564,
+    0.8314354419708252
+  ],
+  "policy": {
+    "queries": 11,
+    "storeId": "photo-search-browser-shop",
+    "galleryPhotos": 24,
+    "negatives": "Four truly absent queries plus seven known queries with the target SKU removed from the calibration gallery",
+    "threshold": "nextafter(maximum of automatic negative top scores, +infinity); freeze before test encoding",
+    "falseAcceptBudget": 0
+  },
+  "protocolSha256": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa"
+}

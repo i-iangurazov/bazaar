@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "date": "2026-11-14",
+  "branch": "codex/playground",
+  "applicationBaseCommit": "c3d67c9472f5fbb3023be8badc216b58044196bc",
+  "protocolSha256": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa",
+  "frozenInputSha256": "0ceb9311c788332c303ff6dfc5a267e1d8127f7986d82e62a6284c81a244e948",
+  "modelManifestSha256": "17c17cf3fa1c89fd6f451e263141a7fc400d7489f2674dd3bfa9eae8efe1dcbe",
+  "sourceSha256": {
+    "scripts/benchmarks/product-photo/elfbar_comparison.py": "d1d76511974d5b591f253f8653dcf69d2b30540747931ed9bcdfa3e7d560176a",
+    "scripts/benchmarks/product-photo/elfbar_consensus.py": "dd783f9c118f7efca5c6361162ba1d2145b61b8c219eafa16ad432e06f6a3570",
+    "scripts/benchmarks/product-photo/elfbar_encoders.py": "c8d1af9e92bcc99acb6aab612b983b96a64700d591cfa42a434cd0f243ef4854",
+    "scripts/benchmarks/product-photo/elfbar_metrics.py": "041d651a2d21730db8412bcf367ae196ba01aeb861754ac2a0daa04aaa8b6388",
+    "scripts/benchmarks/product-photo/prepare-elfbar-models.py": "919da378f4d331aed419eaeeb549799aef9fc241f8a97bc76c1d52a442e09a3c",
+    "scripts/benchmarks/product-photo/prepare-elfbar-views.py": "da6bca17386a318b1290b3d52fbf1a55985f4fdfc12ced73b8dcb8504f595a9f",
+    "scripts/benchmarks/product-photo/run-elfbar-models.py": "ef6b57ac7f9ba2553133a0d40392e542e2db3680853f2b63fd2f5309711bf85d",
+    "scripts/benchmarks/product-photo/summarize-elfbar-models.py": "dba46528633014a3eaf1b20f9f7da2c7ac7f74eac0941a73f14e3e1b658f2526",
+    "scripts/benchmarks/product-photo/test_elfbar_comparison.py": "1cd8394e750e59d95435f86982a160349525fb648019e28cad5c017daaba4d98",
+    "scripts/qa/prepare-elfbar-model-comparison.mjs": "14b220139c75cbd2d0c52e3a7b89aac83dc03f3fa4710c1e4af2416cde538163",
+    "scripts/qa/verify-elfbar-model-comparison.mjs": "90ddffe78ceb010fbd7b7e594ce8ad7f5eb9956b79fd3c2d67e15dea992386a5",
+    "scripts/qa/fixtures/elfbar-model-comparison.json": "16524dc49ff471be09b6b2f61abc5bd9cac3f4303b30f469aedff1c1329668fa",
+    "scripts/qa/fixtures/elfbar-model-consensus.json": "2fde6dbb40d58b04b8bb2235bb766f660203791eb563ec6310f72263b48173c9",
+    "scripts/benchmarks/product-photo/elfbar-models.json": "17c17cf3fa1c89fd6f451e263141a7fc400d7489f2674dd3bfa9eae8efe1dcbe",
+    "scripts/benchmarks/product-photo/requirements-elfbar-comparison.lock.txt": "db60eead7efe355ec1de6d8bd78feb974e00e92f75e7fccefbe2268c43a2e966",
+    "scripts/benchmarks/product-photo/backends.py": "680c110e89f500cdbd6425277836cf3e9b3ec5bb95b59cb9d9172a2520f5eeb6",
+    "scripts/benchmarks/product-photo/metrics.py": "31bc2d32f544fe903b19207b67c3a08bbdc6171ce4d6d67f46a114d8feb67882",
+    "scripts/benchmarks/product-photo/prepare.py": "ae3193966cf15693b06b11524d30570a18b6ef68443d2c694f8ba5ad1ef89d94",
+    "scripts/benchmarks/product-photo/retrieval.py": "44b1b0b314a07ff9239927303475eaaeff10dace4de3cbd266d5614fc0ddaad7",
+    "scripts/benchmarks/product-photo/run.py": "fdcfaa5e4d3c0f413419af99c577d73d7de5750d389fea7cfe18e99714a106c4"
+  },
+  "checks": [
+    {
+      "command": ".local/elfbar-model-comparison/venv/bin/python -m unittest discover -s scripts/benchmarks/product-photo -p test_*.py",
+      "exitCode": 0,
+      "tests": 17,
+      "logSha256": "4daab40b5c31aee0924067166c7d6b2cc07596caa8d23a9055cd15c5bb3c6bb9"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit",
+      "exitCode": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0,
+      "logSha256": "0c3c984925f00fb3efef6a4d8a4d21e92044c9ee3a8a6e50ba6e49315fb24e71"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "exitCode": 0,
+      "logSha256": "7928e029387f03e9d2782197363680f8181899bdb69c80bfc76625f6f40c69cd"
+    },
+    {
+      "command": "Python AST parse; node --check on new scripts",
+      "exitCode": 0,
+      "pythonFiles": 9,
+      "nodeFiles": 2
+    },
+    {
+      "command": "node scripts/qa/verify-elfbar-model-comparison.mjs",
+      "exitCode": 0,
+      "catalogAndFeatureCacheUnchanged": true
+    }
+  ],
+  "nativeModelRuns": {
+    "models": [
+      "ppshitu",
+      "chinese-clip",
+      "dinov2-224",
+      "dinov2-518",
+      "siglip2"
+    ],
+    "configurationsCompleted": 5,
+    "privateFaiss": true,
+    "ppGalleryMatchesApplicationAtol": 1e-05,
+    "ppApplicationPredictionsReproduced": 40,
+    "galleryPhotos": {
+      "calibration": 24,
+      "test": 38
+    },
+    "calibrationImages": 11,
+    "fieldImages": 20,
+    "hardImages": 8,
+    "testRowsPerConfiguration": 40,
+    "leaveTargetOutPerMode": 17,
+    "device": "cpu",
+    "threads": 1,
+    "precision": "fp32"
+  },
+  "artifactsValidatedAgainstLocalResults": true,
+  "runtime": {
+    "applicationHttpStatus": 200,
+    "applicationUrl": "http://192.168.68.109:3158",
+    "bind": "Wi-Fi interface only; loopback is intentionally not bound",
+    "engineBind": "127.0.0.1:3160",
+    "applicationEngine": "PP-ShiTuV2",
+    "applicationThreshold": 0.68,
+    "appEngineWorkerProcessesRunning": true
+  },
+  "applicationChanged": false,
+  "catalogOrFeatureCacheChanged": false,
+  "databaseWrites": false,
+  "paidApiCalls": false,
+  "productionDeployed": false,
+  "notRun": {
+    "productionBuild": "No application changes; previous verified build at applicationBaseCommit",
+    "uiInspection": "No UI changes",
+    "independentCustomerPhoneValidation": "No new independent photographs supplied",
+    "linuxCapacity": "Only local macOS CPU benchmark",
+    "liveConsensusApi": "Offline output fusion only; no dual-model service"
+  },
+  "limitations": [
+    "Known development cases, not a blind independent test",
+    "Video gallery/query frames are correlated; current two added views remain in the fixed gallery",
+    "Calibration contains artwork and a different gallery/domain; its zero empirical false accepts do not guarantee test precision",
+    "Raw top-1/top-5 and accepted results are separate; cosine scores are not SKU probabilities"
+  ]
+}

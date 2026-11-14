@@ -4,6 +4,7 @@ const rawEnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     VERCEL_ENV: z.enum(["development", "preview", "production"]).optional(),
+    VERCEL_PROJECT_ID: z.string().optional(),
     NEXT_PHASE: z.string().optional(),
     npm_lifecycle_event: z.string().optional(),
     DATABASE_URL: z.string().optional(),
@@ -11,6 +12,9 @@ const rawEnvSchema = z
     HARDENING_PREVIEW_GUARD: z.string().optional(),
     HARDENING_PREVIEW_EXPECTED_DATABASE_NAME: z.string().optional(),
     HARDENING_PREVIEW_EXPECTED_DATABASE_HOST: z.string().optional(),
+    HARDENING_PREVIEW_EXPECTED_PROJECT_ID: z.string().optional(),
+    HARDENING_PREVIEW_EXPECTED_IMAGE_STORE_ID: z.string().optional(),
+    HARDENING_PREVIEW_EXPECTED_EXPORT_STORE_ID: z.string().optional(),
     HARDENING_EXTERNAL_PROVIDER_MODE: z.string().optional(),
     RUN_DB_TESTS: z.string().optional(),
     ALLOW_TEST_DB_RESET: z.string().optional(),
@@ -27,6 +31,8 @@ const rawEnvSchema = z
     DEEPSEEK_API_KEY: z.string().optional(),
     IMAGE_STORAGE_PROVIDER: z.string().optional(),
     EXPORT_STORAGE_PROVIDER: z.string().optional(),
+    BLOB_IMAGE_STORE_ID: z.string().optional(),
+    BLOB_EXPORT_STORE_ID: z.string().optional(),
     R2_ACCOUNT_ID: z.string().optional(),
     R2_ACCESS_KEY_ID: z.string().optional(),
     R2_SECRET_ACCESS_KEY: z.string().optional(),
@@ -81,12 +87,16 @@ const normalizeRedisKeyPrefix = (value?: string) => {
 export type RuntimeEnv = {
   nodeEnv: "development" | "test" | "production";
   vercelEnv: "development" | "preview" | "production" | "";
+  vercelProjectId: string;
   isBuildPhase: boolean;
   databaseUrl: string;
   allowLocalhostDatabaseInProduction: boolean;
   hardeningPreviewGuard: boolean;
   hardeningPreviewExpectedDatabaseName: string;
   hardeningPreviewExpectedDatabaseHost: string;
+  hardeningPreviewExpectedProjectId: string;
+  hardeningPreviewExpectedImageStoreId: string;
+  hardeningPreviewExpectedExportStoreId: string;
   hardeningExternalProviderMode: string;
   runDbTests: boolean;
   allowTestDbReset: boolean;
@@ -103,6 +113,8 @@ export type RuntimeEnv = {
   deepseekApiKey: string;
   imageStorageProvider: string;
   exportStorageProvider: string;
+  blobImageStoreId: string;
+  blobExportStoreId: string;
   r2Configured: boolean;
   oMarketMockApi: boolean;
   allowLogEmailInProduction: boolean;
@@ -121,6 +133,7 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
   return {
     nodeEnv,
     vercelEnv: parsed.VERCEL_ENV ?? "",
+    vercelProjectId: parsed.VERCEL_PROJECT_ID?.trim() ?? "",
     isBuildPhase,
     databaseUrl: parsed.DATABASE_URL?.trim() ?? "",
     allowLocalhostDatabaseInProduction: parseBool(parsed.ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION),
@@ -129,6 +142,12 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
       parsed.HARDENING_PREVIEW_EXPECTED_DATABASE_NAME?.trim() ?? "",
     hardeningPreviewExpectedDatabaseHost:
       parsed.HARDENING_PREVIEW_EXPECTED_DATABASE_HOST?.trim().toLowerCase() ?? "",
+    hardeningPreviewExpectedProjectId:
+      parsed.HARDENING_PREVIEW_EXPECTED_PROJECT_ID?.trim() ?? "",
+    hardeningPreviewExpectedImageStoreId:
+      parsed.HARDENING_PREVIEW_EXPECTED_IMAGE_STORE_ID?.trim() ?? "",
+    hardeningPreviewExpectedExportStoreId:
+      parsed.HARDENING_PREVIEW_EXPECTED_EXPORT_STORE_ID?.trim() ?? "",
     hardeningExternalProviderMode:
       parsed.HARDENING_EXTERNAL_PROVIDER_MODE?.trim().toLowerCase() ?? "",
     runDbTests: parseBool(parsed.RUN_DB_TESTS),
@@ -146,6 +165,8 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     deepseekApiKey: parsed.DEEPSEEK_API_KEY?.trim() ?? "",
     imageStorageProvider: parsed.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() ?? "",
     exportStorageProvider: parsed.EXPORT_STORAGE_PROVIDER?.trim().toLowerCase() ?? "",
+    blobImageStoreId: parsed.BLOB_IMAGE_STORE_ID?.trim() ?? "",
+    blobExportStoreId: parsed.BLOB_EXPORT_STORE_ID?.trim() ?? "",
     r2Configured: Boolean(
       parsed.R2_ACCOUNT_ID?.trim() ||
       parsed.R2_ACCESS_KEY_ID?.trim() ||
@@ -238,11 +259,27 @@ const assertHardeningPreviewEnv = (env: RuntimeEnv) => {
   if (env.resendApiKey || env.openAiApiKey || env.deepseekApiKey) {
     throw new Error("External provider credentials are forbidden in hardening Preview.");
   }
-  if (env.imageStorageProvider && env.imageStorageProvider !== "local") {
+  if (env.imageStorageProvider && !["local", "vercel-blob"].includes(env.imageStorageProvider)) {
     throw new Error("Hardening Preview storage must use the isolated local provider.");
   }
-  if (env.exportStorageProvider && env.exportStorageProvider !== "local") {
+  if (env.exportStorageProvider && !["local", "vercel-blob"].includes(env.exportStorageProvider)) {
     throw new Error("Hardening Preview exports must use the isolated local provider.");
+  }
+  if (env.imageStorageProvider === "vercel-blob" || env.exportStorageProvider === "vercel-blob") {
+    if (env.imageStorageProvider !== "vercel-blob" || env.exportStorageProvider !== "vercel-blob") {
+      throw new Error("Hardening Preview Blob storage requires explicit image and export providers.");
+    }
+    if (!/^prj_[A-Za-z0-9]+$/.test(env.hardeningPreviewExpectedProjectId) ||
+        env.vercelProjectId !== env.hardeningPreviewExpectedProjectId) {
+      throw new Error("Blob storage does not match the approved hardening Preview project.");
+    }
+    if (!/^store_[A-Za-z0-9]+$/.test(env.hardeningPreviewExpectedImageStoreId) ||
+        env.blobImageStoreId !== env.hardeningPreviewExpectedImageStoreId ||
+        !/^store_[A-Za-z0-9]+$/.test(env.hardeningPreviewExpectedExportStoreId) ||
+        env.blobExportStoreId !== env.hardeningPreviewExpectedExportStoreId ||
+        env.blobImageStoreId.toLowerCase() === env.blobExportStoreId.toLowerCase()) {
+      throw new Error("Blob storage does not match the two approved hardening Preview stores.");
+    }
   }
   if (env.r2Configured) {
     throw new Error("R2 credentials and endpoints are forbidden in hardening Preview.");
@@ -256,6 +293,21 @@ export const assertExternalProviderCallAllowed = (provider: string) => {
   const env = getRuntimeEnv();
   if (env.hardeningPreviewGuard && env.hardeningExternalProviderMode === "disabled") {
     throw new Error(`externalProviderDisabled:${provider}`);
+  }
+};
+
+// This narrowly scoped storage permission does not authorize AI, email, R2 or
+// payment calls. Explicit project/store identities remain mandatory in Preview.
+export const assertVercelBlobStorageAllowed = (purpose: "images" | "exports", storeId: string) => {
+  const env = getRuntimeEnv();
+  assertHardeningPreviewEnv(env);
+  const provider = purpose === "images" ? env.imageStorageProvider : env.exportStorageProvider;
+  const configuredStore = purpose === "images" ? env.blobImageStoreId : env.blobExportStoreId;
+  if (provider !== "vercel-blob" || !/^store_[A-Za-z0-9]+$/.test(storeId) || configuredStore !== storeId) {
+    throw new Error("blobStorageNotConfigured");
+  }
+  if (env.blobImageStoreId && env.blobExportStoreId && env.blobImageStoreId.toLowerCase() === env.blobExportStoreId.toLowerCase()) {
+    throw new Error("blobStorageStoresMustDiffer");
   }
 };
 

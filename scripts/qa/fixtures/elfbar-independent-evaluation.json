@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "frozenBeforeAnyNewQueryEncoding": true,
+  "frozenInputSha256": "c5c7aa95b1929aff2aefefbbbe0a0e5d5ecb0f8b22904116a7bef7330510812f",
+  "policySha256": "eb36f49e348b5498eaf1141f0861e120690b8a429b9ee8db0e4798f21c3918c8",
+  "manifestSha256": "7a313a351189ddd74cea7dcfb4a2cd1084f5083892623c660dc42b4e3f1e2468",
+  "sourceSha256": {
+    "scripts/qa/prepare-independent-elfbar.mjs": "f77efda81ccb071d8468f3c1dd3f53c47cfd19d9c02f9ca571519490891eb2b5",
+    "scripts/benchmarks/product-photo/prepare-independent-elfbar-views.py": "3153f0a646e81a0f8f3d445538235b7cee6d183c30d8c7226318ca482d920464",
+    "scripts/benchmarks/product-photo/independent-elfbar.py": "125cb87b97f8e74b320a2b69f6449b16848dadcb7a812f42283c8828ab727dc7",
+    "scripts/benchmarks/product-photo/elfbar_guarded_consensus.py": "47d1da0dbea08c14926b28b57f9296c514a4e9f1c10d85fe8c6324d95042dd46",
+    "scripts/benchmarks/product-photo/summarize-independent-elfbar.py": "85d8a11f395d4fa2901c7567baca6a6c1ecb12f93f4085c2ad9cda2af81a4411",
+    "scripts/benchmarks/product-photo/elfbar_consensus.py": "dd783f9c118f7efca5c6361162ba1d2145b61b8c219eafa16ad432e06f6a3570",
+    "scripts/benchmarks/product-photo/elfbar_encoders.py": "c8d1af9e92bcc99acb6aab612b983b96a64700d591cfa42a434cd0f243ef4854",
+    "scripts/benchmarks/product-photo/elfbar_comparison.py": "d1d76511974d5b591f253f8653dcf69d2b30540747931ed9bcdfa3e7d560176a",
+    "scripts/benchmarks/product-photo/elfbar_metrics.py": "041d651a2d21730db8412bcf367ae196ba01aeb861754ac2a0daa04aaa8b6388",
+    "scripts/benchmarks/product-photo/retrieval.py": "44b1b0b314a07ff9239927303475eaaeff10dace4de3cbd266d5614fc0ddaad7"
+  },
+  "queries": 16,
+  "known": 3,
+  "absent": 13,
+  "reviewGroups": 5,
+  "photographerGroups": 1,
+  "manualRegions": false,
+  "galleryWrite": false
+}

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { useNativePlatform } from "@/lib/native/useNativePlatform";
 import { cn } from "@/lib/utils";
 
 type GuidanceMode = "ios" | "safari" | "unsupported" | "browser";
@@ -21,6 +22,7 @@ export const PwaInstallButton = ({
   className?: string;
 }) => {
   const t = useTranslations("pwaInstall");
+  const platform = useNativePlatform();
   const [guidanceMode, setGuidanceMode] = useState<GuidanceMode | null>(null);
   const { toast } = useToast();
   const {
@@ -34,7 +36,7 @@ export const PwaInstallButton = ({
     promptInstall,
   } = usePwaInstall();
 
-  if (!isReady || isInstalled) {
+  if (!isReady || isInstalled || platform !== "web") {
     return null;
   }
 
