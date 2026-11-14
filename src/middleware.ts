@@ -16,6 +16,7 @@ import {
   marketingLocaleFromPath,
   marketingLocaleHeader,
 } from "./lib/marketingSeo";
+import { marketingSolutionPath, parseMarketingSolutionPath } from "./lib/marketingSolutions";
 import {
   acquisitionCookieName,
   acquisitionFromSearch,
@@ -89,6 +90,25 @@ export const middleware = async (request: NextRequest) => {
   const segments = pathname.split("/");
   const maybeLocale = segments[1];
   const pathLocale = normalizeLocale(maybeLocale);
+  const marketingSolution = parseMarketingSolutionPath(pathname);
+  if (/^\/(?:ru|kg|ky|en)\/solutions(?:\/|$)/.test(pathname) && !marketingSolution) {
+    return new NextResponse(null, {
+      status: 404,
+      headers: {
+        "x-request-id": requestId,
+        "x-robots-tag": "noindex, nofollow, noarchive",
+        "cache-control": "private, no-store",
+      },
+    });
+  }
+  if (marketingSolution?.isAlias) {
+    const nextUrl = request.nextUrl.clone();
+    nextUrl.pathname = marketingSolutionPath(marketingSolution.locale, marketingSolution.id);
+    const redirectResponse = NextResponse.redirect(nextUrl, 308);
+    redirectResponse.headers.set("x-request-id", requestId);
+    redirectResponse.cookies.set("NEXT_LOCALE", marketingSolution.locale, localeCookieOptions);
+    return redirectResponse;
+  }
   const marketingLocale = marketingLocaleFromPath(pathname);
   if (marketingLocale && maybeLocale === "ky") {
     const nextUrl = request.nextUrl.clone();

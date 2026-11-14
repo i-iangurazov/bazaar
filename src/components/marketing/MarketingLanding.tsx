@@ -20,6 +20,8 @@ import { MarketingPricing } from "./MarketingPricing";
 import { FeatureShowcase } from "./FeatureShowcase";
 import { MarketingMotion } from "./MarketingMotion";
 import { MarketingNav } from "./MarketingNav";
+import { getSolutionsCopy } from "@/content/solutions";
+import { marketingSolutionPath, solutionPages } from "@/lib/marketingSolutions";
 import { MarketingPreview } from "./MarketingPreview";
 import { getMarketingPreviewData } from "@/content/marketing/preview";
 import { PosIcon, InventoryIcon, ReportsIcon } from "@/components/icons";
@@ -160,6 +162,7 @@ export const MarketingLanding = async () => {
   const publicLegalName = loadPublicSellerLegalName();
   const documents = legalCopy[normalizeLocale(locale) ?? defaultLocale].documents;
   const copy = getMarketingCopy(locale);
+  const solutions = getSolutionsCopy(locale);
   const previewData = getMarketingPreviewData(locale);
   const structuredData = getMarketingStructuredData({
     locale,
@@ -176,7 +179,10 @@ export const MarketingLanding = async () => {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeMarketingStructuredData(structuredData) }}
       />
-      <MarketingNav copy={copy.nav} />
+      <MarketingNav
+        copy={copy.nav}
+        solutionsLink={{ href: marketingSolutionPath(locale), label: solutions.ui.solutions }}
+      />
 
       <section className={styles.hero} aria-labelledby="hero-title">
         <div className={styles.heroGlow} aria-hidden="true" />
@@ -440,6 +446,12 @@ export const MarketingLanding = async () => {
             <a href="#platform">Retail OS</a>
             <a href="#mobile">Mobile / PWA</a>
             <a href="#pricing">{copy.nav.pricing}</a>
+            <Link href={marketingSolutionPath(locale)}>{solutions.ui.indexTitle}</Link>
+            {solutionPages.slice(0, 3).map((page) => (
+              <Link href={marketingSolutionPath(locale, page.id)} key={page.id}>
+                {solutions.pages[page.id].title}
+              </Link>
+            ))}
           </div>
           <div>
             <h3>{copy.footer.integrations}</h3>

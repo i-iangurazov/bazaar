@@ -1,0 +1,131 @@
+{
+  "verifiedAt": "2026-11-14T06:13:49.521449+06:00",
+  "branch": "main",
+  "baseCommit": "6ace83f8cdbf99e67d3114f2b53c46c395bd11d4",
+  "implementationStatus": "ready_locally_pending_separate_production_approval",
+  "productionDeployed": false,
+  "pushed": false,
+  "adsOrBudgetsChanged": false,
+  "scope": {
+    "queries": 22,
+    "distinctResources": 7,
+    "detailPages": 6,
+    "locales": [
+      "ru",
+      "kg",
+      "en"
+    ],
+    "newPublicPaths": 21
+  },
+  "checks": {
+    "typecheck": {
+      "passed": true,
+      "command": "pnpm typecheck; also checked by final Next production build"
+    },
+    "lint": {
+      "passed": true,
+      "command": "pnpm lint; also checked by final Next production build"
+    },
+    "translations": {
+      "passed": true,
+      "command": "pnpm i18n:check",
+      "strictMissingMessageChecksInSsrTests": true
+    },
+    "unitRegression": {
+      "passed": true,
+      "files": 19,
+      "tests": 599,
+      "workers": 1,
+      "command": "pnpm exec vitest run tests/unit/marketing-*.test.ts tests/unit/marketing-*.test.tsx tests/unit/meta-marketing.test.ts tests/unit/public-seo.test.ts tests/unit/middleware.test.ts tests/unit/landing-theme.test.tsx tests/unit/acquisition.test.ts --maxWorkers=1"
+    },
+    "productionBuild": {
+      "passed": true,
+      "totalGeneratedRoutes": 150,
+      "node": "22.23.4",
+      "cpuLimit": 1,
+      "providerCredentialsInherited": false
+    },
+    "http": {
+      "passed": true,
+      "publicPaths": 21,
+      "sitemapUrls": 63,
+      "solutionSitemapUrls": 21,
+      "redirectAnd404Checks": 6,
+      "checks": [
+        "HTTP 200",
+        "content available in initial HTML",
+        "URL controls HTML language despite conflicting locale cookie and forged header",
+        "distinct metadata",
+        "self canonical",
+        "reciprocal hreflang",
+        "index/follow",
+        "real KGS offers",
+        "no missing translation placeholders",
+        "unknown solution 404/noindex",
+        "ky alias 308 with query preserved",
+        "private product route remains protected"
+      ]
+    },
+    "browser": {
+      "passed": true,
+      "desktop": "RU hub and inventory page; real product UI capture loaded",
+      "automatedMobileGeometry": {
+        "viewport": [
+          320,
+          568
+        ],
+        "uniquePaths": 20,
+        "noPageOverflow": true,
+        "primaryCtaVisibleAboveConsent": true,
+        "primaryCtaHitTargetVerified": true
+      },
+      "additionalManualMobilePage": "RU warehouse page inspected at 320x568 with visible registration CTA",
+      "signup": "Actual form opened from mobile page; no form submitted",
+      "navigation": "Mobile menu moved from solution page to landing and back to Solutions"
+    }
+  },
+  "isolation": {
+    "databaseSchemaOrPersistenceChanged": false,
+    "databaseIntegrationRun": false,
+    "reason": "Public content, metadata, routing and eligibility changes; registration persistence and business transactions unchanged. No customer or production database used.",
+    "productionProviderCalls": false,
+    "externalTrackingBlockedInBrowserPreview": true,
+    "testRegistrationsCreated": false
+  },
+  "evidence": {
+    "directory": "artifacts/commercial-seo-20261114",
+    "files": [
+      "production-build.log",
+      "public-http-audit.json",
+      "mobile-geometry.json",
+      "inventory-desktop-final.png"
+    ],
+    "worktreeLogs": [
+      "artifacts/commercial-seo-tests.log",
+      "artifacts/commercial-seo-lint.log",
+      "artifacts/commercial-seo-i18n.log"
+    ]
+  },
+  "cleanup": {
+    "previewStopped": true,
+    "ownRedisStopped": true,
+    "closedPorts": [
+      3162,
+      3163,
+      56362
+    ],
+    "viewportReset": true,
+    "ownPreviewTabClosed": true
+  },
+  "remaining": {
+    "requiresSeparateReleaseApproval": true,
+    "postRelease": [
+      "Verify public new URLs and canonical/hreflang",
+      "Request Google crawl and inspect indexing",
+      "Repeat the same 22 queries under comparable conditions and report observed positions",
+      "Compare Search Console impressions/clicks and consented organic registrations"
+    ],
+    "rankingImprovementConfirmed": false,
+    "firstPageGuaranteed": false
+  }
+}

@@ -1,10 +1,13 @@
 import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/locales";
+import { marketingSolutionPath, parseMarketingSolutionPath } from "@/lib/marketingSolutions";
 
 export const marketingSiteUrl = "https://www.bazaar.kg";
 // Set by middleware after checking the pathname, never accepted from the browser.
 export const marketingLocaleHeader = "x-bazaar-marketing-locale";
 
 export const marketingLocaleFromPath = (pathname: string): Locale | undefined => {
+  const solution = parseMarketingSolutionPath(pathname);
+  if (solution) return solution.locale;
   const match = /^\/(ru|kg|ky|en)\/?$/.exec(pathname);
   return match ? normalizeLocale(match[1]) : undefined;
 };
@@ -20,7 +23,10 @@ export const marketingLanguageDestination = (locale: string, currentUrl: string)
   if (!normalized) return undefined;
   const destination = new URL(currentUrl);
   if (!isMarketingLandingPath(destination.pathname)) return undefined;
-  destination.pathname = marketingHomePath(normalized);
+  const solution = parseMarketingSolutionPath(destination.pathname);
+  destination.pathname = solution
+    ? marketingSolutionPath(normalized, solution.id)
+    : marketingHomePath(normalized);
   return `${destination.pathname}${destination.search}${destination.hash}`;
 };
 

@@ -1,0 +1,501 @@
+{
+  "schemaVersion": 1,
+  "status": "implementation_in_main_pending_release_approval",
+  "releaseApproved": false,
+  "pushAuthorized": false,
+  "productionChangedByThisDocumentation": false,
+  "preferredLocale": "ru",
+  "publicDomain": "https://www.bazaar.kg",
+  "baseline": {
+    "observedAtBishkek": "2026-11-14T05:38:17.358137+06:00",
+    "observationDate": "2026-11-14",
+    "city": "Bishkek",
+    "timezone": "Asia/Bishkek",
+    "queryCount": 22,
+    "foundInCheckedResults": 0,
+    "minimumOrdinaryLinksCheckedPerQuery": 30,
+    "conditions": {
+      "engine": "Google Web",
+      "country": "Kyrgyzstan",
+      "city": "Bishkek, confirmed in Google footer",
+      "language": "Russian",
+      "personalization": "off, confirmed for every recorded page",
+      "positionDefinition": "Ordinary heading links excluding identified ads and AI citations; page and row recorded; no click on advertisements or our site to inflate traffic."
+    },
+    "sourceArtifact": "artifacts/search-rank-audit-20261114/rank-report.json",
+    "sourceArtifactSha256": "ba73424e0ba2eb17cae1d04be1ee8ab28c5bcb826c39e2c98f2633b69f66ef49",
+    "snapshotOnly": true,
+    "searchVolumesMeasured": false,
+    "rankingCausesProven": false
+  },
+  "architecture": {
+    "resourceCount": 7,
+    "detailResourceCount": 6,
+    "hubTargetId": "retail",
+    "educationalTargetId": "store-guide",
+    "targets": [
+      {
+        "id": "inventory",
+        "slug": "inventory-management",
+        "role": "detail",
+        "name": "Система учёта товаров",
+        "queries": [
+          "система учета товаров",
+          "учет товаров",
+          "программа для учета товаров",
+          "программа учета товара Бишкек",
+          "система учета товаров Кыргызстан",
+          "товароучетная система"
+        ],
+        "purpose": "Помочь выбрать товароучётную систему через полный пример каталога, поступления, продажи и изменения остатка; показать применимость, ограничения и тарифы.",
+        "pathTemplate": "/{locale}/solutions/inventory-management",
+        "urlRu": "https://www.bazaar.kg/ru/solutions/inventory-management",
+        "localizedUrls": {
+          "ru": "https://www.bazaar.kg/ru/solutions/inventory-management",
+          "kg": "https://www.bazaar.kg/kg/solutions/inventory-management",
+          "en": "https://www.bazaar.kg/en/solutions/inventory-management"
+        },
+        "publicationStatus": "prepared_locally_pending_release_approval"
+      },
+      {
+        "id": "retail",
+        "slug": null,
+        "role": "hub",
+        "name": "Решения для розничного магазина",
+        "queries": [
+          "программа для магазина",
+          "программа для магазина Бишкек",
+          "автоматизация магазина Бишкек",
+          "автоматизация торговли Кыргызстан",
+          "онлайн учет магазина"
+        ],
+        "purpose": "Помочь выбрать подходящий сценарий или отрасль и перейти к содержательной странице; объяснить браузерную работу и дистанционный запуск. Не дублировать подробную страницу учёта товаров.",
+        "pathTemplate": "/{locale}/solutions",
+        "urlRu": "https://www.bazaar.kg/ru/solutions",
+        "localizedUrls": {
+          "ru": "https://www.bazaar.kg/ru/solutions",
+          "kg": "https://www.bazaar.kg/kg/solutions",
+          "en": "https://www.bazaar.kg/en/solutions"
+        },
+        "publicationStatus": "prepared_locally_pending_release_approval"
+      },
+      {
+        "id": "warehouse",
+        "slug": "warehouse-management",
+        "role": "detail",
+        "name": "Складской учёт и товарные остатки",
+        "queries": [
+          "складской учет",
+          "складской учет Бишкек",
+          "учет остатков"
+        ],
+        "purpose": "Объяснить поступления, перемещения, списания, инвентаризацию и сверку товарных остатков; не смешивать их с банковскими или бухгалтерскими остатками.",
+        "pathTemplate": "/{locale}/solutions/warehouse-management",
+        "urlRu": "https://www.bazaar.kg/ru/solutions/warehouse-management",
+        "localizedUrls": {
+          "ru": "https://www.bazaar.kg/ru/solutions/warehouse-management",
+          "kg": "https://www.bazaar.kg/kg/solutions/warehouse-management",
+          "en": "https://www.bazaar.kg/en/solutions/warehouse-management"
+        },
+        "publicationStatus": "prepared_locally_pending_release_approval"
+      },
+      {
+        "id": "pos",
+        "slug": "pos-for-retail",
+        "role": "detail",
+        "name": "Программная касса и учёт продаж",
+        "queries": [
+          "программа учета продаж",
+          "учет продаж и остатков",
+          "касса для магазина",
+          "касса для магазина Бишкек",
+          "POS система Бишкек"
+        ],
+        "purpose": "Показать рабочее место кассира, продажу, оплату, возврат, смену и связь с остатками. Ясно отделить ПО от продажи оборудования и фискальной ККМ.",
+        "pathTemplate": "/{locale}/solutions/pos-for-retail",
+        "urlRu": "https://www.bazaar.kg/ru/solutions/pos-for-retail",
+        "localizedUrls": {
+          "ru": "https://www.bazaar.kg/ru/solutions/pos-for-retail",
+          "kg": "https://www.bazaar.kg/kg/solutions/pos-for-retail",
+          "en": "https://www.bazaar.kg/en/solutions/pos-for-retail"
+        },
+        "publicationStatus": "prepared_locally_pending_release_approval"
+      },
+      {
+        "id": "grocery",
+        "slug": "grocery-store",
+        "role": "detail",
+        "name": "Учёт в продуктовом магазине",
+        "queries": [
+          "программа для продуктового магазина"
+        ],
+        "purpose": "Показать специфический продуктовый сценарий поставок, цен, продаж, списаний и пересчёта; не обещать неподтверждённые весы, сроки годности или офлайн-режим.",
+        "pathTemplate": "/{locale}/solutions/grocery-store",
+        "urlRu": "https://www.bazaar.kg/ru/solutions/grocery-store",
+        "localizedUrls": {
+          "ru": "https://www.bazaar.kg/ru/solutions/grocery-store",
+          "kg": "https://www.bazaar.kg/kg/solutions/grocery-store",
+          "en": "https://www.bazaar.kg/en/solutions/grocery-store"
+        },
+        "publicationStatus": "prepared_locally_pending_release_approval"
+      },
+      {
+        "id": "clothing",
+        "slug": "clothing-store",
+        "role": "detail",
+        "name": "Учёт в магазине одежды",
+        "queries": [
+          "программа для магазина одежды"
+        ],
+        "purpose": "Показать ассортимент и варианты, фотографии, остатки, продажу и возврат на примере одежды в рамках фактических возможностей продукта.",
+        "pathTemplate": "/{locale}/solutions/clothing-store",
+        "urlRu": "https://www.bazaar.kg/ru/solutions/clothing-store",
+        "localizedUrls": {
+          "ru": "https://www.bazaar.kg/ru/solutions/clothing-store",
+          "kg": "https://www.bazaar.kg/kg/solutions/clothing-store",
+          "en": "https://www.bazaar.kg/en/solutions/clothing-store"
+        },
+        "publicationStatus": "prepared_locally_pending_release_approval"
+      },
+      {
+        "id": "store-guide",
+        "slug": "store-accounting-guide",
+        "role": "guide",
+        "name": "Как вести учёт в магазине",
+        "queries": [
+          "как вести учет в магазине"
+        ],
+        "purpose": "Дать самостоятельное практическое руководство от начальных остатков до проверки дня и расхождений; связать шаги с инструкциями. Это образовательный ответ, а не промежуточная рекламная страница.",
+        "pathTemplate": "/{locale}/solutions/store-accounting-guide",
+        "urlRu": "https://www.bazaar.kg/ru/solutions/store-accounting-guide",
+        "localizedUrls": {
+          "ru": "https://www.bazaar.kg/ru/solutions/store-accounting-guide",
+          "kg": "https://www.bazaar.kg/kg/solutions/store-accounting-guide",
+          "en": "https://www.bazaar.kg/en/solutions/store-accounting-guide"
+        },
+        "publicationStatus": "prepared_locally_pending_release_approval"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "query": "система учета товаров",
+      "targetId": "inventory",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/inventory-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 35,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "учет товаров",
+      "targetId": "inventory",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/inventory-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 36,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "программа для учета товаров",
+      "targetId": "inventory",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/inventory-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 37,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "программа для магазина",
+      "targetId": "retail",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 37,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "программа учета продаж",
+      "targetId": "pos",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/pos-for-retail",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 37,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "складской учет",
+      "targetId": "warehouse",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/warehouse-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 34,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "учет остатков",
+      "targetId": "warehouse",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/warehouse-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 37,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "касса для магазина",
+      "targetId": "pos",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/pos-for-retail",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 35,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "программа учета товара Бишкек",
+      "targetId": "inventory",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/inventory-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 39,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "система учета товаров Кыргызстан",
+      "targetId": "inventory",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/inventory-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 39,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "программа для магазина Бишкек",
+      "targetId": "retail",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 39,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "автоматизация магазина Бишкек",
+      "targetId": "retail",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 39,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "автоматизация торговли Кыргызстан",
+      "targetId": "retail",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 39,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "складской учет Бишкек",
+      "targetId": "warehouse",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/warehouse-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 39,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "касса для магазина Бишкек",
+      "targetId": "pos",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/pos-for-retail",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 38,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "POS система Бишкек",
+      "targetId": "pos",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/pos-for-retail",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 38,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "учет продаж и остатков",
+      "targetId": "pos",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/pos-for-retail",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 36,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "товароучетная система",
+      "targetId": "inventory",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/inventory-management",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 34,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "программа для продуктового магазина",
+      "targetId": "grocery",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/grocery-store",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 38,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "программа для магазина одежды",
+      "targetId": "clothing",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/clothing-store",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 37,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "как вести учет в магазине",
+      "targetId": "store-guide",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions/store-accounting-guide",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 35,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    },
+    {
+      "query": "онлайн учет магазина",
+      "targetId": "retail",
+      "targetUrlRu": "https://www.bazaar.kg/ru/solutions",
+      "baseline": {
+        "found": false,
+        "ordinaryLinksChecked": 38,
+        "resultPagesChecked": 4,
+        "matches": []
+      }
+    }
+  ],
+  "measurement": {
+    "compareSameExactQueries": true,
+    "compareSameCityLanguagePersonalizationAndCountingMethod": true,
+    "separateBrandCommercialAndInstructional": true,
+    "reporting": [
+      "impressions",
+      "organic_search_clicks",
+      "completed_organic_registrations_under_existing_approved_consent_and_measurement"
+    ],
+    "organicRegistrationBaseline": null,
+    "registrationMeasurementChanged": false,
+    "limitations": [
+      "First-page positions and AI citations are not guaranteed.",
+      "One-time SERP results vary with time, context and reindexing.",
+      "The audit commercial label includes mixed and informational intentions.",
+      "Brand and help/guide impressions do not establish commercial ranking.",
+      "GSC totals, positions and anonymized query rows must not be treated as registration counts.",
+      "Compare equivalent intervals after publication; allow for report lag and recrawling."
+    ]
+  },
+  "sources": [
+    {
+      "url": "https://tmg.kg/uchet/",
+      "type": "competitor_primary",
+      "observation": "Страница конкретного товароучётного продукта, операций, тарифов и начала работы; фискализация eKassa заявлена поставщиком и не переносится на BAZAAR."
+    },
+    {
+      "url": "https://pos-service.kg/magazin-produktov/",
+      "type": "competitor_primary",
+      "observation": "Отдельная отраслевая страница со снимками кассы, отчётов, движения товаров и этапами подключения."
+    },
+    {
+      "url": "https://pos-service.kg/magazin-odezhdy/",
+      "type": "competitor_primary",
+      "observation": "Одежный сценарий и оборудование; близкий общему текст не служит образцом для копирования однотипных страниц."
+    },
+    {
+      "url": "https://umag.kg/produktovyj-magazin",
+      "type": "competitor_primary",
+      "observation": "Продуктовое предложение включает видимые аппаратные комплекты; запрос POS или касса может означать покупку оборудования."
+    },
+    {
+      "url": "https://yaros.kg/produkty/yaros-magazin/",
+      "type": "competitor_primary",
+      "observation": "Услуга автоматизации магазина на базе 1С с бухгалтерскими возможностями, которых нельзя автоматически приписывать BAZAAR."
+    },
+    {
+      "url": "https://jarvis.kg/msklad",
+      "type": "competitor_primary",
+      "observation": "Внедрение МойСклад с описанием процессов, лицензий и стоимости услуг; часть кейсов на странице относится к Битрикс24."
+    },
+    {
+      "url": "https://www.google.com/search/howsearchworks/how-search-works/ranking-results/",
+      "type": "google_primary",
+      "applied": "Соответствие смыслу запроса и контексту; синонимы не требуют отдельных дубликатов."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+      "type": "google_primary",
+      "applied": "Оригинальные проверяемые примеры, полнота ответа, реальный опыт и ограничения."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+      "type": "google_primary",
+      "applied": "Обычные контекстные a[href] и описательные названия; новые страницы доступны из иерархии сайта."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/essentials/spam-policies#doorway-abuse",
+      "type": "google_primary",
+      "applied": "Не создавать серии почти одинаковых городских страниц и промежуточные страницы без самостоятельной пользы."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
+      "type": "google_primary",
+      "applied": "Понятная структура и заголовки; нет гарантии первой страницы или срока роста позиций."
+    }
+  ]
+}
