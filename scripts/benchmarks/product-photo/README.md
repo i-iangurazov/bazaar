@@ -120,3 +120,19 @@ and images under a separate isolated root. Provide real product labels, disjoint
 query photos and calibration/test identities; mark absent products unknown. Do not
 fill the live database, copy customer pictures into git, or reuse public laboratory
 scores as that sample's measured accuracy.
+
+## ELFBAR encoder comparison
+
+The later [ELFBAR report](../../../docs/product-photo-encoders-20261114.md) compares
+the two controls above with pinned DINOv2 and SigLIP 2 encoders on the eight known
+development misses, the complete field set, and leave-target-out negatives.
+`run-elfbar-models.py` uses fixed inputs and sequential offline model processes.
+Its separate environment is captured in `requirements-elfbar-comparison.lock.txt`.
+
+Unlike the original public ALOI preparation, the explicit QA exporter
+`scripts/qa/prepare-elfbar-model-comparison.mjs` reads only the guarded disposable
+local database. It performs no writes and keeps calibration/test store galleries
+separate. Images, frozen regions, checkpoints and embeddings remain under ignored
+`.local/elfbar-model-comparison`; committed evidence contains hashes and results.
+The protocol fixes rejection thresholds before field encoding. The separate
+PP/DINO agreement experiment is labelled post-hoc and is not enabled in Bazaar.
