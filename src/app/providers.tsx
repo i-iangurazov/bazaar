@@ -9,6 +9,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { z } from "zod";
 
 import { fetchAppRead, fetchPosRead, isInteractivePosRead } from "@/lib/pos-read-transport";
+import { clientRequestHeaders } from "@/lib/clientRequestHeaders";
 import { trpc, getBaseUrl } from "@/lib/trpc";
 import { createAppQueryClient } from "@/lib/query-client";
 import { createMessageFallback } from "@/lib/i18nFallback";
@@ -77,7 +78,7 @@ export const Providers = ({
           true: httpLink({
             url: `${getBaseUrl()}/api/trpc`,
             fetch: fetchPosRead,
-            headers: () => ({ "x-request-id": crypto.randomUUID() }),
+            headers: clientRequestHeaders,
           }),
           false: httpBatchLink({
             url: `${getBaseUrl()}/api/trpc`,
@@ -95,11 +96,7 @@ export const Providers = ({
               }
               return fetch(url, { ...options, credentials: "include" });
             },
-            headers() {
-              return {
-                "x-request-id": crypto.randomUUID(),
-              };
-            },
+            headers: clientRequestHeaders,
           }),
         }),
       ],
