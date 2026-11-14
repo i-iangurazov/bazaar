@@ -8,6 +8,8 @@ import sharp from "sharp";
 
 const mode = process.argv[2];
 const visionCheck = process.argv.includes("--vision");
+const runLabel = process.argv.find((value) => value.startsWith("--run="))?.slice(6);
+assert.ok(!runLabel || /^[a-z0-9-]{1,50}$/.test(runLabel), "Invalid run label");
 assert.ok(["prepare", "seed", "evaluate"].includes(mode), "Use prepare, seed or evaluate");
 const root = resolve(".local/elfbar-photo-check");
 const fixture = JSON.parse(await readFile("scripts/qa/fixtures/elfbar-photo-search.json", "utf8"));
@@ -97,7 +99,14 @@ try {
     return response;
   }
   async function json(path, init = {}) {
-    const response = await request(path, init);
+    let response = await request(path, init);
+    if (path === "/api/products/photo-search" && response.status === 429) {
+      const seconds = Number(response.headers.get("retry-after"));
+      assert.ok(Number.isFinite(seconds) && seconds > 0 && seconds <= 60);
+      await response.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+      response = await request(path, init);
+    }
     const body = await response.json();
     assert.equal(response.status, 200, JSON.stringify({ path, status: response.status, message: body.message ?? body.error }));
     return body;
@@ -143,10 +152,12 @@ try {
     assert.equal(images[0].url, expectedUrl);
     galleryEvidence.push({ fixtureId: row.id, productId: product.id, sourceSha256: byAsset.get(row.asset).sha256, crop: row.crop, uploadedSha256: digest(expectedGallery), imageUrl: expectedUrl });
     const visibleStores = await db.storeProduct.findMany({ where: { productId: product.id } });
-    assert.equal(visibleStores.length, 1);
-    assert.equal(visibleStores[0].storeId, storeId);
-    assert.equal(visibleStores[0].organizationId, organizationId);
-    assert.ok(visibleStores[0].isActive && !visibleStores[0].isHidden);
+    assert.ok(visibleStores.some((membership) => membership.storeId === storeId));
+    for (const membership of visibleStores) {
+      assert.ok([storeId, "photo-search-field-shop"].includes(membership.storeId));
+      assert.equal(membership.organizationId, organizationId);
+      assert.ok(membership.isActive && !membership.isHidden);
+    }
     products.set(row.id, { id: product.id, flavor: row.flavor, sku: row.sku });
   }
   // Do not touch existing Miami Mint, prices, stock or any unrelated records.
@@ -186,6 +197,7 @@ try {
       if (visionCheck) assert.ok(body.recognition && body.recognition.labelStatus !== "unavailable", "Detector/OCR runtime is not active");
       results.push({ query: row.id, kind: row.kind, expected: row.expected ?? row.flavor, expectedId, rank: rank || null, ms, items: body.items, ...(body.recognition ? { recognition: body.recognition } : {}) });
       console.log(JSON.stringify({ query: row.id, rank: rank || null, candidates: body.items.map((item) => item.name) }));
+      await new Promise((resolve) => setTimeout(resolve, 5250));
     }
     const emptyStoreId = "photo-search-browser-other";
     const emptyStore = await db.store.findUniqueOrThrow({ where: { id: emptyStoreId } });
@@ -208,7 +220,7 @@ try {
       realApplicationApi: true, model: "ppshitu-v2-pplcnetv2-v1-fp32-224", threshold: 0.68, galleryProgress: prepared.progress,
       originalPreserved: true, storeScopeVerified: true, emptyStoreHasNoLeakedCandidates: true, gallery: galleryEvidence, summaries, limitations: fixture.protocol.limits, results };
     if (visionCheck) evidence.visionModelManifestSha256 = digest(await readFile("services/product-photo-search/vision-models.json"));
-    await writeFile(`${root}/${visionCheck ? "results-vision" : "results"}.json`, JSON.stringify(evidence, null, 2) + "\n");
+    await writeFile(`${root}/${visionCheck ? "results-vision" : "results"}${runLabel ? `-${runLabel}` : ""}.json`, JSON.stringify(evidence, null, 2) + "\n");
     console.log(JSON.stringify(summaries, null, 2));
   }
 } finally { await db.$disconnect(); }

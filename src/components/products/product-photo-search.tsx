@@ -336,8 +336,8 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
                 {result.items.filter((item) => !selectedId || item.id === selectedId).map((item, index) =>
                   <li key={item.id} className={styles.card + " flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card"}
                     style={{ animationDelay: Math.min(index, 7) * 25 + "ms" }}>
-                    <div className="relative flex aspect-[4/3] items-center justify-center border-b border-border/60 bg-secondary/20 p-3">
-                      <Photo src={item.imageUrl} alt={item.name} className="h-full w-full object-contain" />
+                    <div className="relative aspect-[4/3] shrink-0 border-b border-border/60 bg-secondary/20">
+                      <Photo src={item.imageUrl} alt={item.name} className="absolute inset-0 h-full w-full object-contain p-3" />
                       {selectedId ? <span className="absolute right-2 top-2 rounded-full bg-primary p-1 text-primary-foreground"><Check className="h-4 w-4" aria-hidden /></span> : null}
                     </div>
                     <div className="flex flex-1 flex-col gap-2 p-3">

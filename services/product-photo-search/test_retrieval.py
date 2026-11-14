@@ -56,6 +56,23 @@ class RetrievalTest(unittest.TestCase):
         finally:
             executor.close()
 
+    def test_batched_views_are_bounded_and_do_not_reuse_another_store_index(self):
+        executor = Searcher(2)
+        a = [1.0]+[0.0]*511
+        b = [0.0, 1.0]+[0.0]*510
+        try:
+            batches = executor.search_many(matrix([a, b]), [0, 1], [a, b, a, b, a, b])
+            self.assertEqual(len(batches), 6)
+            self.assertEqual([batch[0]['index'] for batch in batches], [0, 1, 0, 1, 0, 1])
+            self.assertEqual(executor.search_many(matrix([b]), [0], [a, b]),
+                             [[{'index': 0, 'score': 0.0}], [{'index': 0, 'score': 1.0}]])
+            for invalid in [[], [a]*7, [[0.0]*512], [[float('nan')]+a[1:]], [[1.0]]]:
+                with self.assertRaises(ValueError):
+                    executor.search_many(matrix([a]), [0], invalid)
+            self.assertEqual(executor.search(matrix([a]), [0], a)[0]['score'], 1)
+        finally:
+            executor.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,3 +15,11 @@ and runtime reads pinned local files without downloading replacements.
 The Apache-2.0 text is included in [licenses/Apache-2.0.txt](licenses/Apache-2.0.txt).
 Weights and archive checksums are in [vision-models.json](vision-models.json).
 No model-specific ELFBAR training or flavor list is added.
+
+`pipeline.py` adapts the multi-region recognition method in PaddleClas
+[`SystemPredictor.predict`](https://github.com/PaddlePaddle/PaddleClas/blob/202ac79a99aa368f2c95cb1871bbc11574f685da/deploy/python/predict_system.py)
+(Copyright (c) 2021 PaddlePaddle Authors, Apache-2.0): recognize detector proposals
+and the full image, retain recognition evidence. Bazaar caps this at six views,
+merges product candidates rather than accepting a top-one SKU, and uses one
+stateless batched Faiss request. Detector threshold 0.2 / five proposals follow the
+pinned official configuration; Bazaar's separate retrieval threshold stays 0.68.

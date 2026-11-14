@@ -16,7 +16,8 @@ from engine import Encoder, MODEL_VERSION, DIMENSION
 import cv2
 import numpy as np
 from retrieval import Searcher
-from vision import Vision, crop_region, fallback_analysis, valid_region
+from vision import Vision, valid_region
+from pipeline import search_views
 
 
 def main():
@@ -97,22 +98,7 @@ def main():
                     if not isinstance(automatic, bool):
                         raise ValueError('invalidRegion')
                     rgb = encoder.decode(data)
-                    if vision:
-                        selected, analysis = vision.analyze(rgb, region, automatic)
-                    else:
-                        selected = crop_region(rgb, region) if region else rgb
-                        analysis = fallback_analysis(region)
-                    variants = [selected]
-                    if analysis['regionSource'] == 'auto':
-                        variants.append(rgb)  # Preserve recall if automatic localization was imperfect.
-                    grouped = {}
-                    for pixels in variants:
-                        query = encoder.encode_rgb(pixels).tolist()
-                        for match in searcher.search(request['vectorsBase64'], request['groups'], query):
-                            group = request['groups'][match['index']]
-                            if group not in grouped or match['score'] > grouped[group]['score']:
-                                grouped[group] = match
-                    result = {'matches': sorted(grouped.values(), key=lambda match: (-match['score'], match['index']))[:8], 'analysis': analysis}
+                    result = search_views(rgb, encoder, searcher, request['vectorsBase64'], request['groups'], vision, region, automatic)
                 self.reply(200, {"modelVersion": MODEL_VERSION, **result})
             except (ValueError, KeyError, TypeError, TimeoutError):
                 self.reply(400, {"error": "invalidInput"})

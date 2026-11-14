@@ -2,7 +2,7 @@
 import unittest
 from types import SimpleNamespace
 import numpy as np
-from vision import Vision, crop_region, valid_region
+from vision import Detector, Vision, crop_region, valid_region
 
 
 class VisionTest(unittest.TestCase):
@@ -21,22 +21,34 @@ class VisionTest(unittest.TestCase):
         vision.ocr = lambda _: SimpleNamespace(txts=['ICE MINT'], scores=[.99], boxes=np.array([[[1, 1], [20, 1], [20, 10], [1, 10]]]))
         region = {'x': .25, 'y': .1, 'width': .5, 'height': .8}
         image = np.zeros((100, 200, 3), dtype=np.uint8)
-        _, first = vision.analyze(image, region)
+        first = vision.read(image, region, 'manual')
         self.assertEqual(first['regionSource'], 'manual')
         self.assertEqual(first['lines'][0]['text'], 'ICE MINT')
         vision.ocr = lambda _: (_ for _ in ()).throw(RuntimeError('OCR unavailable'))
-        _, second = vision.analyze(image, automatic=False)
+        second = vision.read(image)
         self.assertEqual(second, {'regionSource': 'full', 'region': None, 'ocrStatus': 'unavailable', 'lines': []})
 
-    def test_several_similarly_strong_objects_do_not_silently_select_one(self):
+    def test_proposals_are_preserved_for_recognition_and_detector_failure_falls_back(self):
         vision = Vision.__new__(Vision)
         region = {'x': 0, 'y': 0, 'width': .5, 'height': .5}
         vision.detector = SimpleNamespace(detect=lambda _: [(0.9, region), (0.88, region | {'x': .5})])
         vision.ocr = lambda _: SimpleNamespace(txts=None, scores=None, boxes=None)
         image = np.zeros((100, 200, 3), dtype=np.uint8)
-        _, analysis = vision.analyze(image)
-        self.assertEqual(analysis['regionSource'], 'full')
-        self.assertIsNone(analysis['region'])
+        self.assertEqual(len(vision.propose(image)), 2)
+        vision.detector.detect = lambda _: (_ for _ in ()).throw(RuntimeError('unavailable'))
+        self.assertEqual(vision.propose(image), [])
+
+    def test_published_detector_threshold_keeps_small_goods_and_bounds_model_boxes(self):
+        detector = Detector.__new__(Detector)
+        boxes = np.array([[0, .8, 0, 0, 190, 90], [0, .4, 100, 40, 110, 80],
+                          [0, .19, 0, 0, 60, 90], [1, .9, 0, 0, 40, 90],
+                          [0, .9, 1, 1, 1, 20], [0, .9, 0, 0, np.nan, 20]])
+        detector.predictor = SimpleNamespace(get_input_names=lambda: [], run=lambda: None,
+            get_output_names=lambda: ['boxes'], get_output_handle=lambda _: SimpleNamespace(copy_to_cpu=lambda: boxes))
+        regions = detector.detect(np.zeros((100, 200, 3), np.uint8))
+        self.assertEqual(len(regions), 2)
+        self.assertLess(regions[1][1]['width']*regions[1][1]['height'], .03)
+        self.assertTrue(all(valid_region(region) for _, region in regions))
 
 
 if __name__ == '__main__':

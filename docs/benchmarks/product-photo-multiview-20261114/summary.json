@@ -1,0 +1,557 @@
+{
+  "schema": 1,
+  "frozenQueryManifestSha256": "2a861704e04d2b8781874327409e95a859993bef97adb36358aee749f0b92e89",
+  "limitations": [
+    "Same known inputs used during development; not an independent accuracy estimate",
+    "Gallery and query frames are correlated within source videos",
+    "Sequential local API latency; no production throughput measurement"
+  ],
+  "runs": [
+    {
+      "run": "baseline",
+      "galleryPhotos": 27,
+      "uniqueInputs": 20,
+      "requests": 40,
+      "modes": [
+        {
+          "mode": "auto",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 1,
+            "correctTop5": 1,
+            "wrongFirst": 0,
+            "empty": 13,
+            "withCandidates": 1,
+            "textMatched": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "latencyMs": {
+            "p50": 458.4862920000014,
+            "p95": 1287.953332999983,
+            "max": 1449.001750000025
+          },
+          "flavors": [
+            {
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "requests": 5,
+              "correctFirst": 1,
+              "correctTop5": 1,
+              "wrongFirst": 0,
+              "empty": 4,
+              "withCandidates": 1,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "requests": 5,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 5,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "requests": 5,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 5,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            }
+          ]
+        },
+        {
+          "mode": "manual",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 4,
+            "correctTop5": 4,
+            "wrongFirst": 0,
+            "empty": 10,
+            "withCandidates": 4,
+            "textMatched": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "latencyMs": {
+            "p50": 226.41333400000076,
+            "p95": 335.5963749999937,
+            "max": 447.4351670000033
+          },
+          "flavors": [
+            {
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "requests": 5,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 5,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "detector",
+      "galleryPhotos": 27,
+      "uniqueInputs": 20,
+      "requests": 40,
+      "modes": [
+        {
+          "mode": "auto",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 4,
+            "correctTop5": 4,
+            "wrongFirst": 0,
+            "empty": 10,
+            "withCandidates": 4,
+            "textMatched": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 1,
+            "correctTop5": 1,
+            "wrongFirst": 0,
+            "empty": 2,
+            "withCandidates": 1,
+            "textMatched": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "latencyMs": {
+            "p50": 612.8627089999936,
+            "p95": 747.5826249999809,
+            "max": 837.708707999991
+          },
+          "flavors": [
+            {
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "requests": 5,
+              "correctFirst": 1,
+              "correctTop5": 1,
+              "wrongFirst": 0,
+              "empty": 4,
+              "withCandidates": 1,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            }
+          ]
+        },
+        {
+          "mode": "manual",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 4,
+            "correctTop5": 4,
+            "wrongFirst": 0,
+            "empty": 10,
+            "withCandidates": 4,
+            "textMatched": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "latencyMs": {
+            "p50": 292.2965419999964,
+            "p95": 392.3067499999888,
+            "max": 423.05008400000224
+          },
+          "flavors": [
+            {
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "requests": 5,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 5,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "multiview",
+      "galleryPhotos": 36,
+      "uniqueInputs": 20,
+      "requests": 40,
+      "modes": [
+        {
+          "mode": "auto",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 5,
+            "correctTop5": 5,
+            "wrongFirst": 0,
+            "empty": 9,
+            "withCandidates": 5,
+            "textMatched": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 1,
+            "correctTop5": 1,
+            "wrongFirst": 0,
+            "empty": 2,
+            "withCandidates": 1,
+            "textMatched": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "latencyMs": {
+            "p50": 612.0827920000011,
+            "p95": 831.7432089999929,
+            "max": 893.7143330000108
+          },
+          "flavors": [
+            {
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "requests": 5,
+              "correctFirst": 3,
+              "correctTop5": 3,
+              "wrongFirst": 0,
+              "empty": 2,
+              "withCandidates": 3,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "requests": 5,
+              "correctFirst": 1,
+              "correctTop5": 1,
+              "wrongFirst": 0,
+              "empty": 4,
+              "withCandidates": 1,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            }
+          ]
+        },
+        {
+          "mode": "manual",
+          "knownSingle": {
+            "requests": 14,
+            "correctFirst": 5,
+            "correctTop5": 5,
+            "wrongFirst": 0,
+            "empty": 9,
+            "withCandidates": 5,
+            "textMatched": 0
+          },
+          "knownMultiple": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "absent": {
+            "requests": 3,
+            "correctFirst": 0,
+            "correctTop5": 0,
+            "wrongFirst": 0,
+            "empty": 3,
+            "withCandidates": 0,
+            "textMatched": 0
+          },
+          "latencyMs": {
+            "p50": 281.5269579999731,
+            "p95": 434.49654100000043,
+            "max": 802.239375000001
+          },
+          "flavors": [
+            {
+              "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+              "requests": 5,
+              "correctFirst": 2,
+              "correctTop5": 2,
+              "wrongFirst": 0,
+              "empty": 3,
+              "withCandidates": 2,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+              "requests": 5,
+              "correctFirst": 3,
+              "correctTop5": 3,
+              "wrongFirst": 0,
+              "empty": 2,
+              "withCandidates": 3,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+              "requests": 5,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 5,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            },
+            {
+              "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+              "requests": 1,
+              "correctFirst": 0,
+              "correctTop5": 0,
+              "wrongFirst": 0,
+              "empty": 1,
+              "withCandidates": 0,
+              "textMatched": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

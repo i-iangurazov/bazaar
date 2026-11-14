@@ -10,6 +10,7 @@ import sys
 MAX_MESSAGE = 32 * 1024 * 1024
 MAX_VECTORS = 10_000
 DIMENSION = 512
+MAX_QUERIES = 6
 
 
 def receive(connection):
@@ -49,8 +50,11 @@ class Searcher:
             raise RuntimeError("retrievalNotReady")
 
     def search(self, matrix, groups, query):
+        return self.search_many(matrix, groups, [query])[0]
+
+    def search_many(self, matrix, groups, queries):
         try:
-            send(self.connection, {"matrix": matrix, "groups": groups, "query": query})
+            send(self.connection, {"matrix": matrix, "groups": groups, "queries": queries})
             result = receive(self.connection)
         except (OSError, EOFError):
             # A late response must never be consumed by the next store request.
@@ -90,24 +94,30 @@ def serve(fd, threads):
             if len(raw) != count*DIMENSION*4:
                 raise ValueError("invalidMatrix")
             matrix = np.frombuffer(raw, dtype="<f4").reshape(count, DIMENSION)
-            query = np.ascontiguousarray([request["query"]], dtype=np.float32)
-            if query.shape != (1, DIMENSION) or not np.isfinite(matrix).all() or not np.isfinite(query).all():
+            queries = request['queries']
+            if not isinstance(queries, list) or not 1 <= len(queries) <= MAX_QUERIES:
+                raise ValueError('invalidQueries')
+            query = np.ascontiguousarray(queries, dtype=np.float32)
+            if query.shape != (len(queries), DIMENSION) or not np.isfinite(matrix).all() or not np.isfinite(query).all():
                 raise ValueError("invalidMatrix")
-            if not np.allclose(np.linalg.norm(matrix, axis=1), 1, atol=0.01):
+            if not np.allclose(np.linalg.norm(matrix, axis=1), 1, atol=0.01) or not np.allclose(np.linalg.norm(query, axis=1), 1, atol=0.01):
                 raise ValueError("invalidMatrix")
             index = faiss.IndexFlatIP(DIMENSION)
             index.add(matrix)
             scores, indexes = index.search(query, count)
-            seen, matches = set(), []
-            for score, number in zip(scores[0], indexes[0]):
-                group = groups[int(number)]
-                if group in seen:
-                    continue
-                seen.add(group)
-                matches.append({"index": int(number), "score": float(score)})
-                if len(matches) == 8:
-                    break
-            send(connection, {"matches": matches})
+            batches = []
+            for row_scores, row_indexes in zip(scores, indexes):
+                seen, matches = set(), []
+                for score, number in zip(row_scores, row_indexes):
+                    group = groups[int(number)]
+                    if group in seen:
+                        continue
+                    seen.add(group)
+                    matches.append({"index": int(number), "score": float(score)})
+                    if len(matches) == 8:
+                        break
+                batches.append(matches)
+            send(connection, {"matches": batches})
             del index, matrix, raw, query
         except (ValueError, TypeError, KeyError):
             send(connection, {"error": "invalidSearch"})

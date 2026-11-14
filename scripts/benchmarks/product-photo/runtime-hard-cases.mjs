@@ -7,6 +7,8 @@ import {randomBytes,createHash} from 'node:crypto';
 import sharp from 'sharp';
 const root=resolve('.local/photo-search-benchmark');
 const withVision=process.argv.includes('--vision');
+const runLabel=process.argv.find(value=>value.startsWith('--run='))?.slice(6);
+assert.ok(!runLabel || /^[a-z0-9-]{1,50}$/.test(runLabel),'Invalid run label');
 const out=resolve('.local/product-photo-hard-cases');await mkdir(out,{recursive:true});
 const pairs=[[259,262],[577,617],[543,546],[609,618],[143,19],[208,321]];
 const ids=pairs.flat(); const threshold=0.68;
@@ -58,7 +60,7 @@ try {
   absentCandidateRate:results.filter(r=>r.absentMatches.some(m=>m.score>=threshold)).length/results.length,
   identicalPhotoDifferentSku:{candidates:duplicate.matches.length,scores:duplicate.matches.map(m=>m.score),distinguishable:false},
   limits:['Curated 12 public ALOI objects; 154x115 previews, not Bazaar SKU accuracy','Real pinned runtime and Faiss, Node canonicalization; no database or user gallery changes','Same input pixels for duplicate-SKU ambiguity is a protocol test, not independent photographic evidence'],results};
- await writeFile(`${out}/${withVision?'runtime-vision':'runtime'}.json`,JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify({...summary,results:undefined},null,2));
+ await writeFile(`${out}/${withVision?'runtime-vision':'runtime'}${runLabel?`-${runLabel}`:''}.json`,JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify({...summary,results:undefined},null,2));
 } finally {
  if(service.exitCode===null && service.signalCode===null)service.kill('SIGTERM');
  const force=setTimeout(()=>service.kill('SIGKILL'),5000);

@@ -67,16 +67,18 @@ class Detector:
             raise ValueError('invalidDetection')
         regions = []
         for label, score, left, top, right, bottom in boxes:
-            if label != 0 or not np.isfinite([score, left, top, right, bottom]).all() or score < 0.5:
+            # Published PaddleClas inference_general.yaml: threshold .2, top five.
+            # Detection confidence is not a SKU similarity score.
+            if label != 0 or not np.isfinite([score, left, top, right, bottom]).all() or score < 0.2:
                 continue
             # Small context margin; never synthesize a different view or change colors.
             pad_x, pad_y = (right-left)*0.03, (bottom-top)*0.03
             left, top = max(0, left-pad_x), max(0, top-pad_y)
             right, bottom = min(w, right+pad_x), min(h, bottom+pad_y)
             region = {'x': float(left/w), 'y': float(top/h), 'width': float((right-left)/w), 'height': float((bottom-top)/h)}
-            if valid_region(region) and 0.03 <= region['width']*region['height'] < 0.95:
+            if valid_region(region) and right-left >= 4 and bottom-top >= 4 and region['width']*region['height'] < 0.95:
                 regions.append((float(score), region))
-        return sorted(regions, key=lambda item: -item[0])[:3]
+        return sorted(regions, key=lambda item: -item[0])[:5]
 
 
 class Vision:
@@ -99,16 +101,14 @@ class Vision:
             'Cls.model_path': str(root/'ocr/ch_ppocr_mobile_v2.0_cls_mobile.onnx'),
         })
 
-    def analyze(self, rgb, requested=None, automatic=True):
-        region, source = requested, 'manual' if requested else 'full'
-        if requested is None and automatic:
-            try:
-                proposals = self.detector.detect(rgb)
-                # Several similarly strong objects require the user's manual region.
-                if proposals and (len(proposals) == 1 or proposals[0][0]-proposals[1][0] >= 0.15):
-                    region, source = proposals[0][1], 'auto'
-            except Exception:
-                pass  # Full-image visual search still works; do not invent a box.
+    def propose(self, rgb):
+        try:
+            return self.detector.detect(rgb)
+        except Exception:
+            return []  # Full-image visual search still works; do not invent boxes.
+
+    def read(self, rgb, region=None, source='full'):
+        """OCR only the selected real region, after visual recognition of proposals."""
         selected = crop_region(rgb, region) if region else rgb
         analysis = {'regionSource': source, 'region': region, 'ocrStatus': 'unavailable', 'lines': []}
         try:
@@ -129,4 +129,4 @@ class Vision:
             analysis.update(ocrStatus='ready', lines=lines)
         except Exception:
             pass  # Explicit unavailable state; OCR never silently confirms a product.
-        return selected, analysis
+        return analysis

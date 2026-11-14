@@ -1,0 +1,32 @@
+"""Bounded PaddleClas detection -> per-region recognition -> best region for OCR.
+
+The published SystemPredictor recognizes every proposed foreground box plus the
+whole image. Bazaar returns candidate products for explicit user selection, keeping
+the existing similarity threshold in Node. No shared store index or query cache.
+"""
+from vision import crop_region, fallback_analysis
+
+
+def search_views(rgb, encoder, searcher, matrix, groups, vision=None, region=None, automatic=True):
+    # At most five detector proposals plus the full image; manual choice bypasses
+    # both detection and the full image so it cannot silently broaden the query.
+    regions = [region] if region else [None]
+    if not region and automatic and vision:
+        regions += [proposal for _, proposal in vision.propose(rgb)[:5]]
+    queries = [encoder.encode_rgb(crop_region(rgb, box) if box else rgb).tolist() for box in regions]
+    batches = searcher.search_many(matrix, groups, queries)
+    if len(batches) != len(regions):
+        raise ValueError('invalidSearch')
+    grouped = {}
+    for matches in batches:
+        for match in matches:
+            group = groups[match['index']]
+            if group not in grouped or match['score'] > grouped[group]['score']:
+                grouped[group] = match
+    # Recognition evidence selects the relevant proposal, rather than the detector's
+    # most confident object (which may be a hand/person). Ties retain the full view.
+    selected = max(range(len(batches)), key=lambda index: batches[index][0]['score'] if batches[index] else -1.01)
+    box = regions[selected]
+    source = 'manual' if region else 'auto' if box else 'full'
+    analysis = vision.read(rgb, box, source) if vision else fallback_analysis(region)
+    return {'matches': sorted(grouped.values(), key=lambda match: (-match['score'], match['index']))[:8], 'analysis': analysis}
