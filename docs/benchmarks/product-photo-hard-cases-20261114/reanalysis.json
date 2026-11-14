@@ -1,0 +1,617 @@
+{
+  "schema": 1,
+  "model": "PP-ShiTuV2 PPLCNetV2 FP32",
+  "threshold": 0.68,
+  "method": "Frozen feature reanalysis; hard pairs selected only from gallery; held-out queries; full 300-product gallery",
+  "manifest_sha256": "c919edfc80cc31ce1bb1a59aba54fd604a4c0d6a31bccbcf8a6b47364aae8756",
+  "features_sha256": "b779b080943086b0e3992a7ad72beff21a8903e6708f24b321a47d6c9a26bce1",
+  "pairs": [
+    {
+      "products": [
+        "aloi-569",
+        "aloi-883"
+      ],
+      "score": 0.8378627896308899,
+      "images": [
+        "aloi-569-r0",
+        "aloi-883-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-117",
+        "aloi-7"
+      ],
+      "score": 0.8304532766342163,
+      "images": [
+        "aloi-117-r0",
+        "aloi-7-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-3",
+        "aloi-886"
+      ],
+      "score": 0.8191603422164917,
+      "images": [
+        "aloi-3-r0",
+        "aloi-886-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-356",
+        "aloi-662"
+      ],
+      "score": 0.8152517080307007,
+      "images": [
+        "aloi-356-r0",
+        "aloi-662-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-446",
+        "aloi-710"
+      ],
+      "score": 0.7844863533973694,
+      "images": [
+        "aloi-446-r0",
+        "aloi-710-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-130",
+        "aloi-422"
+      ],
+      "score": 0.7844601273536682,
+      "images": [
+        "aloi-130-r90",
+        "aloi-422-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-427",
+        "aloi-787"
+      ],
+      "score": 0.7553644776344299,
+      "images": [
+        "aloi-427-r0",
+        "aloi-787-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-259",
+        "aloi-262"
+      ],
+      "score": 0.7434698939323425,
+      "images": [
+        "aloi-259-r0",
+        "aloi-262-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-248",
+        "aloi-417"
+      ],
+      "score": 0.7401884198188782,
+      "images": [
+        "aloi-248-r90",
+        "aloi-417-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-609",
+        "aloi-618"
+      ],
+      "score": 0.7381483912467957,
+      "images": [
+        "aloi-609-r90",
+        "aloi-618-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-143",
+        "aloi-19"
+      ],
+      "score": 0.7334145307540894,
+      "images": [
+        "aloi-143-r90",
+        "aloi-19-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-543",
+        "aloi-546"
+      ],
+      "score": 0.7244629859924316,
+      "images": [
+        "aloi-543-r0",
+        "aloi-546-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-275",
+        "aloi-293"
+      ],
+      "score": 0.7225853800773621,
+      "images": [
+        "aloi-275-r90",
+        "aloi-293-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-208",
+        "aloi-321"
+      ],
+      "score": 0.7124987840652466,
+      "images": [
+        "aloi-208-r90",
+        "aloi-321-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-801",
+        "aloi-949"
+      ],
+      "score": 0.7107496857643127,
+      "images": [
+        "aloi-801-r0",
+        "aloi-949-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-577",
+        "aloi-617"
+      ],
+      "score": 0.697786271572113,
+      "images": [
+        "aloi-577-r0",
+        "aloi-617-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-661",
+        "aloi-668"
+      ],
+      "score": 0.6974924206733704,
+      "images": [
+        "aloi-661-r90",
+        "aloi-668-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-361",
+        "aloi-512"
+      ],
+      "score": 0.694142758846283,
+      "images": [
+        "aloi-361-r90",
+        "aloi-512-r90"
+      ]
+    },
+    {
+      "products": [
+        "aloi-49",
+        "aloi-894"
+      ],
+      "score": 0.6868072152137756,
+      "images": [
+        "aloi-49-r90",
+        "aloi-894-r0"
+      ]
+    },
+    {
+      "products": [
+        "aloi-169",
+        "aloi-736"
+      ],
+      "score": 0.6807835102081299,
+      "images": [
+        "aloi-169-r0",
+        "aloi-736-r0"
+      ]
+    }
+  ],
+  "overall_test": {
+    "known_queries": 1000,
+    "known_identities": 200,
+    "raw_recall_at_1": 0.973,
+    "raw_recall_at_5": 0.99,
+    "visible_recall_at_5": 0.916,
+    "visible_recall_at_8": 0.916,
+    "visible_wrong_top1_rate": 0.01,
+    "unknown_queries": 180,
+    "unknown_candidate_rate": 0.16111111111111112,
+    "near_tie_top2_rate": 0.008
+  },
+  "hard_test": {
+    "known_queries": 200,
+    "known_identities": 40,
+    "raw_recall_at_1": 0.965,
+    "raw_recall_at_5": 0.985,
+    "visible_recall_at_5": 0.93,
+    "visible_recall_at_8": 0.93,
+    "visible_wrong_top1_rate": 0.015,
+    "unknown_queries": 0,
+    "unknown_candidate_rate": null,
+    "near_tie_top2_rate": 0.01
+  },
+  "hard_true_product_removed": {
+    "known_queries": 0,
+    "known_identities": 0,
+    "raw_recall_at_1": null,
+    "raw_recall_at_5": null,
+    "visible_recall_at_5": null,
+    "visible_recall_at_8": null,
+    "visible_wrong_top1_rate": null,
+    "unknown_queries": 200,
+    "unknown_candidate_rate": 0.585,
+    "near_tie_top2_rate": null
+  },
+  "limitations": [
+    "Public 154x115 ALOI objects; not exact Bazaar SKU accuracy",
+    "Frozen embeddings from prior benchmark; not an end-to-end HTTP latency test",
+    "Near tie is a descriptive score gap, never a confidence probability",
+    "Same model, no new training, no threshold fitting on this test"
+  ],
+  "failure_examples": [
+    {
+      "id": "aloi-208-r180",
+      "product_id": "aloi-208",
+      "condition": "r180",
+      "known": true,
+      "hard": true,
+      "matches": [
+        {
+          "product_id": "aloi-708",
+          "image_id": "aloi-708-r0",
+          "score": 0.4564135670661926
+        },
+        {
+          "product_id": "aloi-37",
+          "image_id": "aloi-37-r90",
+          "score": 0.4457716941833496
+        },
+        {
+          "product_id": "aloi-631",
+          "image_id": "aloi-631-r90",
+          "score": 0.4416363537311554
+        },
+        {
+          "product_id": "aloi-427",
+          "image_id": "aloi-427-r0",
+          "score": 0.4356563985347748
+        },
+        {
+          "product_id": "aloi-597",
+          "image_id": "aloi-597-r0",
+          "score": 0.43512290716171265
+        },
+        {
+          "product_id": "aloi-403",
+          "image_id": "aloi-403-r0",
+          "score": 0.4295892119407654
+        },
+        {
+          "product_id": "aloi-240",
+          "image_id": "aloi-240-r0",
+          "score": 0.42756783962249756
+        },
+        {
+          "product_id": "aloi-295",
+          "image_id": "aloi-295-r90",
+          "score": 0.42210400104522705
+        }
+      ]
+    },
+    {
+      "id": "aloi-321-r180",
+      "product_id": "aloi-321",
+      "condition": "r180",
+      "known": true,
+      "hard": true,
+      "matches": [
+        {
+          "product_id": "aloi-846",
+          "image_id": "aloi-846-r90",
+          "score": 0.3030756115913391
+        },
+        {
+          "product_id": "aloi-624",
+          "image_id": "aloi-624-r90",
+          "score": 0.2754185199737549
+        },
+        {
+          "product_id": "aloi-95",
+          "image_id": "aloi-95-r90",
+          "score": 0.26238322257995605
+        },
+        {
+          "product_id": "aloi-77",
+          "image_id": "aloi-77-r90",
+          "score": 0.25869128108024597
+        },
+        {
+          "product_id": "aloi-427",
+          "image_id": "aloi-427-r0",
+          "score": 0.2583533525466919
+        },
+        {
+          "product_id": "aloi-528",
+          "image_id": "aloi-528-r90",
+          "score": 0.25802257657051086
+        },
+        {
+          "product_id": "aloi-92",
+          "image_id": "aloi-92-r90",
+          "score": 0.25785791873931885
+        },
+        {
+          "product_id": "aloi-618",
+          "image_id": "aloi-618-r90",
+          "score": 0.2531152367591858
+        }
+      ]
+    },
+    {
+      "id": "aloi-321-r60",
+      "product_id": "aloi-321",
+      "condition": "r60",
+      "known": true,
+      "hard": true,
+      "matches": [
+        {
+          "product_id": "aloi-636",
+          "image_id": "aloi-636-r0",
+          "score": 0.5408135652542114
+        },
+        {
+          "product_id": "aloi-321",
+          "image_id": "aloi-321-r0",
+          "score": 0.5001528859138489
+        },
+        {
+          "product_id": "aloi-452",
+          "image_id": "aloi-452-r0",
+          "score": 0.4800334572792053
+        },
+        {
+          "product_id": "aloi-635",
+          "image_id": "aloi-635-r0",
+          "score": 0.4752351939678192
+        },
+        {
+          "product_id": "aloi-757",
+          "image_id": "aloi-757-r0",
+          "score": 0.424089252948761
+        },
+        {
+          "product_id": "aloi-346",
+          "image_id": "aloi-346-r0",
+          "score": 0.42022788524627686
+        },
+        {
+          "product_id": "aloi-129",
+          "image_id": "aloi-129-r0",
+          "score": 0.4100990295410156
+        },
+        {
+          "product_id": "aloi-528",
+          "image_id": "aloi-528-r90",
+          "score": 0.40276676416397095
+        }
+      ]
+    },
+    {
+      "id": "aloi-417-r60",
+      "product_id": "aloi-417",
+      "condition": "r60",
+      "known": true,
+      "hard": true,
+      "matches": [
+        {
+          "product_id": "aloi-427",
+          "image_id": "aloi-427-r90",
+          "score": 0.7501864433288574
+        },
+        {
+          "product_id": "aloi-417",
+          "image_id": "aloi-417-r90",
+          "score": 0.6984702944755554
+        },
+        {
+          "product_id": "aloi-7",
+          "image_id": "aloi-7-r0",
+          "score": 0.656686544418335
+        },
+        {
+          "product_id": "aloi-559",
+          "image_id": "aloi-559-r90",
+          "score": 0.6332114934921265
+        },
+        {
+          "product_id": "aloi-502",
+          "image_id": "aloi-502-r90",
+          "score": 0.6315212249755859
+        },
+        {
+          "product_id": "aloi-543",
+          "image_id": "aloi-543-r90",
+          "score": 0.6206556558609009
+        },
+        {
+          "product_id": "aloi-732",
+          "image_id": "aloi-732-r0",
+          "score": 0.6129574775695801
+        },
+        {
+          "product_id": "aloi-221",
+          "image_id": "aloi-221-r0",
+          "score": 0.5990412831306458
+        }
+      ]
+    },
+    {
+      "id": "aloi-546-r60",
+      "product_id": "aloi-546",
+      "condition": "r60",
+      "known": true,
+      "hard": true,
+      "matches": [
+        {
+          "product_id": "aloi-543",
+          "image_id": "aloi-543-r90",
+          "score": 0.8194518089294434
+        },
+        {
+          "product_id": "aloi-546",
+          "image_id": "aloi-546-r90",
+          "score": 0.6989365816116333
+        },
+        {
+          "product_id": "aloi-732",
+          "image_id": "aloi-732-r0",
+          "score": 0.6377250552177429
+        },
+        {
+          "product_id": "aloi-44",
+          "image_id": "aloi-44-r90",
+          "score": 0.5923035144805908
+        },
+        {
+          "product_id": "aloi-365",
+          "image_id": "aloi-365-r90",
+          "score": 0.5889273881912231
+        },
+        {
+          "product_id": "aloi-767",
+          "image_id": "aloi-767-r90",
+          "score": 0.582922101020813
+        },
+        {
+          "product_id": "aloi-98",
+          "image_id": "aloi-98-r0",
+          "score": 0.5745186805725098
+        },
+        {
+          "product_id": "aloi-928",
+          "image_id": "aloi-928-r90",
+          "score": 0.5511198043823242
+        }
+      ]
+    },
+    {
+      "id": "aloi-617-r180",
+      "product_id": "aloi-617",
+      "condition": "r180",
+      "known": true,
+      "hard": true,
+      "matches": [
+        {
+          "product_id": "aloi-781",
+          "image_id": "aloi-781-r90",
+          "score": 0.5870707035064697
+        },
+        {
+          "product_id": "aloi-914",
+          "image_id": "aloi-914-r90",
+          "score": 0.5852173566818237
+        },
+        {
+          "product_id": "aloi-576",
+          "image_id": "aloi-576-r90",
+          "score": 0.5771262645721436
+        },
+        {
+          "product_id": "aloi-533",
+          "image_id": "aloi-533-r90",
+          "score": 0.5714995861053467
+        },
+        {
+          "product_id": "aloi-966",
+          "image_id": "aloi-966-r0",
+          "score": 0.5547265410423279
+        },
+        {
+          "product_id": "aloi-709",
+          "image_id": "aloi-709-r0",
+          "score": 0.5542512536048889
+        },
+        {
+          "product_id": "aloi-617",
+          "image_id": "aloi-617-r0",
+          "score": 0.5516833066940308
+        },
+        {
+          "product_id": "aloi-5",
+          "image_id": "aloi-5-r0",
+          "score": 0.5387095212936401
+        }
+      ]
+    },
+    {
+      "id": "aloi-661-r180",
+      "product_id": "aloi-661",
+      "condition": "r180",
+      "known": true,
+      "hard": true,
+      "matches": [
+        {
+          "product_id": "aloi-5",
+          "image_id": "aloi-5-r90",
+          "score": 0.7017371654510498
+        },
+        {
+          "product_id": "aloi-668",
+          "image_id": "aloi-668-r90",
+          "score": 0.6660791635513306
+        },
+        {
+          "product_id": "aloi-661",
+          "image_id": "aloi-661-r0",
+          "score": 0.6456300616264343
+        },
+        {
+          "product_id": "aloi-662",
+          "image_id": "aloi-662-r0",
+          "score": 0.6249277591705322
+        },
+        {
+          "product_id": "aloi-117",
+          "image_id": "aloi-117-r0",
+          "score": 0.6172555685043335
+        },
+        {
+          "product_id": "aloi-356",
+          "image_id": "aloi-356-r0",
+          "score": 0.6164823770523071
+        },
+        {
+          "product_id": "aloi-667",
+          "image_id": "aloi-667-r90",
+          "score": 0.6089359521865845
+        },
+        {
+          "product_id": "aloi-714",
+          "image_id": "aloi-714-r90",
+          "score": 0.6081693768501282
+        }
+      ]
+    }
+  ]
+}

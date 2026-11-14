@@ -31,6 +31,14 @@ for (const [object,name] of [[103,"Футбольный мяч"],[482,"Синя�
 await db.$disconnect();
 if (process.argv.includes("--seed-only")) { console.log("Isolated photo search browser fixtures prepared"); process.exit(0); }
 const cookie = async (user) => ({name:"__Secure-next-auth.session-token",secure:true,value:await encode({secret:"disposable-product-photo-search-secret",token:{sub:user.id,email:user.email,name:user.name,role:user.role,organizationId:user.organizationId,sessionVersion:user.sessionVersion}}),url:base.replace("http:","https:")});
+const assertDialogFits = async (page) => {
+ const bounds = await page.getByRole("dialog", {name:"Найти товар по фотографии"}).evaluate(async (element) => {
+  await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => undefined)));
+  const r=element.getBoundingClientRect();
+  return {top:r.top,left:r.left,bottom:r.bottom,right:r.right,width:innerWidth,height:innerHeight};
+ });
+ assert.ok(bounds.top>=-1 && bounds.left>=-1 && bounds.bottom<=bounds.height+1 && bounds.right<=bounds.width+1,JSON.stringify(bounds));
+};
 const browser = await chromium.launch({headless:true,channel:"chrome"});
 const errors=[],checks=[];
 try {
@@ -39,11 +47,13 @@ try {
   await context.route("**/*",route=>["localhost","127.0.0.1"].includes(new URL(route.request().url()).hostname)?route.continue():route.abort());
   await context.addCookies([await cookie(users[1]),{name:"NEXT_LOCALE",value:"ru",url:base}]);
   const page=await context.newPage();page.on("pageerror",error=>errors.push(error.message));
+  let unexpectedBundleReads=0;page.on("request",request=>{if(request.url().includes("bundles.listComponents"))unexpectedBundleReads++;});
   await page.goto(`${base}/products?storeId=${stores[0].id}`);
   await page.screenshot({path:`${out}/loaded-${viewport.width}.png`,fullPage:false});
   await writeFile(`${out}/loaded-${viewport.width}.txt`,await page.locator("body").innerText());
   await page.getByRole("button",{name:"Поиск по фото",exact:true}).click();
   await page.getByText("Поиск только в ассортименте магазина «Тестовый магазин».").waitFor();
+  await assertDialogFits(page);
   await page.screenshot({path:`${out}/initial-${viewport.width}.png`,fullPage:false});
   assert.equal(await page.locator('input[capture="environment"]').count(),1);
   await page.getByLabel("Загрузить фото",{exact:true}).setInputFiles(".local/photo-search-benchmark/images/103/103_r30.jpg");
@@ -58,6 +68,9 @@ try {
   await writeFile(`${out}/results-${viewport.width}.txt`,await dialog.innerText());
   await page.getByRole("button",{name:"Выбрать товар «Футбольный мяч»"}).click();
   await page.waitForURL(`**/products/photo-search-browser-product-103?**`);
+  await page.getByRole("heading", {name:"Футбольный мяч",exact:false}).waitFor();
+  assert.equal(unexpectedBundleReads,0,"A regular product must not request bundle contents");
+  assert.deepEqual(await page.getByRole("dialog").count(),0);
   checks.push({viewport,role:"CASHIER",plan:"STARTER",realPPShiTuFaiss:true,heldOutPhoto:"103_r30",manualChoice:true,noOverflow:true});
   await context.close();
  }

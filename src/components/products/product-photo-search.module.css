@@ -1,0 +1,24 @@
+/* Short, functional feedback. No simulated percentages or minimum search delay. */
+@media (prefers-reduced-motion: no-preference) {
+  .enter {
+    animation: photo-enter 180ms ease-out both;
+  }
+  .card {
+    animation: photo-enter 180ms ease-out both;
+  }
+  .scan {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent 0%, hsl(var(--primary) / .06) 42%, hsl(var(--primary) / .36) 50%, transparent 53%);
+    animation: photo-scan 1.7s ease-in-out infinite;
+  }
+  @keyframes photo-enter {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes photo-scan {
+    from { transform: translateY(-85%); }
+    to { transform: translateY(85%); }
+  }
+}

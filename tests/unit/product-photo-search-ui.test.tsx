@@ -87,3 +87,36 @@ it("does not cancel the initial availability check when a photo is chosen immedi
   await act(async () => status(Response.json({ configured: true, progress })));
   await waitFor(() => expect((view.getByRole("button", { name: "Find similar" }) as HTMLButtonElement).disabled).toBe(false));
 });
+
+it("shows distinct lookalike SKUs and requires choosing the intended candidate", async () => {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, init) => init?.method === "POST" && !String(url).endsWith("/prepare")
+    ? Promise.resolve(Response.json({ ...result, items: [result.items[0], { ...result.items[0], id: "p2", name: "Blue cup", sku: "CUP-BLUE" }] })) : original(url, init));
+  const view = render(screen()); await select(view); fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Blue cup"); expect(view.getByText("CUP-BLUE")).toBeTruthy();
+  expect(view.getByText(messages.productPhotoSearch.compareVariants)).toBeTruthy();
+  expect(boundary.push).not.toHaveBeenCalled();
+  fireEvent.click(view.getByText("Blue cup")); expect(boundary.push).not.toHaveBeenCalled();
+  fireEvent.click(view.getByRole("button", { name: "Choose product Blue cup" }));
+  expect(boundary.push).toHaveBeenCalledWith(expect.stringContaining("/products/p2?storeId=s1"));
+});
+
+it("reports real catalog progress only, and cancel removes loading feedback", async () => {
+  const pending = { ...progress, total: 10, ready: 3, failed: 1, pending: 6 };
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, init) => String(url).endsWith("/prepare") ? Promise.resolve(Response.json({ progress: pending })) : original(url, init));
+  const view = render(screen()); await select(view); fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  const bar = await view.findByRole("progressbar"); expect(bar.getAttribute("aria-valuenow")).toBe("4"); expect(bar.getAttribute("aria-valuemax")).toBe("10");
+  fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+  expect(view.queryByRole("progressbar")).toBeNull(); expect(view.queryByText(messages.productPhotoSearch.searching)).toBeNull();
+});
+
+it("keeps incomplete results explicit and does not manufacture a confidence percentage", async () => {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, init) => init?.method === "POST" && !String(url).endsWith("/prepare")
+    ? Promise.resolve(Response.json({ ...result, partial: true, progress: { ...progress, total: 2, failed: 1 } })) : original(url, init));
+  const view = render(screen()); await select(view); fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup"); expect(view.getByText("Searched a subset of photos: 1 of 2. Failed to process: 1.")).toBeTruthy();
+  expect(view.getByRole("button", { name: "Retry photo preparation" })).toBeTruthy();
+  expect(view.container.textContent).not.toMatch(/\d+%/);
+});
