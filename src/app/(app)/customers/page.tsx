@@ -47,7 +47,7 @@ import {
   CUSTOMER_EXPORT_COLUMN_KEYS,
   type CustomerExportColumnKey,
 } from "@/lib/customerExport";
-import { formatStoreMoney } from "@/lib/currencyDisplay";
+import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import {
   isValidOptionalCustomerAddress,
   isValidOptionalCustomerPhone,
@@ -381,8 +381,6 @@ const CustomerDatabasePage = () => {
     setDetailCustomerId(customer.id);
   };
 
-  const formatCustomerMoney = (value: number) => formatStoreMoney(value, locale, selectedStore);
-
   const emptyState = (
     <Card className="bazaar-admin-surface">
       <CardContent className="bazaar-admin-empty">
@@ -621,6 +619,13 @@ const CustomerDatabasePage = () => {
                         <TableCell>{formatDateTime(customer.createdAt, locale)}</TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-2">
+                            <IconButton
+                              type="button"
+                              variant="secondary"
+                              onClick={() => viewCustomerSales(customer)}
+                              icon={ViewIcon}
+                              label={t("actions.viewSales")}
+                            />
                             <IconButton
                               type="button"
                               variant="secondary"
@@ -936,17 +941,17 @@ const CustomerDatabasePage = () => {
               <h3 className="text-sm font-semibold text-foreground">{t("detail.summary")}</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="bazaar-admin-modal-card">
-                  <p className="text-xs text-muted-foreground">{t("columns.lastPurchase")}</p>
+                  <p className="text-xs text-muted-foreground">{t("detail.lastCompletedPurchase")}</p>
                   <p className="font-semibold text-foreground">
-                    {customerDetail.customer.lastOrderAt
-                      ? formatDateTime(customerDetail.customer.lastOrderAt, locale)
+                    {customerDetail.lastCompletedOrderAt
+                      ? formatDateTime(customerDetail.lastCompletedOrderAt, locale)
                       : tCommon("notAvailable")}
                   </p>
                 </div>
                 <div className="bazaar-admin-modal-card">
-                  <p className="text-xs text-muted-foreground">{t("columns.totalPurchases")}</p>
+                  <p className="text-xs text-muted-foreground">{t("detail.completedPurchases")}</p>
                   <p className="font-semibold text-foreground">
-                    {customerDetail.customer.orderCount}
+                    {customerDetail.completedOrderCount}
                   </p>
                 </div>
               </div>
@@ -955,7 +960,7 @@ const CustomerDatabasePage = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-foreground">
-                  {t("detail.recentReceipts")}
+                  {t("detail.recentPurchases")}
                 </h3>
                 <Button
                   type="button"
@@ -974,26 +979,40 @@ const CustomerDatabasePage = () => {
                   {customerDetail.recentOrders.map((order) => (
                     <div key={order.id} className="bazaar-admin-modal-card">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <Link
-                            className="font-semibold text-primary hover:underline"
-                            href={`/reports/receipts?receiptId=${encodeURIComponent(order.id)}`}
+                            className="break-words font-semibold text-primary hover:underline"
+                            href={
+                              order.isPosSale !== false
+                                ? `/reports/receipts?receiptId=${encodeURIComponent(order.id)}`
+                                : `/sales/orders/${encodeURIComponent(order.id)}`
+                            }
                           >
                             {order.number}
                           </Link>
+                          <p className="text-xs text-muted-foreground">
+                            {order.isPosSale !== false
+                              ? t("detail.posReceipt")
+                              : t("detail.customerOrder")}
+                            {order.store?.name ? ` · ${order.store.name}` : ""}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {formatDateTime(order.completedAt ?? order.createdAt, locale)}
                           </p>
                         </div>
                         <p className="shrink-0 font-semibold text-foreground">
-                          {formatCustomerMoney(order.totalKgs)}
+                          {formatKgsMoney(
+                            order.totalKgs,
+                            locale,
+                            currencySourceWithFallback(order, order.store),
+                          )}
                         </p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="bazaar-admin-empty min-h-24 p-4">{t("detail.noReceipts")}</div>
+                <div className="bazaar-admin-empty min-h-24 p-4">{t("detail.noPurchases")}</div>
               )}
             </section>
           </div>

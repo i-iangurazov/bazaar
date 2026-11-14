@@ -24,13 +24,19 @@ import {
 } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
+import {
+  SalesOrderCustomerSelect,
+  type SalesOrderCustomerOption,
+} from "@/components/sales-order-customer-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
+import { PriceInput } from "@/components/ui/price-input";
 import {
   Select,
   SelectContent,
@@ -50,13 +56,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
-import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
+import { currencySourceWithFallback, formatKgsMoney, resolveCurrency } from "@/lib/currencyDisplay";
 import {
   isValidOptionalCustomerAddress,
   isValidOptionalCustomerPhone,
 } from "@/lib/customerContact";
 import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
+import { parseSalesOrderPriceInput, salesOrderPriceInput } from "@/lib/salesOrderPriceInput";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
@@ -145,6 +152,9 @@ const SalesOrderDetailPage = () => {
         : t("source.manual");
 
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const canManualPrice = ["ADMIN", "MANAGER", "STAFF", "CASHIER"].some(
+    (role) => role === session?.user?.role,
+  );
 
   const orderQuery = trpc.salesOrders.getById.useQuery(
     { customerOrderId },
@@ -152,7 +162,11 @@ const SalesOrderDetailPage = () => {
   );
   const orderStore = orderQuery.data?.store ?? null;
   const orderCurrencySource = currencySourceWithFallback(orderQuery.data, orderStore);
+  const { currencyCode: orderCurrencyCode } = resolveCurrency(orderCurrencySource);
 
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerSelectionTouched, setCustomerSelectionTouched] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<SalesOrderCustomerOption | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -170,6 +184,8 @@ const SalesOrderDetailPage = () => {
   const [selectedVariant, setSelectedVariant] = useState<string>("BASE");
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineQtyInput, setLineQtyInput] = useState<string>("1");
+  const [linePriceInput, setLinePriceInput] = useState("");
+  const [linePriceEdited, setLinePriceEdited] = useState(false);
   const lineQtyInputRef = useRef<HTMLInputElement | null>(null);
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
@@ -183,6 +199,29 @@ const SalesOrderDetailPage = () => {
     { productId: selectedProduct?.id ?? "" },
     { enabled: lineDialogMode === "add" && Boolean(selectedProduct?.id) },
   );
+
+  const linePriceQuery = trpc.salesOrders.linePrice.useQuery(
+    {
+      productId: selectedProduct?.id ?? "",
+      storeId: orderStore?.id ?? "",
+      variantId: selectedVariant === "BASE" ? null : selectedVariant,
+    },
+    {
+      enabled: lineDialogMode === "add" && Boolean(selectedProduct?.id) && Boolean(orderStore?.id),
+      keepPreviousData: false,
+      retry: false,
+    },
+  );
+  const manualLinePrice = linePriceEdited
+    ? parseSalesOrderPriceInput(linePriceInput, orderCurrencySource)
+    : null;
+  const hasManualLinePrice = canManualPrice && linePriceEdited && manualLinePrice !== null;
+  const displayedLinePriceInput =
+    lineDialogMode === "add" && !linePriceEdited
+      ? linePriceQuery.data
+        ? salesOrderPriceInput(linePriceQuery.data.unitPriceKgs, orderCurrencySource)
+        : ""
+      : linePriceInput;
 
   const order = orderQuery.data;
   const loyaltyQuery = trpc.loyalty.orderSummary.useQuery(
@@ -198,6 +237,9 @@ const SalesOrderDetailPage = () => {
     if (!order) {
       return;
     }
+    setCustomerId(order.customerId ?? null);
+    setCustomerSelectionTouched(false);
+    setSelectedCustomer(null);
     setCustomerName(order.customerName ?? "");
     setCustomerEmail(order.customerEmail ?? "");
     setCustomerPhone(order.customerPhone ?? "");
@@ -364,6 +406,8 @@ const SalesOrderDetailPage = () => {
     setSelectedVariant("BASE");
     setEditingLineId(null);
     setLineQtyInput("1");
+    setLinePriceInput("");
+    setLinePriceEdited(false);
   };
 
   const openAddLineDialog = () => {
@@ -374,6 +418,8 @@ const SalesOrderDetailPage = () => {
     setSelectedVariant("BASE");
     setEditingLineId(null);
     setLineQtyInput("1");
+    setLinePriceInput("");
+    setLinePriceEdited(false);
   };
 
   const openEditLineDialog = (lineId: string) => {
@@ -392,28 +438,51 @@ const SalesOrderDetailPage = () => {
     setSelectedVariant(line.variantId ?? "BASE");
     setEditingLineId(line.id);
     setLineQtyInput(String(line.qty));
+    setLinePriceInput(salesOrderPriceInput(line.unitPriceKgs, orderCurrencySource));
+    setLinePriceEdited(false);
   };
 
-  const handleSaveCustomer = async () => {
-    if (!order) {
-      return;
-    }
+  const chooseCustomer = (customer: SalesOrderCustomerOption | null) => {
+    setCustomerId(customer?.id ?? null);
+    setCustomerSelectionTouched(true);
+    setSelectedCustomer(customer);
+    setCustomerName(customer?.name ?? "");
+    setCustomerEmail(customer?.email ?? "");
+    setCustomerPhone(customer?.phone ?? "");
+    setCustomerAddress(customer?.address ?? "");
+  };
+
+  const validateCustomerContacts = () => {
+    const baseline =
+      selectedCustomer?.id === customerId
+        ? selectedCustomer
+        : customerId === (order?.customerId ?? null)
+          ? { phone: order?.customerPhone, address: order?.customerAddress }
+          : null;
     if (
       !isValidOptionalCustomerPhone(customerPhone) &&
-      customerPhone.trim() !== (order.customerPhone?.trim() ?? "")
+      customerPhone.trim() !== (baseline?.phone?.trim() ?? "")
     ) {
       toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
-      return;
+      return false;
     }
     if (
       !isValidOptionalCustomerAddress(customerAddress) &&
-      customerAddress.trim() !== (order.customerAddress?.trim() ?? "")
+      customerAddress.trim() !== (baseline?.address?.trim() ?? "")
     ) {
       toast({ variant: "error", description: tErrors("customerAddressInvalid") });
+      return false;
+    }
+    return true;
+  };
+
+  const handleSaveCustomer = async () => {
+    if (!order || !validateCustomerContacts()) {
       return;
     }
     await setCustomerMutation.mutateAsync({
       customerOrderId: order.id,
+      ...(customerSelectionTouched || customerId ? { customerId } : {}),
       customerName: customerName.trim() || null,
       customerEmail: customerEmail.trim() || null,
       customerPhone: customerPhone.trim() || null,
@@ -453,25 +522,12 @@ const SalesOrderDetailPage = () => {
   };
 
   const handleSendTrackingEmail = async () => {
-    if (!order) {
-      return;
-    }
-    if (
-      !isValidOptionalCustomerPhone(customerPhone) &&
-      customerPhone.trim() !== (order.customerPhone?.trim() ?? "")
-    ) {
-      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
-      return;
-    }
-    if (
-      !isValidOptionalCustomerAddress(customerAddress) &&
-      customerAddress.trim() !== (order.customerAddress?.trim() ?? "")
-    ) {
-      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
+    if (!order || !validateCustomerContacts()) {
       return;
     }
     const customerInput = {
       customerOrderId: order.id,
+      ...(customerSelectionTouched || customerId ? { customerId } : {}),
       customerName: optionalFormValue(customerName),
       customerEmail: optionalFormValue(customerEmail),
       customerPhone: optionalFormValue(customerPhone),
@@ -480,6 +536,7 @@ const SalesOrderDetailPage = () => {
     };
     const trackingInput = trackingMutationInput(order.id);
     const shouldSaveCustomer =
+      (customerSelectionTouched && customerId !== (order.customerId ?? null)) ||
       customerInput.customerName !== optionalFormValue(order.customerName) ||
       customerInput.customerEmail !== optionalFormValue(order.customerEmail) ||
       customerInput.customerPhone !== optionalFormValue(order.customerPhone) ||
@@ -521,11 +578,18 @@ const SalesOrderDetailPage = () => {
       return;
     }
     const qty = normalizedQty;
+    if (linePriceEdited && !hasManualLinePrice) {
+      toast({ variant: "error", description: t("unitPriceInvalid") });
+      return;
+    }
+    const priceInput =
+      hasManualLinePrice && manualLinePrice !== null ? { unitPriceKgs: manualLinePrice } : {};
 
     if (lineDialogMode === "edit" && editingLineId) {
       await updateLineMutation.mutateAsync({
         lineId: editingLineId,
         qty,
+        ...priceInput,
       });
       return;
     }
@@ -534,12 +598,20 @@ const SalesOrderDetailPage = () => {
       toast({ variant: "error", description: t("productRequired") });
       return;
     }
+    if (
+      !hasManualLinePrice &&
+      (linePriceQuery.isFetching || linePriceQuery.error || !linePriceQuery.data)
+    ) {
+      toast({ variant: "error", description: t("priceNotSetBlocking") });
+      return;
+    }
 
     await addLineMutation.mutateAsync({
       customerOrderId: order.id,
       productId: selectedProduct.id,
       variantId: selectedVariant === "BASE" ? null : selectedVariant,
       qty,
+      ...priceInput,
     });
   };
 
@@ -613,6 +685,8 @@ const SalesOrderDetailPage = () => {
     setSelectedProduct(product);
     setLineSearch(product.name);
     setSelectedVariant("BASE");
+    setLinePriceInput("");
+    setLinePriceEdited(false);
     setShowResults(false);
     window.setTimeout(() => lineQtyInputRef.current?.focus(), 0);
   };
@@ -713,6 +787,9 @@ const SalesOrderDetailPage = () => {
         subtitle={t("detailsSubtitle")}
         action={headerActions}
       />
+      {isEditable ? (
+        <p className="mb-4 text-sm text-muted-foreground">{t("orderWithoutShift")}</p>
+      ) : null}
 
       {loading ? (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -773,7 +850,12 @@ const SalesOrderDetailPage = () => {
             </CardContent>
           </Card>
 
-          <OrderPayment customerOrderId={order.id} onPaid={() => { void loyaltyQuery.refetch(); }} />
+          <OrderPayment
+            customerOrderId={order.id}
+            onPaid={() => {
+              void loyaltyQuery.refetch();
+            }}
+          />
           {loyaltyQuery.data ? (
             <Card>
               <CardHeader>
@@ -782,18 +864,32 @@ const SalesOrderDetailPage = () => {
               <CardContent className="space-y-3">
                 <FormGrid>
                   <div>
-                    <p className="text-xs text-muted-foreground">{tLoyalty("loyaltyMemberDiscount")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {tLoyalty("loyaltyMemberDiscount")}
+                    </p>
                     <p className="text-sm font-medium">
-                      {formatKgsMoney(loyaltyQuery.data.memberDiscountKgs, locale, orderCurrencySource)}
+                      {formatKgsMoney(
+                        loyaltyQuery.data.memberDiscountKgs,
+                        locale,
+                        orderCurrencySource,
+                      )}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{tLoyalty("loyaltySpent")}</p>
-                    <p className="text-sm font-medium tabular-nums">{loyaltyQuery.data.pointsSpent}</p>
+                    <p className="text-sm font-medium tabular-nums">
+                      {loyaltyQuery.data.pointsSpent}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">{tLoyalty(loyaltyQuery.data.hasEarned ? "loyaltyEarned" : "willEarn")}</p>
-                    <p className="text-sm font-medium tabular-nums">{loyaltyQuery.data.hasEarned ? loyaltyQuery.data.pointsEarned : loyaltyQuery.data.plannedPoints}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {tLoyalty(loyaltyQuery.data.hasEarned ? "loyaltyEarned" : "willEarn")}
+                    </p>
+                    <p className="text-sm font-medium tabular-nums">
+                      {loyaltyQuery.data.hasEarned
+                        ? loyaltyQuery.data.pointsEarned
+                        : loyaltyQuery.data.plannedPoints}
+                    </p>
                   </div>
                 </FormGrid>
                 {loyaltyQuery.data.entries.length ? (
@@ -803,7 +899,13 @@ const SalesOrderDetailPage = () => {
                         <span className="text-muted-foreground">
                           {tLoyalty(`ledger.${entry.type}` as never)}
                         </span>
-                        <span className={entry.points < 0 ? "text-danger tabular-nums" : "text-success tabular-nums"}>
+                        <span
+                          className={
+                            entry.points < 0
+                              ? "tabular-nums text-danger"
+                              : "tabular-nums text-success"
+                          }
+                        >
                           {entry.points > 0 ? `+${entry.points}` : entry.points}
                         </span>
                       </li>
@@ -819,6 +921,18 @@ const SalesOrderDetailPage = () => {
               <CardTitle>{t("customerSectionTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">
+                  {t("customerCard")} ({tCommon("optional")})
+                </p>
+                <SalesOrderCustomerSelect
+                  storeId={orderStore?.id ?? ""}
+                  customerId={customerId}
+                  customerName={customerName}
+                  disabled={!isEditable || setCustomerMutation.isLoading}
+                  onSelect={chooseCustomer}
+                />
+              </div>
               <FormGrid>
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium">{t("customerName")}</p>
@@ -1240,6 +1354,8 @@ const SalesOrderDetailPage = () => {
                     if (selectedProduct && nextValue !== selectedProduct.name) {
                       setSelectedProduct(null);
                       setSelectedVariant("BASE");
+                      setLinePriceInput("");
+                      setLinePriceEdited(false);
                     }
                   }}
                   placeholder={t("productSearchPlaceholder")}
@@ -1255,6 +1371,12 @@ const SalesOrderDetailPage = () => {
                       <p className="px-3 py-3 text-sm text-muted-foreground">
                         {tCommon("loading")}
                       </p>
+                    ) : productSearchQuery.error ? (
+                      <QueryErrorState
+                        error={productSearchQuery.error}
+                        onRetry={() => void productSearchQuery.refetch()}
+                        className="m-2"
+                      />
                     ) : (productSearchQuery.data ?? []).length ? (
                       (productSearchQuery.data ?? []).map((product) => (
                         <ProductSearchResultItem
@@ -1280,7 +1402,9 @@ const SalesOrderDetailPage = () => {
                 ) : null}
                 {selectedProduct ? (
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>{t("selectedProduct", { sku: selectedProduct.sku })}</span>
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                      {t("selectedProduct", { sku: selectedProduct.sku })}
+                    </span>
                     {selectedProduct.isBundle ? (
                       <Badge variant="muted">{t("bundleProductLabel")}</Badge>
                     ) : null}
@@ -1294,7 +1418,11 @@ const SalesOrderDetailPage = () => {
                 <p className="text-sm font-medium">{t("variant")}</p>
                 <Select
                   value={selectedVariant}
-                  onValueChange={setSelectedVariant}
+                  onValueChange={(value) => {
+                    setSelectedVariant(value);
+                    setLinePriceInput("");
+                    setLinePriceEdited(false);
+                  }}
                   disabled={!selectedProduct}
                 >
                   <SelectTrigger aria-label={t("variant")}>
@@ -1309,14 +1437,20 @@ const SalesOrderDetailPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                {selectedProductQuery.error ? (
+                  <QueryErrorState
+                    error={selectedProductQuery.error}
+                    onRetry={() => void selectedProductQuery.refetch()}
+                  />
+                ) : null}
               </div>
             </>
           ) : (
             <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-              <p className="font-medium text-foreground">
+              <p className="break-words font-medium text-foreground [overflow-wrap:anywhere]">
                 {selectedProduct?.name ?? currentLine?.product.name}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {selectedProduct?.sku ?? currentLine?.product.sku} ·{" "}
                 {currentLine?.variant?.name ?? t("variantBase")}
               </p>
@@ -1324,15 +1458,58 @@ const SalesOrderDetailPage = () => {
           )}
 
           <div className="space-y-1.5">
-            <p className="text-sm font-medium">{t("qty")}</p>
+            <label htmlFor="sales-order-line-qty" className="text-sm font-medium">
+              {t("qty")}
+            </label>
             <Input
               ref={lineQtyInputRef}
-              type="number"
-              min={0.001}
-              step={0.001}
+              id="sales-order-line-qty"
+              type="text"
+              inputMode="decimal"
               value={lineQtyInput}
               onChange={(event) => setLineQtyInput(event.target.value)}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="sales-order-line-price" className="text-sm font-medium">
+              {t("unitPrice")} · {orderCurrencyCode}
+            </label>
+            <PriceInput
+              id="sales-order-line-price"
+              value={displayedLinePriceInput}
+              placeholder={t("priceNotSet")}
+              disabled={!canManualPrice || (lineDialogMode === "add" && !selectedProduct)}
+              aria-invalid={linePriceEdited && manualLinePrice === null}
+              aria-describedby="sales-order-line-price-hint"
+              onChange={(event) => {
+                setLinePriceInput(event.target.value);
+                setLinePriceEdited(true);
+              }}
+            />
+            <p id="sales-order-line-price-hint" className="text-xs text-muted-foreground">
+              {t("documentPriceHint")}
+            </p>
+            {linePriceEdited && manualLinePrice === null ? (
+              <p role="alert" className="text-xs text-danger">
+                {t("unitPriceInvalid")}
+              </p>
+            ) : null}
+            {lineDialogMode === "add" && selectedProduct ? (
+              linePriceQuery.isFetching ? (
+                <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+                  <Spinner className="h-3 w-3" />
+                  {tCommon("loading")}
+                </p>
+              ) : linePriceQuery.error ? (
+                <QueryErrorState
+                  error={linePriceQuery.error}
+                  onRetry={() => void linePriceQuery.refetch()}
+                />
+              ) : !linePriceQuery.data ? (
+                <p className="text-xs text-muted-foreground">{t("priceNotSet")}</p>
+              ) : null
+            ) : null}
           </div>
 
           <ModalFooter>
@@ -1344,7 +1521,13 @@ const SalesOrderDetailPage = () => {
               disabled={
                 lineActionsDisabled ||
                 selectedProductQuery.isFetching ||
-                (lineDialogMode === "add" && !selectedProduct)
+                (linePriceEdited && !hasManualLinePrice) ||
+                (lineDialogMode === "add" &&
+                  (!selectedProduct ||
+                    (!hasManualLinePrice &&
+                      (linePriceQuery.isFetching ||
+                        Boolean(linePriceQuery.error) ||
+                        !linePriceQuery.data))))
               }
             >
               {lineActionsDisabled ? <Spinner className="h-4 w-4" /> : null}

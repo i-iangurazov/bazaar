@@ -608,6 +608,7 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
     throw new AppError("customerNotFound", "NOT_FOUND", 404);
   }
   await assertUserCanAccessStore(prisma, input.user, customer.storeId);
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
 
   const customerMatches: Prisma.CustomerOrderWhereInput[] = [];
   if (
@@ -628,48 +629,63 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
   )
     customerMatches.push({ customerPhone: customer.phone, customerEmail: null });
 
-  const recentOrders = await prisma.customerOrder.findMany({
-    where: {
-      organizationId: input.user.organizationId,
-      storeId: customer.storeId,
-      isPosSale: true,
-      status: CustomerOrderStatus.COMPLETED,
-      isHeld: false,
-      OR: [
-        { customerId: customer.id },
-        ...(customerMatches.length ? [{ customerId: null, OR: customerMatches }] : []),
-      ],
-    },
-    select: {
-      id: true,
-      number: true,
-      saleChannel: true,
-      customerName: true,
-      customerEmail: true,
-      customerPhone: true,
-      totalKgs: true,
-      currencyCode: true,
-      currencyRateKgsPerUnit: true,
-      completedAt: true,
-      createdAt: true,
-      payments: {
-        select: {
-          id: true,
-          method: true,
-          amountKgs: true,
-          currencyCode: true,
-          currencyRateKgsPerUnit: true,
-          isRefund: true,
+  const completedOrderWhere: Prisma.CustomerOrderWhereInput = {
+    organizationId: input.user.organizationId,
+    storeId: { in: accessibleStoreIds },
+    status: CustomerOrderStatus.COMPLETED,
+    isHeld: false,
+    OR: [
+      { customerId: customer.id },
+      ...(customerMatches.length ? [{ customerId: null, OR: customerMatches }] : []),
+    ],
+  };
+  const [recentOrders, completedOrders] = await Promise.all([
+    prisma.customerOrder.findMany({
+      where: completedOrderWhere,
+      select: {
+        id: true,
+        number: true,
+        storeId: true,
+        store: {
+          select: { id: true, name: true, currencyCode: true, currencyRateKgsPerUnit: true },
         },
-        orderBy: { createdAt: "asc" },
+        isPosSale: true,
+        source: true,
+        saleChannel: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+        totalKgs: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+        completedAt: true,
+        createdAt: true,
+        payments: {
+          select: {
+            id: true,
+            method: true,
+            amountKgs: true,
+            currencyCode: true,
+            currencyRateKgsPerUnit: true,
+            isRefund: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
-    },
-    orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
-    take: 10,
-  });
+      orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+      take: 10,
+    }),
+    prisma.customerOrder.aggregate({
+      where: completedOrderWhere,
+      _count: { _all: true },
+      _max: { completedAt: true },
+    }),
+  ]);
 
   return {
     customer,
+    completedOrderCount: completedOrders._count._all,
+    lastCompletedOrderAt: completedOrders._max.completedAt,
     recentOrders: recentOrders.map((order) => ({
       ...order,
       totalKgs: Number(order.totalKgs),
