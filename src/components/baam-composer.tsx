@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 import {
   ImagePlusIcon as ImageSquare,
   MicrophoneIcon as Microphone,
@@ -17,6 +17,16 @@ const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
 export function BaamComposer({ c, inlineControls = false }: { c: BaamController; inlineControls?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const attachInput = useCallback((input: HTMLTextAreaElement | null) => {
+    c.inputRef.current = input;
+    if (!input?.closest("[data-baam-drawer]")) return;
+    // Consent can finish loading after the dialog's initial focus pass. Focus
+    // the newly mounted composer only while focus still awaits that input;
+    // preserve a person's deliberate focus on another control.
+    const active = document.activeElement;
+    if (active === document.body || active === input.closest("[data-baam-drawer]") || active?.hasAttribute("data-baam-launcher"))
+      input.focus({ preventScroll: true });
+  }, [c.inputRef]);
   const editingForm = c.workflows?.some(
     (w) =>
       w.id === c.data?.conversation.activeWorkflowId &&
@@ -143,7 +153,7 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
           className="rounded-lg border border-border bg-background p-2 shadow-none focus-within:border-primary"
         >
           <textarea
-            ref={c.inputRef}
+            ref={attachInput}
             data-baam-input
             aria-label={c.t("placeholder")}
             placeholder={c.t("placeholder")}

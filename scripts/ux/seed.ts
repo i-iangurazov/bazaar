@@ -8,6 +8,7 @@ const { prisma } = await import("../../src/server/db/prisma");
 const { seedBase } = await import("../../tests/helpers/db");
 const { businessCaller } = await import("../../src/server/services/baamBusiness");
 const { getLogger } = await import("../../src/server/logging");
+const { AI_PRIVACY_CONSENT_VERSION } = await import("../../src/lib/aiPrivacy");
 try {
   if (await prisma.organization.count())
     throw new Error("UI fixture only accepts an empty database");
@@ -26,6 +27,11 @@ try {
   });
   const passwordHash = await bcrypt.hash("BazaarUxTest123!", 10);
   await prisma.user.updateMany({ where: { organizationId: f.org.id }, data: { passwordHash } });
+  // Read-only BAAM interaction scenarios use explicitly consenting synthetic actors.
+  await prisma.user.updateMany({
+    where: { id: { in: [f.adminUser.id, f.managerUser.id] } },
+    data: { aiConsentVersion: AI_PRIVACY_CONSENT_VERSION, aiConsentGrantedAt: new Date(), aiConsentRevokedAt: null },
+  });
   await prisma.userGuideState.createMany({
     data: [f.adminUser, f.managerUser, f.staffUser, f.cashierUser].map((u) => ({
       userId: u.id,
