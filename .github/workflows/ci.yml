@@ -508,6 +508,34 @@ jobs:
           path: artifacts/whatsapp-worker-container/
           if-no-files-found: warn
 
+  product-photo-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Verify isolated-run opt-in and pinned public test inputs
+        run: node --test scripts/deployment/product-photo-linux.test.mjs
+      - name: Build the pinned CPU photo service for Linux x86_64
+        run: |
+          mkdir -p artifacts/product-photo-linux
+          docker build --platform linux/amd64 --progress=plain -f Dockerfile.product-photo-search -t bazaar-product-photo:ci . 2>&1 | tee artifacts/product-photo-linux/build.log
+      - name: Verify real PP-ShiTu, Faiss and OCR offline in an isolated container
+        env:
+          RUN_PRODUCT_PHOTO_LINUX_SMOKE: "1"
+        run: node scripts/qa/product-photo-linux.mjs
+      - name: Upload photo-service compatibility and resource evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-photo-linux
+          path: artifacts/product-photo-linux/
+          if-no-files-found: error
+
   release-gate:
     # A skipped aggregate job can be treated as passing by GitHub-backed checks.
     # Always report a failure unless every required job actually succeeded.
@@ -526,6 +554,7 @@ jobs:
       - reporting-browser
       - landing-browser
       - whatsapp-worker-container
+      - product-photo-linux
     services:
       postgres:
         image: postgres:16-alpine

@@ -1,0 +1,9 @@
+**
+!Dockerfile.product-photo-search
+!services/
+!services/product-photo-search/
+!services/product-photo-search/**
+!scripts/
+!scripts/benchmarks/
+!scripts/benchmarks/product-photo/
+!scripts/benchmarks/product-photo/prepare.py
