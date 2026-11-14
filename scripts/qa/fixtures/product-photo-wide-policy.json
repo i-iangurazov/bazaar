@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "date": "2026-11-15",
+  "applicationCommit": "68cfed2e",
+  "seed": "bazaar-wide-20261115-v1",
+  "model": "ppshitu-v2-pplcnetv2-v1-fp32-224",
+  "visualThreshold": 0.68,
+  "ocrConfidenceThreshold": 0.85,
+  "autoRegion": true,
+  "maxCandidates": 8,
+  "galleryScope": "One mixed store containing all known products from both datasets; metrics remain separated by label granularity",
+  "thresholdOrModelTuning": false,
+  "duplicateRule": "exclude query if its bytes or decoded RGB pixels equal any gallery image; report exclusions and cross-identity gallery collisions",
+  "sources": {
+    "sop": {
+      "dataset": "nyris/stanford-online-products-v1",
+      "revision": "24a1b9b8ec6c0b1fc4dd324f24b2d829413a6c69",
+      "split": "test",
+      "categoryImageCounts": {"bicycle":4145,"cabinet":6220,"chair":6226,"coffee maker":4713,"fan":3003,"kettle":5101,"lamp":6226,"mug":6895,"sofa":3959,"stapler":4019,"table":5638,"toaster":4357},
+      "metadataWindowPerCategory": 200,
+      "minimumPhotosPerListing": 4,
+      "knownPerCategory": 10,
+      "absentPerCategory": 5,
+      "galleryViews": 2,
+      "queryViews": 2,
+      "labelMeaning": "eBay listing identity; not verified manufacturer SKU or independent phone capture"
+    },
+    "grocery": {
+      "repository": "marcusklasson/GroceryStoreDataset",
+      "revision": "fc80ba90f803d79d0383df52c5a4ac5de99ff6fc",
+      "knownClasses": 54,
+      "absentClasses": 27,
+      "gallery": "one iconic image and two natural train images per known fine class",
+      "queries": "three official test photos per fine class",
+      "absentSelection": "one deterministic sibling from every multi-class coarse group, then fill deterministically to 27",
+      "labelMeaning": "official fine-grained class, sometimes produce variety rather than exact SKU"
+    }
+  },
+  "hardPairs": {"countPerDataset": 12, "selection": "non-overlapping nearest different product pairs from gallery embeddings only; no query scores"},
+  "counterfactual": "remove every reference of the true product for hard-pair queries; same frozen model and threshold",
+  "report": ["raw recall@1 and @5", "visible recall@1, @5 and @8", "wrong visible first", "known queries without candidates", "absent queries with candidates", "per-category and hard-pair metrics", "label matches", "latency and RSS on this Mac only"],
+  "limits": ["Public benchmark images may overlap upstream pretraining; cannot establish absence of contamination", "Report sources separately: listing identities and grocery fine classes are different label granularities", "No ELFBAR references or queries and no model/threshold changes", "Photos and downloaded data remain outside git and production", "Results rank candidates for explicit user selection, never authorize a sale or stock mutation"]
+}

@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "policySha256": "a2ed6370b7214bce2807494444592c7f116fbd734ca7085620ac2490e9b82465",
+  "manifestSha256": "19363b1edb9f58c0f95681b4f1ea7f357dba7919d2d0b87a738d5bf1169a72c0",
+  "inputSha256": "d05b5401f6a6e9c5c10a74f6d644cc4bb17963018298c88cd066d152197bcb9f",
+  "nativeSha256": "0993f36e8a86bfa34f5974adb8bff1eed907f58e29009347cde9aef298245e19",
+  "scoredSha256": "fa484c534b587a843f4444f9e103ced1d9c280121428060bd48f99a7ee2f18ae",
+  "apiSha256": "62a324dc80f574f7e5682f302df75aaf73bf6fa5773e6c91a214d54c7a272ec1",
+  "regularQueries": 600,
+  "counterfactualQueries": 119,
+  "crossIdentityGalleryPixelCollisions": [],
+  "duplicateGalleryPixelGroups": [
+    [
+      "sop-281775316285-281775316285_0",
+      "sop-281775316285-281775316285_1"
+    ],
+    [
+      "sop-291514194440-291514194440_0",
+      "sop-291514194440-291514194440_1"
+    ]
+  ],
+  "excludedExactGalleryQueryDuplicates": [
+    {
+      "id": "sop-291507444957-291507444957_10",
+      "productId": "sop-291507444957",
+      "dataset": "sop",
+      "category": "lamp",
+      "known": true,
+      "role": "query",
+      "sourceSplit": "test",
+      "sourcePath": "Stanford_Online_Products/lamp_final/291507444957_10.JPG",
+      "viewerRow": 32613,
+      "file": "images/sop-291507444957-291507444957_10.jpg",
+      "sha256": "628e2fadb6ced2f8e7f133c658984b5435629c2463776dae62fde55a7c568c33",
+      "pixelSha256": "8cfa1641bf79ffe487b784e72738999b40c55d66b62b61a08bca821f11137ea1",
+      "bytes": 36527,
+      "width": 224,
+      "height": 400
+    },
+    {
+      "id": "sop-291507444957-291507444957_11",
+      "productId": "sop-291507444957",
+      "dataset": "sop",
+      "category": "lamp",
+      "known": true,
+      "role": "query",
+      "sourceSplit": "test",
+      "sourcePath": "Stanford_Online_Products/lamp_final/291507444957_11.JPG",
+      "viewerRow": 32614,
+      "file": "images/sop-291507444957-291507444957_11.jpg",
+      "sha256": "8b597d82c100032c5f826ce59343c1f6ad10ee8d51e4e7d604efefeea67b614b",
+      "pixelSha256": "cd11556d0607b6d836e142fe6f407a01a6fff22e83b00704864de17011fa3a90",
+      "bytes": 33091,
+      "width": 224,
+      "height": 400
+    },
+    {
+      "id": "sop-281746055379-281746055379_11",
+      "productId": "sop-281746055379",
+      "dataset": "sop",
+      "category": "sofa",
+      "known": true,
+      "role": "query",
+      "sourceSplit": "test",
+      "sourcePath": "Stanford_Online_Products/sofa_final/281746055379_11.JPG",
+      "viewerRow": 44465,
+      "file": "images/sop-281746055379-281746055379_11.jpg",
+      "sha256": "61ea65ffdbffef234429a7ea8622b77a595c2bab8c613bc7720e2da2c3d746e5",
+      "pixelSha256": "cbd9e6d4f5497a1e004d822d179de12315d5123f8e2d3df1567621db9604a7a2",
+      "bytes": 8651,
+      "width": 400,
+      "height": 206
+    }
+  ],
+  "realApi": {
+    "queries": 48,
+    "exactCandidateListAgreement": 48,
+    "mismatchQueries": [],
+    "allHttp200": true,
+    "catalogAndFeatureCacheUnchanged": true,
+    "emptyStoreHasNoLeak": true
+  },
+  "sampledCombinedPeakRssMiB": 1889.453125,
+  "rssMeasurement": "Sampled combined parent/native-Faiss RSS; local Mac, one thread. Not server capacity.",
+  "seed": {
+    "storeId": "photo-search-wide-20261115",
+    "knownProducts": 174,
+    "galleryPhotos": 402,
+    "uniqueGallerySources": 400,
+    "progress": {
+      "total": 400,
+      "ready": 400,
+      "pending": 0,
+      "failed": 0,
+      "withoutPhoto": 0
+    },
+    "oldRecordsUnchanged": true,
+    "realUploadApi": true,
+    "fixtureRowsOnly": true
+  }
+}

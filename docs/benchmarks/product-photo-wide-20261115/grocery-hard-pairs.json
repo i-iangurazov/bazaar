@@ -1,0 +1,134 @@
+[
+  {
+    "productIds": [
+      "grocery-70",
+      "grocery-72"
+    ],
+    "score": 0.8640561103820801,
+    "images": [
+      "grocery-70-iconic-Orange-Bell-Pepper_Iconic.jpg",
+      "grocery-72-iconic-Yellow-Bell-Pepper_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-15",
+      "grocery-19"
+    ],
+    "score": 0.8315107226371765,
+    "images": [
+      "grocery-15-iconic-Nectarine_Iconic.jpg",
+      "grocery-19-iconic-Peach_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-3",
+      "grocery-4"
+    ],
+    "score": 0.8146510720252991,
+    "images": [
+      "grocery-3-iconic-Red-Delicious_Iconic.jpg",
+      "grocery-4-iconic-Royal-Gala_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-31",
+      "grocery-33"
+    ],
+    "score": 0.7730889320373535,
+    "images": [
+      "grocery-31-iconic-God-Morgon-Orange-Juice_Iconic.jpg",
+      "grocery-33-iconic-God-Morgon-Red-Grapefruit-Juice_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-0",
+      "grocery-1"
+    ],
+    "score": 0.7654457092285156,
+    "images": [
+      "grocery-0-iconic-Golden-Delicious_Iconic.jpg",
+      "grocery-1-iconic-Granny-Smith_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-57",
+      "grocery-58"
+    ],
+    "score": 0.7384161949157715,
+    "images": [
+      "grocery-57-iconic-Yoggi-Strawberry-Yoghurt_Iconic.jpg",
+      "grocery-58-iconic-Yoggi-Vanilla-Yoghurt_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-39",
+      "grocery-40"
+    ],
+    "score": 0.7369726300239563,
+    "images": [
+      "grocery-39-iconic-Arla-Lactose-Medium-Fat-Milk_Iconic.jpg",
+      "grocery-40-iconic-Arla-Medium-Fat-Milk_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-53",
+      "grocery-55"
+    ],
+    "score": 0.7361961603164673,
+    "images": [
+      "grocery-53-iconic-Arla-Mild-Vanilla-Yoghurt_Iconic.jpg",
+      "grocery-55-iconic-Arla-Natural-Yoghurt_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-36",
+      "grocery-37"
+    ],
+    "score": 0.7134683132171631,
+    "images": [
+      "grocery-36-iconic-Tropicana-Juice-Smooth_Iconic.jpg",
+      "grocery-37-iconic-Tropicana-Mandarin-Morning_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-8",
+      "grocery-9"
+    ],
+    "score": 0.7120351195335388,
+    "images": [
+      "grocery-8-train-Lemon_027.jpg",
+      "grocery-9-train-Lime_007.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-65",
+      "grocery-67"
+    ],
+    "score": 0.7072871923446655,
+    "images": [
+      "grocery-65-iconic-Ginger_Iconic.jpg",
+      "grocery-67-iconic-Brown-Cap-Mushroom_Iconic.jpg"
+    ]
+  },
+  {
+    "productIds": [
+      "grocery-68",
+      "grocery-74"
+    ],
+    "score": 0.7028558850288391,
+    "images": [
+      "grocery-68-train-Yellow-Onion_038.jpg",
+      "grocery-74-train-Solid-Potato_016.jpg"
+    ]
+  }
+]
