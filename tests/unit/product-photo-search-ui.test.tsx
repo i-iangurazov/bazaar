@@ -144,3 +144,28 @@ it("sends the selected region, supports the whole photo, and keeps OCR evidence 
   const body = requests()[1][1]!.body as FormData;
   expect(body.get("region")).toBeNull(); expect(body.get("autoRegion")).toBe("0");
 });
+
+it("keeps uploaded markup, names and OCR text outside the active DOM in both preview modes", async () => {
+  const payload = '<svg onload="window.photoSearchInjected=1"><script>window.photoSearchInjected=1</script></svg>';
+  const photo = new File([payload], `${payload}.svg`, { type: "image/svg+xml" });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, init) => init?.method === "POST" && !String(url).endsWith("/prepare")
+    ? Promise.resolve(Response.json({ ...result, items: [{ ...result.items[0], name: payload }], recognition: {
+      regionSource: "automatic", region: { x: .1, y: .1, width: .8, height: .8 }, labelStatus: "matched", text: payload,
+    } })) : original(url, init));
+  const view = render(screen());
+  fireEvent.click(view.getByRole("button", { name: "Search by photo" }));
+  await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+  fireEvent.change(view.getByLabelText("Upload a photo"), { target: { files: [photo] } });
+  const preview = await view.findByAltText("Photo for search");
+  expect(URL.createObjectURL).toHaveBeenCalledWith(photo);
+  expect(preview.getAttribute("src")).toBe("blob:photo");
+  Object.defineProperties(preview, { naturalWidth: { value: 800 }, naturalHeight: { value: 600 } });
+  fireEvent.load(preview);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText(payload, { selector: "p" });
+  expect(view.baseElement.querySelector('svg image')?.getAttribute("href")).toBe("blob:photo");
+  expect(view.baseElement.querySelector('script, [onload], [onerror]')).toBeNull();
+  expect(view.getByAltText(payload).getAttribute("alt")).toBe(payload);
+  expect(boundary.push).not.toHaveBeenCalled();
+});

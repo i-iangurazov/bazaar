@@ -99,7 +99,7 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     let providerRequests = 0;
     page.on("request", (request) => {
-      if (request.url().includes("api.hiobuy.com")) providerRequests++;
+      if (new URL(request.url()).hostname === "api.hiobuy.com") providerRequests++;
     });
     await page.goto(`${base}/operations/integrations/china-image-search`);
     await page.screenshot({ path: `${out}/initial-${viewport.width}.png`, fullPage: true });

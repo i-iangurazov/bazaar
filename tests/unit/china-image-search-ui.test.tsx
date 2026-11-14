@@ -72,6 +72,18 @@ afterEach(() => {
 });
 
 describe("photo search workflow", () => {
+  it("renders an uploaded file as a blob image and hostile file names as text", async () => {
+    const payload = '<svg onload="window.photoSearchInjected=1"><script>window.photoSearchInjected=1</script></svg>';
+    const photo = new File([payload], `${payload}.svg`, { type: "image/svg+xml" });
+    const view = render(screen());
+    await view.findByRole("button", { name: "Upload a photo" });
+    fireEvent.change(view.getByLabelText("Upload a photo"), { target: { files: [photo] } });
+    await view.findByText(photo.name);
+    expect(URL.createObjectURL).toHaveBeenCalledWith(photo);
+    expect(view.getByAltText(messages.chinaImageSearch.preview).getAttribute("src")).toBe("blob:isolated-photo");
+    expect(view.container.querySelector('script, [onload], [onerror]')).toBeNull();
+    expect(boundary.upload).not.toHaveBeenCalled();
+  });
   it("labels demo cards, uses the existing image preparation, and offers no invented original links", async () => {
     boundary.upload.mockResolvedValue(Response.json(fixture));
     const view = render(screen());
