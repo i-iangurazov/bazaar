@@ -14,6 +14,8 @@ import { getSubscriptionUsage, withSubscriptionUsage } from "@/server/billing/su
 import * as verification from "@/server/billing/appleVerification";
 import { APPLE_WHATSAPP_OFFER_VERSION } from "@/server/billing/appleConfig";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
+import { APPLE_PURCHASE_TERMS_REVISION } from "@/lib/applePurchaseLegal";
+import { syntheticSellerEnvironment } from "../helpers/legalSeller";
 import { deleteOwnAccount } from "@/server/services/accountDeletion";
 import { setUserActive, updateUser } from "@/server/services/users";
 import type { SubscriptionSelection } from "@/lib/billing/subscriptionPricing";
@@ -44,9 +46,10 @@ const seed = async () => {
   return { ...f, actor: { id: f.adminUser.id, organizationId: f.org.id } };
 };
 const intentFor = async (f: Awaited<ReturnType<typeof seed>>, offerKey: string, action: "RENEW" | "CHANGE" = "RENEW") => {
+  const catalog = await getAppleBillingState(f.actor);
   const preview = await getApplePurchasePreview(f.actor, { expectedOrganizationId: f.org.id, offerKey, action });
   const intent = await createApplePurchaseIntent(f.actor, { quoteToken: preview.quoteToken ?? undefined, expectedOrganizationId: f.org.id, offerKey, action, idempotencyKey: randomUUID(),
-    termsVersion: LEGAL_TERMS_VERSION, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true });
+    termsVersion: LEGAL_TERMS_VERSION, termsRevision: catalog.termsRevision ?? undefined, storeKitConsent: syntheticAppleStoreKitConsent, acceptedTerms: true });
   const attemptId = randomUUID();
   await authorizeApplePurchase(f.actor, intent.intentId, { attemptId });
   return { ...intent, attemptId };
@@ -545,6 +548,9 @@ describeDb("Apple lifecycle, source isolation and recovery on PostgreSQL", () =>
 
   it("keeps ordinary live organizations in Production and refuses Sandbox fulfillment", async () => {
     const f = await seed(), [mapping] = configure(f.org.id, [business]);
+    for (const [key, value] of Object.entries({ ...syntheticSellerEnvironment, BILLING_LEGAL_RELEASE_APPROVED: LEGAL_TERMS_VERSION,
+      BILLING_SUPPORT_EMAIL_VERIFIED: "1", BILLING_PUBLIC_CONTACT_ADDRESS: "Synthetic public correspondence address 123",
+      APPLE_LEGAL_RELEASE_APPROVED: APPLE_PURCHASE_TERMS_REVISION })) vi.stubEnv(key, value);
     vi.stubEnv("APPLE_BILLING_MODE", "live"); vi.stubEnv("APPLE_BILLING_SANDBOX_ORGANIZATION_IDS", "synthetic-review-only-other-org");
     expect(await getAppleBillingState(f.actor)).toMatchObject({ ready: true, environment: "Production" });
     const intent = await intentFor(f, mapping.offerKey);

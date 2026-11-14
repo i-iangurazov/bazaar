@@ -14,7 +14,10 @@ describeDb("complete newcomer signup in the owned isolated Preview boundary", ()
     const protectedFixture = await seedBase({ plan: "BUSINESS" });
     const beforeProtected = await prisma.organization.findUniqueOrThrow({ where: { id: protectedFixture.org.id } });
     const databaseUrl = process.env.DATABASE_TEST_URL ?? process.env.DATABASE_URL!;
+    const redisUrl = process.env.REDIS_URL;
+    if (!redisUrl) throw new Error("Explicit isolated Redis is required for database signup checks");
     for (const [key, value] of Object.entries(hardeningPreviewEnv(databaseUrl))) vi.stubEnv(key, value);
+    vi.stubEnv("REDIS_URL", redisUrl);
     const network = vi.fn(() => { throw new Error("No external provider in isolated signup tests"); }); vi.stubGlobal("fetch", network);
     const email = await import("@/server/services/email"), send = vi.spyOn(email, "sendVerificationEmail");
     const { createTestCaller } = await import("../helpers/context"), caller = createTestCaller();
