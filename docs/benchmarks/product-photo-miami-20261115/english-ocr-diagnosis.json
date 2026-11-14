@@ -1,0 +1,38 @@
+[
+  {
+    "before": [
+      "ELFBAR",
+      0.99915
+    ],
+    "texts": [
+      "ELFBAR"
+    ],
+    "scores": [
+      0.99767
+    ]
+  },
+  {
+    "before": [
+      "GH23000",
+      0.96179
+    ],
+    "texts": [
+      "CH23000"
+    ],
+    "scores": [
+      0.88528
+    ]
+  },
+  {
+    "before": [
+      "mAm MNT",
+      0.60249
+    ],
+    "texts": [
+      "miami mINT"
+    ],
+    "scores": [
+      0.76396
+    ]
+  }
+]

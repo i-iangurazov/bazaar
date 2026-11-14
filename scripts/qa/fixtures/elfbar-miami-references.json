@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "date": "2026-11-15",
+  "source": {
+    "url": "https://dcdn-us.mitiendanube.com/stores/004/945/350/products/3bfbdaf5-f5e0-4868-aff5-f950b4751258-83a18a0e2b06f1c89c17207341972780-1024-1024.webp",
+    "page": "https://gocciacba.mitiendanube.com/productos/elfbar-gh-23000-miami-mint/",
+    "file": "sources/goccia.webp",
+    "sha256": "f3ca41acb887b07c590ed7e66ea03b5905239e6e26c37a32329b50ba6b49516c",
+    "kind": "Retail stock illustration with readable Miami Mint; one source angle, not two independent photographs"
+  },
+  "assets": [
+    {
+      "id": "miami-three-quarter",
+      "sku": "PHOTO-ELFBAR-TEST",
+      "source": "goccia.webp",
+      "file": "miami-three-quarter.jpg",
+      "crop": {
+        "left": 290,
+        "top": 125,
+        "width": 435,
+        "height": 790
+      },
+      "sha256": "2769c385f892ab6da9cadd76d3a7d98cb12df625bc18d0e3af3cba883917697e",
+      "canonicalSha256": "2ff3392c07b0b32c77f9c614b57126871c9dacf5104c812a3dea18ee3f3b3f40"
+    },
+    {
+      "id": "miami-front-detail",
+      "sku": "PHOTO-ELFBAR-TEST",
+      "source": "goccia.webp",
+      "file": "miami-front-detail.jpg",
+      "crop": {
+        "left": 310,
+        "top": 250,
+        "width": 196,
+        "height": 634
+      },
+      "sha256": "01551ee5d9347a4d3f9f5955ec22ab355971de9d694620e53ea735acf40e4639",
+      "canonicalSha256": "b61c22b800b14d41030a43a04b020324409945ea13b38aaf2717f34374efef73"
+    }
+  ],
+  "removeReferences": [
+    {
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "sourceKey": "2883587347c79d74274b13906d051650d3c79f43ea9b6d8a868c863c5599231c",
+      "sourceSha256": "4c86131b75cdc53add270eabb460c4e9f921b44875a7a2d531f4ce3c84379645",
+      "canonicalSha256": "641480ad17013435a093896a6155bc967d0828f117350082a8476a56a2a6fc97",
+      "reason": "Common skull display, does not show flavor; keep the original file and all other images"
+    },
+    {
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "sourceKey": "216ca8287a83485703e8e29f73c5f53973bcc9023271a2157e4f918a8deee49d",
+      "sourceSha256": "c6c2375fe896ec0dd4cf998bcd72b3679f8d28546a12affb8c1a64a05c0c7eac",
+      "canonicalSha256": "0fb5cef091cbe8fc1e6dcf32393085289097bd2442fa88b46c8553c0d49f2714",
+      "reason": "Common skull display, does not show flavor; keep the original file and all other images"
+    }
+  ],
+  "expectedGalleryPhotos": 38,
+  "expectedOriginalShopPhotos": 26,
+  "queryManifestSha256": "7a313a351189ddd74cea7dcfb4a2cd1084f5083892623c660dc42b4e3f1e2468",
+  "limits": [
+    "Same known 16-photo development cohort, source-disjoint from new references; not a new blind test",
+    "Full-body and front-detail crops come from one stock image; not different angles",
+    "Display-only views can no longer identify the Strawberry Banana flavor"
+  ]
+}

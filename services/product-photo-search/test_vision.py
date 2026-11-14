@@ -6,6 +6,49 @@ from vision import Detector, Vision, crop_region, valid_region
 
 
 class VisionTest(unittest.TestCase):
+    def test_context_retry_uses_only_text_inside_the_automatic_product_region(self):
+        vision = Vision.__new__(Vision)
+        region = {'x': .25, 'y': .2, 'width': .5, 'height': .6}
+        calls = []
+        def read(image, box, source):
+            calls.append(source)
+            lines = [{'text': 'ELFBAR', 'confidence': .99, 'box': {'x': .1, 'y': .1, 'width': .5, 'height': .1}}]
+            if source == 'full':
+                lines = [{'text': 'MIAMI MINT', 'confidence': .9, 'box': {'x': .3, 'y': .5, 'width': .3, 'height': .1}},
+                    {'text': 'ICE MINT', 'confidence': .99, 'box': {'x': 0, 'y': 0, 'width': .2, 'height': .1}}]
+            return {'regionSource': source, 'region': box, 'ocrStatus': 'ready', 'lines': lines}
+        vision._read_once = read
+        result = vision.read(np.zeros((100, 200, 3)), region, 'auto')
+        self.assertEqual(calls, ['auto', 'full'])
+        self.assertEqual([line['text'] for line in result['lines']], ['MIAMI MINT'])
+        self.assertEqual(result['region'], region)
+        self.assertAlmostEqual(result['lines'][0]['box']['x'], .1)
+        self.assertTrue(valid_region(result['lines'][0]['box']))
+
+    def test_manual_and_already_readable_labels_never_trigger_context_retry(self):
+        vision = Vision.__new__(Vision)
+        calls = []
+        def read(image, region, source):
+            calls.append(source)
+            return {'regionSource': source, 'region': region, 'ocrStatus': 'ready',
+                'lines': [{'text': 'ICE MINT', 'confidence': .99, 'box': {'x': 0, 'y': 0, 'width': 1, 'height': 1}}]}
+        vision._read_once = read
+        region = {'x': .25, 'y': .2, 'width': .5, 'height': .6}
+        for source in ['manual', 'auto']:
+            result = vision.read(np.zeros((100, 200, 3)), region, source)
+            self.assertEqual(result['regionSource'], source)
+        self.assertEqual(calls, ['manual', 'auto'])
+
+    def test_failed_context_retry_does_not_promote_outside_or_low_confidence_words(self):
+        vision = Vision.__new__(Vision)
+        region = {'x': .25, 'y': .2, 'width': .5, 'height': .6}
+        def read(image, box, source):
+            return {'regionSource': source, 'region': box, 'ocrStatus': 'ready',
+                'lines': [] if source != 'full' else [{'text': 'MIAMI MINT', 'confidence': .7,
+                    'box': {'x': .3, 'y': .5, 'width': .3, 'height': .1}}]}
+        vision._read_once = read
+        self.assertEqual(vision.read(np.zeros((100, 200, 3)), region, 'auto')['lines'], [])
+
     def test_normalized_regions_cannot_escape_the_input_or_create_tiny_crops(self):
         image = np.zeros((100, 200, 3), dtype=np.uint8)
         region = {'x': .25, 'y': .1, 'width': .5, 'height': .8}

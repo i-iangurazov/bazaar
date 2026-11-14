@@ -14,6 +14,9 @@ and runtime reads pinned local files without downloading replacements.
 
 The Apache-2.0 text is included in [licenses/Apache-2.0.txt](licenses/Apache-2.0.txt).
 Weights and archive checksums are in [vision-models.json](vision-models.json).
+The recognizer uses the pinned PP-OCRv6 **medium** ONNX artifact from RapidOCR 3.9.2;
+the small detector and direction classifier remain unchanged. The explicit installer
+downloads and verifies medium; inference never downloads or falls back to an API.
 No model-specific ELFBAR training or flavor list is added.
 
 `pipeline.py` adapts the multi-region recognition method in PaddleClas

@@ -31,10 +31,14 @@ def main():
         for name, expected in registry['files'].items():
             path = destination/name
             if name.startswith('ocr/'):
-                original = Path(rapidocr.__file__).parent/'models'/Path(name).name
-                if hashlib.sha256(original.read_bytes()).hexdigest() != expected:
-                    raise ValueError('unexpectedBundledOcrModel')
-                shutil.copyfile(original, path)
+                download = registry.get('downloads', {}).get(name)
+                if download:
+                    assets.download(download['url'], path, download['maxBytes'], expected)
+                else:
+                    original = Path(rapidocr.__file__).parent/'models'/Path(name).name
+                    if hashlib.sha256(original.read_bytes()).hexdigest() != expected:
+                        raise ValueError('unexpectedBundledOcrModel')
+                    shutil.copyfile(original, path)
             if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
                 raise ValueError('unexpectedVisionModel')
         print(destination)

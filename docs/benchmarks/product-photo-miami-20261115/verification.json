@@ -1,0 +1,212 @@
+{
+  "schema": 1,
+  "date": "2026-11-15",
+  "branch": "codex/playground",
+  "baseCommit": "2b6dc02525c175ebc59f13217b1bc4414bf093dd",
+  "sourceSha256": {
+    "services/product-photo-search/vision.py": "b1ec3527e1b56da11d93a6e4898959fabca218b61b62185ddf83af7d8f30273c",
+    "services/product-photo-search/vision-models.json": "13bcaa6be92a0d346b1b5243652fbc0377b77fe3883d6f673fa508e8e7e000cf",
+    "services/product-photo-search/prepare_model.py": "06a2220bad3a6d7e995c46278dbdf487d6075bff3a701a68157f92e7aaf6420d",
+    "services/product-photo-search/test_vision.py": "115be50b0eda2ced6d2e20ee01e7935be386bc6fd11a836d4d392c0c106d6d9b",
+    "scripts/qa/fixtures/elfbar-miami-references.json": "a203d4b86d011fd8c34938df3e59307d0a1e6f4c83512d682bce641340af97b2",
+    "scripts/qa/prepare-miami-photo-references.mjs": "7b3601812d92c20b521c8b6075d35875bab6de8cc5689bafdcddfdefa51b7b90",
+    "scripts/qa/improve-miami-photo-references.mjs": "e6fd1c944a5dda840d61472edebff3be5ef6543a53c4d7c5fee2710f1a912c21",
+    "scripts/qa/check-independent-elfbar-api.mjs": "e4463126f5cdb2fd5cdfd0566a59ea6ed110c40438032280f1f1e071c9367c11",
+    "scripts/benchmarks/product-photo/miami-gallery-ablation.py": "a6dae6cf4a2f1424f6d724c7a76a14676390fa227a58f361500eefbdb9c2a9fe"
+  },
+  "model": {
+    "name": "PP-OCRv6_rec_medium",
+    "sha256": "eef444829dbbe18d7fea59a3f6eb75647518d2b3a9568d27c92e42940204894b",
+    "visualEncoderAndIndexVersionChanged": false,
+    "inferenceDownloads": false,
+    "visualThreshold": 0.68,
+    "labelConfidenceThreshold": 0.85,
+    "maxContextualPasses": 1
+  },
+  "data": {
+    "frozenInputSha256": "c5c7aa95b1929aff2aefefbbbe0a0e5d5ecb0f8b22904116a7bef7330510812f",
+    "knownPhotos": 3,
+    "absentPhotos": 13,
+    "reviewGroups": 5,
+    "photographers": 1,
+    "sourceDisjointFromReferences": true,
+    "newBlindTest": false,
+    "newRealCameraPhotos": false,
+    "newReferenceSources": 1,
+    "newReferenceCrops": 2
+  },
+  "catalog": {
+    "isolatedOrganization": "photo-search-browser-qa",
+    "disposableDatabasePort": 55991,
+    "changedProducts": 2,
+    "rerunChangedProducts": 0,
+    "addedImages": 2,
+    "removedImageAssociations": 2,
+    "removedOriginalFiles": false,
+    "initialSnapshotSha256": "fc7b0497215fb239bb380d4779706d8fed993800a2d19321be876e9f8dced6e1",
+    "initialSnapshotAudit": "catalog-audit.json",
+    "fieldReady": 38,
+    "originalStoreReady": 26
+  },
+  "checks": [
+    {
+      "command": ".local/product-photo-search/runtime/venv/bin/python services/product-photo-search/prepare_model.py --with-vision",
+      "exitCode": 0,
+      "pinnedWeightsVerified": true,
+      "log": ".local/elfbar-pp-improve/prepare-model.log",
+      "logSha256": "905dee4adeaafed8aff3dbc4872a0ef5559778c5aec67e9d15f9bf44ffdb4561"
+    },
+    {
+      "command": ".local/product-photo-search/runtime/venv/bin/python -m unittest discover -s services/product-photo-search -p test_*.py",
+      "exitCode": 0,
+      "tests": 15,
+      "log": ".local/elfbar-pp-improve/python-tests.log",
+      "logSha256": "6041218dbdff112bb72aa09ad5da4e55b19ea5cdebaeb2b5359548caea8341ba"
+    },
+    {
+      "command": "node .local/product-photo-hard-cases/qa.mjs test tests/integration/product-photo-search.test.ts tests/integration/product-search-context.test.ts tests/integration/product-search-consistency.test.ts tests/integration/store-product-visibility.test.ts tests/integration/bundles.test.ts tests/unit/product-photo-label.test.ts tests/unit/product-photo-search-ui.test.tsx tests/unit/product-photo-search-engine.test.ts tests/unit/client-request-headers.test.ts tests/unit/pos-read-transport.test.ts tests/unit/role-access.test.ts tests/unit/product-image-changes.test.ts tests/unit/product-image-upload-route.test.ts tests/unit/pos-product-photo-button.test.tsx",
+      "exitCode": 0,
+      "tests": 80,
+      "files": 14,
+      "disposableDatabasePort": 55981,
+      "log": ".local/elfbar-pp-improve/regression.log",
+      "logSha256": "adb5230d1c0a82da551510a6945fc5a3b081ac6cbc250836355a410f814a97ca"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit",
+      "exitCode": 0,
+      "log": ".local/elfbar-pp-improve/typecheck.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0,
+      "log": ".local/elfbar-pp-improve/lint.log",
+      "logSha256": "0c3c984925f00fb3efef6a4d8a4d21e92044c9ee3a8a6e50ba6e49315fb24e71"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "exitCode": 0,
+      "log": ".local/elfbar-pp-improve/i18n.log",
+      "logSha256": "7928e029387f03e9d2782197363680f8181899bdb69c80bfc76625f6f40c69cd"
+    },
+    {
+      "command": "node scripts/qa/product-photo-search-engine.mjs",
+      "exitCode": 0,
+      "realNativeModelsAndFaiss": true,
+      "log": ".local/elfbar-pp-improve/engine-tests.log",
+      "logSha256": "1de5d4d5b8fe200c324620bbed92d6d4312fd6b32b61b2433ea4528ef26c0684"
+    },
+    {
+      "command": "node .local/product-photo-search/manual/lan-runner.mjs build",
+      "exitCode": 0,
+      "productionBuild": true,
+      "isolatedPreviewEnvironment": true,
+      "log": ".local/elfbar-pp-improve/build.log",
+      "logSha256": "a0f59b0a8d2b92ced5c22478c95f0c2267d2e91c8794ae076026040017558260"
+    },
+    {
+      "command": ".local/product-photo-search/runtime/venv/bin/python scripts/benchmarks/product-photo/miami-gallery-ablation.py",
+      "exitCode": 0,
+      "variants": 5,
+      "frozenQueries": 36,
+      "log": ".local/elfbar-pp-improve/ablation.log",
+      "logSha256": "0ad365eee6d63e89a7e86d7d510b20e222f53caf356900c761d6052ffe159a9d"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --miami-improvement --cohort=independent",
+      "exitCode": 0,
+      "allHttp200": true,
+      "photoQueries": 16,
+      "emptyStoreControl": true,
+      "galleryUnchangedDuringSearch": true,
+      "log": ".local/elfbar-pp-improve/api-independent.log",
+      "logSha256": "3c7e8e2ce2bfdfdee858fa992eeb30a9c9f47df8e5a3a7ade07835eca969669d"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --miami-improvement --cohort=field",
+      "exitCode": 0,
+      "allHttp200": true,
+      "photoQueries": 40,
+      "emptyStoreControl": true,
+      "galleryUnchangedDuringSearch": true,
+      "log": ".local/elfbar-pp-improve/api-field.log",
+      "logSha256": "9fbfed84ed6976b4ba6942a1d3c91311aa94ea91c0a3edae46d3bfa7af8f6160"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs --miami-improvement --cohort=legacy",
+      "exitCode": 0,
+      "allHttp200": true,
+      "photoQueries": 11,
+      "emptyStoreControl": true,
+      "galleryUnchangedDuringSearch": true,
+      "log": ".local/elfbar-pp-improve/api-legacy.log",
+      "logSha256": "d2852a139cf8e5ef7f110f794eac274bb7dc5e7a71b4e44c796b79a928ff34ae"
+    },
+    {
+      "command": "node --check QA scripts; Python AST; git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "ui": {
+    "browser": "Hidden own IAB; user Chrome not used",
+    "desktop": true,
+    "mobileViewport": {
+      "width": 390,
+      "height": 844
+    },
+    "horizontalOverflow": false,
+    "catalogSearch": true,
+    "posEntrySearch": true,
+    "positiveAndEmptyResults": true,
+    "selectionAndBack": true,
+    "salesOrCashOperations": false,
+    "consoleErrors": 0,
+    "consoleWarnings": 1,
+    "warning": "Radix Select uncontrolled to controlled on POS entry",
+    "screenshots": {
+      ".local/elfbar-pp-improve/ui-catalog-desktop.png": "42c92df3bdbc9cce81d1a8ad9dface18de630570c2cfd405ac605f5943aac91c",
+      ".local/elfbar-pp-improve/ui-pos-mobile.png": "c03c24c9557187bbe980099d59a2a6631401a48b5f18c3e2951dfb2883a18029",
+      ".local/elfbar-pp-improve/ui-pos-empty.png": "54b176af3b69471e0390392d9cec291752c48a79bd5b02aec3b77dae59e646f1"
+    },
+    "viewportReset": true
+  },
+  "runtime": {
+    "url": "http://192.168.68.109:3158",
+    "appHttpStatus": 200,
+    "processesRunning": {
+      "lan": true,
+      "engine": true,
+      "worker": true
+    },
+    "engine": "PP-ShiTu/Faiss + PP-OCRv6 medium",
+    "dinov2Activated": false
+  },
+  "paidInferenceCalls": false,
+  "productionDeployed": false,
+  "notRun": {
+    "newBlindCaptureSet": "Repeated known source-disjoint corpus; no new phone captures",
+    "independentStrawberryBananaWatermelonCherryPair": "No new reliably labelled captures",
+    "targetLinuxCapacity": "Sequential local Mac checks; no production concurrency benchmark"
+  },
+  "resolvedSetupFailures": [
+    "Separate disposable automated-test database was initially stopped; started owned helper and completed 80 tests",
+    "First engine check hit startup readiness 503; awaited healthy service and completed native/API checks"
+  ],
+  "evidenceSha256": {
+    "api-field.json": "345e5b9132982c730e0f96eccdd4ca8bc53ab2bb025a419a30a20cfb4c4e2406",
+    "api-independent.json": "022228d2217028df7a87de541278fc587d9a7219f9d83977a041041278ad21cc",
+    "api-legacy.json": "c26a179a1131811ae1b553fdba978c463529f2e3f4d262655caacdcc1b575c74",
+    "augmentation-initial.json": "f3fd77ed13a47b31015855e948a11db4b5626005241a655ab6713004b6ca17ae",
+    "augmentation.json": "2b972cf571d6937cb927cbf4be42f5912f2a52c6e5aa434084e7a73e64c8cfee",
+    "catalog-audit.json": "88f1b47ef5ba6e2e63cded3a9a81f4871fb46b48de33c55bbbbc11f4cd30efe6",
+    "english-ocr-diagnosis.json": "d3a2f84e3dd86b7b11ddbf9349a327586de16e239a66a9dd49038cd7f9643863",
+    "english-preprocess-diagnosis.json": "ab6cdcafd00eaa0da285bf9a0fa527dcd218188c744f699f0bcb5565a768c4e9",
+    "gallery-ablation.json.gz": "bb4317cb69a6678e48cfd5b99f7319e47895074033b623811c93774de88e1f9a",
+    "medium-diagnosis.json": "22e7b8af3caecc818a0e963e25d9e77411f2cc25c4893d2b27881722d54d378d",
+    "ocr-before.json": "a8518b8dcc98d14048977197923d2acc57be7b77fc7df94c6793fbe8710bd92f",
+    "ocr-scale-diagnosis.json": "00bf537ed8dd3030c2a5e6c2d31a0f1eda250a93e9c0002e7db7823e7d730912",
+    "summary.json": "6456e25106dbb1b937575e9432061ae43296732486f381a93199fb1bbd6ee0f2",
+    "ui-console.json": "26cef457b9b5aa4cfa911a00650227628b573fed24ed6f26afc519f7c25ce021"
+  }
+}

@@ -8,6 +8,7 @@ Copyright (c) 2020 PaddlePaddle Authors. Licensed under Apache License 2.0.
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import cv2
 import numpy as np
@@ -90,14 +91,15 @@ class Vision:
                 if hashlib.file_digest(stream, 'sha256').hexdigest() != expected:
                     raise ValueError('unexpectedVisionWeights')
         self.detector = Detector(root/registry['detectorDirectory'], threads)
-        from rapidocr import RapidOCR
+        from rapidocr import RapidOCR, ModelType
         self.ocr = RapidOCR(params={
             'Global.log_level': 'error', 'Global.max_side_len': 1600,
             'Det.max_candidates': 200,
             'EngineConfig.onnxruntime.intra_op_num_threads': threads,
             'EngineConfig.onnxruntime.inter_op_num_threads': 1,
             'Det.model_path': str(root/'ocr/PP-OCRv6_det_small.onnx'),
-            'Rec.model_path': str(root/'ocr/PP-OCRv6_rec_small.onnx'),
+            'Rec.model_path': str(root/registry['recognizerFile']),
+            'Rec.model_type': ModelType.MEDIUM,
             'Cls.model_path': str(root/'ocr/ch_ppocr_mobile_v2.0_cls_mobile.onnx'),
         })
 
@@ -108,7 +110,33 @@ class Vision:
             return []  # Full-image visual search still works; do not invent boxes.
 
     def read(self, rgb, region=None, source='full'):
-        """OCR only the selected real region, after visual recognition of proposals."""
+        """Bounded OCR; an automatic crop may recover in-region text at full scale.
+
+        Never broaden a human crop. A contextual pass may return only text boxes
+        fully contained in the automatic product region, never shelf/background text.
+        """
+        analysis = self._read_once(rgb, region, source)
+        def has_label(lines):
+            return any(line['confidence'] >= .85 and len(re.findall(r'[^\W\d_]{2,}', line['text'])) >= 2 for line in lines)
+        if source != 'auto' or region is None or has_label(analysis['lines']):
+            return analysis
+        full = self._read_once(rgb, None, 'full')
+        contained = []
+        for line in full['lines']:
+            box = line['box']
+            if (box['x'] >= region['x'] and box['y'] >= region['y']
+                    and box['x']+box['width'] <= region['x']+region['width']
+                    and box['y']+box['height'] <= region['y']+region['height']):
+                local = {'x': (box['x']-region['x'])/region['width'],
+                    'y': (box['y']-region['y'])/region['height'],
+                    'width': box['width']/region['width'], 'height': box['height']/region['height']}
+                if valid_region(local):
+                    contained.append({**line, 'box': local})
+        if has_label(contained):
+            analysis.update(ocrStatus='ready', lines=contained)
+        return analysis
+
+    def _read_once(self, rgb, region=None, source='full'):
         selected = crop_region(rgb, region) if region else rgb
         analysis = {'regionSource': source, 'region': region, 'ocrStatus': 'unavailable', 'lines': []}
         try:
