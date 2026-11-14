@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-14",
+  "dataset_manifest_sha256": "c919edfc80cc31ce1bb1a59aba54fd604a4c0d6a31bccbcf8a6b47364aae8756",
+  "known_products": 300,
+  "unknown_products": 100,
+  "images": 2400,
+  "image_sizes": [
+    [
+      154,
+      115
+    ]
+  ],
+  "excluded_query_gallery_duplicates": [],
+  "paired_comparison": {
+    "pp_minus_cn_recall_at_5": 0.0,
+    "paired_identity_bootstrap_95ci": [
+      -0.007,
+      0.007
+    ],
+    "identities": 200,
+    "iterations": 5000
+  },
+  "model_assets": {
+    "pp-shitu-v2.tar": {
+      "url": "https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/rec/models/inference/PP-ShiTuV2/general_PPLCNetV2_base_pretrained_v1.0_infer.tar",
+      "bytes": 17103396,
+      "sha256": "b55f63f2f93eb42b0ff232154180f5e54d99da0891a200a2439d7a0a0ef8c026"
+    },
+    "cn-clip-source.tar.gz": {
+      "url": "https://codeload.github.com/OFA-Sys/Chinese-CLIP/tar.gz/31863c707501bf1605d36842f43deb78793dbc5d",
+      "bytes": 2744646,
+      "sha256": "48b04d626eec503243e5af8fda5da1bd15ef066a51c43bc882b1ffb1f69ac750"
+    },
+    "clip_cn_vit-b-16.pt": {
+      "url": "https://huggingface.co/OFA-Sys/chinese-clip-vit-base-patch16/resolve/36e679e65c2a2fead755ae21162091293ad37834/clip_cn_vit-b-16.pt",
+      "bytes": 753196934,
+      "sha256": "5997ef32c50de18f3ac06eb5d746c324a639053c3bed8f2986f97ebb22b2ecde"
+    },
+    "cn_code_revision": "31863c707501bf1605d36842f43deb78793dbc5d",
+    "pp_code_revision": "202ac79a99aa368f2c95cb1871bbc11574f685da",
+    "cn_weights_revision": "36e679e65c2a2fead755ae21162091293ad37834"
+  },
+  "raw_evidence_hashes": {
+    "chineseclip-2t.queries.json": "d16e8f53bc02769d285d8f19230713a20c463c4d5d02d869fd40c6ed6a25c5af",
+    "chineseclip-2t.features.npz": "1a7111224d1b0f0f2b06b24a7d8f45b893ca71520dd9103f97ca8ba0db0a7efb",
+    "chineseclip-2t.timings.json": "9b9beb03d85862c1d45d05f3df564d66b050c488248314744156adf5a8b1c64b",
+    "ppshitu-2t.queries.json": "9e1cc132e36c245ee19770c2db91c6ad7abb490e460af5581668d3524258364d",
+    "ppshitu-2t.timings.json": "2e046a6460bf20708280382ac1a2dcd2730c3f3949d6b13cf05f7357803d7d30",
+    "ppshitu-2t.features.npz": "b779b080943086b0e3992a7ad72beff21a8903e6708f24b321a47d6c9a26bce1"
+  }
+}
