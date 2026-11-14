@@ -7,6 +7,7 @@ import { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
 
 const mode = process.argv[2];
+const visionCheck = process.argv.includes("--vision");
 assert.ok(["prepare", "seed", "evaluate"].includes(mode), "Use prepare, seed or evaluate");
 const root = resolve(".local/elfbar-photo-check");
 const fixture = JSON.parse(await readFile("scripts/qa/fixtures/elfbar-photo-search.json", "utf8"));
@@ -182,7 +183,8 @@ try {
       }
       const expectedId = row.expected ? products.get(row.expected).id : null;
       const rank = expectedId ? body.items.findIndex((item) => item.id === expectedId) + 1 : null;
-      results.push({ query: row.id, kind: row.kind, expected: row.expected ?? row.flavor, expectedId, rank: rank || null, ms, items: body.items });
+      if (visionCheck) assert.ok(body.recognition && body.recognition.labelStatus !== "unavailable", "Detector/OCR runtime is not active");
+      results.push({ query: row.id, kind: row.kind, expected: row.expected ?? row.flavor, expectedId, rank: rank || null, ms, items: body.items, ...(body.recognition ? { recognition: body.recognition } : {}) });
       console.log(JSON.stringify({ query: row.id, rank: rank || null, candidates: body.items.map((item) => item.name) }));
     }
     const emptyStoreId = "photo-search-browser-other";
@@ -199,12 +201,14 @@ try {
     const summaries = ["independent-device-photo", "manufacturer-artwork", "absent-manufacturer-artwork"].map((kind) => {
       const rows = results.filter((row) => row.kind === kind);
       return { kind, queries: rows.length, top1: rows.filter((row) => row.rank === 1).length,
-        top5: rows.filter((row) => row.rank && row.rank <= 5).length, queriesWithCandidates: rows.filter((row) => row.items.length).length };
+        top5: rows.filter((row) => row.rank && row.rank <= 5).length, queriesWithCandidates: rows.filter((row) => row.items.length).length,
+        ...(visionCheck ? { queriesWithTextConfirmation: rows.filter((row) => row.recognition?.labelStatus === "matched").length } : {}) };
     });
     const evidence = { schema: 1, at: new Date().toISOString(), fixtureManifestSha256: digest(await readFile("scripts/qa/fixtures/elfbar-photo-search.json")),
       realApplicationApi: true, model: "ppshitu-v2-pplcnetv2-v1-fp32-224", threshold: 0.68, galleryProgress: prepared.progress,
       originalPreserved: true, storeScopeVerified: true, emptyStoreHasNoLeakedCandidates: true, gallery: galleryEvidence, summaries, limitations: fixture.protocol.limits, results };
-    await writeFile(`${root}/results.json`, JSON.stringify(evidence, null, 2) + "\n");
+    if (visionCheck) evidence.visionModelManifestSha256 = digest(await readFile("services/product-photo-search/vision-models.json"));
+    await writeFile(`${root}/${visionCheck ? "results-vision" : "results"}.json`, JSON.stringify(evidence, null, 2) + "\n");
     console.log(JSON.stringify(summaries, null, 2));
   }
 } finally { await db.$disconnect(); }

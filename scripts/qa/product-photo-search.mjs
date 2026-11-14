@@ -139,7 +139,11 @@ if (mode === "up") {
 } else if (mode === "worker") {
   runService(process.execPath, ["--import", "tsx", "scripts/product-photo-worker.ts"]);
 } else if (mode === "engine") {
-  runService(resolve(".local/photo-search-benchmark/venv/bin/python"), ["services/product-photo-search/server.py", "--model-dir", resolve(".local/photo-search-benchmark/models/general_PPLCNetV2_base_pretrained_v1.0_infer"), "--port", "3160"]);
+  const runtime = resolve(root, "runtime");
+  const python = existsSync(resolve(runtime, "venv/bin/python")) ? resolve(runtime, "venv/bin/python") : resolve(".local/photo-search-benchmark/venv/bin/python");
+  const model = existsSync(resolve(runtime, "models/general_PPLCNetV2_base_pretrained_v1.0_infer")) ? resolve(runtime, "models/general_PPLCNetV2_base_pretrained_v1.0_infer") : resolve(".local/photo-search-benchmark/models/general_PPLCNetV2_base_pretrained_v1.0_infer");
+  const vision = resolve(runtime, "models/vision");
+  runService(python, ["services/product-photo-search/server.py", "--model-dir", model, "--port", "3160", ...(existsSync(vision) ? ["--vision-model-dir", vision] : [])]);
 } else if (mode === "migrate") {
   run("pnpm", ["exec", "prisma", "migrate", "deploy"]);
 } else if (["build", "serve", "dev"].includes(mode)) {

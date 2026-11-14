@@ -9375,6 +9375,26 @@
     "noPhotosTitle": "Add product photos",
     "noMatchesTitle": "Try another angle",
     "readyToSearch": "Similar products will appear here",
-    "resultsHelp": "Take a photo or upload an image. You choose the right match."
+    "resultsHelp": "Take a photo or upload an image. You choose the right match.",
+    "cropTitle": "Select the product",
+    "cropHelp": "Move the photo and zoom in on the product. You can use the arrow keys and sliders.",
+    "cropZoom": "Zoom",
+    "cropShape": "Selection shape",
+    "applyRegion": "Use selection",
+    "editRegion": "Select product area",
+    "cropNeedsPreview": "Manual selection needs an available photo preview. Automatic selection runs during search.",
+    "regionManual": "Using the area you selected.",
+    "regionAuto": "Area selected automatically. Check the outline.",
+    "wholePhoto": "Use the whole photo",
+    "automaticRegion": "Enable automatic selection",
+    "label_matched": "The text matches a product name. Check the product before choosing.",
+    "label_ambiguous": "The text is ambiguous. Check the product name, model and variant.",
+    "label_unmatched": "The text could not be confirmed among similar products. Check the model and variant: the exact product may be absent.",
+    "label_unreadable": "The product name could not be read reliably. Try selecting a closer view.",
+    "label_unavailable": "Text recognition is unavailable. Results are based on the photo.",
+    "readLabel": "Read: “{text}”",
+    "labelBadge": "Text match",
+    "textOnlyBadge": "From text in photo",
+    "textOnlyHelp": "Visual similarity is not confirmed for a card marked “From text in photo”. Check the physical product."
   }
 }

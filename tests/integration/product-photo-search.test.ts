@@ -26,11 +26,13 @@ const cookie = async (user = f.adminUser, claims: Record<string, unknown> = {}) 
 const prepare = async (auth: string, storeId = f.store.id, retryFailed = false) => PREPARE(new Request(`${endpoint}/prepare`, {
   method: "POST", headers: { cookie: auth, origin: base, "Content-Type": "application/json" }, body: JSON.stringify({ storeId, retryFailed }),
 }));
-const query = async (auth: string, options: { storeId?: string; partial?: boolean; buffer?: Buffer; origin?: string } = {}) => {
+const query = async (auth: string, options: { storeId?: string; partial?: boolean; buffer?: Buffer; origin?: string; region?: unknown; autoRegion?: string } = {}) => {
   const form = new FormData();
   form.set("file", new File([new Uint8Array(options.buffer ?? image)], "photo.jpg", { type: "image/jpeg" }));
   form.set("storeId", options.storeId ?? f.store.id);
   form.set("allowPartial", options.partial ? "1" : "0");
+  if (options.region !== undefined) form.set("region", typeof options.region === "string" ? options.region : JSON.stringify(options.region));
+  if (options.autoRegion !== undefined) form.set("autoRegion", options.autoRegion);
   return POST(new Request(endpoint, { method: "POST", headers: { cookie: auth, origin: options.origin ?? base }, body: form }));
 };
 async function ready() {
@@ -91,6 +93,65 @@ suite("internal photo search: isolated PostgreSQL, Redis and authentication", ()
     expect((await query(token)).status).toBe(401);
     await prisma.user.update({ where: { id: f.adminUser.id }, data: { sessionVersion: { increment: 1 } } });
     expect((await query(await cookie())).status).toBe(401);
+  });
+  it("checks regions before inference and preserves a manual choice through the private protocol", async () => {
+    await ready();
+    for (const region of ["not-json", [], { x: -1, y: 0, width: 1, height: 1 }, { x: 0, y: 0, width: 2, height: 1 }, { x: 0, y: 0, width: 0, height: 1 }])
+      expect((await query(await cookie(), { region })).status).toBe(400);
+    expect((await query(await cookie(), { autoRegion: "anything" })).status).toBe(400);
+    expect(transport).not.toHaveBeenCalled();
+    const region = { x: 0.1, y: 0.1, width: 0.8, height: 0.8 };
+    transport.mockImplementation(async (_url, init) => {
+      expect(JSON.parse(init.body).region).toEqual(region);
+      return Response.json({ modelVersion, matches: [{ index: 0, score: 0.9 }], analysis: { regionSource: "manual", region, ocrStatus: "unavailable", lines: [] } });
+    });
+    expect(await (await query(await cookie(), { region })).json()).toMatchObject({ recognition: { regionSource: "manual", region } });
+  });
+  it("reranks close visual candidates using names and marks a separate exact text result when visual matching misses", async () => {
+    await ready();
+    await prisma.product.update({ where: { id: f.product.id }, data: { name: "ELFBAR GH23000 Pineapple Plums Lime Mint" } });
+    await preparePhotoSearch({ ...f.adminUser, organizationId: f.org.id }, f.store.id, false);
+    await prisma.productPhotoFeature.updateMany({ data: { status: "READY", embedding: vector } });
+    const peach = await prisma.product.create({ data: { organizationId: f.org.id, name: "ELFBAR GH23000 Peach Mango Watermelon", sku: "PEACH-TEST", unit: "each", baseUnitId: f.baseUnit.id, photoUrl: "/uploads/product-photo-integration-only.jpg" } });
+    await prisma.storeProduct.create({ data: { organizationId: f.org.id, storeId: f.store.id, productId: peach.id } });
+    const otherVector = [0, 1, ...Array<number>(510).fill(0)];
+    await prisma.productPhotoFeature.create({ data: { organizationId: f.org.id, productId: peach.id, sourceKey: photoSourceKey(peach.id, peach.photoUrl!, peach.updatedAt), sourceUrl: peach.photoUrl!, modelVersion, status: "READY", embedding: otherVector } });
+    const analysis = { regionSource: "full", region: null, ocrStatus: "ready", lines: ["ELFBAR", "GH23000", "PEACH MANGO", "WATERMELON"].map((text, index) => ({ text, confidence: 0.99, box: { x: 0.2, y: 0.1 + index * 0.05, width: 0.6, height: 0.04 } })) };
+    transport.mockImplementation(async (_url, init) => {
+      const matrix = Buffer.from(JSON.parse(init.body).vectorsBase64, "base64");
+      const wrong = matrix.readFloatLE(0) === 1 ? 0 : 1;
+      return Response.json({ modelVersion, matches: [{ index: wrong, score: 0.95 }, { index: 1 - wrong, score: 0.8 }], analysis });
+    });
+    const both = await (await query(await cookie())).json();
+    expect(both.items.map((item: { id: string }) => item.id)).toEqual([peach.id, f.product.id]);
+    expect(both.items[0]).toMatchObject({ labelMatched: true, matchSource: "photo-text" });
+    transport.mockResolvedValue(Response.json({ modelVersion, matches: [], analysis }));
+    const textOnly = await (await query(await cookie())).json();
+    expect(textOnly.items).toHaveLength(1); expect(textOnly.items[0]).toMatchObject({ id: peach.id, matchSource: "text", labelMatched: true });
+    // An exact label alone, without separate context, cannot introduce a new result.
+    transport.mockResolvedValue(Response.json({ modelVersion, matches: [], analysis: { ...analysis, lines: analysis.lines.slice(2) } }));
+    expect(await (await query(await cookie())).json()).toMatchObject({ items: [] });
+    // No inference response can retrieve a hidden product, including via OCR.
+    await prisma.storeProduct.update({ where: { storeId_productId: { storeId: f.store.id, productId: peach.id } }, data: { isHidden: true } });
+    transport.mockResolvedValue(Response.json({ modelVersion, matches: [], analysis }));
+    expect(await (await query(await cookie())).json()).toMatchObject({ items: [] });
+  });
+  it("keeps the eight-result limit when an exact text result supplements eight visual neighbors", async () => {
+    await prisma.product.update({ where: { id: f.product.id }, data: { name: "ELFBAR GH23000 Ice Mint" } });
+    await ready();
+    for (let index = 0; index < 8; index += 1) {
+      const product = await prisma.product.create({ data: { organizationId: f.org.id, name: `Visual neighbor ${index}`, sku: `VISUAL-${index}`, unit: "each", baseUnitId: f.baseUnit.id, photoUrl: "/uploads/product-photo-integration-only.jpg" } });
+      await prisma.storeProduct.create({ data: { organizationId: f.org.id, storeId: f.store.id, productId: product.id } });
+      await prisma.productPhotoFeature.create({ data: { organizationId: f.org.id, productId: product.id, sourceKey: photoSourceKey(product.id, product.photoUrl!, product.updatedAt), sourceUrl: product.photoUrl!, modelVersion, status: "READY", embedding: [0, 1, ...Array<number>(510).fill(0)] } });
+    }
+    transport.mockImplementation(async (_url, init) => {
+      const matrix = Buffer.from(JSON.parse(init.body).vectorsBase64, "base64");
+      const matches = Array.from({ length: 9 }, (_, index) => index).filter((index) => matrix.readFloatLE(index * 512 * 4) === 0).map((index) => ({ index, score: 0.9 }));
+      return Response.json({ modelVersion, matches, analysis: { regionSource: "full", region: null, ocrStatus: "ready", lines: ["ELFBAR", "GH23000", "ICE MINT"].map((text, index) => ({ text, confidence: 0.99, box: { x: 0.2, y: 0.1 + index * 0.05, width: 0.6, height: 0.04 } })) } });
+    });
+    const result = await (await query(await cookie())).json();
+    expect(result.items).toHaveLength(8);
+    expect(result.items[0]).toMatchObject({ id: f.product.id, matchSource: "text", labelMatched: true });
   });
   it("never sends embeddings of another store, hidden or archived products; deduplicates photos", async () => {
     await ready();

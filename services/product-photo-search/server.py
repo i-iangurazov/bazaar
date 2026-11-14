@@ -16,6 +16,7 @@ from engine import Encoder, MODEL_VERSION, DIMENSION
 import cv2
 import numpy as np
 from retrieval import Searcher
+from vision import Vision, crop_region, fallback_analysis, valid_region
 
 
 def main():
@@ -24,12 +25,14 @@ def main():
     parser.add_argument("--port", type=int, default=3150)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--threads", type=int, choices=[1, 2, 4], default=2)
+    parser.add_argument("--vision-model-dir", type=Path, help="Optional pinned detector/OCR assets, prepared offline")
     args = parser.parse_args()
     token = os.environ.get("PRODUCT_PHOTO_SEARCH_TOKEN", "")
     if len(token) < 32:
         raise SystemExit("PRODUCT_PHOTO_SEARCH_TOKEN must have at least 32 characters")
     encoder = Encoder(args.model_dir, args.threads)
     encoder.encode(cv2.imencode(".jpg", np.zeros((224, 224, 3), dtype="uint8"))[1].tobytes())
+    vision = Vision(args.vision_model_dir, args.threads) if args.vision_model_dir else None
     searcher = Searcher(args.threads)
     capacity = threading.Lock()
 
@@ -64,7 +67,7 @@ def main():
                 return self.reply(401, {"error": "unauthorized"})
             if self.path != "/health":
                 return self.reply(404, {"error": "notFound"})
-            self.reply(200, {"modelVersion": MODEL_VERSION, "dimension": DIMENSION, "ready": searcher.process.poll() is None})
+            self.reply(200, {"modelVersion": MODEL_VERSION, "dimension": DIMENSION, "ready": searcher.process.poll() is None, "vision": vision is not None})
 
         def do_POST(self):
             if not self.authorized():
@@ -84,10 +87,32 @@ def main():
                 data = base64.b64decode(request["imageBase64"], validate=True)
                 if not 0 < len(data) <= 3*1024*1024:
                     return self.reply(400, {"error": "invalidImage"})
-                query = encoder.encode(data).tolist()
-                result = {"embedding": query} if self.path == "/embed" else {
-                    "matches": searcher.search(request["vectorsBase64"], request["groups"], query)
-                }
+                if self.path == '/embed':
+                    result = {'embedding': encoder.encode(data).tolist()}
+                else:
+                    region = request.get('region')
+                    if region is not None and not valid_region(region):
+                        raise ValueError('invalidRegion')
+                    automatic = request.get('autoRegion', True)
+                    if not isinstance(automatic, bool):
+                        raise ValueError('invalidRegion')
+                    rgb = encoder.decode(data)
+                    if vision:
+                        selected, analysis = vision.analyze(rgb, region, automatic)
+                    else:
+                        selected = crop_region(rgb, region) if region else rgb
+                        analysis = fallback_analysis(region)
+                    variants = [selected]
+                    if analysis['regionSource'] == 'auto':
+                        variants.append(rgb)  # Preserve recall if automatic localization was imperfect.
+                    grouped = {}
+                    for pixels in variants:
+                        query = encoder.encode_rgb(pixels).tolist()
+                        for match in searcher.search(request['vectorsBase64'], request['groups'], query):
+                            group = request['groups'][match['index']]
+                            if group not in grouped or match['score'] > grouped[group]['score']:
+                                grouped[group] = match
+                    result = {'matches': sorted(grouped.values(), key=lambda match: (-match['score'], match['index']))[:8], 'analysis': analysis}
                 self.reply(200, {"modelVersion": MODEL_VERSION, **result})
             except (ValueError, KeyError, TypeError, TimeoutError):
                 self.reply(400, {"error": "invalidInput"})

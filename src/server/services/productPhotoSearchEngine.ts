@@ -1,4 +1,5 @@
-import { productPhotoSearchDimension, productPhotoSearchMaxImages, productPhotoSearchModel } from "@/lib/productPhotoSearch";
+import { productPhotoSearchDimension, productPhotoSearchMaxImages, productPhotoSearchModel, validProductPhotoRegion,
+  type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
 
 export const photoSearchConfigured = () => Boolean(process.env.PRODUCT_PHOTO_SEARCH_URL?.trim() && (process.env.PRODUCT_PHOTO_SEARCH_TOKEN?.length ?? 0) >= 32);
@@ -60,8 +61,23 @@ export async function embedProductPhoto(jpeg: Buffer, signal?: AbortSignal) {
   return result.embedding;
 }
 
-export async function matchProductPhoto(jpeg: Buffer, features: { productId: string; embedding: number[] }[], signal?: AbortSignal): Promise<{ index: number; score: number }[]> {
-  if (!features.length) return [];
+const noAnalysis = (): ProductPhotoAnalysis => ({ regionSource: "full", region: null, ocrStatus: "unavailable", lines: [] });
+function readAnalysis(value: unknown): ProductPhotoAnalysis {
+  if (value === undefined) return noAnalysis(); // Older private runtime: visual search remains usable.
+  const data = value as ProductPhotoAnalysis;
+  if (!data || !["auto", "manual", "full"].includes(data.regionSource) || !["ready", "unavailable"].includes(data.ocrStatus) ||
+    (data.region !== null && !validProductPhotoRegion(data.region)) || (data.regionSource !== "full" && !data.region) || (data.regionSource === "full" && data.region !== null) ||
+    !Array.isArray(data.lines) || data.lines.length > 24 || data.lines.some((line) => !line || typeof line.text !== "string" || line.text.length > 120 ||
+      typeof line.confidence !== "number" || !Number.isFinite(line.confidence) || line.confidence < 0 || line.confidence > 1 || !validProductPhotoRegion(line.box)))
+    throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  return { regionSource: data.regionSource, region: data.region, ocrStatus: data.ocrStatus,
+    lines: data.lines.map((line) => ({ text: line.text.replace(/[\u0000-\u001f\u007f]/g, " "), confidence: line.confidence, box: line.box })) };
+}
+
+export async function queryProductPhoto(jpeg: Buffer, features: { productId: string; embedding: number[] }[], signal?: AbortSignal, options: { region?: ProductPhotoRegion; autoRegion?: boolean } = {}) {
+  const { region, autoRegion } = options;
+  if (region && !validProductPhotoRegion(region)) throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  if (!features.length) return { matches: [] as { index: number; score: number }[], analysis: noAnalysis() };
   if (features.length > productPhotoSearchMaxImages || features.some((feature) => !validPhotoEmbedding(feature.embedding)))
     throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
   const buffer = Buffer.allocUnsafe(features.length * productPhotoSearchDimension * 4);
@@ -71,10 +87,20 @@ export async function matchProductPhoto(jpeg: Buffer, features: { productId: str
     if (!productGroups.has(feature.productId)) productGroups.set(feature.productId, productGroups.size);
     return productGroups.get(feature.productId)!;
   });
-  const result = await requestEngine("search", { imageBase64: jpeg.toString("base64"), vectorsBase64: buffer.toString("base64"), groups }, signal);
+  const result = await requestEngine("search", { imageBase64: jpeg.toString("base64"), vectorsBase64: buffer.toString("base64"), groups, ...(region ? { region } : {}), ...(autoRegion === false ? { autoRegion: false } : {}) }, signal);
   if (!Array.isArray(result.matches) || result.matches.length > 8 || result.matches.some((match: { index?: unknown; score?: unknown }) =>
     !Number.isInteger(match.index) || Number(match.index) < 0 || Number(match.index) >= features.length ||
     typeof match.score !== "number" || !Number.isFinite(match.score) || Math.abs(match.score) > 1.001))
     throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
-  return result.matches;
+  const analysis = readAnalysis(result.analysis);
+  if (region && analysis.regionSource !== "manual") throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  if (!region && analysis.regionSource === "manual") throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  if (region && !(Object.keys(region) as (keyof ProductPhotoRegion)[]).every((key) => analysis.region?.[key] === region[key]))
+    throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  if (!region && autoRegion === false && analysis.regionSource === "auto") throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  return { matches: result.matches as { index: number; score: number }[], analysis };
+}
+
+export async function matchProductPhoto(jpeg: Buffer, features: { productId: string; embedding: number[] }[], signal?: AbortSignal) {
+  return (await queryProductPhoto(jpeg, features, signal)).matches;
 }

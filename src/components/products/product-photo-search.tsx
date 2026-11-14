@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera, Check, ImageOff, Info, ScanLine, Upload, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, Crop, ImageOff, Info, ScanLine, Upload, X } from "lucide-react";
 import { ViewIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -16,16 +16,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { prepareManagedProductImageForUpload } from "@/lib/productImageClientUpload";
 import { productPhotoAccept } from "@/lib/productImageUpload";
-import { productPhotoSearchMaxBytes, type ProductPhotoProgress, type ProductPhotoSearchResult } from "@/lib/productPhotoSearch";
+import { productPhotoSearchMaxBytes, type ProductPhotoProgress, type ProductPhotoSearchResult, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
+import { ProductPhotoRegionEditor } from "./product-photo-region-editor";
 import { convertFromKgs, normalizeCurrencyCode } from "@/lib/currency";
 import { formatCurrency, formatNumber } from "@/lib/i18nFormat";
 
 type Props = { identityKey: string; storeId: string; stores: { id: string; name: string }[]; disabled?: boolean; selectionMode?: "card" | "preview" };
 
-function Photo({ src, alt, className }: { src: string | null; alt: string; className: string }) {
+function Photo({ src, alt, className, onDimensions }: { src: string | null; alt: string; className: string; onDimensions?: (size: { width: number; height: number }) => void }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [src]);
-  return src && !failed ? <img src={src} alt={alt} className={className} referrerPolicy="no-referrer" onError={() => setFailed(true)} /> :
+  return src && !failed ? <img src={src} alt={alt} className={className} referrerPolicy="no-referrer" onError={() => setFailed(true)}
+    onLoad={(event) => onDimensions?.({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} /> :
     <div className={`${className} flex items-center justify-center bg-secondary`} role="img" aria-label={alt}><ImageOff className="h-6 w-6 text-muted-foreground" aria-hidden /></div>;
 }
 
@@ -71,6 +73,10 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
   const [selectedStore, setSelectedStore] = useState(storeId);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewDimensions, setPreviewDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [manualRegion, setManualRegion] = useState<ProductPhotoRegion | null>(null);
+  const [automaticRegion, setAutomaticRegion] = useState(true);
+  const [editingRegion, setEditingRegion] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "unconfigured" | null>(null);
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -89,6 +95,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
 
   useEffect(() => () => { epoch.current += 1; controller.current?.abort(); }, []);
   useEffect(() => {
+    setPreviewDimensions(null);
     if (!file) { setPreview(null); return; }
     const url = URL.createObjectURL(file);
     setPreview(url);
@@ -118,12 +125,12 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
   }, [open, selectedStore, reload]);
 
   const changeOpen = (value: boolean) => {
-    if (!value) { cancel(); setFile(null); setResult(null); setSelectedId(null); setProgress(null); setError(null); }
+    if (!value) { cancel(); setFile(null); setResult(null); setSelectedId(null); setProgress(null); setError(null); setManualRegion(null); setAutomaticRegion(true); setEditingRegion(false); }
     setOpen(value);
   };
   const chooseFile = (value?: File) => {
     if (!value) return;
-    setFile(value); setResult(null); setSelectedId(null); setError(null);
+    setFile(value); setResult(null); setSelectedId(null); setError(null); setManualRegion(null); setAutomaticRegion(true); setEditingRegion(false);
   };
   const search = async (retryFailed = false, partial = false) => {
     if (!file || !selectedStore || busy || status !== "ready") return;
@@ -161,6 +168,8 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
         form.append("file", prepared.file);
         form.append("storeId", selectedStore);
         form.append("allowPartial", useReady.current ? "1" : "0");
+        if (manualRegion) form.append("region", JSON.stringify(manualRegion));
+        if (!automaticRegion) form.append("autoRegion", "0");
         let body: ProductPhotoSearchResult | undefined;
         for (let attempt = 0; attempt < 3; attempt += 1) {
           try { body = await requestJson("/api/products/photo-search", { method: "POST", body: form }, active.signal); break; }
@@ -187,6 +196,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
     phase === "catalog" && progress?.pending ? t("preparing", { ready: progress.ready, total: progress.total }) : t("searching");
   const processed = progress ? progress.ready + progress.failed : 0;
   const hasProgress = busy && phase === "catalog" && progress && progress.total > 0 && progress.pending > 0;
+  const shownRegion = manualRegion ?? result?.recognition?.region ?? null;
 
   return <>
     <Button type="button" variant="secondary" disabled={disabled || !stores.length} onClick={() => setOpen(true)}>
@@ -194,6 +204,8 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
     </Button>
     <Modal open={open} onOpenChange={changeOpen} title={t("title")} subtitle={t("subtitle")}
       className="sm:max-w-4xl sm:data-[state=open]:-translate-y-1/2 sm:data-[state=closed]:-translate-y-1/2" bodyClassName="p-0 sm:p-0" animated mobileSheet>
+      {editingRegion && preview && previewDimensions ? <ProductPhotoRegionEditor image={preview} dimensions={previewDimensions} initial={shownRegion}
+        onCancel={() => setEditingRegion(false)} onApply={(region) => { cancel(); setManualRegion(region); setAutomaticRegion(true); setEditingRegion(false); setResult(null); setError(null); }} /> :
       <div className={selectedId ? "" : "grid md:grid-cols-[280px_minmax(0,1fr)]"}>
         {!selectedId ? <section className="min-w-0 space-y-4 border-b border-border bg-secondary/25 p-4 sm:p-5 md:border-b-0 md:border-r" aria-label={t("queryPhoto")}>
           <div className="space-y-1.5">
@@ -207,7 +219,12 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
             <div className={(file ? "h-28 w-28 shrink-0 md:h-auto md:w-full md:aspect-square " : "min-h-36 ") +
               "relative flex items-center justify-center overflow-hidden rounded-xl border border-border bg-card p-3"}>
               {file ? <>
-                <Photo src={preview} alt={t("preview")} className="h-full w-full object-contain" />
+                {shownRegion && previewDimensions && preview ? <svg className="h-full w-full" viewBox={`0 0 ${previewDimensions.width} ${previewDimensions.height}`} role="img" aria-label={t("preview")}>
+                  <image href={preview} width={previewDimensions.width} height={previewDimensions.height} />
+                  <rect x={shownRegion.x * previewDimensions.width} y={shownRegion.y * previewDimensions.height}
+                    width={shownRegion.width * previewDimensions.width} height={shownRegion.height * previewDimensions.height}
+                    fill="none" stroke="currentColor" strokeWidth={2} vectorEffect="non-scaling-stroke" className="text-primary" />
+                </svg> : <Photo src={preview} alt={t("preview")} className="h-full w-full object-contain" onDimensions={setPreviewDimensions} />}
                 {busy && phase === "search" ? <div className={styles.scan} aria-hidden /> : null}
               </> : <div className="space-y-2 px-3 py-5 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><ScanLine className="h-6 w-6" aria-hidden /></div>
@@ -219,7 +236,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
               {file ? <div className="flex items-start justify-between gap-1">
                 <p className="min-w-0 break-all text-xs text-muted-foreground">{file.name}</p>
                 <Button type="button" variant="ghost" size="icon" className="-mt-2 h-8 w-8 shrink-0" disabled={busy}
-                  aria-label={t("remove")} title={t("remove")} onClick={() => { setFile(null); setResult(null); setSelectedId(null); }}>
+                  aria-label={t("remove")} title={t("remove")} onClick={() => { setFile(null); setResult(null); setSelectedId(null); setManualRegion(null); setAutomaticRegion(true); }}>
                   <X className="h-4 w-4" aria-hidden />
                 </Button>
               </div> : null}
@@ -237,6 +254,16 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
                 onChange={(event) => { chooseFile(event.target.files?.[0]); event.target.value = ""; }} />
             </div>
           </div>
+          {file ? <div className="space-y-2">
+            <Button type="button" variant="outline" className="h-11 w-full" disabled={busy || !previewDimensions} title={!previewDimensions ? t("cropNeedsPreview") : undefined} onClick={() => setEditingRegion(true)}>
+              <Crop className="h-4 w-4" aria-hidden />{t("editRegion")}
+            </Button>
+            {shownRegion ? <p className="text-xs text-muted-foreground">{t(manualRegion ? "regionManual" : "regionAuto")}</p> : null}
+            <Button type="button" variant="ghost" className="h-auto min-h-9 w-full whitespace-normal text-xs" disabled={busy}
+              onClick={() => { setManualRegion(null); setAutomaticRegion(!automaticRegion); setResult(null); }}>
+              {t(automaticRegion ? "wholePhoto" : "automaticRegion")}
+            </Button>
+          </div> : null}
           <p className="text-xs leading-relaxed text-muted-foreground">{t("photoHelp")}</p>
           {status === "loading" ? <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status"><Spinner className="h-3.5 w-3.5 motion-reduce:animate-none" />{common("loading")}</p> : null}
           <div className="space-y-2">
@@ -292,6 +319,11 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
           </div> : null}
 
           {result ? <div className="space-y-3">
+            {result.recognition ? <Alert variant={["unmatched", "ambiguous"].includes(result.recognition.labelStatus) ? "warning" : "default"}>
+              <p>{t(`label_${result.recognition.labelStatus}`)}</p>
+              {result.recognition.text ? <p className="mt-1 break-words text-sm font-medium">{t("readLabel", { text: result.recognition.text })}</p> : null}
+              {result.items.some((item) => item.matchSource === "text") ? <p className="mt-1 text-xs">{t("textOnlyHelp")}</p> : null}
+            </Alert> : null}
             {result.partial ? <Alert variant="warning"><p>{t("partial", { ready: result.progress.ready, total: result.progress.total, failed: result.progress.failed })}</p>
               {result.progress.failed > 0 ? <Button type="button" variant="secondary" className="mt-2" disabled={busy} onClick={() => void search(true)}>{t("retryImages")}</Button> : null}
             </Alert> : null}
@@ -310,6 +342,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
                     </div>
                     <div className="flex flex-1 flex-col gap-2 p-3">
                       <div className="min-w-0 flex-1"><p className="break-words text-sm font-medium leading-snug">{item.name}</p>
+                        {item.labelMatched ? <p className="mt-1 flex items-center gap-1 text-xs font-medium text-primary"><Check className="h-3.5 w-3.5 shrink-0" aria-hidden />{t(item.matchSource === "text" ? "textOnlyBadge" : "labelBadge")}</p> : null}
                         {item.sku ? <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{item.sku}</p> : null}
                       </div>
                       <div className="flex items-end justify-between gap-1">
@@ -338,7 +371,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
             <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">{t("resultsHelp")}</p>
           </div> : null}
         </section>
-      </div>
+      </div>}
     </Modal>
   </>;
 }

@@ -1,4 +1,4 @@
-import { productPhotoSearchMaxBytes } from "@/lib/productPhotoSearch";
+import { productPhotoSearchMaxBytes, validProductPhotoRegion, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "@/server/services/errors";
 import { findPhotoCandidates, presentPhotoCandidates } from "@/server/services/productPhotoSearch";
 import { photoSearchConfigured, checkPhotoSearchEngine } from "@/server/services/productPhotoSearchEngine";
@@ -38,10 +38,21 @@ export async function POST(request: Request) {
     const storeId = form.get("storeId");
     if (!(file instanceof File) || typeof storeId !== "string") throw new AppError("invalidInput", "BAD_REQUEST", 400);
     const allowPartial = form.get("allowPartial") === "1";
-    const candidates = await findPhotoCandidates({ user, storeId, file, allowPartial, signal: request.signal });
+    const rawRegion = form.get("region");
+    let region: ProductPhotoRegion | undefined;
+    if (rawRegion !== null) {
+      let value: unknown;
+      try { if (typeof rawRegion !== "string" || rawRegion.length > 512) throw new Error(); value = JSON.parse(rawRegion); }
+      catch { throw new AppError("invalidInput", "BAD_REQUEST", 400); }
+      if (!validProductPhotoRegion(value)) throw new AppError("invalidInput", "BAD_REQUEST", 400);
+      region = value;
+    }
+    const rawAutomatic = form.get("autoRegion");
+    if (rawAutomatic !== null && rawAutomatic !== "0" && rawAutomatic !== "1") throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    const { candidates, analysis } = await findPhotoCandidates({ user, storeId, file, allowPartial, signal: request.signal, region, autoRegion: rawAutomatic !== "0" });
     const currentUser = await photoSearchUser(request);
     if (currentUser.id !== user.id || currentUser.organizationId !== user.organizationId)
       throw new AppError("forbidden", "FORBIDDEN", 403);
-    return photoJson(await presentPhotoCandidates(currentUser, storeId, candidates, allowPartial));
+    return photoJson(await presentPhotoCandidates(currentUser, storeId, candidates, allowPartial, analysis));
   } catch (error) { return photoFailure(error); }
 }

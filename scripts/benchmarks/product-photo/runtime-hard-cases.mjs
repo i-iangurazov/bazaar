@@ -6,6 +6,7 @@ import {resolve} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import sharp from 'sharp';
 const root=resolve('.local/photo-search-benchmark');
+const withVision=process.argv.includes('--vision');
 const out=resolve('.local/product-photo-hard-cases');await mkdir(out,{recursive:true});
 const pairs=[[259,262],[577,617],[543,546],[609,618],[143,19],[208,321]];
 const ids=pairs.flat(); const threshold=0.68;
@@ -16,7 +17,8 @@ assert.equal(catalog.length,24);assert.equal(queries.length,60);
 const token=randomBytes(32).toString('hex');const base='http://127.0.0.1:3161';
 const model='ppshitu-v2-pplcnetv2-v1-fp32-224';
 const log=await open(`${out}/runtime-service.log`,'w');
-const service=spawn(`${root}/venv/bin/python`,['services/product-photo-search/server.py','--model-dir',`${root}/models/general_PPLCNetV2_base_pretrained_v1.0_infer`,'--port','3161','--threads','1'],{env:{PATH:process.env.PATH,PRODUCT_PHOTO_SEARCH_TOKEN:token,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'},stdio:['ignore',log.fd,log.fd]});
+const python=withVision?resolve('.local/product-photo-search/runtime/venv/bin/python'):`${root}/venv/bin/python`;
+const service=spawn(python,['services/product-photo-search/server.py','--model-dir',`${root}/models/general_PPLCNetV2_base_pretrained_v1.0_infer`,'--port','3161','--threads','1',...(withVision?['--vision-model-dir',resolve('.local/product-photo-search/runtime/models/vision')]:[])],{env:{PATH:process.env.PATH,PRODUCT_PHOTO_SEARCH_TOKEN:token,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'},stdio:['ignore',log.fd,log.fd]});
 let serviceError;
 // Observe termination before startup: cleanup must also finish if Python cannot start.
 const serviceClosed=new Promise(resolve=>service.once('close',resolve));
@@ -49,14 +51,14 @@ try {
  }
  const duplicate=await call('search',{imageBase64:await canonical(catalog[0]),vectorsBase64:pack([embeddings[0],embeddings[0]]),groups:[0,1]});
  assert.equal(duplicate.matches.length,2);assert.ok(duplicate.matches.every(m=>m.score>0.999));
- const summary={schema:1,model,threshold,pairs,products:unique.length,galleryPhotos:catalog.length,heldOutQueries:results.length,
+ const summary={schema:1,model,threshold,...(withVision?{withVision:true,textReranking:false}:{}),pairs,products:unique.length,galleryPhotos:catalog.length,heldOutQueries:results.length,
   rawTop1:results.filter(r=>r.matches[0]?.productId===r.productId).length/results.length,
   visibleTop5:results.filter(r=>r.matches.slice(0,5).some(m=>m.productId===r.productId&&m.score>=threshold)).length/results.length,
   visibleWrongTop1:results.filter(r=>r.matches[0]?.productId!==r.productId&&r.matches[0]?.score>=threshold).length/results.length,
   absentCandidateRate:results.filter(r=>r.absentMatches.some(m=>m.score>=threshold)).length/results.length,
   identicalPhotoDifferentSku:{candidates:duplicate.matches.length,scores:duplicate.matches.map(m=>m.score),distinguishable:false},
   limits:['Curated 12 public ALOI objects; 154x115 previews, not Bazaar SKU accuracy','Real pinned runtime and Faiss, Node canonicalization; no database or user gallery changes','Same input pixels for duplicate-SKU ambiguity is a protocol test, not independent photographic evidence'],results};
- await writeFile(`${out}/runtime.json`,JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify({...summary,results:undefined},null,2));
+ await writeFile(`${out}/${withVision?'runtime-vision':'runtime'}.json`,JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify({...summary,results:undefined},null,2));
 } finally {
  if(service.exitCode===null && service.signalCode===null)service.kill('SIGTERM');
  const force=setTimeout(()=>service.kill('SIGKILL'),5000);

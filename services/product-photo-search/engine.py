@@ -39,7 +39,8 @@ class Encoder:
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-    def encode(self, data: bytes):
+    @staticmethod
+    def decode(data: bytes):
         # Public Node ingress has already decoded and bounded this JPEG. This
         # private endpoint also checks dimensions before using the model.
         try:
@@ -51,7 +52,12 @@ class Encoder:
         image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
         if image is None or image.shape[0]*image.shape[1] > 4_000_000:
             raise ValueError("invalidImage")
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    def encode(self, data: bytes):
+        return self.encode_rgb(self.decode(data))
+
+    def encode_rgb(self, image):
         image = cv2.resize(image, (224, 224), interpolation=cv2.INTER_LINEAR)
         image = (image.astype(np.float32)/255-self.mean)/self.std
         value = np.ascontiguousarray(image.transpose(2, 0, 1)[None])

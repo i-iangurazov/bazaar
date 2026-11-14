@@ -1,9 +1,10 @@
 import sharp from "sharp";
 import { prisma } from "@/server/db/prisma";
-import { productPhotoSearchMaxBytes, type ProductPhotoSearchResult } from "@/lib/productPhotoSearch";
+import { productPhotoSearchMaxBytes, type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
 import { prepareProductStudioSource } from "./productImageSourceUpload";
-import { matchProductPhoto } from "./productPhotoSearchEngine";
+import { queryProductPhoto } from "./productPhotoSearchEngine";
+import { matchProductPhotoLabel } from "./productPhotoLabel";
 import { loadPhotoSearchScope } from "./productPhotoSearchScope";
 import type { StoreAccessUser } from "./storeAccess";
 import { resolveStoreSellingPrice } from "./storeSellingPrice";
@@ -20,7 +21,7 @@ export async function canonicalPhoto(file: File, maxBytes = productPhotoSearchMa
   } catch { throw new AppError("imageInvalidType", "BAD_REQUEST", 400); }
 }
 
-export async function findPhotoCandidates(input: { user: StoreAccessUser; storeId: string; file: File; allowPartial: boolean; signal?: AbortSignal }) {
+export async function findPhotoCandidates(input: { user: StoreAccessUser; storeId: string; file: File; allowPartial: boolean; signal?: AbortSignal; region?: ProductPhotoRegion; autoRegion?: boolean }) {
   const scope = await loadPhotoSearchScope(input.user, input.storeId);
   if (scope.progress.pending && !input.allowPartial) throw new AppError("photoSearchPreparing", "CONFLICT", 409);
   if (!scope.progress.ready && scope.progress.failed) throw new AppError("photoSearchImagesFailed", "INTERNAL_SERVER_ERROR", 503);
@@ -31,18 +32,30 @@ export async function findPhotoCandidates(input: { user: StoreAccessUser; storeI
   }, select: { productId: true, sourceKey: true, embedding: true } }) : [];
   const scopedRows = rows.filter((row) => current.get(row.sourceKey)?.productId === row.productId);
   const jpeg = await canonicalPhoto(input.file);
-  const matches = await matchProductPhoto(jpeg, scopedRows, input.signal);
+  if (input.region) {
+    const { width, height } = await sharp(jpeg).metadata();
+    if (!width || !height || input.region.width * width < 4 || input.region.height * height < 4)
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  const { matches, analysis } = await queryProductPhoto(jpeg, scopedRows, input.signal, { region: input.region, autoRegion: input.autoRegion });
   // Experimental laboratory calibration. This ranks candidates, never proves SKU identity.
   const threshold = 0.68;
-  return matches.filter((match) => match.score >= threshold).map((match) => scopedRows[match.index]);
+  return { candidates: matches.filter((match) => match.score >= threshold).map((match) => scopedRows[match.index]), analysis };
 }
 
 /** Called after revalidating the session again, after inference. No stale prices or grants. */
-export async function presentPhotoCandidates(user: StoreAccessUser, storeId: string, candidates: { productId: string; sourceKey: string }[], allowPartial: boolean): Promise<ProductPhotoSearchResult> {
+export async function presentPhotoCandidates(user: StoreAccessUser, storeId: string, candidates: { productId: string; sourceKey: string }[], allowPartial: boolean, analysis?: ProductPhotoAnalysis): Promise<ProductPhotoSearchResult> {
   const scope = await loadPhotoSearchScope(user, storeId);
   if (scope.progress.pending && !allowPartial) throw new AppError("photoSearchPreparing", "CONFLICT", 409);
   const current = new Map(scope.sources.map((source) => [source.sourceKey, source]));
   const selected = candidates.filter((candidate) => current.get(candidate.sourceKey)?.productId === candidate.productId);
+  const visualIds = new Set(selected.map((candidate) => candidate.productId));
+  const text = analysis ? matchProductPhotoLabel(analysis, scope.products, [...visualIds]) : undefined;
+  if (text?.textCandidateId) {
+    const ready = new Set(scope.features.filter((feature) => feature.status === "READY").map((feature) => feature.sourceKey));
+    const source = scope.sources.find((source) => source.productId === text.textCandidateId && ready.has(source.sourceKey));
+    if (source) selected.push({ productId: source.productId, sourceKey: source.sourceKey });
+  }
   const ids = [...new Set(selected.map((candidate) => candidate.productId))];
   const [organization, products, prices, extras] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: user.organizationId }, select: { retailWholesaleEnabled: true } }),
@@ -73,6 +86,16 @@ export async function presentPhotoCandidates(user: StoreAccessUser, storeId: str
     return [{ id: product.id, name: product.name, sku: scope.store.enableSku ? product.sku : null,
       imageUrl, priceKgs: effective, onHand: product.inventorySnapshots.reduce((sum, snapshot) => sum + snapshot.onHand, 0) }];
   });
+  const checkedLabel = analysis ? matchProductPhotoLabel(analysis, scope.products.map((product) => ({ id: product.id, name: byId.get(product.id)?.name ?? product.name })), items.filter((item) => visualIds.has(item.id)).map((item) => item.id)) : undefined;
+  // Recheck independent brand/model context too: adding a text candidate must not
+  // turn it into visual evidence if its metadata changed during presentation.
+  const label = checkedLabel?.textCandidateId && items.some((item) => item.id === checkedLabel.textCandidateId)
+    ? { ...checkedLabel, status: "matched" as const, matchedIds: new Set([checkedLabel.textCandidateId]) } : checkedLabel;
+  // Use current authorized metadata, even if a name or grant changed during inference.
+  const ranked = label ? items.filter((item) => visualIds.has(item.id) || label.matchedIds.has(item.id)).map((item) => ({ ...item, labelMatched: label.matchedIds.has(item.id),
+    matchSource: (visualIds.has(item.id) ? label.matchedIds.has(item.id) ? "photo-text" : "photo" : "text") as "photo" | "text" | "photo-text" }))
+    .sort((a, b) => Number(b.labelMatched) - Number(a.labelMatched)) : items;
   return { storeId, currencyCode: scope.store.currencyCode, currencyRateKgsPerUnit: Number(scope.store.currencyRateKgsPerUnit),
-    items, progress: scope.progress, partial: scope.progress.pending > 0 || scope.progress.failed > 0 };
+    items: ranked.slice(0, 8), progress: scope.progress, partial: scope.progress.pending > 0 || scope.progress.failed > 0,
+    ...(analysis && label ? { recognition: { regionSource: analysis.regionSource, region: analysis.region, labelStatus: label.status, text: label.text } } : {}) };
 }

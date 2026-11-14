@@ -8,6 +8,8 @@ import { ProductPhotoSearchButton } from "@/components/products/product-photo-se
 const boundary = vi.hoisted(() => ({ prep: vi.fn(), push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: boundary.push }) }));
 vi.mock("@/lib/productImageClientUpload", () => ({ prepareManagedProductImageForUpload: boundary.prep }));
+vi.mock("react-easy-crop", () => ({ default: ({ onCropComplete }: { onCropComplete: (area: { x: number; y: number; width: number; height: number }) => void }) =>
+  <button type="button" onClick={() => onCropComplete({ x: 25, y: 10, width: 50, height: 80 })}>Set test selection</button> }));
 const progress = { total: 1, ready: 1, pending: 0, failed: 0, withoutPhoto: 0 };
 const result = { storeId: "s1", currencyCode: "KGS", currencyRateKgsPerUnit: 1, progress, partial: false,
   items: [{ id: "p1", name: "Red cup", sku: "CUP", imageUrl: "/cup.jpg", priceKgs: 120, onHand: 0 }] };
@@ -119,4 +121,26 @@ it("keeps incomplete results explicit and does not manufacture a confidence perc
   await view.findByText("Red cup"); expect(view.getByText("Searched a subset of photos: 1 of 2. Failed to process: 1.")).toBeTruthy();
   expect(view.getByRole("button", { name: "Retry photo preparation" })).toBeTruthy();
   expect(view.container.textContent).not.toMatch(/\d+%/);
+});
+
+it("sends the selected region, supports the whole photo, and keeps OCR evidence distinct from visual identity", async () => {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, init) => init?.method === "POST" && !String(url).endsWith("/prepare")
+    ? Promise.resolve(Response.json({ ...result, items: [{ ...result.items[0], labelMatched: true, matchSource: "text" }], recognition: { regionSource: "manual", region: { x: .25, y: .1, width: .5, height: .8 }, labelStatus: "matched", text: "RED CUP" } })) : original(url, init));
+  const view = render(screen()); await select(view);
+  const photo = view.getByAltText("Photo for search");
+  Object.defineProperties(photo, { naturalWidth: { value: 800 }, naturalHeight: { value: 600 } }); fireEvent.load(photo);
+  fireEvent.click(view.getByRole("button", { name: "Select product area" }));
+  fireEvent.click(view.getByRole("button", { name: "Set test selection" }));
+  fireEvent.click(view.getByRole("button", { name: "Use selection" }));
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("From text in photo");
+  expect(view.getByText(messages.productPhotoSearch.textOnlyHelp)).toBeTruthy(); expect(boundary.push).not.toHaveBeenCalled();
+  const requests = () => vi.mocked(fetch).mock.calls.filter(([url, init]) => init?.method === "POST" && !String(url).endsWith("/prepare"));
+  expect(JSON.parse((requests()[0][1]!.body as FormData).get("region") as string)).toEqual({ x: .25, y: .1, width: .5, height: .8 });
+  fireEvent.click(view.getByRole("button", { name: "Use the whole photo" }));
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("From text in photo");
+  const body = requests()[1][1]!.body as FormData;
+  expect(body.get("region")).toBeNull(); expect(body.get("autoRegion")).toBe("0");
 });

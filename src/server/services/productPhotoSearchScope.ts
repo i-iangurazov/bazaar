@@ -17,7 +17,7 @@ export async function loadPhotoSearchScope(user: StoreAccessUser, storeId: strin
   const products = await prisma.product.findMany({
     where: { organizationId: user.organizationId, isDeleted: false,
       storeProducts: { some: { organizationId: user.organizationId, storeId, isActive: true, isHidden: false } } },
-    select: { id: true, photoUrl: true, updatedAt: true }, orderBy: { id: "asc" }, take: productPhotoSearchMaxImages + 1,
+    select: { id: true, name: true, photoUrl: true, updatedAt: true }, orderBy: { id: "asc" }, take: productPhotoSearchMaxImages + 1,
   });
   if (products.length > productPhotoSearchMaxImages) throw new AppError("photoSearchCatalogTooLarge", "BAD_REQUEST", 422);
   const images = products.length ? await prisma.productImage.findMany({

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "detectorDirectory": "picodet_PPLCNet_x2_5_mainbody_lite_v1.0_infer",
+  "detectorUrl": "https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/rec/models/inference/picodet_PPLCNet_x2_5_mainbody_lite_v1.0_infer.tar",
+  "archiveSha256": "9e2211fc4b9790d862b8e282c27b4ba735473433520774603bdaf4fd210e202c",
+  "files": {
+    "picodet_PPLCNet_x2_5_mainbody_lite_v1.0_infer/inference.pdmodel": "aef54d49af0ed0b38334c1da9939ff8a5e2a19229f9a21147521cdf22b456280",
+    "picodet_PPLCNet_x2_5_mainbody_lite_v1.0_infer/inference.pdiparams": "c4bd9d61c3f8157805ee341eb9e4ac5a5e27dcdb4e05d7fc5ce50086df94cc09",
+    "ocr/PP-OCRv6_det_small.onnx": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f",
+    "ocr/ch_ppocr_mobile_v2.0_cls_mobile.onnx": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+    "ocr/PP-OCRv6_rec_small.onnx": "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"
+  }
+}
