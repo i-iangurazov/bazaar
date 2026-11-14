@@ -1,0 +1,1835 @@
+{
+  "schema": 1,
+  "manifestSha256": "7a313a351189ddd74cea7dcfb4a2cd1084f5083892623c660dc42b4e3f1e2468",
+  "policySha256": "eb36f49e348b5498eaf1141f0861e120690b8a429b9ee8db0e4798f21c3918c8",
+  "previousInputSha256": "0ceb9311c788332c303ff6dfc5a267e1d8127f7986d82e62a6284c81a244e948",
+  "modelManifestSha256": "17c17cf3fa1c89fd6f451e263141a7fc400d7489f2674dd3bfa9eae8efe1dcbe",
+  "storeId": "photo-search-field-shop",
+  "catalogHash": "917e2ded5ffc436f44cf084f4bdd2ce0b828c70fa6c476d6f333984ea95dd39c",
+  "sources": [
+    {
+      "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "name": "ELFBAR GH23000 Sakura Grape \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "66ec118bf2ae48c2e39141233074fdc3b40ba8f62d28b365c6691a43572cb00f",
+      "sourceSha256": "2119b3fe94228c7aa684231bd12ace3205137f834cb9973bb405a1d71b014cca",
+      "file": "images/gallery-photo-search-field-shop-0.jpg",
+      "sha256": "e8c4bf3722e16efbaaa31ee1bf6081d6915a019248472a837d47d645ee7501e5"
+    },
+    {
+      "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "name": "ELFBAR GH23000 Sakura Grape \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "4c54b21f34e16f94d61ee9851eac47f8b030deb0f42adc6ad9bce8c37f38a05a",
+      "sourceSha256": "e79b0f88cdef5a4c743175eb7a9783351b500e9b9d31f55781d30f7fe28b5cdd",
+      "file": "images/gallery-photo-search-field-shop-1.jpg",
+      "sha256": "76188da92516c5abe319a8e14f3ced5d66d73d58b841e63c3730c28800df9384"
+    },
+    {
+      "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "name": "ELFBAR GH23000 Sakura Grape \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "97e669c0f6fff3f8a1d022a6ac83c918cee40e028010cf7437963fdad017c014",
+      "sourceSha256": "4ffed8fe19c2e497b2ebe66daea08d55afe69ca9fc1323ca18044ca105e04880",
+      "file": "images/gallery-photo-search-field-shop-2.jpg",
+      "sha256": "cb4da1d4dd15cee7359a976a169c99995845007db2f210b6a9c5f0cb0039324a"
+    },
+    {
+      "productId": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "name": "ELFBAR GH23000 Sakura Grape \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "e43de978b50f51153a4cd62b8800942a91163d91c49e7b002a14f7f173081f0e",
+      "sourceSha256": "f11a9429a35146dd034c0bd8397d04ace886c7d75e0deb60166f3750921f5c51",
+      "file": "images/gallery-photo-search-field-shop-3.jpg",
+      "sha256": "ec810d523a7038b29c92eb8beac7438962182c66ee4324e7e964f97940afa464"
+    },
+    {
+      "productId": "3c5beb21-2104-43c6-8755-e9121d789c61",
+      "sku": "QA-ELFBAR-GH23000-ICE-MINT",
+      "name": "ELFBAR GH23000 Ice Mint \u2014 \u0442\u0435\u0441\u0442",
+      "sourceKey": "71692050402054a7b6e14fd7951c35c0a6a39a703465a1340515c13db62542c4",
+      "sourceSha256": "1e4c2c5c2acf4d3da1e80cf7b05a2ee3777eb5e283e3fc1d0a10a26526547d65",
+      "file": "images/gallery-photo-search-field-shop-4.jpg",
+      "sha256": "7f493d3a837ee0c97e7fd640ea8f1d279fcc71109531250043600aebb2f98a45"
+    },
+    {
+      "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "name": "ELFBAR GH23000 Watermelon Cherry \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "0d4d18f083f047f3f94ccee24f3bd8081b4ab9ca5e6808f82f349b87b8caf90b",
+      "sourceSha256": "475bbfc5a1837f7c69e4e5cd95d201abed24134a0256d0a340ab76ffa38bff7b",
+      "file": "images/gallery-photo-search-field-shop-5.jpg",
+      "sha256": "7282579c10e36b6091a65c67636dcc1d79f3e73361282b584f65d7d361621db9"
+    },
+    {
+      "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "name": "ELFBAR GH23000 Watermelon Cherry \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "16d7aeb5f0f2829220306f8be53f8b0d7ea2942534b9a6a7f0f6fe0dc5ecde89",
+      "sourceSha256": "a696ef9b50abe2f61541122ad280523229f32335a3f3c26c93d03dc34d6d743a",
+      "file": "images/gallery-photo-search-field-shop-6.jpg",
+      "sha256": "7e0a131ba9e12b457d23abdd99c8c848a7151ff6c1bf0a5b0cfd353f21b81315"
+    },
+    {
+      "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "name": "ELFBAR GH23000 Watermelon Cherry \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "ae8c432fa7311c5319ad493e09bf52812e16bb7db5bd291112216ae63a9f608e",
+      "sourceSha256": "069fb26fc3bfe51083704ab47d1958242da6c82ed4e993522e884d099ef22609",
+      "file": "images/gallery-photo-search-field-shop-7.jpg",
+      "sha256": "0993ef5c9189154b216b55b7ea42eb6912edc0007bc0b28dd105a8a9cb14c3f3"
+    },
+    {
+      "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "name": "ELFBAR GH23000 Watermelon Cherry \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "c7efd2868a82245744fbd07f4b2cf3e7d1da8c6379250816e916e32a2fc93ca4",
+      "sourceSha256": "b2ded8e11805b3208703d8bc81e4e730b3e966d9260dc8202fdef27f7e5b95c3",
+      "file": "images/gallery-photo-search-field-shop-8.jpg",
+      "sha256": "a1eee7ce2ee98bdac7631cd09933a6e0a4af465536165ef91cd5b43e8b16b346"
+    },
+    {
+      "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "name": "ELFBAR GH23000 Watermelon Cherry \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "75d56c2790450ee59c94f1801927eb8d3b8ef4451851d6f7e789b6205235ae1e",
+      "sourceSha256": "9bebba065011c25971f8444cd038663e0bd35079590065f482a978fb36b36bf7",
+      "file": "images/gallery-photo-search-field-shop-9.jpg",
+      "sha256": "4d11e98c8835e7da12107d22bdfd82917853fbb0fabcdbf2af8acead6239c61b"
+    },
+    {
+      "productId": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "name": "ELFBAR GH23000 Watermelon Cherry \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "6ceeca1cccc466405c5ca9466fabad23e6f2079d88a155e4b6f9b9fd5d4dc00a",
+      "sourceSha256": "49d3a4f0a7057846bdb07abbcd1e6465b524e7a014a74b742728654fda96a11f",
+      "file": "images/gallery-photo-search-field-shop-10.jpg",
+      "sha256": "2e1b7d52f627caf2d9ce538970ee34c3a3a9ef02caeb65b17e74ebfacb36a79c"
+    },
+    {
+      "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "name": "ELFBAR GH23000 Strawberry Banana \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "81799a16b73f13eed53d9bba01462328d99cb01689b7adb6e1dedf2aa34d6ffd",
+      "sourceSha256": "bde4aa2ebee9582e822810ea51f6c8943f0c2267524598ed5772f40ca2be4473",
+      "file": "images/gallery-photo-search-field-shop-11.jpg",
+      "sha256": "25eeefca7bd2e4cc1c05d6dfa32e6836e03f1db69bdf6cb82e79ec38f809ec29"
+    },
+    {
+      "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "name": "ELFBAR GH23000 Strawberry Banana \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "2883587347c79d74274b13906d051650d3c79f43ea9b6d8a868c863c5599231c",
+      "sourceSha256": "4c86131b75cdc53add270eabb460c4e9f921b44875a7a2d531f4ce3c84379645",
+      "file": "images/gallery-photo-search-field-shop-12.jpg",
+      "sha256": "641480ad17013435a093896a6155bc967d0828f117350082a8476a56a2a6fc97"
+    },
+    {
+      "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "name": "ELFBAR GH23000 Strawberry Banana \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "216ca8287a83485703e8e29f73c5f53973bcc9023271a2157e4f918a8deee49d",
+      "sourceSha256": "c6c2375fe896ec0dd4cf998bcd72b3679f8d28546a12affb8c1a64a05c0c7eac",
+      "file": "images/gallery-photo-search-field-shop-13.jpg",
+      "sha256": "0fb5cef091cbe8fc1e6dcf32393085289097bd2442fa88b46c8553c0d49f2714"
+    },
+    {
+      "productId": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "name": "ELFBAR GH23000 Strawberry Banana \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)",
+      "sourceKey": "770728f96c4e32c1648ae2166d92251bff355700e9686f5f433bb6685bb7cf73",
+      "sourceSha256": "3b81cab906d03ad5cc641df1c69a0d034bf639ff0a35ee84f6bfa0799076af05",
+      "file": "images/gallery-photo-search-field-shop-14.jpg",
+      "sha256": "42b08342a8029586f244785c2c33115b9b3c7c991b319501cf16a630c6148494"
+    },
+    {
+      "productId": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+      "name": "ELFBAR GH23000 Kiwi Dragon Fruit \u2014 \u0442\u0435\u0441\u0442",
+      "sourceKey": "d119c20c4b40ef0bb3efde8ef08c89f56ef5e2fa86378904c02b8bf7ab2a21fe",
+      "sourceSha256": "4fe249f31277135e40c4da259e9697993a20a7c68bf601473f12a4af170eaea1",
+      "file": "images/gallery-photo-search-field-shop-15.jpg",
+      "sha256": "0f90ae9577b8a447c68306257297b21c718876dc155e90f1aa7329730c346b10"
+    },
+    {
+      "productId": "bf9b66f0-1255-4695-a5bb-f02a6ad0700e",
+      "sku": "QA-ELFBAR-GH23000-PINEAPPLE-PLUMS-LIME-MINT",
+      "name": "ELFBAR GH23000 Pineapple Plums Lime Mint \u2014 \u0442\u0435\u0441\u0442",
+      "sourceKey": "21b6cc97ca9d70e7c32a2685cece52f5b124d9ee00b3dec50bdd22776ad5b9ea",
+      "sourceSha256": "9e6b656286c5cae4e6f05c2b8b2b3d683f7e7382cde4fc9d9c2d39f47b1dbf22",
+      "file": "images/gallery-photo-search-field-shop-16.jpg",
+      "sha256": "40f1a9c291a1824741179e52ba7e0160c4752200fe302badfcb28cdb344013f7"
+    },
+    {
+      "productId": "c27a7695-3e12-474d-b2a0-be00ae276c5f",
+      "sku": "QA-ELFBAR-GH23000-PEACH-MANGO-WATERMELON",
+      "name": "ELFBAR GH23000 Peach Mango Watermelon \u2014 \u0442\u0435\u0441\u0442",
+      "sourceKey": "ddea2a01c94298ec5111638bbfbb0c39b5915203c28d86a34dc42779e0c50fe9",
+      "sourceSha256": "2d14d87f981ecfdc217f45fadf74023ebef5f45912e5a292e663a48a4008dc08",
+      "file": "images/gallery-photo-search-field-shop-17.jpg",
+      "sha256": "c8cdb2a757a85691f05f376c56801f8d515dee7a2cb32907d276879c2a78401f"
+    },
+    {
+      "productId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "sku": "PHOTO-ELFBAR-TEST",
+      "name": "ELFBAR GH23000 Miami Mint",
+      "sourceKey": "c218091bd96e430f20cd5fd2e867f4df185bdf6403016a27470488bc46b7fc14",
+      "sourceSha256": "0ae5e3ec8faf0d83f618fa32acec13f60614f8f893ab27f78649cc80ca92f109",
+      "file": "images/gallery-photo-search-field-shop-18.jpg",
+      "sha256": "c45505ea8c3da5614328fe4341d91001b2283c093a19f6b9e49f2104ae694a79"
+    },
+    {
+      "productId": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+      "name": "ELFBAR GH23000 Grape Ice \u2014 \u0442\u0435\u0441\u0442",
+      "sourceKey": "1eaea92e2c5f7e125497eacc63b5aa95a2582d49008646f946b176863f67152d",
+      "sourceSha256": "051503b07bf83709771f87338ce7c68af0ecf2b4a83a3355d5264848f40728ba",
+      "file": "images/gallery-photo-search-field-shop-19.jpg",
+      "sha256": "550540cea070398ca0ea6a92a663ddad73101016afef78ae97d755f15f8647f9"
+    },
+    {
+      "productId": "photo-search-browser-product-103",
+      "sku": "ALOI-103",
+      "name": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043c\u044f\u0447",
+      "sourceKey": "5a118464f2d4d55344e16918ded1e1a656bf2a6caeb18d0d63b1b3421d7ed321",
+      "sourceSha256": "644b291d0eafba6df29887dd39cbe9d4af1be653fe866c2b57e70653070a6268",
+      "file": "images/gallery-photo-search-field-shop-20.jpg",
+      "sha256": "e290f86285fb4a91b784667fd96bebee6346e10d682f4fdb74351f9d3e0b1162"
+    },
+    {
+      "productId": "photo-search-browser-product-103",
+      "sku": "ALOI-103",
+      "name": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043c\u044f\u0447",
+      "sourceKey": "5aebaafed4caf4a402ce308b7213c9e72f8fd63010baf6aa8e66c5f9b95f3240",
+      "sourceSha256": "b36ea87484bdd5e78d3d9e0bf50104e28895c0a900a985e7ab6a7d8884908725",
+      "file": "images/gallery-photo-search-field-shop-21.jpg",
+      "sha256": "9510881d8210981cd38fd923bd53628c78a9b2a325eac2d8a157bfbd61b81f4d"
+    },
+    {
+      "productId": "photo-search-browser-product-482",
+      "sku": "ALOI-482",
+      "name": "\u0421\u0438\u043d\u044f\u044f \u043c\u0430\u0448\u0438\u043d\u043a\u0430",
+      "sourceKey": "9fb8ea09b8266b221b2921284bb7f4e9a89e7a954f74d0c1a1afca2a3d762636",
+      "sourceSha256": "2b10bbca6a2d25fb05f83dd717df6a75ac31f76858bdc1efe1b38b84771c1d4c",
+      "file": "images/gallery-photo-search-field-shop-22.jpg",
+      "sha256": "da4862429fadff8f33336e9bfafd8b87eb17a4794beeca5940d78ec5f2ecf815"
+    },
+    {
+      "productId": "photo-search-browser-product-482",
+      "sku": "ALOI-482",
+      "name": "\u0421\u0438\u043d\u044f\u044f \u043c\u0430\u0448\u0438\u043d\u043a\u0430",
+      "sourceKey": "27c1f0cffabfdb432144d13541f685039edeea9a7b78222d1e1574f483a72a75",
+      "sourceSha256": "da3b37033937abf8965aea7b0cbff687347fcb28b36e4ece3e2e0a68b074b3bb",
+      "file": "images/gallery-photo-search-field-shop-23.jpg",
+      "sha256": "3907ebfa5003fdeca95e4c23da5a6434e0935a0492645ce6d8d8f24d41581265"
+    },
+    {
+      "productId": "photo-search-browser-product-577",
+      "sku": "ALOI-577",
+      "name": "\u0411\u0430\u043d\u043a\u0430",
+      "sourceKey": "b30c7075177cd1312a67ebe2518fc80d67df6b6435cd82b2860adbca2dc7dd32",
+      "sourceSha256": "f7264cda0b8f7494dda43df1926abd38d29de77da01fe2eb7972ca5ab1fe64c5",
+      "file": "images/gallery-photo-search-field-shop-24.jpg",
+      "sha256": "1d63ff11916fa96858cf343dc762aa5f459c545d1bea8a2d4d9e48fdfaa734ef"
+    },
+    {
+      "productId": "photo-search-browser-product-577",
+      "sku": "ALOI-577",
+      "name": "\u0411\u0430\u043d\u043a\u0430",
+      "sourceKey": "6eec148cd3e7fe5d658fde13705939f309c0ef927380f5a899aef7f98713de0e",
+      "sourceSha256": "3ee591d3aba0f48f941893df9eaced3e53c7b41f1408620e7aa253c3a3df2724",
+      "file": "images/gallery-photo-search-field-shop-25.jpg",
+      "sha256": "377b6d807dec90496614b57d5652ae3ebae6f881f60d78296785d0a0c611859f"
+    },
+    {
+      "productId": "photo-search-browser-product-688",
+      "sku": "ALOI-688",
+      "name": "\u041a\u043e\u0440\u043e\u0431\u043a\u0430 \u043b\u0430\u043c\u043f\u043e\u0447\u043a\u0438",
+      "sourceKey": "9e1dedccd88d65e70f0f1ff5cc88565a9dcdf8a7eb8ee28b69b94c67b3212268",
+      "sourceSha256": "e0d573dbfbfd12134be261e16f9f90f6e746e543cc905fcc35ea44b107ddb193",
+      "file": "images/gallery-photo-search-field-shop-26.jpg",
+      "sha256": "5be5fa5c92cb9c21c4f25ddc1eb13248e0f299b91c665763fb2a8bcb56747398"
+    },
+    {
+      "productId": "photo-search-browser-product-688",
+      "sku": "ALOI-688",
+      "name": "\u041a\u043e\u0440\u043e\u0431\u043a\u0430 \u043b\u0430\u043c\u043f\u043e\u0447\u043a\u0438",
+      "sourceKey": "9aa17fd99251fbb59952921aeae076f3e85b34a76129355a673aa40267d4cae4",
+      "sourceSha256": "6fccacc0d4df5b7b049816b4675709dd15e6cce6d9db278c0bfd3e1434e23027",
+      "file": "images/gallery-photo-search-field-shop-27.jpg",
+      "sha256": "430c83a48b3c1dee42ce4bc6c90c3fa236d324c4b51d0c4597d615c4e93c2297"
+    },
+    {
+      "productId": "photo-search-lookalike-143",
+      "sku": "ALOI-143",
+      "name": "\u0422\u0435\u0441\u0442: \u0437\u0435\u043b\u0451\u043d\u044b\u0439 \u0431\u043b\u043e\u043a \u2014 \u043d\u0438\u0437\u043a\u0438\u0439",
+      "sourceKey": "97869243f5d882a36c8a1e9bd929497151d135504af0985b26ac209af1ce6477",
+      "sourceSha256": "fdd1633275d776838e5889fb24b2c29a11347d020d3959b36a36caa0f9866241",
+      "file": "images/gallery-photo-search-field-shop-28.jpg",
+      "sha256": "0517b23825f0a2f62330c267e4b776fd68ff0261a28c9c4e0c29896eafaea300"
+    },
+    {
+      "productId": "photo-search-lookalike-143",
+      "sku": "ALOI-143",
+      "name": "\u0422\u0435\u0441\u0442: \u0437\u0435\u043b\u0451\u043d\u044b\u0439 \u0431\u043b\u043e\u043a \u2014 \u043d\u0438\u0437\u043a\u0438\u0439",
+      "sourceKey": "294b093121932b147a1b08b3029c4aa84806ddecf744558c7c45a8adfcd5e7eb",
+      "sourceSha256": "d16cbbfaf623b41c96f75b357367c7d3872a87c18f13c7f842d7a602c013c4c9",
+      "file": "images/gallery-photo-search-field-shop-29.jpg",
+      "sha256": "dde433d0c0e4c7131e6763aad48e6f4ec735a7d8fa1391c35b56167a9476a403"
+    },
+    {
+      "productId": "photo-search-lookalike-19",
+      "sku": "ALOI-19",
+      "name": "\u0422\u0435\u0441\u0442: \u0437\u0435\u043b\u0451\u043d\u044b\u0439 \u0431\u043b\u043e\u043a \u2014 \u0432\u044b\u0441\u043e\u043a\u0438\u0439",
+      "sourceKey": "d967cd39e3937f4975f5b2a19be2a8ed60a2ccbbb9c24769cf7535bb7395f8ef",
+      "sourceSha256": "43e8078343a9e5b3c09aa76eb560fd6e1c468e0bf49f31faf2b93239e76bca88",
+      "file": "images/gallery-photo-search-field-shop-30.jpg",
+      "sha256": "60d27fca3ddc699e05cbe3c4027be3f8cf9fa13230dfc5ab248c09ac1c03302e"
+    },
+    {
+      "productId": "photo-search-lookalike-19",
+      "sku": "ALOI-19",
+      "name": "\u0422\u0435\u0441\u0442: \u0437\u0435\u043b\u0451\u043d\u044b\u0439 \u0431\u043b\u043e\u043a \u2014 \u0432\u044b\u0441\u043e\u043a\u0438\u0439",
+      "sourceKey": "95958fe99c9f3d66b9d6890ad3280a0746bd13261bf7eadc79c60ca85cc8a408",
+      "sourceSha256": "d5d354da6289875a555f8fd431bf4664eaf28d24a2450a83cee189836b26ed25",
+      "file": "images/gallery-photo-search-field-shop-31.jpg",
+      "sha256": "8ddca5cbce1900b2cec96be27937cf1d52d37baf7df3cd820cff5a1cd4a5ab0e"
+    },
+    {
+      "productId": "photo-search-lookalike-259",
+      "sku": "ALOI-259",
+      "name": "\u0422\u0435\u0441\u0442: \u043a\u0440\u0443\u0436\u043a\u0430 \u0441 \u0440\u0438\u0441\u0443\u043d\u043a\u043e\u043c \u0410",
+      "sourceKey": "9656560187db8050b4d0f237a0c063ad7484c3d37a2cd4bc6d6aeb72f39d9e8f",
+      "sourceSha256": "6135cd8bdeccaf09b3051df58a45a3a08f8838546c9d8e7d166fd10f775addb9",
+      "file": "images/gallery-photo-search-field-shop-32.jpg",
+      "sha256": "6118665210d6883e57cf38ed6061023d9bc2377f2455d3a4105be716b57faf38"
+    },
+    {
+      "productId": "photo-search-lookalike-259",
+      "sku": "ALOI-259",
+      "name": "\u0422\u0435\u0441\u0442: \u043a\u0440\u0443\u0436\u043a\u0430 \u0441 \u0440\u0438\u0441\u0443\u043d\u043a\u043e\u043c \u0410",
+      "sourceKey": "6e0847767deac18804f2b78646351c5312ecee4c05ac1d6b0b5a76aa340f50c1",
+      "sourceSha256": "834735244df10aaaca7df14a9c8715c63523b71d5065837f10d83c548317f01d",
+      "file": "images/gallery-photo-search-field-shop-33.jpg",
+      "sha256": "ecb6db2284384fb16a413886059f27caf2bacc7686092c950200ef964bea34de"
+    },
+    {
+      "productId": "photo-search-lookalike-262",
+      "sku": "ALOI-262",
+      "name": "\u0422\u0435\u0441\u0442: \u043a\u0440\u0443\u0436\u043a\u0430 \u0441 \u0440\u0438\u0441\u0443\u043d\u043a\u043e\u043c \u0411",
+      "sourceKey": "6a5ca72c5528d9489759b8f7bb765ee8de3bc1b784790b74869e83f867bb0011",
+      "sourceSha256": "ae4928581fbde5f690f7f02c645d9ff2c1aecb9dd06b3f3518bcb4beee9a052d",
+      "file": "images/gallery-photo-search-field-shop-34.jpg",
+      "sha256": "4a96689bdd445e0a233504ba16a78b6707cf3d5605ba93af525654432f4f3ade"
+    },
+    {
+      "productId": "photo-search-lookalike-262",
+      "sku": "ALOI-262",
+      "name": "\u0422\u0435\u0441\u0442: \u043a\u0440\u0443\u0436\u043a\u0430 \u0441 \u0440\u0438\u0441\u0443\u043d\u043a\u043e\u043c \u0411",
+      "sourceKey": "84d22af2dc4839576f70930db24beaf8433a7882d3665a14d5b93bbfc9b1f487",
+      "sourceSha256": "a144827d3d9e3253efdd0dfbc9753c3d19638f10648f697ca97a32b346c262b0",
+      "file": "images/gallery-photo-search-field-shop-35.jpg",
+      "sha256": "d9965bda7d634d2a0910967e0808f5525e83d9c19a970b308d3a4765e70d23d6"
+    },
+    {
+      "productId": "photo-search-lookalike-617",
+      "sku": "ALOI-617",
+      "name": "\u0422\u0435\u0441\u0442: \u0431\u0430\u043d\u043a\u0430 \u0441 \u0434\u0440\u0443\u0433\u043e\u0439 \u044d\u0442\u0438\u043a\u0435\u0442\u043a\u043e\u0439",
+      "sourceKey": "2e3aab4d57f7404b957d4a77865fdd5400a193ffbeb991728b61d1032d2091e2",
+      "sourceSha256": "19851c9d996034bed8571abde0507c75c4a6d27efca8100a1b53a424163a5113",
+      "file": "images/gallery-photo-search-field-shop-36.jpg",
+      "sha256": "96612073816a455c3e9082e7641f798b9f8ca2948fbea3879e3db80afb0876ee"
+    },
+    {
+      "productId": "photo-search-lookalike-617",
+      "sku": "ALOI-617",
+      "name": "\u0422\u0435\u0441\u0442: \u0431\u0430\u043d\u043a\u0430 \u0441 \u0434\u0440\u0443\u0433\u043e\u0439 \u044d\u0442\u0438\u043a\u0435\u0442\u043a\u043e\u0439",
+      "sourceKey": "d89ed7c198435ace7e55867437b69f9529759937314d2f470fc1571c504fbc71",
+      "sourceSha256": "ef52c4f0ff644c364f11046e86f5175b52f921eba1dfea3d80a8746582709626",
+      "file": "images/gallery-photo-search-field-shop-37.jpg",
+      "sha256": "d14f894e5735da4c89291bf3e9a9f3baeac9ac6178ddad622e004f888795708f"
+    }
+  ],
+  "products": [
+    {
+      "id": "0bb53655-b7ef-45f5-bbf9-6e6799888510",
+      "sku": "QA-ELFBAR-FIELD-SAKURA-GRAPE",
+      "name": "ELFBAR GH23000 Sakura Grape \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)"
+    },
+    {
+      "id": "3c5beb21-2104-43c6-8755-e9121d789c61",
+      "sku": "QA-ELFBAR-GH23000-ICE-MINT",
+      "name": "ELFBAR GH23000 Ice Mint \u2014 \u0442\u0435\u0441\u0442"
+    },
+    {
+      "id": "56942858-e7e0-4683-a5fb-5f6c683a162f",
+      "sku": "QA-ELFBAR-FIELD-WATERMELON-CHERRY",
+      "name": "ELFBAR GH23000 Watermelon Cherry \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)"
+    },
+    {
+      "id": "84cb06ca-5379-4f9d-8a28-5aa1ce205c53",
+      "sku": "QA-ELFBAR-FIELD-STRAWBERRY-BANANA",
+      "name": "ELFBAR GH23000 Strawberry Banana \u2014 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u0435 \u0440\u0430\u043a\u0443\u0440\u0441\u044b (\u0442\u0435\u0441\u0442)"
+    },
+    {
+      "id": "a56fbc71-cfa5-429b-be5c-dd2e019e5736",
+      "sku": "QA-ELFBAR-GH23000-KIWI-DRAGON-FRUIT",
+      "name": "ELFBAR GH23000 Kiwi Dragon Fruit \u2014 \u0442\u0435\u0441\u0442"
+    },
+    {
+      "id": "bf9b66f0-1255-4695-a5bb-f02a6ad0700e",
+      "sku": "QA-ELFBAR-GH23000-PINEAPPLE-PLUMS-LIME-MINT",
+      "name": "ELFBAR GH23000 Pineapple Plums Lime Mint \u2014 \u0442\u0435\u0441\u0442"
+    },
+    {
+      "id": "c27a7695-3e12-474d-b2a0-be00ae276c5f",
+      "sku": "QA-ELFBAR-GH23000-PEACH-MANGO-WATERMELON",
+      "name": "ELFBAR GH23000 Peach Mango Watermelon \u2014 \u0442\u0435\u0441\u0442"
+    },
+    {
+      "id": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "sku": "PHOTO-ELFBAR-TEST",
+      "name": "ELFBAR GH23000 Miami Mint"
+    },
+    {
+      "id": "dfc21c99-dddb-483c-9093-2c20f13c354f",
+      "sku": "QA-ELFBAR-GH23000-GRAPE-ICE",
+      "name": "ELFBAR GH23000 Grape Ice \u2014 \u0442\u0435\u0441\u0442"
+    },
+    {
+      "id": "photo-search-browser-product-103",
+      "sku": "ALOI-103",
+      "name": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043c\u044f\u0447"
+    },
+    {
+      "id": "photo-search-browser-product-482",
+      "sku": "ALOI-482",
+      "name": "\u0421\u0438\u043d\u044f\u044f \u043c\u0430\u0448\u0438\u043d\u043a\u0430"
+    },
+    {
+      "id": "photo-search-browser-product-577",
+      "sku": "ALOI-577",
+      "name": "\u0411\u0430\u043d\u043a\u0430"
+    },
+    {
+      "id": "photo-search-browser-product-688",
+      "sku": "ALOI-688",
+      "name": "\u041a\u043e\u0440\u043e\u0431\u043a\u0430 \u043b\u0430\u043c\u043f\u043e\u0447\u043a\u0438"
+    },
+    {
+      "id": "photo-search-lookalike-143",
+      "sku": "ALOI-143",
+      "name": "\u0422\u0435\u0441\u0442: \u0437\u0435\u043b\u0451\u043d\u044b\u0439 \u0431\u043b\u043e\u043a \u2014 \u043d\u0438\u0437\u043a\u0438\u0439"
+    },
+    {
+      "id": "photo-search-lookalike-19",
+      "sku": "ALOI-19",
+      "name": "\u0422\u0435\u0441\u0442: \u0437\u0435\u043b\u0451\u043d\u044b\u0439 \u0431\u043b\u043e\u043a \u2014 \u0432\u044b\u0441\u043e\u043a\u0438\u0439"
+    },
+    {
+      "id": "photo-search-lookalike-259",
+      "sku": "ALOI-259",
+      "name": "\u0422\u0435\u0441\u0442: \u043a\u0440\u0443\u0436\u043a\u0430 \u0441 \u0440\u0438\u0441\u0443\u043d\u043a\u043e\u043c \u0410"
+    },
+    {
+      "id": "photo-search-lookalike-262",
+      "sku": "ALOI-262",
+      "name": "\u0422\u0435\u0441\u0442: \u043a\u0440\u0443\u0436\u043a\u0430 \u0441 \u0440\u0438\u0441\u0443\u043d\u043a\u043e\u043c \u0411"
+    },
+    {
+      "id": "photo-search-lookalike-617",
+      "sku": "ALOI-617",
+      "name": "\u0422\u0435\u0441\u0442: \u0431\u0430\u043d\u043a\u0430 \u0441 \u0434\u0440\u0443\u0433\u043e\u0439 \u044d\u0442\u0438\u043a\u0435\u0442\u043a\u043e\u0439"
+    }
+  ],
+  "matrices": {
+    "ppshitu": {
+      "file": "gallery/ppshitu.npy",
+      "sha256": "4660ae4d7efc78f3a4cd7641043fdbb096535d1faff40c805eea1b30183288b6"
+    },
+    "dinov2-224": {
+      "file": "gallery/dinov2-224.npy",
+      "sha256": "86aa3c0ba8251cb7b8277c7076c3cabb1877274cd594c67cfa03e4afd11df041"
+    }
+  },
+  "queries": [
+    {
+      "id": "lUu7tf54D-VSOsFGuIs",
+      "source": "loox",
+      "reviewId": "lUu7tf54D",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "lUu7tf54D",
+      "url": "https://images.loox.io/uploads/2025/5/13/VSOsFGuIs.jpg",
+      "page": "https://www.loox.io/post/quickview/lUu7tf54D?ref=loox-feed",
+      "file": "queries/lUu7tf54D-VSOsFGuIs.jpg",
+      "sha256": "9f5d56b671bf243564326b72d8c134ef172f47a60dcccf274cd17befd1574fa8",
+      "bytes": 19782,
+      "expectedFlavor": "Mr Blue",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "warm-room",
+      "poseSet": "front+display",
+      "labelEvidence": "Readable flavor on front image VSOsFGuIs.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "lUu7tf54D-VSOsFGuIs.jpg",
+      "labelVisible": true,
+      "originalFile": "photos/lUu7tf54D-VSOsFGuIs.jpg",
+      "originalSha256": "910d0f982a355e2546b22b2cc6a964a021b1380e07f6941e890744ac00fe5f04",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/lUu7tf54D-VSOsFGuIs.jpg",
+          "sha256": "9f5d56b671bf243564326b72d8c134ef172f47a60dcccf274cd17befd1574fa8",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-VSOsFGuIs-0.png",
+          "region": {
+            "x": 0.355072021484375,
+            "y": 0.5329501628875732,
+            "width": 0.16640816628932953,
+            "height": 0.1476157158613205
+          },
+          "confidence": 0.5215936303138733,
+          "sha256": "2827484478b3a2ea22ac48634661336ef455c1705c7a10781aad4fb5a0e552f4"
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-VSOsFGuIs-1.png",
+          "region": {
+            "x": 0.1997893899679184,
+            "y": 0.3215102553367615,
+            "width": 0.4670102596282959,
+            "height": 0.5770464539527893
+          },
+          "confidence": 0.25499147176742554,
+          "sha256": "054514e5b781cd51e5800447ef3bdff6e406b90c134a3ba47c65ad9ff38bcd7e"
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-VSOsFGuIs-2.png",
+          "region": {
+            "x": 0.32489562034606934,
+            "y": 0.5033752918243408,
+            "width": 0.23088979721069336,
+            "height": 0.18974603712558746
+          },
+          "confidence": 0.20197775959968567,
+          "sha256": "a7c32a4de81397713810b5282e2de11cdd03c5facb2083d53d51c693d4c7c890"
+        }
+      ]
+    },
+    {
+      "id": "lUu7tf54D-uRtPfwfVI",
+      "source": "loox",
+      "reviewId": "lUu7tf54D",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "lUu7tf54D",
+      "url": "https://images.loox.io/uploads/2025/5/13/uRtPfwfVI.jpg",
+      "page": "https://www.loox.io/post/quickview/lUu7tf54D?ref=loox-feed",
+      "file": "queries/lUu7tf54D-uRtPfwfVI.jpg",
+      "sha256": "fac540913fb46bd2d723a360d880d533bebf7e031cae4ae3c06364defc1074e0",
+      "bytes": 17877,
+      "expectedFlavor": "Mr Blue",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "warm-room",
+      "poseSet": "front+display",
+      "labelEvidence": "Readable flavor on front image VSOsFGuIs.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "lUu7tf54D-VSOsFGuIs.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/lUu7tf54D-uRtPfwfVI.jpg",
+      "originalSha256": "2c68fb3b6267764050c0500802b8b7b7727bd9a6a68712f6374175314af6353a",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/lUu7tf54D-uRtPfwfVI.jpg",
+          "sha256": "fac540913fb46bd2d723a360d880d533bebf7e031cae4ae3c06364defc1074e0",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-uRtPfwfVI-0.png",
+          "region": {
+            "x": 0.30239251255989075,
+            "y": 0.2474808394908905,
+            "width": 0.2832042872905731,
+            "height": 0.6278719902038574
+          },
+          "confidence": 0.6676468253135681,
+          "sha256": "eb6fab41d5c2d84c1834069b9ba093a8e2a6a414d96a0dee2683a1916d5cc6ff"
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-uRtPfwfVI-1.png",
+          "region": {
+            "x": 0.28953221440315247,
+            "y": 0.0,
+            "width": 0.3087186813354492,
+            "height": 0.33425769209861755
+          },
+          "confidence": 0.4599100351333618,
+          "sha256": "c4a2db2b9586bade0be45b722bb5ed98249423f3b5a282938da0406fac231b9c"
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-uRtPfwfVI-2.png",
+          "region": {
+            "x": 0.8782161474227905,
+            "y": 0.5391671061515808,
+            "width": 0.12178385257720947,
+            "height": 0.3181801736354828
+          },
+          "confidence": 0.4511323869228363,
+          "sha256": "03768bdef2d41bfa96fb56dcea94d7895b89a0f55ee081d7a1c4854b69966b85"
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-uRtPfwfVI-3.png",
+          "region": {
+            "x": 0.27093884348869324,
+            "y": 0.1304229348897934,
+            "width": 0.4121415615081787,
+            "height": 0.7664874196052551
+          },
+          "confidence": 0.4354458451271057,
+          "sha256": "d605d83e97a8ba8a1fd60ee31b0cb2da1ff9484c563a78149c2e88b6454e0743"
+        },
+        {
+          "kind": "detection",
+          "file": "views/lUu7tf54D-uRtPfwfVI-4.png",
+          "region": {
+            "x": 0.5595816969871521,
+            "y": 0.4306296408176422,
+            "width": 0.4404183030128479,
+            "height": 0.2290736734867096
+          },
+          "confidence": 0.41988664865493774,
+          "sha256": "cbec83aa03a089e80905013a8a438541d6e4fdba55fac60ac7b42745a182e955"
+        }
+      ]
+    },
+    {
+      "id": "IZR2bs6DZ-CgqrfBFigv",
+      "source": "loox",
+      "reviewId": "IZR2bs6DZ",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "IZR2bs6DZ",
+      "url": "https://images.loox.io/uploads/2025/5/13/CgqrfBFigv.jpg",
+      "page": "https://www.loox.io/post/quickview/IZR2bs6DZ?ref=loox-feed",
+      "file": "queries/IZR2bs6DZ-CgqrfBFigv.jpg",
+      "sha256": "19c7b8e69392d5bac574f4c55575202b3c0e91d391a5d3e38cec2c8207bbf7d0",
+      "bytes": 17803,
+      "expectedFlavor": "Sour Apple Ice",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "indoor-diffuse",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image RJbrIXfSB.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "IZR2bs6DZ-RJbrIXfSB.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/IZR2bs6DZ-CgqrfBFigv.jpg",
+      "originalSha256": "88d95e1fed74fc3bbaf562fe40daefa3c2334411b31c68a0a0afb0038bac7fe2",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/IZR2bs6DZ-CgqrfBFigv.jpg",
+          "sha256": "19c7b8e69392d5bac574f4c55575202b3c0e91d391a5d3e38cec2c8207bbf7d0",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-CgqrfBFigv-0.png",
+          "region": {
+            "x": 0.25095513463020325,
+            "y": 0.24381133913993835,
+            "width": 0.29654061794281006,
+            "height": 0.728271484375
+          },
+          "confidence": 0.7654634714126587,
+          "sha256": "1c1183faf6de2afd6bdb90a3d786a2093a8a3d962176243b578e499cc1edd9dd"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-CgqrfBFigv-1.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.2550390362739563,
+            "width": 0.5783066153526306,
+            "height": 0.7431701421737671
+          },
+          "confidence": 0.3812529444694519,
+          "sha256": "376fa29de45b564cffcd0e5984e6e9a39fb533e1cbb0dda196370aff96c5c7ed"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-CgqrfBFigv-2.png",
+          "region": {
+            "x": 0.16686759889125824,
+            "y": 0.1667773425579071,
+            "width": 0.5916438698768616,
+            "height": 0.8237319588661194
+          },
+          "confidence": 0.37960517406463623,
+          "sha256": "4d9fc3d1aac0d45a5b2d913b16cbdc03b73d5be24af6c0c3181a1a0d7af4f24f"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-CgqrfBFigv-3.png",
+          "region": {
+            "x": 0.6477442383766174,
+            "y": 0.8319044709205627,
+            "width": 0.28475698828697205,
+            "height": 0.16809551417827606
+          },
+          "confidence": 0.33196958899497986,
+          "sha256": "9689969569ff6374673292034b63c9de255c93659fe303d22fbab7679107097c"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-CgqrfBFigv-4.png",
+          "region": {
+            "x": 0.5488666892051697,
+            "y": 0.7887762188911438,
+            "width": 0.38654589653015137,
+            "height": 0.2112237513065338
+          },
+          "confidence": 0.3218667209148407,
+          "sha256": "06731827efe7754cfc15adac680a7766b804135a4788e8f0d42c88ae6e09a3c5"
+        }
+      ]
+    },
+    {
+      "id": "IZR2bs6DZ-RJbrIXfSB",
+      "source": "loox",
+      "reviewId": "IZR2bs6DZ",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "IZR2bs6DZ",
+      "url": "https://images.loox.io/uploads/2025/5/13/RJbrIXfSB.jpg",
+      "page": "https://www.loox.io/post/quickview/IZR2bs6DZ?ref=loox-feed",
+      "file": "queries/IZR2bs6DZ-RJbrIXfSB.jpg",
+      "sha256": "727bcf316de37a435de27caeaf24c30d522e8b5f613556fafe3ca4cf1db0aecd",
+      "bytes": 22367,
+      "expectedFlavor": "Sour Apple Ice",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "indoor-diffuse",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image RJbrIXfSB.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "IZR2bs6DZ-RJbrIXfSB.jpg",
+      "labelVisible": true,
+      "originalFile": "photos/IZR2bs6DZ-RJbrIXfSB.jpg",
+      "originalSha256": "0099cd1f7881e43675d09e632d54483f742e5f319c59261fe8225719e46c4432",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/IZR2bs6DZ-RJbrIXfSB.jpg",
+          "sha256": "727bcf316de37a435de27caeaf24c30d522e8b5f613556fafe3ca4cf1db0aecd",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-RJbrIXfSB-0.png",
+          "region": {
+            "x": 0.2633924186229706,
+            "y": 0.16139039397239685,
+            "width": 0.47723308205604553,
+            "height": 0.663851797580719
+          },
+          "confidence": 0.6807459592819214,
+          "sha256": "49627dacc42227e60e93db64a60cccda9e901f97034f3d99d657a63f54be1c80"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-RJbrIXfSB-1.png",
+          "region": {
+            "x": 0.5494238138198853,
+            "y": 0.8408592343330383,
+            "width": 0.27118390798568726,
+            "height": 0.15914075076580048
+          },
+          "confidence": 0.3098798394203186,
+          "sha256": "14b9fe2030f4f46e44345525475a9b3c9c315e561a5f8b2be3046a3df88eeff6"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-RJbrIXfSB-2.png",
+          "region": {
+            "x": 0.3538958728313446,
+            "y": 0.16118304431438446,
+            "width": 0.16795377433300018,
+            "height": 0.11503610014915466
+          },
+          "confidence": 0.3096714913845062,
+          "sha256": "1ddb04de32235b786aa0065a91f534ddbd588ddcfc85fd17961f8adc8ae8cbc9"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-RJbrIXfSB-3.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.13158990442752838,
+            "width": 0.2684980034828186,
+            "height": 0.8684101104736328
+          },
+          "confidence": 0.2995307445526123,
+          "sha256": "7de343a4a17b416b42a73455507a54e32d2fb4d4d8cfeb4fa10a1c5e2ab8c2cc"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-RJbrIXfSB-4.png",
+          "region": {
+            "x": 0.004855969920754433,
+            "y": 0.14266087114810944,
+            "width": 0.8264914751052856,
+            "height": 0.857339084148407
+          },
+          "confidence": 0.2594734728336334,
+          "sha256": "961b7ae987607828b8e3fb46690450f076f46d82e7c2267bb5524218b3f86d59"
+        }
+      ]
+    },
+    {
+      "id": "IZR2bs6DZ-e6QrOI35-",
+      "source": "loox",
+      "reviewId": "IZR2bs6DZ",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "IZR2bs6DZ",
+      "url": "https://images.loox.io/uploads/2025/5/13/e6QrOI35-.jpg",
+      "page": "https://www.loox.io/post/quickview/IZR2bs6DZ?ref=loox-feed",
+      "file": "queries/IZR2bs6DZ-e6QrOI35-.jpg",
+      "sha256": "3d8357b7f817f9d2d2a472bde9d25f9d15a5ad7df5f6707cf7bb34980d892bba",
+      "bytes": 17333,
+      "expectedFlavor": "Sour Apple Ice",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "indoor-diffuse",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image RJbrIXfSB.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "IZR2bs6DZ-RJbrIXfSB.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/IZR2bs6DZ-e6QrOI35-.jpg",
+      "originalSha256": "bb00c2c6f6afe931dab282cb9247165c06c811f2eb67c4f81060c001be4c0a80",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/IZR2bs6DZ-e6QrOI35-.jpg",
+          "sha256": "3d8357b7f817f9d2d2a472bde9d25f9d15a5ad7df5f6707cf7bb34980d892bba",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-e6QrOI35--0.png",
+          "region": {
+            "x": 0.028642473742365837,
+            "y": 0.004050847142934799,
+            "width": 0.7210743427276611,
+            "height": 0.9804441928863525
+          },
+          "confidence": 0.4979313611984253,
+          "sha256": "b7d9c5f33f4f138d9e1aa94b70b46dab23aa815f8fc84c53ddc3d2c0d02decea"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-e6QrOI35--1.png",
+          "region": {
+            "x": 0.7267982363700867,
+            "y": 0.35604265332221985,
+            "width": 0.14574779570102692,
+            "height": 0.21386288106441498
+          },
+          "confidence": 0.25289615988731384,
+          "sha256": "bc6725453bb717e70641afb9b266821e3bc0fdb2b416a7fbcf34d65599561476"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-e6QrOI35--2.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.724942147731781,
+            "height": 0.6669129729270935
+          },
+          "confidence": 0.24375998973846436,
+          "sha256": "41e329091728323d58a0511d7d6e39c3c38cfb5280653fea102bcae231007bad"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-e6QrOI35--3.png",
+          "region": {
+            "x": 0.2674158215522766,
+            "y": 0.22548651695251465,
+            "width": 0.1296560913324356,
+            "height": 0.3568039536476135
+          },
+          "confidence": 0.21966497600078583,
+          "sha256": "5b1148459f14b39a4675b881546514d882a241e5dbffa8963532fc18e9d904de"
+        },
+        {
+          "kind": "detection",
+          "file": "views/IZR2bs6DZ-e6QrOI35--4.png",
+          "region": {
+            "x": 0.7394291162490845,
+            "y": 0.006430585402995348,
+            "width": 0.26057085394859314,
+            "height": 0.9935694336891174
+          },
+          "confidence": 0.21045470237731934,
+          "sha256": "4f079bcdd4c90f787eb2c5e9cc4bf94a6405ffe3f05b87f0ea1b22b86de5baeb"
+        }
+      ]
+    },
+    {
+      "id": "KcMQMyqCO-4OgiByvCC",
+      "source": "loox",
+      "reviewId": "KcMQMyqCO",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "KcMQMyqCO",
+      "url": "https://images.loox.io/uploads/2025/5/9/4OgiByvCC.jpg",
+      "page": "https://www.loox.io/post/quickview/KcMQMyqCO?ref=loox-feed",
+      "file": "queries/KcMQMyqCO-4OgiByvCC.jpg",
+      "sha256": "5fa850904a601e3a0677a87309c0896f3a1b30f64b01998e79b2be501b5cf379",
+      "bytes": 18135,
+      "expectedFlavor": "Miami Mint",
+      "expectedSku": "PHOTO-ELFBAR-TEST",
+      "scene": "hand",
+      "lighting": "daylight-indoor",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image f_xzYny1h9.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "KcMQMyqCO-f_xzYny1h9.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/KcMQMyqCO-4OgiByvCC.jpg",
+      "originalSha256": "a5e24ec795741387cb908a4ac59395d2d189a871a46f056df171202fdbcda8ce",
+      "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/KcMQMyqCO-4OgiByvCC.jpg",
+          "sha256": "5fa850904a601e3a0677a87309c0896f3a1b30f64b01998e79b2be501b5cf379",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-4OgiByvCC-0.png",
+          "region": {
+            "x": 0.06022161990404129,
+            "y": 0.24483539164066315,
+            "width": 0.5996730327606201,
+            "height": 0.7031481266021729
+          },
+          "confidence": 0.44684430956840515,
+          "sha256": "47006f47940790ba8828a23bd082c90bda2f2d522aede64dd6dc2e853d8386c6"
+        }
+      ]
+    },
+    {
+      "id": "KcMQMyqCO-f_xzYny1h9",
+      "source": "loox",
+      "reviewId": "KcMQMyqCO",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "KcMQMyqCO",
+      "url": "https://images.loox.io/uploads/2025/5/9/f_xzYny1h9.jpg",
+      "page": "https://www.loox.io/post/quickview/KcMQMyqCO?ref=loox-feed",
+      "file": "queries/KcMQMyqCO-f_xzYny1h9.jpg",
+      "sha256": "748cd126ff52e0d9f7e5e903f6d54d92cdf8445ffed16af23e694e1a17bdc068",
+      "bytes": 15867,
+      "expectedFlavor": "Miami Mint",
+      "expectedSku": "PHOTO-ELFBAR-TEST",
+      "scene": "hand",
+      "lighting": "daylight-indoor",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image f_xzYny1h9.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "KcMQMyqCO-f_xzYny1h9.jpg",
+      "labelVisible": true,
+      "originalFile": "photos/KcMQMyqCO-f_xzYny1h9.jpg",
+      "originalSha256": "785730ae7f382c6af47380f7fc534c2252e8c5d9a08aab28910a55ca9145a016",
+      "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/KcMQMyqCO-f_xzYny1h9.jpg",
+          "sha256": "748cd126ff52e0d9f7e5e903f6d54d92cdf8445ffed16af23e694e1a17bdc068",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-f_xzYny1h9-0.png",
+          "region": {
+            "x": 0.1932060718536377,
+            "y": 0.2933952212333679,
+            "width": 0.5023166537284851,
+            "height": 0.5944781303405762
+          },
+          "confidence": 0.538173496723175,
+          "sha256": "f88c42266d5df720b339c9928f86517a86fab08f8d71c8540422380aca7bc5d2"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-f_xzYny1h9-1.png",
+          "region": {
+            "x": 0.33841708302497864,
+            "y": 0.0,
+            "width": 0.3508172333240509,
+            "height": 0.24649183452129364
+          },
+          "confidence": 0.3814416229724884,
+          "sha256": "7fdac127a4ad534930c14adb08cbf0c597f14daea7406598d723d2b0ff82b913"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-f_xzYny1h9-2.png",
+          "region": {
+            "x": 0.3551008701324463,
+            "y": 0.547584056854248,
+            "width": 0.15528832376003265,
+            "height": 0.13685424625873566
+          },
+          "confidence": 0.3181653618812561,
+          "sha256": "03035cd713c8a308b56210598488f2c7aedd6d89c896281f7aa81794d7d1b434"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-f_xzYny1h9-3.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.2704178988933563,
+            "height": 1.0
+          },
+          "confidence": 0.312252014875412,
+          "sha256": "c4ec329118711109e4628dca990cf4dbffc2bc8497e6bba6db76930ace3d7002"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-f_xzYny1h9-4.png",
+          "region": {
+            "x": 0.10162866115570068,
+            "y": 0.0,
+            "width": 0.6593576669692993,
+            "height": 0.9131500124931335
+          },
+          "confidence": 0.29541218280792236,
+          "sha256": "e3ed8a9bf58bf3dc0fb5d48df8485d460bfcb4bc5fa54e9fe7a91359564dcb75"
+        }
+      ]
+    },
+    {
+      "id": "KcMQMyqCO-pmKCQuq1g",
+      "source": "loox",
+      "reviewId": "KcMQMyqCO",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "KcMQMyqCO",
+      "url": "https://images.loox.io/uploads/2025/5/9/pmKCQuq1g.jpg",
+      "page": "https://www.loox.io/post/quickview/KcMQMyqCO?ref=loox-feed",
+      "file": "queries/KcMQMyqCO-pmKCQuq1g.jpg",
+      "sha256": "612ada21aae0dbca204e563576ec6fab46b9beecbb6bbf5cd95d11784132e546",
+      "bytes": 18347,
+      "expectedFlavor": "Miami Mint",
+      "expectedSku": "PHOTO-ELFBAR-TEST",
+      "scene": "hand",
+      "lighting": "daylight-indoor",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image f_xzYny1h9.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "KcMQMyqCO-f_xzYny1h9.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/KcMQMyqCO-pmKCQuq1g.jpg",
+      "originalSha256": "71f3f6a0360cc51c3b6f31a6cf5b87db6f55bcd5b9c3afa45beb5a405589fef6",
+      "expectedId": "d85fd9cd-d6e7-4d7b-b878-b613864391a7",
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/KcMQMyqCO-pmKCQuq1g.jpg",
+          "sha256": "612ada21aae0dbca204e563576ec6fab46b9beecbb6bbf5cd95d11784132e546",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-pmKCQuq1g-0.png",
+          "region": {
+            "x": 0.21476048231124878,
+            "y": 0.3571293354034424,
+            "width": 0.2995016872882843,
+            "height": 0.6428706645965576
+          },
+          "confidence": 0.5861928462982178,
+          "sha256": "324f92a9391e43bec858c56c530abee235878adbf27925d2d3faf55e0f1a7a2e"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-pmKCQuq1g-1.png",
+          "region": {
+            "x": 0.4131651222705841,
+            "y": 0.0,
+            "width": 0.3191906809806824,
+            "height": 0.31795012950897217
+          },
+          "confidence": 0.5809155106544495,
+          "sha256": "9751c1b1f959468d9db4ed283bb04d8c6fc6ff187d6ec8391aa4dbe7adf4fc8b"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-pmKCQuq1g-2.png",
+          "region": {
+            "x": 0.6954314708709717,
+            "y": 0.39524006843566895,
+            "width": 0.1473756581544876,
+            "height": 0.2173837572336197
+          },
+          "confidence": 0.4866233468055725,
+          "sha256": "92f7afc04ad1229adb7fdf73c11781129a77a3199b3f3b01d160712377b26ae0"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-pmKCQuq1g-3.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.30028703808784485,
+            "width": 0.49693864583969116,
+            "height": 0.6997129321098328
+          },
+          "confidence": 0.4061153531074524,
+          "sha256": "2900230d8243ce3e97649fdf386036c4ea34576af13d1e305d23ba05e3b3102a"
+        },
+        {
+          "kind": "detection",
+          "file": "views/KcMQMyqCO-pmKCQuq1g-4.png",
+          "region": {
+            "x": 0.5586315393447876,
+            "y": 0.4339667856693268,
+            "width": 0.4413684606552124,
+            "height": 0.5660331845283508
+          },
+          "confidence": 0.38852179050445557,
+          "sha256": "007cd92a36de37ac25d445fcf9b6c23be8b58b1b0dc791284d2a2ffa4d2ab3fa"
+        }
+      ]
+    },
+    {
+      "id": "eDsVLm62O-NkITx8ye8",
+      "source": "loox",
+      "reviewId": "eDsVLm62O",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "eDsVLm62O",
+      "url": "https://images.loox.io/uploads/2025/5/15/NkITx8ye8.jpg",
+      "page": "https://www.loox.io/post/quickview/eDsVLm62O?ref=loox-feed",
+      "file": "queries/eDsVLm62O-NkITx8ye8.jpg",
+      "sha256": "d4f640e9ccea3e27de4ff80ea2e9e89a04de63773d87d8fe44c0515f43e28fa0",
+      "bytes": 21850,
+      "expectedFlavor": "Rainbow Candy",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "room-daylight",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image NkITx8ye8.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "eDsVLm62O-NkITx8ye8.jpg",
+      "labelVisible": true,
+      "originalFile": "photos/eDsVLm62O-NkITx8ye8.jpg",
+      "originalSha256": "fcba10e31726fdb11e21f1d82735ce046dcbf9ed489bf5d210ce2e3f8a33cdc3",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/eDsVLm62O-NkITx8ye8.jpg",
+          "sha256": "d4f640e9ccea3e27de4ff80ea2e9e89a04de63773d87d8fe44c0515f43e28fa0",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-NkITx8ye8-0.png",
+          "region": {
+            "x": 0.3134133815765381,
+            "y": 0.5058358907699585,
+            "width": 0.16579465568065643,
+            "height": 0.14316031336784363
+          },
+          "confidence": 0.5039969682693481,
+          "sha256": "c3f5ebcb253bcd14112cb1a042665d607ec283bc66adce9d4816278c022def53"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-NkITx8ye8-1.png",
+          "region": {
+            "x": 0.11716917157173157,
+            "y": 0.2522713840007782,
+            "width": 0.542471170425415,
+            "height": 0.6298533082008362
+          },
+          "confidence": 0.3348614275455475,
+          "sha256": "1a28d5d6e00c19da0a0146a2855ad6c32b94c4826c41a00af29cf19930de7ee0"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-NkITx8ye8-2.png",
+          "region": {
+            "x": 0.2774578332901001,
+            "y": 0.17354832589626312,
+            "width": 0.17179463803768158,
+            "height": 0.10721058398485184
+          },
+          "confidence": 0.249082550406456,
+          "sha256": "bca1dcea5775521182de27f64b7d3697cc0fa65c27d6b4074b78806fbccad015"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-NkITx8ye8-3.png",
+          "region": {
+            "x": 0.5736231207847595,
+            "y": 0.32093578577041626,
+            "width": 0.4263768792152405,
+            "height": 0.5667001605033875
+          },
+          "confidence": 0.24706459045410156,
+          "sha256": "d54af42536cf09fdd6cd950d02b0c9009ca343571d76a1677b06d9c5be504217"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-NkITx8ye8-4.png",
+          "region": {
+            "x": 0.07860643416643143,
+            "y": 0.2626110911369324,
+            "width": 0.8969122767448425,
+            "height": 0.6273437142372131
+          },
+          "confidence": 0.2464788556098938,
+          "sha256": "f211bf7abf6f2b5d93605e9bbdc4c5f37305b252c7520b9d2d44ae28bcef5be5"
+        }
+      ]
+    },
+    {
+      "id": "eDsVLm62O-VurPQ7l-q",
+      "source": "loox",
+      "reviewId": "eDsVLm62O",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "eDsVLm62O",
+      "url": "https://images.loox.io/uploads/2025/5/15/VurPQ7l-q.jpg",
+      "page": "https://www.loox.io/post/quickview/eDsVLm62O?ref=loox-feed",
+      "file": "queries/eDsVLm62O-VurPQ7l-q.jpg",
+      "sha256": "f450a18ddb3fe0923342e30f3a9060a9f07b93dd65f204ab4d99d4e6f59cbb4e",
+      "bytes": 15908,
+      "expectedFlavor": "Rainbow Candy",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "room-daylight",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image NkITx8ye8.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "eDsVLm62O-NkITx8ye8.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/eDsVLm62O-VurPQ7l-q.jpg",
+      "originalSha256": "7f32ef2f6455b160309a2fc7df9f9ab42efe1a6a54bf324924cb9b75ebfb0bb4",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/eDsVLm62O-VurPQ7l-q.jpg",
+          "sha256": "f450a18ddb3fe0923342e30f3a9060a9f07b93dd65f204ab4d99d4e6f59cbb4e",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-VurPQ7l-q-0.png",
+          "region": {
+            "x": 0.19548319280147552,
+            "y": 0.2019997537136078,
+            "width": 0.3234853446483612,
+            "height": 0.7220103144645691
+          },
+          "confidence": 0.7092839479446411,
+          "sha256": "62e291d2b33c24b53b0717c95b8f0e8a53e8536869b9bf16494f824784df79fb"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-VurPQ7l-q-1.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.7074953317642212,
+            "height": 0.9290719032287598
+          },
+          "confidence": 0.2826501727104187,
+          "sha256": "bc9d8dfd1b3578876d9e7d5edb60b5ce83966c32f7c34e14dea6307734c4fe44"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-VurPQ7l-q-2.png",
+          "region": {
+            "x": 0.00883463304489851,
+            "y": 0.1972476691007614,
+            "width": 0.9760059118270874,
+            "height": 0.7868111729621887
+          },
+          "confidence": 0.27368271350860596,
+          "sha256": "0d3ebe5dc8280a174f0a55b9a461e19b46b0b455f2570e2b94d348d0bfe4b87d"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-VurPQ7l-q-3.png",
+          "region": {
+            "x": 0.4967844784259796,
+            "y": 0.4076738655567169,
+            "width": 0.1945367455482483,
+            "height": 0.2768966853618622
+          },
+          "confidence": 0.2675066888332367,
+          "sha256": "cc1c86318a1bd98b9456928f2fec67d24f10d9ac662e1f08b30e038a469e74b5"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-VurPQ7l-q-4.png",
+          "region": {
+            "x": 0.46129104495048523,
+            "y": 0.3968506455421448,
+            "width": 0.5387089252471924,
+            "height": 0.6031493544578552
+          },
+          "confidence": 0.26691263914108276,
+          "sha256": "837ce2208fa75c3fcd750ec48b04c8e4fef78209e11a84561e3aa67be46185dd"
+        }
+      ]
+    },
+    {
+      "id": "eDsVLm62O-o4fnOE9vE",
+      "source": "loox",
+      "reviewId": "eDsVLm62O",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "eDsVLm62O",
+      "url": "https://images.loox.io/uploads/2025/5/15/o4fnOE9vE.jpg",
+      "page": "https://www.loox.io/post/quickview/eDsVLm62O?ref=loox-feed",
+      "file": "queries/eDsVLm62O-o4fnOE9vE.jpg",
+      "sha256": "95aa21d80b44027a559d8f68804f625da74cf0cca0095d206a367dc8b1b17779",
+      "bytes": 16730,
+      "expectedFlavor": "Rainbow Candy",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "room-daylight",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image NkITx8ye8.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "eDsVLm62O-NkITx8ye8.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/eDsVLm62O-o4fnOE9vE.jpg",
+      "originalSha256": "72c5e0ac4be1a5120b3a3e47bae260f73c98f64bfd2340b39e5520471bdf8664",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/eDsVLm62O-o4fnOE9vE.jpg",
+          "sha256": "95aa21d80b44027a559d8f68804f625da74cf0cca0095d206a367dc8b1b17779",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-o4fnOE9vE-0.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.14873488247394562,
+            "width": 0.6353440880775452,
+            "height": 0.8189352750778198
+          },
+          "confidence": 0.41889092326164246,
+          "sha256": "14b1df804c8ecbc2ed09aac95036a75c1b8c42385594ebccbc10ef8f307a8899"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-o4fnOE9vE-1.png",
+          "region": {
+            "x": 0.28509074449539185,
+            "y": 0.09851009398698807,
+            "width": 0.2129065990447998,
+            "height": 0.12622500956058502
+          },
+          "confidence": 0.23496758937835693,
+          "sha256": "e15fdb4ad97ecad5854cbd236aeaf0894db9102662e1f7e47057e545ef7fdf55"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-o4fnOE9vE-2.png",
+          "region": {
+            "x": 0.5943083763122559,
+            "y": 0.45037704706192017,
+            "width": 0.2631775736808777,
+            "height": 0.277391642332077
+          },
+          "confidence": 0.23344668745994568,
+          "sha256": "1097da93304e9dfeae9da07a5811a2b5f4540528f18b081962d3e242bb8103a6"
+        },
+        {
+          "kind": "detection",
+          "file": "views/eDsVLm62O-o4fnOE9vE-3.png",
+          "region": {
+            "x": 0.14195233583450317,
+            "y": 0.5175777077674866,
+            "width": 0.33006590604782104,
+            "height": 0.25865575671195984
+          },
+          "confidence": 0.21995364129543304,
+          "sha256": "45302e69e1dc7ac438ba9d80952f0c64fdc01a98f11845b3fbd30231e9cba454"
+        }
+      ]
+    },
+    {
+      "id": "M2HUviMqu-C1EacroQd",
+      "source": "loox",
+      "reviewId": "M2HUviMqu",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "M2HUviMqu",
+      "url": "https://images.loox.io/uploads/2025/5/9/C1EacroQd.jpg",
+      "page": "https://www.loox.io/post/quickview/M2HUviMqu?ref=loox-feed",
+      "file": "queries/M2HUviMqu-C1EacroQd.jpg",
+      "sha256": "0d7ce43b0a5936034a6a816100271a6257f0a0efc38fb6616a166523fc7d19a5",
+      "bytes": 20903,
+      "expectedFlavor": "Ice Pop",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "outdoor-window",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image C1EacroQd.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "M2HUviMqu-C1EacroQd.jpg",
+      "labelVisible": true,
+      "originalFile": "photos/M2HUviMqu-C1EacroQd.jpg",
+      "originalSha256": "e9ff113fc3baf30d430da7fe8efed4263f2dce64059de32cf7c24d4c549fd7b2",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/M2HUviMqu-C1EacroQd.jpg",
+          "sha256": "0d7ce43b0a5936034a6a816100271a6257f0a0efc38fb6616a166523fc7d19a5",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-C1EacroQd-0.png",
+          "region": {
+            "x": 0.2789100408554077,
+            "y": 0.3562248945236206,
+            "width": 0.42542365193367004,
+            "height": 0.5167405009269714
+          },
+          "confidence": 0.4972444176673889,
+          "sha256": "4c665526771af379191dba85635e1158c4ef692977c72fcced14bde5078c786f"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-C1EacroQd-1.png",
+          "region": {
+            "x": 0.41724923253059387,
+            "y": 0.6037616729736328,
+            "width": 0.13131196796894073,
+            "height": 0.11599688977003098
+          },
+          "confidence": 0.32205116748809814,
+          "sha256": "13799b5fb54440ef3e3d7d48ce1c26ae3e4ad62f12d8d00d160fa609a9e6140c"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-C1EacroQd-2.png",
+          "region": {
+            "x": 0.3586122691631317,
+            "y": 0.7138717770576477,
+            "width": 0.24886226654052734,
+            "height": 0.06370971351861954
+          },
+          "confidence": 0.27751681208610535,
+          "sha256": "d6b594379ffc62c4117347a1a1af0f279f48316965dd2cc660eb32d55a17ec95"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-C1EacroQd-3.png",
+          "region": {
+            "x": 0.3275620937347412,
+            "y": 0.5310335755348206,
+            "width": 0.31734591722488403,
+            "height": 0.3030974864959717
+          },
+          "confidence": 0.2296665608882904,
+          "sha256": "1ae3569d0072ff6e836c78fbcc4398c8a9d1fe6553a887734d67c8bad880fe97"
+        }
+      ]
+    },
+    {
+      "id": "M2HUviMqu-NtKO_H6eO",
+      "source": "loox",
+      "reviewId": "M2HUviMqu",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "M2HUviMqu",
+      "url": "https://images.loox.io/uploads/2025/5/9/NtKO_H6eO.jpg",
+      "page": "https://www.loox.io/post/quickview/M2HUviMqu?ref=loox-feed",
+      "file": "queries/M2HUviMqu-NtKO_H6eO.jpg",
+      "sha256": "21349cce18c5c35cd0cf681b8703bb17d9ebd73b8878d52d7507b7ab9a697491",
+      "bytes": 20301,
+      "expectedFlavor": "Ice Pop",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "outdoor-window",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image C1EacroQd.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "M2HUviMqu-C1EacroQd.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/M2HUviMqu-NtKO_H6eO.jpg",
+      "originalSha256": "5ff0a60bc47dc2e9a8393662d4e6fa6cbb5508b08cc9c18cc38c30f7ca299e6d",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/M2HUviMqu-NtKO_H6eO.jpg",
+          "sha256": "21349cce18c5c35cd0cf681b8703bb17d9ebd73b8878d52d7507b7ab9a697491",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-NtKO_H6eO-0.png",
+          "region": {
+            "x": 0.3325830399990082,
+            "y": 0.18767210841178894,
+            "width": 0.3224348723888397,
+            "height": 0.7059177160263062
+          },
+          "confidence": 0.7072740197181702,
+          "sha256": "bffa91faa01fef15bbeb2b6f889415bdeebde359eea3eab5f935047319cb2172"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-NtKO_H6eO-1.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.4357790946960449,
+            "width": 0.7850244045257568,
+            "height": 0.5642209649085999
+          },
+          "confidence": 0.4647320508956909,
+          "sha256": "97e2786197593087860502c6fc1a39393fecadf71ead6312737ec4d5131683a6"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-NtKO_H6eO-2.png",
+          "region": {
+            "x": 0.17586979269981384,
+            "y": 0.18435297906398773,
+            "width": 0.5985824465751648,
+            "height": 0.8156470060348511
+          },
+          "confidence": 0.3391534090042114,
+          "sha256": "9b74e52ef2cd10b72afed8dd5b97508279439591e016eb8cbb38e1f59f362b58"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-NtKO_H6eO-3.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.23289929330348969,
+            "width": 0.2879335880279541,
+            "height": 0.09423235803842545
+          },
+          "confidence": 0.30965456366539,
+          "sha256": "e640143c5a0cf9d4a689f02a9465f962cf02096e41f9196b23b71fabeee6a310"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-NtKO_H6eO-4.png",
+          "region": {
+            "x": 0.9540349841117859,
+            "y": 0.9123862385749817,
+            "width": 0.045965004712343216,
+            "height": 0.08761376887559891
+          },
+          "confidence": 0.2580184042453766,
+          "sha256": "6c3716eb0a2d6755f2524731af1406b041585d1b1dda42b03e3db03537acdf55"
+        }
+      ]
+    },
+    {
+      "id": "M2HUviMqu-YbAwZzw-S",
+      "source": "loox",
+      "reviewId": "M2HUviMqu",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "M2HUviMqu",
+      "url": "https://images.loox.io/uploads/2025/5/9/YbAwZzw-S.jpg",
+      "page": "https://www.loox.io/post/quickview/M2HUviMqu?ref=loox-feed",
+      "file": "queries/M2HUviMqu-YbAwZzw-S.jpg",
+      "sha256": "ad16b163bf1b0f7077168c67c40d1b4c7b4ca1e347af27bc83a696145e02f212",
+      "bytes": 20020,
+      "expectedFlavor": "Ice Pop",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "outdoor-window",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image C1EacroQd.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "M2HUviMqu-C1EacroQd.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/M2HUviMqu-YbAwZzw-S.jpg",
+      "originalSha256": "a18739c9a8c854f4d53f2f115318a8f5774b31a65162b3aed528f92b3dabf1c7",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/M2HUviMqu-YbAwZzw-S.jpg",
+          "sha256": "ad16b163bf1b0f7077168c67c40d1b4c7b4ca1e347af27bc83a696145e02f212",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-YbAwZzw-S-0.png",
+          "region": {
+            "x": 0.31227654218673706,
+            "y": 0.19046351313591003,
+            "width": 0.3640366196632385,
+            "height": 0.8095365166664124
+          },
+          "confidence": 0.7407910227775574,
+          "sha256": "e2c5a65f1396e94467cf7bd86193172a2e6231055a99e45c17015f38364c88a1"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-YbAwZzw-S-1.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.49766701459884644,
+            "width": 0.558304488658905,
+            "height": 0.5023329854011536
+          },
+          "confidence": 0.3677162230014801,
+          "sha256": "2b69f3197339d9d56e5f71f2525e96419cb5f72c26a136951390895eddac6bcd"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-YbAwZzw-S-2.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.3593387007713318,
+            "width": 0.33095023036003113,
+            "height": 0.10325485467910767
+          },
+          "confidence": 0.30788660049438477,
+          "sha256": "57c5a4718edf7de4005bba02a5082cb419c406d56f9a8a6e9f561ef83398e6ba"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-YbAwZzw-S-3.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.4916474521160126,
+            "width": 0.3369700610637665,
+            "height": 0.508352518081665
+          },
+          "confidence": 0.277313232421875,
+          "sha256": "dc893cd21b0c2658fa7237c5938e120e932527d843191ce9f19dfd8cf1d55cb6"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-YbAwZzw-S-4.png",
+          "region": {
+            "x": 0.11387406289577484,
+            "y": 0.3650232255458832,
+            "width": 0.6922719478607178,
+            "height": 0.6349768042564392
+          },
+          "confidence": 0.2561003267765045,
+          "sha256": "b10679d498ec1b5039bf8c745b598e4afddb83e8bf2eeb8e85112b54a943909f"
+        }
+      ]
+    },
+    {
+      "id": "M2HUviMqu-l2EK1V2U4X",
+      "source": "loox",
+      "reviewId": "M2HUviMqu",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "M2HUviMqu",
+      "url": "https://images.loox.io/uploads/2025/5/9/l2EK1V2U4X.jpg",
+      "page": "https://www.loox.io/post/quickview/M2HUviMqu?ref=loox-feed",
+      "file": "queries/M2HUviMqu-l2EK1V2U4X.jpg",
+      "sha256": "2c039a9bf27fbd013a12952e640b797162096112f61f8f184d0fa6a261af225a",
+      "bytes": 19162,
+      "expectedFlavor": "Ice Pop",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "outdoor-window",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image C1EacroQd.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "M2HUviMqu-C1EacroQd.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/M2HUviMqu-l2EK1V2U4X.jpg",
+      "originalSha256": "92b17724e8e75eb0e475928e8902fbf50e9bd0d1ef3b94b4d6ddb60f678b31a8",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/M2HUviMqu-l2EK1V2U4X.jpg",
+          "sha256": "2c039a9bf27fbd013a12952e640b797162096112f61f8f184d0fa6a261af225a",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-l2EK1V2U4X-0.png",
+          "region": {
+            "x": 0.17933052778244019,
+            "y": 0.22442933917045593,
+            "width": 0.5307908654212952,
+            "height": 0.708375871181488
+          },
+          "confidence": 0.6363700032234192,
+          "sha256": "3d99af99456798131f6d9b726839004a16a02fe2806ed2ada4b946ac0cfa3b71"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-l2EK1V2U4X-1.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.25254011154174805,
+            "width": 0.7657853364944458,
+            "height": 0.747459888458252
+          },
+          "confidence": 0.41040775179862976,
+          "sha256": "a8b3fd33cb2dde67f9a692b37d2c0e7583c55529a7186b011f666e1e59b76900"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-l2EK1V2U4X-2.png",
+          "region": {
+            "x": 0.8082263469696045,
+            "y": 0.9377401471138,
+            "width": 0.1917736828327179,
+            "height": 0.06225982680916786
+          },
+          "confidence": 0.2577117085456848,
+          "sha256": "c941b577be366f1b1a0cb94423e80dbd623acf52f51619a28c85897285cf15ff"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-l2EK1V2U4X-3.png",
+          "region": {
+            "x": 0.6660922169685364,
+            "y": 0.5680598020553589,
+            "width": 0.1074787974357605,
+            "height": 0.22861768305301666
+          },
+          "confidence": 0.2325793355703354,
+          "sha256": "20a2a6fbc7a031a9718a154d303221f00df4c3da9ece64378689cc2af95c9e09"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-l2EK1V2U4X-4.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.5126243829727173,
+            "width": 1.0,
+            "height": 0.4873756170272827
+          },
+          "confidence": 0.22760455310344696,
+          "sha256": "9f456dc8d927a5b9163cfd3b31125356f88fd4369c752e8361f4fe5599195fd0"
+        }
+      ]
+    },
+    {
+      "id": "M2HUviMqu-piT9-OQkFI",
+      "source": "loox",
+      "reviewId": "M2HUviMqu",
+      "photographerGroup": "loox-uploader-1",
+      "shootGroup": "M2HUviMqu",
+      "url": "https://images.loox.io/uploads/2025/5/9/piT9-OQkFI.jpg",
+      "page": "https://www.loox.io/post/quickview/M2HUviMqu?ref=loox-feed",
+      "file": "queries/M2HUviMqu-piT9-OQkFI.jpg",
+      "sha256": "5fc0cd6b2696782d96574cb6ecaadb16490b0b0188393911019391f89a9186e3",
+      "bytes": 21668,
+      "expectedFlavor": "Ice Pop",
+      "expectedSku": null,
+      "scene": "hand",
+      "lighting": "outdoor-window",
+      "poseSet": "front+back+display",
+      "labelEvidence": "Readable flavor on front image C1EacroQd.jpg in the same review; other views are paired same-device views",
+      "frontEvidence": "M2HUviMqu-C1EacroQd.jpg",
+      "labelVisible": false,
+      "originalFile": "photos/M2HUviMqu-piT9-OQkFI.jpg",
+      "originalSha256": "1d389f0f5df764becc89090ea78f1c454b08410ac5a62541001163c35d8458af",
+      "expectedId": null,
+      "multiObject": false,
+      "automaticViews": [
+        {
+          "kind": "full",
+          "file": "queries/M2HUviMqu-piT9-OQkFI.jpg",
+          "sha256": "5fc0cd6b2696782d96574cb6ecaadb16490b0b0188393911019391f89a9186e3",
+          "region": null
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-piT9-OQkFI-0.png",
+          "region": {
+            "x": 0.2842040956020355,
+            "y": 0.2820303440093994,
+            "width": 0.25752922892570496,
+            "height": 0.6475964188575745
+          },
+          "confidence": 0.7089172601699829,
+          "sha256": "6fcc3f3f5bd0615abf59069232cca2c7f7358e62d5c2476a54f0537ebcfa2dc0"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-piT9-OQkFI-1.png",
+          "region": {
+            "x": 0.15240615606307983,
+            "y": 0.2817147970199585,
+            "width": 0.5543023943901062,
+            "height": 0.6693138480186462
+          },
+          "confidence": 0.48272180557250977,
+          "sha256": "bf38db995fa2fbd67aa992daea50ae704d4acd1f14ba296c035153f678971a4e"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-piT9-OQkFI-2.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.44684237241744995,
+            "width": 0.7496637105941772,
+            "height": 0.5531575679779053
+          },
+          "confidence": 0.4263743460178375,
+          "sha256": "2801878c957592a311892557fc78488b225c254dd105fa9a6333db2138bb7f88"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-piT9-OQkFI-3.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.2728295624256134,
+            "width": 0.2618078887462616,
+            "height": 0.09973739832639694
+          },
+          "confidence": 0.4020228981971741,
+          "sha256": "78b798f78c77a9d0c80957f2e757d6683a2fb8a8c3a8b0143d4f88a8f651d9f4"
+        },
+        {
+          "kind": "detection",
+          "file": "views/M2HUviMqu-piT9-OQkFI-4.png",
+          "region": {
+            "x": 0.0,
+            "y": 0.2641589343547821,
+            "width": 0.6108042597770691,
+            "height": 0.7132794857025146
+          },
+          "confidence": 0.30478960275650024,
+          "sha256": "c2c0daf0b741ef1cef1ba460ea663602e1e1d10cb5fe67524391d0f7bc555c8c"
+        }
+      ]
+    }
+  ],
+  "databaseWrites": false,
+  "ingress": "One application-equivalent JPEG canonicalization of the original public photo upload; identical input bytes for both models"
+}

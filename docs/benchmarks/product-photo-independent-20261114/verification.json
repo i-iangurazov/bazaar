@@ -1,0 +1,145 @@
+{
+  "schema": 1,
+  "date": "2026-11-14",
+  "branch": "codex/playground",
+  "applicationCommit": "3c8edb1b785f88d281e984c6f8c216a23be3794e",
+  "policySha256": "eb36f49e348b5498eaf1141f0861e120690b8a429b9ee8db0e4798f21c3918c8",
+  "protocolSha256": "4e0e417c1f2dff00685754fd96e942fa6d50d9f4c493ffd87df4ee7c5a7d1d3d",
+  "frozenInputSha256": "c5c7aa95b1929aff2aefefbbbe0a0e5d5ecb0f8b22904116a7bef7330510812f",
+  "nativeSourceSha256": {
+    "scripts/qa/prepare-independent-elfbar.mjs": "f77efda81ccb071d8468f3c1dd3f53c47cfd19d9c02f9ca571519490891eb2b5",
+    "scripts/benchmarks/product-photo/prepare-independent-elfbar-views.py": "3153f0a646e81a0f8f3d445538235b7cee6d183c30d8c7226318ca482d920464",
+    "scripts/benchmarks/product-photo/independent-elfbar.py": "125cb87b97f8e74b320a2b69f6449b16848dadcb7a812f42283c8828ab727dc7",
+    "scripts/benchmarks/product-photo/elfbar_guarded_consensus.py": "47d1da0dbea08c14926b28b57f9296c514a4e9f1c10d85fe8c6324d95042dd46",
+    "scripts/benchmarks/product-photo/summarize-independent-elfbar.py": "85d8a11f395d4fa2901c7567baca6a6c1ecb12f93f4085c2ad9cda2af81a4411",
+    "scripts/benchmarks/product-photo/elfbar_consensus.py": "dd783f9c118f7efca5c6361162ba1d2145b61b8c219eafa16ad432e06f6a3570",
+    "scripts/benchmarks/product-photo/elfbar_encoders.py": "c8d1af9e92bcc99acb6aab612b983b96a64700d591cfa42a434cd0f243ef4854",
+    "scripts/benchmarks/product-photo/elfbar_comparison.py": "d1d76511974d5b591f253f8653dcf69d2b30540747931ed9bcdfa3e7d560176a",
+    "scripts/benchmarks/product-photo/elfbar_metrics.py": "041d651a2d21730db8412bcf367ae196ba01aeb861754ac2a0daa04aaa8b6388",
+    "scripts/benchmarks/product-photo/retrieval.py": "44b1b0b314a07ff9239927303475eaaeff10dace4de3cbd266d5614fc0ddaad7"
+  },
+  "additionalSourceSha256": {
+    "scripts/qa/check-independent-elfbar-api.mjs": "59933906511332dd9b17eef20ef1d234e8c5232d0e55320ee631830a9009a04a",
+    "scripts/benchmarks/product-photo/prepare-independent-photos.py": "8dd40382e71a1ba456a791fede7a44f6696809a13f33b72e62868ab97aab70d4",
+    "scripts/benchmarks/product-photo/test_elfbar_guarded_consensus.py": "599b8997bd22106a48b205173128a464f4e705a18f1c09cad5531826225bb791"
+  },
+  "corpus": {
+    "photos": 16,
+    "knownPhotos": 3,
+    "knownFlavors": [
+      "Miami Mint"
+    ],
+    "absentPhotos": 13,
+    "absentFlavors": [
+      "Mr Blue",
+      "Sour Apple Ice",
+      "Rainbow Candy",
+      "Ice Pop"
+    ],
+    "reviewGroups": 5,
+    "photographerGroups": 1,
+    "sourceDimensions": [
+      "375x500",
+      "500x375"
+    ],
+    "newStrawberryBananaAndWatermelonCherryCaptures": false
+  },
+  "checks": [
+    {
+      "command": ".local/elfbar-model-comparison/venv/bin/python -m unittest discover -s scripts/benchmarks/product-photo -p test_*.py",
+      "exitCode": 0,
+      "tests": 21,
+      "logSha256": "2b390ad0ecc0187ae4c9907c4b66fcd5cf984adc11b10becfdaa3a91cfef8ccd"
+    },
+    {
+      "command": "SKIP_DB_TESTS=1 RUN_DB_TESTS=0 pnpm exec vitest run tests/unit/product-photo-label.test.ts",
+      "exitCode": 0,
+      "tests": 7,
+      "logSha256": "397fbff99c65b5bc9f9401cd393e83dd9bbafb73431b1336cfebcf50fa6796f3"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit",
+      "exitCode": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0,
+      "logSha256": "0c3c984925f00fb3efef6a4d8a4d21e92044c9ee3a8a6e50ba6e49315fb24e71"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "exitCode": 0,
+      "logSha256": "7928e029387f03e9d2782197363680f8181899bdb69c80bfc76625f6f40c69cd"
+    },
+    {
+      "command": "Python AST / node --check for new scripts",
+      "exitCode": 0
+    },
+    {
+      "command": ".local/elfbar-model-comparison/venv/bin/python scripts/benchmarks/product-photo/prepare-independent-photos.py",
+      "exitCode": 0,
+      "verifiedPhotos": 16,
+      "networkDuringVerification": false
+    },
+    {
+      "command": "node scripts/qa/verify-elfbar-model-comparison.mjs",
+      "exitCode": 0,
+      "catalogAndFeatureCacheUnchanged": true,
+      "logSha256": "ea0e8c3eee325922da5136c14ff518f4064f85aa820e805931c47ad4c50286e4"
+    },
+    {
+      "command": "node scripts/qa/check-independent-elfbar-api.mjs (fixed local QA environment)",
+      "exitCode": 0,
+      "authenticatedPhotoQueries": 16,
+      "allHttp200": true,
+      "emptyStoreControl": true,
+      "galleryUnchanged": true,
+      "logSha256": "b6d1f5d5482439d13b21abf2b4b3dc86655856a4ad187b659f9f891558607b0c"
+    }
+  ],
+  "nativeRuns": {
+    "models": [
+      "ppshitu",
+      "dinov2-224"
+    ],
+    "privateFaiss": true,
+    "queriesEach": 16,
+    "galleryPhotos": 38,
+    "cpuThreads": 1,
+    "precision": "fp32",
+    "sequence": "One model process at a time, then separate unchanged-app API run",
+    "frozenPolicyNotRetunedAfterNewInference": true,
+    "ppApplicationMatchesReproduced": 16
+  },
+  "runtime": {
+    "appHttpStatus": 200,
+    "url": "http://192.168.68.109:3158",
+    "processesRunning": {
+      "lan": true,
+      "engine": true,
+      "worker": true
+    },
+    "engine": "Current PP-ShiTuV2 + existing OCR",
+    "appChanged": false,
+    "newConsensusActivated": false
+  },
+  "catalogAndFeatureCacheChanged": false,
+  "apiAuthenticationAndRateLimitStateMayChange": true,
+  "paidInferenceCalls": false,
+  "productionDeployed": false,
+  "notRun": {
+    "productionBuild": "No application changes; previous verified build at c3d67c94",
+    "uiInspection": "No UI changes",
+    "independentStrawberryBananaWatermelonCherryPair": "No newly available reliably labelled real captures of these flavors",
+    "dualModelServer": "Only sequential offline inference; not a deployed dual-model endpoint",
+    "newPhoneCapture": "Public reduced photos, not supplied new full-resolution phone shots"
+  },
+  "evidenceSha256": {
+    "api-results.json": "8939d1d5e575a5c35c7d8e9b44fdf1055ad106e26c84e77f13a6b8c077e0f0bb",
+    "data-manifest.json": "c5c7aa95b1929aff2aefefbbbe0a0e5d5ecb0f8b22904116a7bef7330510812f",
+    "dinov2-224.json.gz": "f7e86c0c4571bbe301b2494a13f8eb4085286a32f62e21474c2c9b5b14a99a26",
+    "ppshitu.json.gz": "e09b33376692c9fe72c1dba5320687ece125a447223cd0430f7a2d3a37c4a838",
+    "summary.json": "6cde103afc9a2f6a8f9e5c7069620694559ba3419b0aedf6525ecd21395b08cc"
+  }
+}

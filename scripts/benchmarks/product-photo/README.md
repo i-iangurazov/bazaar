@@ -1,9 +1,11 @@
 # PP-ShiTu versus Chinese-CLIP: isolated photo retrieval benchmark
 
-This is an offline evaluation tool, not a Bazaar feature or a marketplace client.
-It never opens the application database, reads application `.env` files, or calls
-DeepSeek, HioBuy, 1688, or a hosted inference API. Only preparation downloads public
-source, model checkpoints and evaluation photographs. Inference uses local CPU.
+The original ALOI runner below is an offline evaluation tool, not a Bazaar feature
+or a marketplace client. It never opens the application database, reads application
+`.env` files, or calls DeepSeek, HioBuy, 1688, or a hosted inference API. Only
+preparation downloads public source, model checkpoints and evaluation photographs.
+Inference uses local CPU. The later ELFBAR QA workflows at the end separately
+export guarded disposable local data and check the unchanged local application API.
 
 ## Models and source
 
@@ -136,3 +138,12 @@ separate. Images, frozen regions, checkpoints and embeddings remain under ignore
 `.local/elfbar-model-comparison`; committed evidence contains hashes and results.
 The protocol fixes rejection thresholds before field encoding. The separate
 PP/DINO agreement experiment is labelled post-hoc and is not enabled in Bazaar.
+
+The [external-photo validation](../../../docs/product-photo-independent-20261114.md)
+uses sixteen new real user photos from five review groups, separate from the gallery
+shoots. It freezes a PP runner-up margin gate before new encoder inference. It
+reports the failed transfer as well as the fixed development case; no consensus
+policy is activated in the application. `independent-elfbar.py` validates the fixed
+input, matrix, policy and source hashes and runs both local encoders sequentially.
+`check-independent-elfbar-api.mjs` separately checks the unchanged full PP/OCR app
+on the same originals, behind guards for the disposable database/store/account.
