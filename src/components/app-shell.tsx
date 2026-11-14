@@ -24,6 +24,7 @@ import {
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { SignOutButton } from "@/components/signout-button";
 import { ScanInput } from "@/components/ScanInput";
+import { GlobalPhotoSearch } from "@/components/products/global-photo-search";
 import { CommandPalette } from "@/components/command-palette";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalFooter } from "@/components/ui/modal";
@@ -1130,6 +1131,11 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               </div>
             ) : null}
             <MobileAppShell
+              search={<>
+                <div className="min-w-0 flex-1"><ScanInput context="global" placeholder={tHeader("scanPlaceholder")}
+                  ariaLabel={tHeader("scanLabel")} supportsTabSubmit enableProductSearch portalDropdown onResolved={handleScanResolved} /></div>
+                <GlobalPhotoSearch key={`${user.organizationId}:${user.email}:${normalizedPath}`} identityKey={`${user.organizationId}:${user.email}`} canViewProducts={hasPermission(access, "viewProducts")} />
+              </>}
               showAssistant={hasPermission(access, "viewReports")}
               pageTitle={mobilePageTitle}
               storeName={mobileStoreName}
@@ -1282,6 +1288,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                         onResolved={handleScanResolved}
                       />
                     </div>
+                    <GlobalPhotoSearch key={`${user.organizationId}:${user.email}:${normalizedPath}`} identityKey={`${user.organizationId}:${user.email}`} canViewProducts={hasPermission(access, "viewProducts")} />
                   </div>
                   <div className="flex shrink-0 items-center gap-2 justify-self-end">
                     {hasPermission(access, "viewReports") ? (

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { ArrowLeft, Camera, Check, Crop, ImageOff, Info, ScanLine, Upload, X } from "lucide-react";
 import { ViewIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -17,11 +18,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { prepareManagedProductImageForUpload } from "@/lib/productImageClientUpload";
 import { productPhotoAccept } from "@/lib/productImageUpload";
 import { productPhotoSearchMaxBytes, type ProductPhotoProgress, type ProductPhotoSearchResult, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
-import { ProductPhotoRegionEditor } from "./product-photo-region-editor";
+const ProductPhotoRegionEditor = dynamic(() => import("./product-photo-region-editor").then((module) => module.ProductPhotoRegionEditor), { ssr: false });
 import { convertFromKgs, normalizeCurrencyCode } from "@/lib/currency";
 import { formatCurrency, formatNumber } from "@/lib/i18nFormat";
 
-type Props = { identityKey: string; storeId: string; stores: { id: string; name: string }[]; disabled?: boolean; selectionMode?: "card" | "preview" };
+type Props = { identityKey: string; storeId: string; stores: { id: string; name: string }[]; disabled?: boolean; selectionMode?: "card" | "preview";
+  iconOnly?: boolean; loadingStores?: boolean; storeError?: boolean; onRetryStores?: () => void };
 
 function Photo({ src, alt, className, onDimensions }: { src: string | null; alt: string; className: string; onDimensions?: (size: { width: number; height: number }) => void }) {
   const [failed, setFailed] = useState(false);
@@ -63,7 +65,7 @@ export function ProductPhotoSearchButton(props: Props) {
   return <Workspace key={`${props.identityKey}:${props.storeId}`} {...props} />;
 }
 
-function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props) {
+function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly, loadingStores, storeError, onRetryStores }: Props) {
   const t = useTranslations("productPhotoSearch");
   const common = useTranslations("common");
   const errors = useTranslations("errors");
@@ -199,8 +201,11 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
   const shownRegion = manualRegion ?? result?.recognition?.region ?? null;
 
   return <>
-    <Button type="button" variant="secondary" disabled={disabled || !stores.length} onClick={() => setOpen(true)}>
-      <Camera className="h-4 w-4" aria-hidden />{t("open")}
+    <Button type="button" variant="secondary" size={iconOnly ? "icon" : "default"}
+      className={iconOnly ? "h-11 w-11 shrink-0 md:h-9 md:w-9" : undefined}
+      aria-label={t("open")} title={t("open")} aria-haspopup="dialog" aria-expanded={open}
+      disabled={disabled || (!stores.length && !loadingStores && !storeError)} onClick={() => setOpen(true)}>
+      <Camera className="h-4 w-4" aria-hidden />{!iconOnly ? t("open") : null}
     </Button>
     <Modal open={open} onOpenChange={changeOpen} title={t("title")} subtitle={t("subtitle")}
       className="sm:max-w-4xl sm:data-[state=open]:-translate-y-1/2 sm:data-[state=closed]:-translate-y-1/2" bodyClassName="p-0 sm:p-0" animated mobileSheet>
@@ -210,11 +215,15 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card" }: Props)
         {!selectedId ? <section className="min-w-0 space-y-4 border-b border-border bg-secondary/25 p-4 sm:p-5 md:border-b-0 md:border-r" aria-label={t("queryPhoto")}>
           <div className="space-y-1.5">
             <label htmlFor="photo-search-store" className="text-xs font-medium text-muted-foreground">{common("store")}</label>
-            <Select value={selectedStore || undefined} onValueChange={setSelectedStore}>
+            <Select value={selectedStore} onValueChange={setSelectedStore}>
               <SelectTrigger id="photo-search-store" className="bg-card"><SelectValue placeholder={common("selectStore")} /></SelectTrigger>
               <SelectContent>{stores.map((store) => <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          {loadingStores ? <p className="flex items-center gap-2 text-sm" role="status"><Spinner className="h-4 w-4" />{common("loading")}</p> : null}
+          {storeError ? <Alert variant="destructive" role="alert"><p>{errors("genericMessage")}</p>
+            <Button type="button" variant="secondary" className="mt-2" onClick={onRetryStores}>{common("tryAgain")}</Button>
+          </Alert> : null}
           <div className={file ? "flex items-start gap-3 md:block md:space-y-3" : "space-y-3"}>
             <div className={(file ? "h-28 w-28 shrink-0 md:h-auto md:w-full md:aspect-square " : "min-h-36 ") +
               "relative flex items-center justify-center overflow-hidden rounded-xl border border-border bg-card p-3"}>

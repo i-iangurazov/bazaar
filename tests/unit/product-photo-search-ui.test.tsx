@@ -131,7 +131,7 @@ it("sends the selected region, supports the whole photo, and keeps OCR evidence 
   const photo = view.getByAltText("Photo for search");
   Object.defineProperties(photo, { naturalWidth: { value: 800 }, naturalHeight: { value: 600 } }); fireEvent.load(photo);
   fireEvent.click(view.getByRole("button", { name: "Select product area" }));
-  fireEvent.click(view.getByRole("button", { name: "Set test selection" }));
+  fireEvent.click(await view.findByRole("button", { name: "Set test selection" }));
   fireEvent.click(view.getByRole("button", { name: "Use selection" }));
   fireEvent.click(view.getByRole("button", { name: "Find similar" }));
   await view.findByText("From text in photo");
