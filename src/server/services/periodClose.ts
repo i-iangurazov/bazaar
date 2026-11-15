@@ -48,6 +48,9 @@ export const closePeriod = async (input: ClosePeriodInput) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "periodClose" });
   try {
     return await prisma.$transaction(async (tx) => {
+      // Corrections acquire assortment -> sales-period; closing only needs
+      // sales-period, so its snapshot cannot race an ordinary-sale amendment.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`sales-period:${input.organizationId}:${input.storeId}`}, 0))`;
       const store = await tx.store.findFirst({
         where: { id: input.storeId, organizationId: input.organizationId },
         select: { id: true },

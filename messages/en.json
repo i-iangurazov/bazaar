@@ -5369,7 +5369,45 @@
     "customerCard": "Customer record",
     "unitPriceInvalid": "Enter a price of 0 or more with up to two decimal places.",
     "documentPriceHint": "This price applies to this order only.",
-    "orderWithoutShift": "You can create and complete this order without opening a cash register shift."
+    "orderWithoutShift": "You can create and complete this order without opening a cash register shift.",
+    "fastSale": {
+      "cancelledLastLine": "Order cancelled: the last item was removed.",
+      "confirmCancelLastLine": "I confirm cancellation of the entire order",
+      "confirmDeclined": "Confirm removal",
+      "confirmPost": "Complete this sale and deduct stock from the selected store? This action does not record a payment.",
+      "corrected": "Sale corrected. New document: {number}.",
+      "declinedAction": "Customer declined this item",
+      "declinedCompletedHint": "The item will return to stock. The original sale will be cancelled and kept in history. The remaining items will be preserved in a new sale.",
+      "declinedLastLineHint": "This is the last item. The entire order will be cancelled.",
+      "declinedReadyHint": "The item will be removed from the order and the total recalculated.",
+      "declinedTitle": "Declined item",
+      "inlineHint": "Price and quantity save on Enter or when you leave the field. Enter moves to the next line.",
+      "openPayment": "Payments and returns",
+      "paidRemovalBlocked": "This sale has recorded payments. Use the return action in the Payment section.",
+      "post": "Complete sale",
+      "posted": "Sale completed.",
+      "reason": "Reason",
+      "reasonPlaceholder": "For example, the customer declined the item",
+      "reload": "Refresh document"
+    },
+    "workspace": {
+      "customerDetails": "Customer contact details",
+      "keyboardHint": "Edit quantity and price in each row. Enter moves to the next product.",
+      "positionCount": "Items: {count}",
+      "postConfirmation": "Post a sale from “{store}” for {total}? Stock will be deducted. This action does not record a payment.",
+      "postHint": "Posting deducts stock. Receipt of payment is recorded separately.",
+      "postSale": "Post sale",
+      "recoveryHint": "A sale from “{store}” for {total} has already been submitted. Checking again reuses the same request and will not deduct stock twice.",
+      "recoveryRetry": "Check sale",
+      "recoveryTitle": "Check the posting result",
+      "saveDraft": "Save order",
+      "searchEmpty": "Enter a name or SKU, or scan a barcode.",
+      "searchHint": "Add several products in a row. Your search stays in place.",
+      "searchTitle": "Choose products",
+      "storageFailed": "The browser could not save a safe retry. Check recent orders before making a new sale, and open this screen in a regular browser tab.",
+      "subtitle": "Choose a store and customer, add products and review the total.",
+      "title": "Customer sale"
+    }
   },
   "suppliers": {
     "title": "Suppliers",
@@ -6191,7 +6229,17 @@
     "billingManualRefundReasonInvalid": "Enter refund grounds of 10–500 characters.",
     "billingManualRefundIdempotencyInvalid": "The record identifier could not be created. Close and reopen the form; do not repeat the transfer.",
     "billingManualRefundIdempotencyConflict": "This identifier was already used for different details. Review the history and open a new form if needed.",
-    "billingManualRefundBankOperationUsed": "This bank transaction has already been recorded. Review the history; do not repeat the transfer."
+    "billingManualRefundBankOperationUsed": "This bank transaction has already been recorded. Review the history; do not repeat the transfer.",
+    "salesOrderAmendmentFiscalBlocked": "This order already has fiscal records. Follow the applicable return workflow.",
+    "salesOrderAmendmentLoyaltyBlocked": "This order involves loyalty or an order-wide discount. It requires a separate correction.",
+    "salesOrderAmendmentPeriodClosed": "This sale belongs to a closed period and cannot be changed with this action.",
+    "salesOrderAmendmentRequiresReturn": "This order has a payment, a return or a debt. Use the appropriate return and settlement documents.",
+    "salesOrderAmendmentStale": "This order has changed. Refresh the page and review the items before trying again.",
+    "salesOrderAmendmentStockMismatch": "Stock movements do not match this order. Reconciliation is required before correcting it.",
+    "salesOrderAmendmentUnavailable": "This order cannot be corrected by removing an item. Check its status and related documents.",
+    "salesOrderAmendmentUnsupportedSource": "This action is available only for sales created manually outside POS. Use the original workflow for an integration or POS order.",
+    "salesOrderLastLineCancellationRequired": "This is the final item. Canceling the entire order requires separate confirmation.",
+    "salesOrderPriceRequired": "A sale price is missing. Enter a price before posting the sale."
   },
   "adminJobs": {
     "title": "Admin jobs",
@@ -7150,37 +7198,65 @@
       "gettingStarted": {
         "title": "Getting started",
         "summary": "Summary",
-        "body": ["Getting started body", "Getting started body", "Getting started body"]
+        "body": [
+          "Getting started body",
+          "Getting started body",
+          "Getting started body"
+        ]
       },
       "importProducts": {
         "title": "Import products",
         "summary": "Summary",
-        "body": ["Import products body", "Import products body", "Import products body"]
+        "body": [
+          "Import products body",
+          "Import products body",
+          "Import products body"
+        ]
       },
       "barcodeWorkflow": {
         "title": "Barcode workflow",
         "summary": "Summary",
-        "body": ["Barcode workflow body", "Barcode workflow body", "Barcode workflow body"]
+        "body": [
+          "Barcode workflow body",
+          "Barcode workflow body",
+          "Barcode workflow body"
+        ]
       },
       "inventoryFlows": {
         "title": "Inventory flows",
         "summary": "Summary",
-        "body": ["Inventory flows body", "Inventory flows body", "Inventory flows body"]
+        "body": [
+          "Inventory flows body",
+          "Inventory flows body",
+          "Inventory flows body"
+        ]
       },
       "stockCounts": {
         "title": "Stock counts",
         "summary": "Summary",
-        "body": ["Stock counts body", "Stock counts body", "Stock counts body"]
+        "body": [
+          "Stock counts body",
+          "Stock counts body",
+          "Stock counts body"
+        ]
       },
       "purchaseOrders": {
         "title": "Purchase orders",
         "summary": "Summary",
-        "body": ["Purchase orders body", "Purchase orders body", "Purchase orders body"]
+        "body": [
+          "Purchase orders body",
+          "Purchase orders body",
+          "Purchase orders body"
+        ]
       },
       "storePrices": {
         "title": "Store prices",
         "summary": "Summary",
-        "body": ["Store prices body", "Store prices body", "Store prices body"]
+        "body": [
+          "Store prices body",
+          "Store prices body",
+          "Store prices body"
+        ]
       },
       "mMarketIntegration": {
         "title": "M market integration",
@@ -7209,17 +7285,29 @@
       "priceTags": {
         "title": "Price tags",
         "summary": "Summary",
-        "body": ["Price tags body", "Price tags body", "Price tags body"]
+        "body": [
+          "Price tags body",
+          "Price tags body",
+          "Price tags body"
+        ]
       },
       "reorder": {
         "title": "Reorder",
         "summary": "Summary",
-        "body": ["Reorder body", "Reorder body", "Reorder body"]
+        "body": [
+          "Reorder body",
+          "Reorder body",
+          "Reorder body"
+        ]
       },
       "troubleshooting": {
         "title": "Troubleshooting",
         "summary": "Summary",
-        "body": ["Troubleshooting body", "Troubleshooting body", "Troubleshooting body"]
+        "body": [
+          "Troubleshooting body",
+          "Troubleshooting body",
+          "Troubleshooting body"
+        ]
       }
     }
   },
@@ -7229,15 +7317,27 @@
     "sections": {
       "v14": {
         "title": "V14",
-        "items": ["Items", "Items", "Items"]
+        "items": [
+          "Items",
+          "Items",
+          "Items"
+        ]
       },
       "v15": {
         "title": "V15",
-        "items": ["Items", "Items", "Items"]
+        "items": [
+          "Items",
+          "Items",
+          "Items"
+        ]
       },
       "v16": {
         "title": "V16",
-        "items": ["Items", "Items", "Items"]
+        "items": [
+          "Items",
+          "Items",
+          "Items"
+        ]
       }
     }
   },
@@ -7412,22 +7512,35 @@
       "kkmModes": {
         "title": "KKM modes",
         "summary": "Summary",
-        "body": ["KKM modes body", "KKM modes body", "KKM modes body"]
+        "body": [
+          "KKM modes body",
+          "KKM modes body",
+          "KKM modes body"
+        ]
       },
       "exports": {
         "title": "Exports",
         "summary": "Summary",
-        "body": ["Exports body", "Exports body"]
+        "body": [
+          "Exports body",
+          "Exports body"
+        ]
       },
       "ettnMarking": {
         "title": "ETTN marking",
         "summary": "Summary",
-        "body": ["ETTN marking body", "ETTN marking body"]
+        "body": [
+          "ETTN marking body",
+          "ETTN marking body"
+        ]
       },
       "periodClose": {
         "title": "Period close",
         "summary": "Summary",
-        "body": ["Period close body", "Period close body"]
+        "body": [
+          "Period close body",
+          "Period close body"
+        ]
       }
     }
   },
@@ -8874,5 +8987,54 @@
     "customerImage": "Customer image",
     "mediaExpired": "The image expired. Images are kept for 7 days.",
     "mediaUnavailable": "The image could not be loaded. Close and retry; if it expired, ask the customer to resend it."
+  },
+  "salesDocuments": {
+    "description": "Choose a document, then print it or download the PDF.",
+    "download": "Download PDF",
+    "failed": "The document could not be prepared. Please try again.",
+    "goodsReceipt": "Sales receipt",
+    "invoice": "Invoice",
+    "kind": "Document type",
+    "nonFiscalHint": "These documents do not replace a fiscal receipt.",
+    "open": "Invoice / sales receipt",
+    "pdf": {
+      "address": "Address",
+      "amount": "Amount",
+      "customer": "Customer",
+      "date": "Date",
+      "discount": "Discount",
+      "email": "Email",
+      "empty": "No items",
+      "goodsReceipt": "Sales receipt",
+      "inn": "Tax ID",
+      "invoice": "Sales invoice",
+      "issuedBy": "Issued by",
+      "nonFiscal": "This is not a fiscal receipt.",
+      "number": "Number",
+      "page": "Page",
+      "phone": "Phone",
+      "price": "Price",
+      "product": "Product",
+      "quantity": "Qty",
+      "receivedBy": "Received by",
+      "seller": "Seller",
+      "sku": "SKU",
+      "status": "Status",
+      "statuses": {
+        "CANCELED": "Canceled",
+        "COMPLETED": "Completed",
+        "CONFIRMED": "Confirmed",
+        "DRAFT": "Draft",
+        "READY": "Ready for pickup"
+      },
+      "store": "Store",
+      "subtotal": "Subtotal",
+      "total": "Total",
+      "unit": "Unit",
+      "unnamedCustomer": "Not specified"
+    },
+    "print": "Print",
+    "printFallback": "The document is open. If printing did not start, use the browser or phone print menu.",
+    "title": "Sale documents {number}"
   }
 }

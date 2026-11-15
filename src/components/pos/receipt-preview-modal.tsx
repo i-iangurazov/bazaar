@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { DownloadIcon, PrintIcon } from "@/components/icons";
+import { SalesDocumentActions } from "@/components/sales-document-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalFooter } from "@/components/ui/modal";
@@ -335,6 +336,7 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
           ) : null}
 
           <ModalFooter className="m-4 lg:m-6">
+            <SalesDocumentActions orderId={sale.id} number={sale.number} variant="secondary" />
             <Button
               type="button"
               variant="outline"

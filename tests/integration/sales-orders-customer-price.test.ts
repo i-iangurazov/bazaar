@@ -33,7 +33,7 @@ describeDb("ordinary sales orders: customer identity and negotiated prices", () 
   it("previews the same effective base/variant price as order creation and preserves store access", async () => {
     const f = await fixture();
     const staff = createTestCaller(asUser(f.staffUser));
-    expect(await staff.salesOrders.linePrice({ storeId: f.store.id, productId: f.product.id })).toEqual({ unitPriceKgs: 80 });
+    expect(await staff.salesOrders.linePrice({ storeId: f.store.id, productId: f.product.id })).toEqual({ unitPriceKgs: 80, hasConfiguredPrice: true });
     const variant = await prisma.productVariant.create({ data: { productId: f.product.id, name: "Priced variant", attributes: {} } });
     await prisma.storePrice.create({ data: {
       organizationId: f.org.id, storeId: f.store.id, productId: f.product.id,
@@ -41,7 +41,7 @@ describeDb("ordinary sales orders: customer identity and negotiated prices", () 
       discountType: "PERCENTAGE", discountPercentage: 10,
     } });
     const preview = await staff.salesOrders.linePrice({ storeId: f.store.id, productId: f.product.id, variantId: variant.id });
-    expect(preview).toEqual({ unitPriceKgs: 225 });
+    expect(preview).toEqual({ unitPriceKgs: 225, hasConfiguredPrice: true });
     const order = await staff.salesOrders.createDraft({ storeId: f.store.id, idempotencyKey: "customer-price-preview", lines: [{ productId: f.product.id, variantId: variant.id, qty: 1 }] });
     const saved = await prisma.customerOrderLine.findFirstOrThrow({ where: { customerOrderId: order.id } });
     expect(Number(saved.unitPriceKgs)).toBe(preview.unitPriceKgs);

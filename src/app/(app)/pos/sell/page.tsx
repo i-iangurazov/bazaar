@@ -1,4 +1,6 @@
 "use client";
+
+import { SalesDocumentActions } from "@/components/sales-document-actions";
 import { parseQuantity, isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { PosTransferDialog } from "@/components/pos/transfer-dialog";
 
@@ -5677,6 +5679,7 @@ const PosSellPage = () => {
                 <div className="flex min-h-0 flex-1 flex-col justify-between gap-5 overflow-y-auto p-5">
                   <div className="space-y-3">
                     {completedLoyalty}
+                    <SalesDocumentActions orderId={lastCompletedSale.id} number={lastCompletedSale.number} className="w-full" />
                     <Button type="button" className="h-12 w-full" onClick={handleStartNewSale}>
                       {t("sell.newSale")}
                     </Button>
@@ -7023,6 +7026,7 @@ const PosSellPage = () => {
                 </p>
                 <div className="mt-4 grid gap-2">
                   {completedLoyalty}
+                  <SalesDocumentActions orderId={lastCompletedSale.id} number={lastCompletedSale.number} className="w-full" />
                   <Button
                     type="button"
                     className="h-12"
@@ -8010,6 +8014,7 @@ const PosSellPage = () => {
                   <div className="min-h-0 flex-1 overflow-y-auto p-4">
                     <div className="grid gap-2">
                       {completedLoyalty}
+                      <SalesDocumentActions orderId={lastCompletedSale.id} number={lastCompletedSale.number} className="w-full" />
                       <Button type="button" className="h-12 w-full" onClick={handleStartNewSale}>
                         {t("sell.newSale")}
                       </Button>

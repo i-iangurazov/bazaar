@@ -1,4 +1,5 @@
 import { assertProductQuantity } from "./productQuantity";
+import { createHash } from "node:crypto";
 import { roundQuantity } from "@/lib/quantity";
 import { releaseLoyaltyForOrder } from "@/server/services/loyalty/apply";
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
@@ -100,6 +101,17 @@ const assertOrderActorStoreAccessTx = async (
   const user = { ...actor, organizationId: actor.organizationId };
   await assertUserCanAccessStore(tx, user, input.storeId);
   return user;
+};
+
+const assertSalesManagerStoreAccessTx = async (
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; actorId: string; storeId: string },
+) => {
+  const actor = await assertOrderActorStoreAccessTx(tx, input);
+  if (actor.role !== "ADMIN" && actor.role !== "MANAGER") {
+    throw new AppError("forbidden", "FORBIDDEN", 403);
+  }
+  return actor;
 };
 
 const normalizeOrderUnitPrice = (value: number) => {
@@ -383,6 +395,7 @@ const resolveUnitPrice = async (input: {
 
   return {
     variantKey,
+    hasConfiguredPrice: override?.priceKgs != null || product.basePriceKgs != null,
     baseUnitPriceKgs,
     appliedDiscountType: effective.hasActiveDiscount ? CatalogDiscountType.PERCENTAGE : null,
     appliedDiscountPercentage: effective.hasActiveDiscount ? effective.discountPercentage : null,
@@ -404,7 +417,7 @@ export const getCustomerOrderLinePrice = async (input: {
   prisma.$transaction(async (tx) => {
     await assertOrderActorStoreAccessTx(tx, input);
     const resolved = await resolveUnitPrice({ ...input, tx });
-    return { unitPriceKgs: resolved.unitPrice };
+    return { unitPriceKgs: resolved.unitPrice, hasConfiguredPrice: resolved.hasConfiguredPrice };
   });
 
 const resolveUnitCost = async (input: {
@@ -1014,15 +1027,22 @@ const classifyCustomerOrderDraftOperationFailure = (error: unknown): OperationFa
   return classifyDatabaseOperationFailure(error, "operationRequestFailed");
 };
 
-export const createCustomerOrderDraftOperation = async (
+const createCustomerOrderOperation = async (
   input: CreateCustomerOrderDraftInput & { idempotencyKey: string },
+  immediate: boolean,
 ) => {
+  // Completed operation replays must also use current membership, rather than
+  // trusting the role saved in a browser session or an old operation result.
+  if (immediate) {
+    await prisma.$transaction((tx) => assertSalesManagerStoreAccessTx(tx, input));
+  }
   let createdResult: CustomerOrderDraftResult | null = null;
+  let completion: CustomerOrderCompletion | null = null;
   const operation = await runOperationRequest<CustomerOrderDraftOperationResponse>(
     {
       organizationId: input.organizationId,
       storeId: input.storeId,
-      scope: "salesOrders.createDraft.v1",
+      scope: immediate ? "salesOrders.createSale.v1" : "salesOrders.createDraft.v1",
       principal: {
         type: OperationRequestPrincipalType.AUTHENTICATED_USER,
         id: input.actorId,
@@ -1060,7 +1080,30 @@ export const createCustomerOrderDraftOperation = async (
       classifyFailure: classifyCustomerOrderDraftOperationFailure,
     },
     async (tx) => {
-      const result = await createCustomerOrderDraftTx(tx, input);
+      if (immediate) {
+        await lockAssortmentForSale(tx, input.organizationId);
+        await assertSalesManagerStoreAccessTx(tx, input);
+        for (const line of input.lines ?? []) {
+          if (line.unitPriceKgs !== undefined) continue;
+          const price = await resolveUnitPrice({
+            tx, organizationId: input.organizationId, storeId: input.storeId,
+            productId: line.productId, variantId: line.variantId,
+          });
+          if (!price.hasConfiguredPrice) {
+            throw new AppError("salesOrderPriceRequired", "BAD_REQUEST", 400);
+          }
+        }
+      }
+      let result = await createCustomerOrderDraftTx(tx, input);
+      if (immediate) {
+        completion = await completeCustomerOrderTx(tx, {
+          ...input,
+          customerOrderId: result.id,
+          allowImmediate: true,
+          completionEventKey: `salesOrders.createSale:${input.organizationId}:${input.actorId}:${input.idempotencyKey}`,
+        });
+        result = serializeOrder(await tx.customerOrder.findUniqueOrThrow({ where: { id: result.id } }));
+      }
       createdResult = result;
       return {
         response: {
@@ -1081,8 +1124,17 @@ export const createCustomerOrderDraftOperation = async (
   if (createdResult) {
     dispatchCustomerOrderDraftCreated(createdResult);
   }
+  if (completion) publishCustomerOrderCompletion(completion);
   return operation;
 };
+
+export const createCustomerOrderDraftOperation = (
+  input: CreateCustomerOrderDraftInput & { idempotencyKey: string },
+) => createCustomerOrderOperation(input, false);
+
+export const createCustomerSaleOperation = (
+  input: CreateCustomerOrderDraftInput & { idempotencyKey: string },
+) => createCustomerOrderOperation(input, true);
 
 export const setCustomerOrderCustomer = async (input: {
   organizationId: string;
@@ -1694,153 +1746,374 @@ export const cancelCustomerOrder = async (input: {
   return { order, cancellationEmail };
 };
 
-export const completeCustomerOrder = async (input: {
+type CompleteCustomerOrderInput = {
   customerOrderId: string;
   organizationId: string;
   actorId: string;
   requestId: string;
   idempotencyKey: string;
-}) => {
-  const logger = getLogger(input.requestId);
+};
 
-  const result = await prisma.$transaction(async (tx) => {
-    await lockAssortmentForSale(tx, input.organizationId);
-    const { result: completion } = await withIdempotency(
-      tx,
-      {
-        key: input.idempotencyKey,
-        route: "salesOrders.complete",
-        userId: input.actorId,
-      },
-      async () => {
-        await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
-    await tx.$queryRaw`
-          SELECT id FROM "CustomerOrder" WHERE id = ${input.customerOrderId} FOR UPDATE
-        `;
+type CustomerOrderCompletion = {
+  id: string;
+  number: string;
+  status: CustomerOrderStatus;
+  storeId: string;
+  productIds: string[];
+  previousStatus: CustomerOrderStatus;
+  alreadyCompleted: boolean;
+};
 
-        const order = await tx.customerOrder.findUnique({
-          where: { id: input.customerOrderId },
-          include: {
-            store: true,
-            lines: true,
-          },
-        });
-        if (!order) {
-          throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
-        }
-        if (order.organizationId !== input.organizationId) {
-          throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
-        }
-        if (order.isPosSale) {
-          throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
-        }
-        if (order.status === CustomerOrderStatus.COMPLETED) {
-          return {
-            id: order.id,
-            number: order.number,
-            status: order.status,
-            storeId: order.storeId,
-            productIds: order.lines.map((line) => line.productId),
-          };
-        }
-
-        assertTransition(order.status, CustomerOrderStatus.COMPLETED);
-        if (!order.lines.length) {
-          throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
-        }
-
-        await assertSaleAssortment(tx, input.organizationId, order.storeId, order.lines.map(line => line.productId));
-
-        const apiStockAlreadyApplied =
-          order.source === CustomerOrderSource.API
-            ? await tx.stockMovement.findFirst({
-                where: {
-                  referenceType: "CustomerOrder",
-                  referenceId: order.id,
-                  type: StockMovementType.SALE,
-                  qtyDelta: { lt: 0 },
-                },
-                select: { id: true },
-              })
-            : null;
-
-        if (!apiStockAlreadyApplied) {
-          for (const line of order.lines) {
-            await applyStockMovement(tx, {
-              storeId: order.storeId,
-              productId: line.productId,
-              variantId: line.variantId,
-              qtyDelta: -line.qty,
-              type: StockMovementType.SALE,
-              referenceType: "CustomerOrder",
-              referenceId: order.id,
-              note: order.number,
-              actorId: input.actorId,
-              organizationId: input.organizationId,
-            });
-          }
-        }
-
-        const updated = await tx.customerOrder.update({
-          where: { id: order.id },
-          data: {
-            status: CustomerOrderStatus.COMPLETED,
-            completedAt: new Date(),
-            completedEventId: input.idempotencyKey,
-            ...(order.currencyCode ? {} : resolveCurrencySnapshot(order.store)),
-            updatedById: input.actorId,
-          },
-        });
-
-        // Loyalty: confirm the redemption; earn only when real payment evidence covers
-        // the total. A CONFIRMED online order alone is not proof of payment.
-        const paid = await tx.salePayment.aggregate({
-          where: { customerOrderId: order.id, isRefund: false },
-          _sum: { amountKgs: true },
-        });
-        const paidKgs = Number(paid._sum.amountKgs ?? 0);
-        await confirmLoyaltyForOrder(tx, {
-          organizationId: input.organizationId,
-          customerOrderId: order.id,
-          paidInFull: paidKgs + 0.005 >= Number(updated.totalKgs) && Number(updated.totalKgs) > 0,
-          actorId: input.actorId,
-        });
-
-        await writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "SALES_ORDER_COMPLETE",
-          entity: "CustomerOrder",
-          entityId: order.id,
-          before: toJson({ status: order.status }),
-          after: toJson({ status: updated.status }),
-          requestId: input.requestId,
-        });
-
-        return {
-          id: updated.id,
-          number: updated.number,
-          status: updated.status,
-          storeId: updated.storeId,
-          productIds: order.lines.map((line) => line.productId),
-        };
-      },
-    );
-
-    return completion;
+// All ordinary-sale posting paths share these stock, assortment, currency and
+// loyalty rules. Callers own the transaction, assortment lock and idempotency.
+const completeCustomerOrderTx = async (
+  tx: Prisma.TransactionClient,
+  input: CompleteCustomerOrderInput & {
+    allowImmediate?: boolean;
+    completionEventKey?: string;
+    completedAt?: Date;
+  },
+): Promise<CustomerOrderCompletion> => {
+  await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
+  await tx.$queryRaw`SELECT id FROM "CustomerOrder" WHERE id = ${input.customerOrderId} FOR UPDATE`;
+  const order = await tx.customerOrder.findUnique({
+    where: { id: input.customerOrderId },
+    include: { store: true, lines: true },
   });
+  if (!order || order.isPosSale) throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+  if (order.organizationId !== input.organizationId) {
+    throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+  }
+  if (input.allowImmediate) {
+    await assertSalesManagerStoreAccessTx(tx, { ...input, storeId: order.storeId });
+  }
+  if (order.status === CustomerOrderStatus.COMPLETED) {
+    return {
+      id: order.id, number: order.number, status: order.status, storeId: order.storeId,
+      productIds: order.lines.map((line) => line.productId),
+      previousStatus: order.status, alreadyCompleted: true,
+    };
+  }
+  if (input.allowImmediate) {
+    const immediateStatuses: CustomerOrderStatus[] = [CustomerOrderStatus.DRAFT, CustomerOrderStatus.CONFIRMED, CustomerOrderStatus.READY];
+    if (!immediateStatuses.includes(order.status)) {
+      throw new AppError("invalidTransition", "CONFLICT", 409);
+    }
+  } else {
+    assertTransition(order.status, CustomerOrderStatus.COMPLETED);
+  }
+  if (!order.lines.length) throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+  await assertSaleAssortment(tx, input.organizationId, order.storeId, order.lines.map((line) => line.productId));
+  const apiStockAlreadyApplied = order.source === CustomerOrderSource.API
+    ? await tx.stockMovement.findFirst({
+        where: { referenceType: "CustomerOrder", referenceId: order.id, type: StockMovementType.SALE, qtyDelta: { lt: 0 } },
+        select: { id: true },
+      })
+    : null;
+  if (!apiStockAlreadyApplied) {
+    for (const line of order.lines) {
+      await applyStockMovement(tx, {
+        storeId: order.storeId, productId: line.productId, variantId: line.variantId,
+        qtyDelta: -line.qty, type: StockMovementType.SALE, referenceType: "CustomerOrder",
+        referenceId: order.id, note: order.number, actorId: input.actorId, organizationId: input.organizationId,
+      });
+    }
+  }
+  const now = new Date();
+  const updated = await tx.customerOrder.update({
+    where: { id: order.id },
+    data: {
+      status: CustomerOrderStatus.COMPLETED,
+      completedAt: input.completedAt ?? now,
+      completedEventId: input.completionEventKey ?? input.idempotencyKey,
+      ...(input.allowImmediate ? { confirmedAt: order.confirmedAt ?? now, readyAt: order.readyAt ?? now } : {}),
+      ...(order.currencyCode ? {} : resolveCurrencySnapshot(order.store)),
+      updatedById: input.actorId,
+    },
+  });
+  // Posting is not payment evidence. Keep earning and all cash/shift rules intact.
+  const paid = await tx.salePayment.aggregate({
+    where: { customerOrderId: order.id, isRefund: false }, _sum: { amountKgs: true },
+  });
+  const paidKgs = Number(paid._sum.amountKgs ?? 0);
+  await confirmLoyaltyForOrder(tx, {
+    organizationId: input.organizationId, customerOrderId: order.id,
+    paidInFull: paidKgs + 0.005 >= Number(updated.totalKgs) && Number(updated.totalKgs) > 0,
+    actorId: input.actorId,
+  });
+  await writeAuditLog(tx, {
+    organizationId: input.organizationId, actorId: input.actorId, action: "SALES_ORDER_COMPLETE",
+    entity: "CustomerOrder", entityId: order.id,
+    before: toJson({ status: order.status }),
+    after: toJson({ status: updated.status, immediate: Boolean(input.allowImmediate) }),
+    requestId: input.requestId,
+  });
+  return {
+    id: updated.id, number: updated.number, status: updated.status, storeId: updated.storeId,
+    productIds: order.lines.map((line) => line.productId), previousStatus: order.status, alreadyCompleted: false,
+  };
+};
 
-  const productIds = Array.from(new Set(result.productIds));
-  for (const productId of productIds) {
+const publishCustomerOrderCompletion = (result: CustomerOrderCompletion) => {
+  if (result.alreadyCompleted) return;
+  for (const productId of new Set(result.productIds)) {
     eventBus.publish({
       type: "inventory.updated",
       payload: { storeId: result.storeId, productId, variantId: null },
     });
   }
+  eventBus.publish({
+    type: "customerOrder.statusChanged",
+    payload: { customerOrderId: result.id, storeId: result.storeId, oldStatus: result.previousStatus, newStatus: result.status },
+  });
+};
 
-  logger.info({ customerOrderId: result.id, number: result.number }, "customer order completed");
+const getOrdinaryOrderIdentityTx = async (
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; customerOrderId: string },
+) => {
+  const order = await tx.customerOrder.findFirst({
+    where: { id: input.customerOrderId, organizationId: input.organizationId, isPosSale: false },
+    select: { id: true, number: true, storeId: true },
+  });
+  if (!order) throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+  return order;
+};
 
-  return result;
+export const completeCustomerOrder = async (input: CompleteCustomerOrderInput) => {
+  const result = await prisma.$transaction(async (tx) => {
+    await lockAssortmentForSale(tx, input.organizationId);
+    const order = await getOrdinaryOrderIdentityTx(tx, input);
+    await assertOrderActorStoreAccessTx(tx, { ...input, storeId: order.storeId });
+    const existing = await tx.idempotencyKey.findUnique({
+      where: { key_route_userId: { key: input.idempotencyKey, route: "salesOrders.complete", userId: input.actorId } },
+    });
+    // Older completion records hashed the response rather than the request.
+    // Replay only after checking their saved order identity; never let the old
+    // unbound key claim completion of a different order.
+    if (existing?.response) {
+      const saved = existing.response as Prisma.JsonObject;
+      if (saved.id !== order.id || saved.storeId !== order.storeId) {
+        throw new AppError("idempotencyKeyPayloadMismatch", "CONFLICT", 409);
+      }
+      const legacyHash = createHash("sha256").update(JSON.stringify(existing.response)).digest("hex");
+      if (existing.responseHash === legacyHash || existing.responseHash === null) {
+        return {
+          replayed: true,
+          result: { ...saved, previousStatus: CustomerOrderStatus.COMPLETED, alreadyCompleted: true } as CustomerOrderCompletion,
+        };
+      }
+    }
+    return withIdempotency(tx, {
+      key: input.idempotencyKey, route: "salesOrders.complete", userId: input.actorId,
+      request: { customerOrderId: input.customerOrderId },
+    }, () => completeCustomerOrderTx(tx, input));
+  });
+  if (!result.replayed) publishCustomerOrderCompletion(result.result);
+  getLogger(input.requestId).info({ customerOrderId: result.result.id, number: result.result.number }, "customer order completed");
+  return result.result;
+};
+
+export const postCustomerSale = async (input: CompleteCustomerOrderInput) => {
+  const result = await prisma.$transaction(async (tx) => {
+    await lockAssortmentForSale(tx, input.organizationId);
+    const order = await getOrdinaryOrderIdentityTx(tx, input);
+    await assertSalesManagerStoreAccessTx(tx, { ...input, storeId: order.storeId });
+    return withIdempotency(tx, {
+      key: input.idempotencyKey, route: "salesOrders.postSale.v1", userId: input.actorId,
+      request: { customerOrderId: input.customerOrderId },
+    }, () => completeCustomerOrderTx(tx, {
+      ...input,
+      allowImmediate: true,
+      completionEventKey: `salesOrders.postSale:${input.organizationId}:${input.actorId}:${input.idempotencyKey}`,
+    }));
+  });
+  if (!result.replayed) publishCustomerOrderCompletion(result.result);
+  return result.result;
+};
+
+export type RemoveDeclinedCustomerOrderLineInput = CompleteCustomerOrderInput & {
+  lineId: string;
+  expectedUpdatedAt: string;
+  reason: string;
+  confirmCancelLastLine?: boolean;
+};
+
+type DeclinedLineResult = {
+  id: string;
+  status: CustomerOrderStatus;
+  replacementId: string | null;
+  replacementNumber: string | null;
+};
+
+export const removeDeclinedCustomerOrderLine = async (input: RemoveDeclinedCustomerOrderLineInput) => {
+  const reason = input.reason.trim();
+  const expectedUpdatedAt = new Date(input.expectedUpdatedAt);
+  if (!reason || reason.length > 500 || !Number.isFinite(expectedUpdatedAt.getTime())) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  let completion: CustomerOrderCompletion | null = null;
+  let originalChange: { storeId: string; oldStatus: CustomerOrderStatus; newStatus: CustomerOrderStatus } | null = null;
+  const operation = await prisma.$transaction(async (tx) => {
+    await lockAssortmentForSale(tx, input.organizationId);
+    const identity = await getOrdinaryOrderIdentityTx(tx, input);
+    await assertSalesManagerStoreAccessTx(tx, { ...input, storeId: identity.storeId });
+    return withIdempotency<DeclinedLineResult>(tx, {
+      key: input.idempotencyKey,
+      route: "salesOrders.removeDeclinedLine.v1",
+      userId: input.actorId,
+      request: {
+        customerOrderId: input.customerOrderId,
+        lineId: input.lineId,
+        expectedUpdatedAt: expectedUpdatedAt.toISOString(),
+        reason,
+        confirmCancelLastLine: Boolean(input.confirmCancelLastLine),
+      },
+    }, async () => {
+      await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
+      await tx.$queryRaw`SELECT id FROM "CustomerOrder" WHERE id = ${input.customerOrderId} FOR UPDATE`;
+      const order = await tx.customerOrder.findFirstOrThrow({
+        where: { id: identity.id, organizationId: input.organizationId, isPosSale: false },
+        include: { lines: { orderBy: { id: "asc" } } },
+      });
+      if (order.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+        throw new AppError("salesOrderAmendmentStale", "CONFLICT", 409);
+      }
+      if (order.status !== CustomerOrderStatus.READY && order.status !== CustomerOrderStatus.COMPLETED) {
+        throw new AppError("salesOrderAmendmentUnavailable", "CONFLICT", 409);
+      }
+      if (order.source !== CustomerOrderSource.MANUAL || order.isHeld || order.registerId || order.shiftId) {
+        throw new AppError("salesOrderAmendmentUnsupportedSource", "CONFLICT", 409);
+      }
+      if (order.status === CustomerOrderStatus.COMPLETED && order.completedAt) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`sales-period:${input.organizationId}:${order.storeId}`}, 0))`;
+        const closed = await tx.periodClose.findFirst({
+          where: {
+            organizationId: input.organizationId, storeId: order.storeId,
+            periodStart: { lte: order.completedAt }, periodEnd: { gte: order.completedAt },
+          },
+          select: { id: true },
+        });
+        if (closed) throw new AppError("salesOrderAmendmentPeriodClosed", "CONFLICT", 409);
+      }
+      const declined = order.lines.find((line) => line.id === input.lineId);
+      if (!declined) throw new AppError("salesOrderLineNotFound", "NOT_FOUND", 404);
+      const [payment, returned, refund, loyalty, reservation, loyaltyEntry, fiscal] = await Promise.all([
+        tx.salePayment.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+        tx.saleReturn.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
+        tx.refundRequest.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
+        tx.loyaltyOrderApplication.findFirst({ where: { customerOrderId: order.id, status: { not: "RELEASED" } }, select: { id: true } }),
+        tx.loyaltyReservation.findFirst({ where: { customerOrderId: order.id, status: { in: ["ACTIVE", "CONFIRMED"] } }, select: { id: true } }),
+        tx.loyaltyLedgerEntry.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+        tx.fiscalReceipt.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+      ]);
+      if (payment || returned || refund || order.isDebt || order.debtSettledAt) {
+        throw new AppError("salesOrderAmendmentRequiresReturn", "CONFLICT", 409);
+      }
+      if (loyalty || reservation || loyaltyEntry || !order.discountKgs.isZero()) {
+        throw new AppError("salesOrderAmendmentLoyaltyBlocked", "CONFLICT", 409);
+      }
+      if (fiscal || order.kkmStatus !== "NOT_SENT" || order.kkmReceiptId || order.kkmRawJson) {
+        throw new AppError("salesOrderAmendmentFiscalBlocked", "CONFLICT", 409);
+      }
+      const movements = await tx.stockMovement.findMany({
+        where: { referenceType: "CustomerOrder", referenceId: order.id },
+        select: { store: { select: { organizationId: true } }, storeId: true, productId: true, variantId: true, type: true, qtyDelta: true },
+      });
+      if (order.status === CustomerOrderStatus.READY) {
+        if (movements.length) throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
+      } else {
+        const net = new Map<string, number>();
+        for (const movement of movements) {
+          if (movement.type !== StockMovementType.SALE || movement.store.organizationId !== order.organizationId || movement.storeId !== order.storeId) {
+            throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
+          }
+          const key = `${movement.productId}:${movement.variantId ?? "BASE"}`;
+          net.set(key, (net.get(key) ?? 0) + movement.qtyDelta);
+        }
+        if (net.size !== order.lines.length || order.lines.some((line) => Math.abs((net.get(`${line.productId}:${line.variantKey}`) ?? 0) + line.qty) > 0.000001)) {
+          throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
+        }
+        const lineTotal = order.lines.reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0));
+        if (!lineTotal.eq(order.totalKgs)) throw new AppError("salesOrderAmendmentUnavailable", "CONFLICT", 409);
+      }
+      const remaining = order.lines.filter((line) => line.id !== declined.id);
+      if (!remaining.length && !input.confirmCancelLastLine) {
+        throw new AppError("salesOrderLastLineCancellationRequired", "CONFLICT", 409);
+      }
+      if (order.status === CustomerOrderStatus.READY && remaining.length) {
+        await tx.customerOrderLine.delete({ where: { id: declined.id } });
+        const updated = await recomputeTotals(tx, order.id, input.actorId);
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId, actorId: input.actorId,
+          action: "SALES_ORDER_DECLINED_LINE_REMOVE", entity: "CustomerOrder", entityId: order.id,
+          before: toJson({ line: declined, totalKgs: order.totalKgs, updatedAt: order.updatedAt }),
+          after: toJson({ reason, status: updated.status, totalKgs: updated.totalKgs, updatedAt: updated.updatedAt }),
+          requestId: input.requestId,
+        });
+        return { id: order.id, status: updated.status, replacementId: null, replacementNumber: null };
+      }
+      if (order.status === CustomerOrderStatus.COMPLETED) {
+        await restoreCustomerOrderStockOnCancel(tx, { order, organizationId: input.organizationId, actorId: input.actorId });
+      }
+      await tx.customerOrder.update({
+        where: { id: order.id },
+        data: { status: CustomerOrderStatus.CANCELED, canceledAt: new Date(), updatedById: input.actorId },
+      });
+      originalChange = { storeId: order.storeId, oldStatus: order.status, newStatus: CustomerOrderStatus.CANCELED };
+      let replacement: { id: string; number: string } | null = null;
+      if (remaining.length) {
+        const number = await nextSalesOrderNumber(tx, input.organizationId);
+        replacement = await tx.customerOrder.create({
+          data: {
+            organizationId: order.organizationId, storeId: order.storeId,
+            source: CustomerOrderSource.MANUAL, number, saleChannel: order.saleChannel,
+            priceMode: order.priceMode, customerId: order.customerId,
+            customerName: order.customerName, customerEmail: order.customerEmail,
+            customerPhone: order.customerPhone, customerAddress: order.customerAddress,
+            currencyCode: order.currencyCode, currencyRateKgsPerUnit: order.currencyRateKgsPerUnit,
+            notes: [order.notes, order.number, reason].filter(Boolean).join("\n"),
+            createdById: input.actorId, updatedById: input.actorId,
+            lines: {
+              create: remaining.map((line) => ({
+                productId: line.productId, variantId: line.variantId, variantKey: line.variantKey,
+                qty: line.qty, manualPrice: line.manualPrice, priceSource: line.priceSource,
+                unitPriceKgs: line.unitPriceKgs, lineTotalKgs: line.lineTotalKgs,
+                baseUnitPriceKgs: line.baseUnitPriceKgs, appliedDiscountType: line.appliedDiscountType,
+                appliedDiscountPercentage: line.appliedDiscountPercentage,
+                appliedDiscountAmountKgs: line.appliedDiscountAmountKgs,
+                unitCostKgs: line.unitCostKgs, lineCostTotalKgs: line.lineCostTotalKgs,
+              })),
+            },
+          },
+          select: { id: true, number: true },
+        });
+        await recomputeTotals(tx, replacement.id, input.actorId);
+        completion = await completeCustomerOrderTx(tx, {
+          ...input, customerOrderId: replacement.id, allowImmediate: true,
+          completionEventKey: `salesOrders.amendment:${input.organizationId}:${input.actorId}:${input.idempotencyKey}`,
+          completedAt: order.completedAt ?? undefined,
+        });
+      }
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId, actorId: input.actorId,
+        action: "SALES_ORDER_AMENDMENT", entity: "CustomerOrder", entityId: order.id,
+        before: toJson({ status: order.status, totalKgs: order.totalKgs, lineIds: order.lines.map((line) => line.id) }),
+        after: toJson({ status: CustomerOrderStatus.CANCELED, declinedLineId: declined.id, reason, replacementId: replacement?.id ?? null, replacementNumber: replacement?.number ?? null }),
+        requestId: input.requestId,
+      });
+      return { id: order.id, status: CustomerOrderStatus.CANCELED, replacementId: replacement?.id ?? null, replacementNumber: replacement?.number ?? null };
+    });
+  });
+  if (!operation.replayed) {
+    if (completion) publishCustomerOrderCompletion(completion);
+    if (originalChange) {
+      const change = originalChange as { storeId: string; oldStatus: CustomerOrderStatus; newStatus: CustomerOrderStatus };
+      eventBus.publish({ type: "customerOrder.statusChanged", payload: { customerOrderId: input.customerOrderId, ...change } });
+      eventBus.publish({ type: "inventory.updated", payload: { storeId: change.storeId, productId: "*" } });
+    }
+  }
+  return operation.result;
 };
 
 /** Visibility only. Financial, stock and order lifecycle state are untouched. */
