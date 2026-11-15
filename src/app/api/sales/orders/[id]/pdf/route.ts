@@ -1,0 +1,72 @@
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { cookies } from "next/headers";
+
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { getMessageFromFallback } from "@/lib/i18nFallback";
+import { getServerAuthToken } from "@/server/auth/token";
+import { prisma } from "@/server/db/prisma";
+import { writeAuditLog } from "@/server/services/audit";
+import { AppError } from "@/server/services/errors";
+import { toJson } from "@/server/services/json";
+import { buildSalesDocumentPdf, type SalesDocumentPdfLabels } from "@/server/services/salesDocumentPdf";
+import { getSalesDocument, type SalesDocumentKind } from "@/server/services/salesDocuments";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const noCache = { "Cache-Control": "private, no-store, max-age=0", "X-Content-Type-Options": "nosniff" };
+type MessageTree = Record<string, unknown>;
+const message = (messages: MessageTree, path: string) => {
+  let value: unknown = messages;
+  for (const key of path.split(".")) value = value && typeof value === "object" ? (value as MessageTree)[key] : undefined;
+  return typeof value === "string" ? value : getMessageFromFallback(path) ?? path;
+};
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const locale = normalizeLocale((await cookies()).get("NEXT_LOCALE")?.value) ?? defaultLocale;
+  let messages: MessageTree = {};
+  try { messages = JSON.parse(await readFile(join(process.cwd(), "messages", `${locale}.json`), "utf8")) as MessageTree; } catch { /* The application fallback remains available. */ }
+  const errorResponse = (key: string, status: number) => new Response(message(messages, `errors.${key}`), { status, headers: noCache });
+
+  const token = await getServerAuthToken();
+  if (!token?.sub || typeof token.organizationId !== "string") return errorResponse("unauthorized", 401);
+  const url = new URL(request.url);
+  const kind = url.searchParams.get("kind") ?? "invoice";
+  const action = url.searchParams.get("action") ?? "download";
+  if (!["invoice", "goods_receipt"].includes(kind) || !["print", "download"].includes(action)) return errorResponse("invalidInput", 400);
+
+  try {
+    const { id } = await params;
+    const job = await getSalesDocument({ actorId: token.sub, organizationId: token.organizationId, customerOrderId: id, locale });
+    const t = (key: string) => message(messages, `salesDocuments.pdf.${key}`);
+    const labels: SalesDocumentPdfLabels = {
+      invoice: t("invoice"), goodsReceipt: t("goodsReceipt"), number: t("number"), date: t("date"), status: t("status"),
+      seller: t("seller"), customer: t("customer"), unnamedCustomer: t("unnamedCustomer"), store: t("store"), inn: t("inn"),
+      phone: t("phone"), email: t("email"), address: t("address"), product: t("product"), sku: t("sku"), quantity: t("quantity"),
+      unit: t("unit"), price: t("price"), amount: t("amount"), subtotal: t("subtotal"), discount: t("discount"), total: t("total"),
+      issuedBy: t("issuedBy"), receivedBy: t("receivedBy"), nonFiscal: t("nonFiscal"), empty: t("empty"), page: t("page"),
+      statuses: { DRAFT: t("statuses.DRAFT"), CONFIRMED: t("statuses.CONFIRMED"), READY: t("statuses.READY"), COMPLETED: t("statuses.COMPLETED"), CANCELED: t("statuses.CANCELED") },
+    };
+    const pdf = await buildSalesDocumentPdf({ job, kind: kind as SalesDocumentKind, locale, labels });
+    try {
+      await writeAuditLog(prisma, {
+        organizationId: job.organizationId, actorId: token.sub,
+        action: action === "print" ? "SALES_DOCUMENT_PRINT" : "SALES_DOCUMENT_DOWNLOAD",
+        entity: "CustomerOrder", entityId: job.id, before: null,
+        after: toJson({ number: job.number, kind, source: "pdf", action }),
+        requestId: request.headers.get("x-request-id") ?? randomUUID(),
+      });
+    } catch { /* A temporary audit outage must not break a read-only document. */ }
+    // Use the record ID, not a user-controlled title, in the HTTP filename.
+    const filename = `${kind}-${job.id.replace(/[^A-Za-z0-9_-]/g, "")}.pdf`;
+    return new Response(new Uint8Array(pdf), { headers: {
+      ...noCache, "Content-Type": "application/pdf",
+      "Content-Disposition": `${action === "print" ? "inline" : "attachment"}; filename="${filename}"`,
+    } });
+  } catch (error) {
+    if (error instanceof AppError) return errorResponse(error.message, error.status);
+    return errorResponse("unexpectedError", 500);
+  }
+}

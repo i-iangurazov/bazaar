@@ -19,6 +19,7 @@ import {
   completeCustomerOrder,
   confirmCustomerOrder,
   createCustomerOrderDraftOperation,
+  createCustomerSaleOperation,
   getSalesOrderMetrics,
   getCustomerOrder,
   getCustomerOrderLinePrice,
@@ -27,6 +28,8 @@ import {
   setCustomerOrderArchived,
   markCustomerOrderReady,
   removeCustomerOrderLine,
+  removeDeclinedCustomerOrderLine,
+  postCustomerSale,
   sendCustomerOrderEmail,
   setCustomerOrderCustomer,
   updateCustomerOrderTracking,
@@ -36,6 +39,23 @@ import {
 const optionalEmailSchema = z.string().trim().email().max(254).optional().nullable();
 const optionalTrackingTextSchema = z.string().trim().max(512).optional().nullable();
 const optionalUnitPriceSchema = z.number().finite().min(0).max(9_999_999_999.99).optional();
+const createOrderInputSchema = z.object({
+  storeId: z.string().min(1),
+  idempotencyKey: z.string().min(8),
+  customerId: z.string().min(1).optional().nullable(),
+  customerName: z.string().max(180).optional().nullable(),
+  customerEmail: optionalEmailSchema,
+  // Saved contacts can be legacy values; the service validates their identity.
+  customerPhone: z.string().max(64).optional().nullable(),
+  customerAddress: z.string().max(512).optional().nullable(),
+  notes: z.string().max(2_000).optional().nullable(),
+  lines: z.array(z.object({
+    productId: z.string().min(1),
+    variantId: z.string().optional().nullable(),
+    qty: z.number().multipleOf(0.001).positive(),
+    unitPriceKgs: optionalUnitPriceSchema,
+  })).optional(),
+});
 
 const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   try {
@@ -251,31 +271,55 @@ export const salesOrdersRouter = router({
       }
     }),
 
+  createSale: salesOrdersManagerProcedure
+    .input(createOrderInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const operation = await createCustomerSaleOperation({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+        return operation.response.order;
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  postSale: salesOrdersManagerProcedure
+    .input(z.object({ customerOrderId: z.string().min(1), idempotencyKey: z.string().min(8) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await postCustomerSale({
+          ...input, organizationId: ctx.user.organizationId, actorId: ctx.user.id, requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  removeDeclinedLine: salesOrdersManagerProcedure
+    .input(z.object({
+      customerOrderId: z.string().min(1),
+      lineId: z.string().min(1),
+      expectedUpdatedAt: z.string().datetime({ offset: true }),
+      idempotencyKey: z.string().min(8),
+      reason: z.string().trim().min(1).max(500),
+      confirmCancelLastLine: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await removeDeclinedCustomerOrderLine({
+          ...input, organizationId: ctx.user.organizationId, actorId: ctx.user.id, requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   createDraft: salesOrdersProtectedProcedure
-    .input(
-      z.object({
-        storeId: z.string().min(1),
-        idempotencyKey: z.string().min(8),
-        customerId: z.string().min(1).optional().nullable(),
-        customerName: z.string().max(180).optional().nullable(),
-        customerEmail: optionalEmailSchema,
-        // Selected saved contacts may be legacy values. Services validate new
-        // values and only preserve an unchanged contact from the selected row.
-        customerPhone: z.string().max(64).optional().nullable(),
-        customerAddress: z.string().max(512).optional().nullable(),
-        notes: z.string().max(2_000).optional().nullable(),
-        lines: z
-          .array(
-            z.object({
-              productId: z.string().min(1),
-              variantId: z.string().optional().nullable(),
-              qty: z.number().multipleOf(0.001).positive(),
-              unitPriceKgs: optionalUnitPriceSchema,
-            }),
-          )
-          .optional(),
-      }),
-    )
+    .input(createOrderInputSchema)
     .mutation(async ({ ctx, input }) => {
       try {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);

@@ -32,6 +32,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { DownloadIcon, PrintIcon, ShareIcon, ViewIcon } from "@/components/icons";
 import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
+import { SalesDocumentActions } from "@/components/sales-document-actions";
 import { fetchAllReceiptPages } from "@/components/pos/receipt-registry-export";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
@@ -609,6 +610,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                 <TableCell className="sticky right-0 z-10 min-w-[340px] bg-card px-4 py-3 align-top shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)] group-hover:bg-muted/25">
                                   <div className="flex justify-end">
                                     <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-none">
+                                      <SalesDocumentActions orderId={item.id} number={item.number} iconOnly variant="ghost" className="rounded-none border-0 bg-transparent shadow-none" />
                                       <IconButton
                                         type="button"
                                         variant="ghost"
@@ -717,6 +719,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                           ))}
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <SalesDocumentActions orderId={item.id} number={item.number} iconOnly variant="outline" />
                         <IconButton type="button"
 variant="outline"
 onClick={() => setPreviewSaleId(item.id)} icon={ViewIcon} label={t("previewShort")}  />

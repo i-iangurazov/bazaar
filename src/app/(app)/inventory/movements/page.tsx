@@ -12,6 +12,7 @@ import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table"
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { SalesDocumentActions } from "@/components/sales-document-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -447,8 +448,19 @@ const ProductMovementsPage = () => {
         <EditIcon className="h-4 w-4" aria-hidden />
       </Button>
     );
-    const printButton =
-      movement.id && canPrintMovementDocument(movement.documentType) ? (
+    const saleReferencePrefix = "SALE:CustomerOrder:";
+    const saleOrderId = movement.documentType === "SALE" && movement.id.startsWith(saleReferencePrefix)
+      ? movement.id.slice(saleReferencePrefix.length)
+      : null;
+    const printButton = saleOrderId ? (
+      <SalesDocumentActions
+        orderId={saleOrderId}
+        number={movement.documentNumber || shortDocumentReference(movement.documentId)}
+        iconOnly
+        variant={layout === "desktop" ? "ghost" : "secondary"}
+        className="h-10 w-10 md:h-8 md:w-8"
+      />
+    ) : movement.id && canPrintMovementDocument(movement.documentType) ? (
         <Button
           variant={layout === "desktop" ? "ghost" : "secondary"}
           size="icon"

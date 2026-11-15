@@ -32,6 +32,7 @@ import {
 } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
+import { SalesDocumentActions } from "@/components/sales-document-actions";
 import {
   Select,
   SelectContent,
@@ -529,7 +530,8 @@ const SalesOrdersPage = () => {
                           </TableCell>
                           <TableCell>{formatDate(order.createdAt, locale)}</TableCell>
                           <TableCell>
-                            <div className="flex justify-end">
+                            <div className="flex items-center justify-end gap-1">
+                              <SalesDocumentActions orderId={order.id} number={order.number} iconOnly variant="ghost" />
                               <RowActions
                                 maxInline={4}
                                 moreLabel={tCommon("moreActions")}
@@ -656,7 +658,8 @@ const SalesOrdersPage = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-end gap-1">
+                    <SalesDocumentActions orderId={order.id} number={order.number} iconOnly variant="ghost" />
                     <RowActions
                       maxInline={4}
                       moreLabel={tCommon("moreActions")}

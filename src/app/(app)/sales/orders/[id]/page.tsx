@@ -1,10 +1,10 @@
 "use client";
 import { parseQuantity } from "@/lib/quantity";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { CustomerOrderEmailType, CustomerOrderStatus } from "@prisma/client";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -27,6 +27,7 @@ import { ProductSearchResultItem } from "@/components/product-search-result-item
 import { QueryErrorState } from "@/components/query-error-state";
 import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
+import { SalesDocumentActions } from "@/components/sales-document-actions";
 import {
   SalesOrderCustomerSelect,
   type SalesOrderCustomerOption,
@@ -34,6 +35,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { PriceInput } from "@/components/ui/price-input";
@@ -76,6 +78,16 @@ type ProductSearchResult = {
 };
 
 type ManualOrderEmailType = "CONFIRMATION" | "TRACKING";
+type InlineLineField = "qty" | "price";
+type InlineLineDraft = Partial<Record<InlineLineField, string>>;
+type DeclinedLineTarget = {
+  lineId: string;
+  name: string;
+  expectedUpdatedAt: string;
+  idempotencyKey: string;
+  status: CustomerOrderStatus;
+  lastLine: boolean;
+};
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -127,6 +139,7 @@ const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name:
 
 const SalesOrderDetailPage = () => {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const customerOrderId = String(params?.id ?? "");
   const requestedReturnTo = searchParams.get("returnTo");
@@ -176,6 +189,8 @@ const SalesOrderDetailPage = () => {
   const [trackingCarrier, setTrackingCarrier] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
   const [trackingStatus, setTrackingStatus] = useState("");
+  const customerSnapshotRef = useRef<string | null>(null);
+  const trackingSnapshotRef = useRef<string | null>(null);
 
   const [lineDialogMode, setLineDialogMode] = useState<"add" | "edit" | null>(null);
   const [lineSearch, setLineSearch] = useState("");
@@ -187,6 +202,25 @@ const SalesOrderDetailPage = () => {
   const [linePriceInput, setLinePriceInput] = useState("");
   const [linePriceEdited, setLinePriceEdited] = useState(false);
   const lineQtyInputRef = useRef<HTMLInputElement | null>(null);
+  const lineSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [inlineDrafts, setInlineDrafts] = useState<Record<string, InlineLineDraft>>({});
+  const inlineDraftsRef = useRef<Record<string, InlineLineDraft>>({});
+  const inlineInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const inlinePendingRef = useRef(new Set<string>());
+  const [inlinePending, setInlinePending] = useState<string[]>([]);
+  const [declinedLine, setDeclinedLine] = useState<DeclinedLineTarget | null>(null);
+  const [declinedReason, setDeclinedReason] = useState("");
+  const [confirmCancelLastLine, setConfirmCancelLastLine] = useState(false);
+  const [declinedSubmitted, setDeclinedSubmitted] = useState(false);
+  const declinedRequestRef = useRef<{
+    customerOrderId: string;
+    lineId: string;
+    expectedUpdatedAt: string;
+    idempotencyKey: string;
+    reason: string;
+    confirmCancelLastLine: boolean;
+  } | null>(null);
+  const postSaleKeyRef = useRef<{ orderId: string; key: string } | null>(null);
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: lineSearch.trim(), storeId: orderStore?.id, limit: 25 },
@@ -224,6 +258,10 @@ const SalesOrderDetailPage = () => {
       : linePriceInput;
 
   const order = orderQuery.data;
+  const paymentInfoQuery = trpc.salesOrders.paymentInfo.useQuery(
+    { customerOrderId },
+    { enabled: Boolean(order && canFinalize && order.status === CustomerOrderStatus.COMPLETED) },
+  );
   const loyaltyQuery = trpc.loyalty.orderSummary.useQuery(
     { customerOrderId: String(params.id ?? "") },
     { enabled: Boolean(params.id), retry: false },
@@ -237,18 +275,40 @@ const SalesOrderDetailPage = () => {
     if (!order) {
       return;
     }
-    setCustomerId(order.customerId ?? null);
-    setCustomerSelectionTouched(false);
-    setSelectedCustomer(null);
-    setCustomerName(order.customerName ?? "");
-    setCustomerEmail(order.customerEmail ?? "");
-    setCustomerPhone(order.customerPhone ?? "");
-    setCustomerAddress(order.customerAddress ?? "");
-    setNotes(order.notes ?? "");
-    setTrackingNumber(order.trackingNumber ?? "");
-    setTrackingCarrier(order.trackingCarrier ?? "");
-    setTrackingUrl(order.trackingUrl ?? "");
-    setTrackingStatus(order.trackingStatus ?? "");
+    const customerSnapshot = JSON.stringify([
+      order.id,
+      order.customerId,
+      order.customerName,
+      order.customerEmail,
+      order.customerPhone,
+      order.customerAddress,
+      order.notes,
+    ]);
+    if (customerSnapshotRef.current !== customerSnapshot) {
+      customerSnapshotRef.current = customerSnapshot;
+      setCustomerId(order.customerId ?? null);
+      setCustomerSelectionTouched(false);
+      setSelectedCustomer(null);
+      setCustomerName(order.customerName ?? "");
+      setCustomerEmail(order.customerEmail ?? "");
+      setCustomerPhone(order.customerPhone ?? "");
+      setCustomerAddress(order.customerAddress ?? "");
+      setNotes(order.notes ?? "");
+    }
+    const trackingSnapshot = JSON.stringify([
+      order.id,
+      order.trackingNumber,
+      order.trackingCarrier,
+      order.trackingUrl,
+      order.trackingStatus,
+    ]);
+    if (trackingSnapshotRef.current !== trackingSnapshot) {
+      trackingSnapshotRef.current = trackingSnapshot;
+      setTrackingNumber(order.trackingNumber ?? "");
+      setTrackingCarrier(order.trackingCarrier ?? "");
+      setTrackingUrl(order.trackingUrl ?? "");
+      setTrackingStatus(order.trackingStatus ?? "");
+    }
   }, [order]);
 
   const refetchAll = async (updatedOrder?: { id: string }) => {
@@ -314,7 +374,13 @@ const SalesOrderDetailPage = () => {
   const addLineMutation = trpc.salesOrders.addLine.useMutation({
     onSuccess: async () => {
       await refetchAll();
-      closeLineDialog();
+      setSelectedProduct(null);
+      setSelectedVariant("BASE");
+      setLineQtyInput("1");
+      setLinePriceInput("");
+      setLinePriceEdited(false);
+      setShowResults(true);
+      window.requestAnimationFrame(() => lineSearchInputRef.current?.focus());
       toast({ variant: "success", description: t("lineAdded") });
     },
     onError: (error) => {
@@ -327,6 +393,58 @@ const SalesOrderDetailPage = () => {
       await refetchAll();
       closeLineDialog();
       toast({ variant: "success", description: t("lineUpdated") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const inlineLineMutation = trpc.salesOrders.updateLine.useMutation({
+    onSuccess: async () => {
+      await refetchAll();
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const postSaleMutation = trpc.salesOrders.postSale.useMutation({
+    onSuccess: async (result) => {
+      postSaleKeyRef.current = null;
+      await refetchAll(result);
+      toast({ variant: "success", description: t("fastSale.posted") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const removeDeclinedLineMutation = trpc.salesOrders.removeDeclinedLine.useMutation({
+    onSuccess: async (result) => {
+      setDeclinedLine(null);
+      setDeclinedReason("");
+      setConfirmCancelLastLine(false);
+      setDeclinedSubmitted(false);
+      declinedRequestRef.current = null;
+      await refetchAll();
+      if (result.replacementId) {
+        toast({
+          variant: "success",
+          description: t("fastSale.corrected", { number: result.replacementNumber ?? "" }),
+        });
+        router.push(
+          `/sales/orders/${encodeURIComponent(result.replacementId)}?${new URLSearchParams({ returnTo })}`,
+        );
+      } else {
+        toast({
+          variant: "success",
+          description: t(
+            result.status === CustomerOrderStatus.CANCELED
+              ? "fastSale.cancelledLastLine"
+              : "lineRemoved",
+          ),
+        });
+      }
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -357,16 +475,6 @@ const SalesOrderDetailPage = () => {
     onSuccess: async (updatedOrder) => {
       await refetchAll(updatedOrder);
       toast({ variant: "success", description: t("readySuccess") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-
-  const completeMutation = trpc.salesOrders.complete.useMutation({
-    onSuccess: async (updatedOrder) => {
-      await refetchAll(updatedOrder);
-      toast({ variant: "success", description: t("completeSuccess") });
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -615,6 +723,207 @@ const SalesOrderDetailPage = () => {
     });
   };
 
+  const setInlineDraftValue = (lineId: string, field: InlineLineField, value?: string) => {
+    const draft = { ...inlineDraftsRef.current[lineId] };
+    if (value === undefined) delete draft[field];
+    else draft[field] = value;
+    const next = { ...inlineDraftsRef.current, [lineId]: draft };
+    inlineDraftsRef.current = next;
+    setInlineDrafts(next);
+  };
+
+  const saveInlineLine = async (lineId: string, field: InlineLineField) => {
+    const line = lines.find((item) => item.id === lineId);
+    const raw = inlineDraftsRef.current[lineId]?.[field];
+    if (raw === undefined) return true;
+    if (!isEditable || !line || (field === "price" && !canManualPrice)) return false;
+    const value =
+      field === "qty" ? parseQuantity(raw) : parseSalesOrderPriceInput(raw, orderCurrencySource);
+    if (value === null || (field === "qty" && value <= 0)) {
+      toast({
+        variant: "error",
+        description: t(field === "qty" ? "qtyPositive" : "unitPriceInvalid"),
+      });
+      return false;
+    }
+    if (value === (field === "qty" ? line.qty : line.unitPriceKgs)) {
+      setInlineDraftValue(lineId, field);
+      return true;
+    }
+    const pendingKey = `${lineId}:${field}`;
+    if (inlinePendingRef.current.has(pendingKey)) return false;
+    inlinePendingRef.current.add(pendingKey);
+    setInlinePending([...inlinePendingRef.current]);
+    try {
+      await inlineLineMutation.mutateAsync({
+        lineId,
+        ...(field === "qty" ? { qty: value } : { unitPriceKgs: value }),
+      });
+      if (inlineDraftsRef.current[lineId]?.[field] === raw) setInlineDraftValue(lineId, field);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      inlinePendingRef.current.delete(pendingKey);
+      setInlinePending([...inlinePendingRef.current]);
+    }
+  };
+
+  const handleInlineKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    lineId: string,
+    field: InlineLineField,
+    layout: "desktop" | "mobile",
+  ) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setInlineDraftValue(lineId, field);
+      return;
+    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void saveInlineLine(lineId, field).then((saved) => {
+      if (!saved) return;
+      const nextLine = lines[lines.findIndex((line) => line.id === lineId) + 1];
+      if (!nextLine) return;
+      window.requestAnimationFrame(() => {
+        const input = inlineInputRefs.current[`${layout}:${nextLine.id}:${field}`];
+        input?.focus();
+        input?.select();
+      });
+    });
+  };
+
+  const renderInlineLineInput = (
+    lineId: string,
+    field: InlineLineField,
+    layout: "desktop" | "mobile",
+  ) => {
+    const line = lines.find((item) => item.id === lineId);
+    if (!line) return null;
+    const raw = inlineDrafts[lineId]?.[field];
+    const value =
+      raw ??
+      (field === "qty"
+        ? String(line.qty)
+        : salesOrderPriceInput(line.unitPriceKgs, orderCurrencySource));
+    const parsed =
+      raw === undefined
+        ? undefined
+        : field === "qty"
+          ? parseQuantity(raw)
+          : parseSalesOrderPriceInput(raw, orderCurrencySource);
+    const invalid =
+      raw !== undefined && (parsed === null || (field === "qty" && (parsed ?? 0) <= 0));
+    const pending = inlinePending.includes(`${lineId}:${field}`);
+    const props = {
+      value,
+      ref: (element: HTMLInputElement | null) => {
+        inlineInputRefs.current[`${layout}:${lineId}:${field}`] = element;
+      },
+      className: layout === "desktop" ? "h-9 w-28 min-w-0" : "h-10 w-full min-w-0",
+      disabled: pending || postSaleMutation.isLoading || removeDeclinedLineMutation.isLoading,
+      "aria-label": `${t(field === "qty" ? "qty" : "unitPrice")}: ${line.product.name}`,
+      "aria-invalid": invalid,
+      onChange: (event: ChangeEvent<HTMLInputElement>) =>
+        setInlineDraftValue(lineId, field, event.target.value),
+      onBlur: () => {
+        void saveInlineLine(lineId, field);
+      },
+      onKeyDown: (event: KeyboardEvent<HTMLInputElement>) =>
+        handleInlineKeyDown(event, lineId, field, layout),
+    };
+    return (
+      <div className="min-w-0 space-y-1">
+        <div className="flex items-center gap-1">
+          {field === "price" ? (
+            <PriceInput {...props} />
+          ) : (
+            <Input {...props} type="text" inputMode="decimal" />
+          )}
+          {pending ? <Spinner className="h-3 w-3 shrink-0" /> : null}
+        </div>
+        {invalid ? (
+          <p className="max-w-48 text-xs text-danger">
+            {t(field === "qty" ? "qtyPositive" : "unitPriceInvalid")}
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+
+  const handlePostSale = async () => {
+    if (
+      !order ||
+      !canFinalize ||
+      !lines.length ||
+      inlinePendingRef.current.size ||
+      postSaleMutation.isLoading
+    )
+      return;
+    for (const line of lines) {
+      for (const field of ["qty", "price"] as const) {
+        if (!(await saveInlineLine(line.id, field))) return;
+      }
+    }
+    if (!(await confirm({ description: t("fastSale.confirmPost") }))) return;
+    if (postSaleKeyRef.current?.orderId !== order.id)
+      postSaleKeyRef.current = { orderId: order.id, key: createIdempotencyKey() };
+    try {
+      await postSaleMutation.mutateAsync({
+        customerOrderId: order.id,
+        idempotencyKey: postSaleKeyRef.current.key,
+      });
+    } catch {
+      // The same key remains available for a safe retry after an uncertain response.
+    }
+  };
+
+  const openDeclinedLineDialog = (lineId: string) => {
+    if (!order || !canFinalize || inlinePendingRef.current.size) return;
+    const line = lines.find((item) => item.id === lineId);
+    if (!line) return;
+    removeDeclinedLineMutation.reset();
+    setDeclinedReason("");
+    setConfirmCancelLastLine(false);
+    setDeclinedSubmitted(false);
+    declinedRequestRef.current = null;
+    if (order.status === CustomerOrderStatus.COMPLETED) void paymentInfoQuery.refetch();
+    setDeclinedLine({
+      lineId,
+      name: [line.product.name, line.variant?.name].filter(Boolean).join(" · "),
+      expectedUpdatedAt: order.updatedAt.toISOString(),
+      idempotencyKey: createIdempotencyKey(),
+      status: order.status,
+      lastLine: lines.length === 1,
+    });
+  };
+
+  const handleRemoveDeclinedLine = async () => {
+    if (!order || !declinedLine || !declinedReason.trim() || removeDeclinedLineMutation.isLoading)
+      return;
+    if (declinedLine.lastLine && !confirmCancelLastLine) return;
+    if (
+      declinedLine.status === CustomerOrderStatus.COMPLETED &&
+      (paymentInfoQuery.isFetching || !paymentInfoQuery.data || paymentInfoQuery.data.hasEvidence)
+    )
+      return;
+    declinedRequestRef.current ??= {
+      customerOrderId: order.id,
+      lineId: declinedLine.lineId,
+      expectedUpdatedAt: declinedLine.expectedUpdatedAt,
+      idempotencyKey: declinedLine.idempotencyKey,
+      reason: declinedReason.trim(),
+      confirmCancelLastLine,
+    };
+    setDeclinedSubmitted(true);
+    try {
+      await removeDeclinedLineMutation.mutateAsync(declinedRequestRef.current);
+    } catch {
+      // Keep the reviewed snapshot and operation key for a safe retry.
+    }
+  };
+
   const handleConfirm = async () => {
     if (!order) {
       return;
@@ -635,19 +944,6 @@ const SalesOrderDetailPage = () => {
     await markReadyMutation.mutateAsync({ customerOrderId: order.id });
   };
 
-  const handleComplete = async () => {
-    if (!order) {
-      return;
-    }
-    if (!(await confirm({ description: t("confirmComplete") }))) {
-      return;
-    }
-    await completeMutation.mutateAsync({
-      customerOrderId: order.id,
-      idempotencyKey: createIdempotencyKey(),
-    });
-  };
-
   const handleCancel = async () => {
     if (!order) {
       return;
@@ -664,7 +960,12 @@ const SalesOrderDetailPage = () => {
   };
 
   const lineActionsDisabled =
-    addLineMutation.isLoading || updateLineMutation.isLoading || removeLineMutation.isLoading;
+    addLineMutation.isLoading ||
+    updateLineMutation.isLoading ||
+    removeLineMutation.isLoading ||
+    inlinePending.length > 0 ||
+    removeDeclinedLineMutation.isLoading ||
+    postSaleMutation.isLoading;
   const trackingActionsDisabled =
     !canFinalize ||
     saveTrackingMutation.isLoading ||
@@ -678,12 +979,19 @@ const SalesOrderDetailPage = () => {
     (order?.status === CustomerOrderStatus.DRAFT ||
       order?.status === CustomerOrderStatus.CONFIRMED ||
       order?.status === CustomerOrderStatus.READY);
+  const canCorrectDeclinedLine =
+    canFinalize &&
+    Boolean(
+      order &&
+        order.source === "MANUAL" &&
+        !order.isHeld && !order.registerId && !order.shiftId &&
+        (order.status === CustomerOrderStatus.READY || order.status === CustomerOrderStatus.COMPLETED),
+    );
 
   const selectedProductVariants = selectedProductQuery.data?.variants ?? [];
 
   const applySelectedProduct = (product: ProductSearchResult) => {
     setSelectedProduct(product);
-    setLineSearch(product.name);
     setSelectedVariant("BASE");
     setLinePriceInput("");
     setLinePriceEdited(false);
@@ -725,11 +1033,25 @@ const SalesOrderDetailPage = () => {
       <Button variant="secondary" asChild>
         <Link href={returnTo}>{tCommon("back")}</Link>
       </Button>
+      {order ? <SalesDocumentActions orderId={order.id} number={order.number} /> : null}
+      {canCancel ? (
+        <Button
+          onClick={() => void handlePostSale()}
+          disabled={lineActionsDisabled || !lines.length}
+        >
+          {postSaleMutation.isLoading ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <CheckIcon className="h-4 w-4" aria-hidden />
+          )}
+          {order?.status === CustomerOrderStatus.READY ? t("complete") : t("fastSale.post")}
+        </Button>
+      ) : null}
       {order?.status === CustomerOrderStatus.DRAFT ? (
         <Button
           variant="secondary"
           onClick={() => void handleConfirm()}
-          disabled={confirmMutation.isLoading || !lines.length}
+          disabled={confirmMutation.isLoading || lineActionsDisabled || !lines.length}
         >
           {confirmMutation.isLoading ? (
             <Spinner className="h-4 w-4" />
@@ -743,7 +1065,7 @@ const SalesOrderDetailPage = () => {
         <Button
           variant="secondary"
           onClick={() => void handleMarkReady()}
-          disabled={markReadyMutation.isLoading}
+          disabled={markReadyMutation.isLoading || lineActionsDisabled}
         >
           {markReadyMutation.isLoading ? (
             <Spinner className="h-4 w-4" />
@@ -753,21 +1075,11 @@ const SalesOrderDetailPage = () => {
           {t("markReady")}
         </Button>
       ) : null}
-      {canFinalize && order?.status === CustomerOrderStatus.READY ? (
-        <Button onClick={() => void handleComplete()} disabled={completeMutation.isLoading}>
-          {completeMutation.isLoading ? (
-            <Spinner className="h-4 w-4" />
-          ) : (
-            <CheckIcon className="h-4 w-4" aria-hidden />
-          )}
-          {t("complete")}
-        </Button>
-      ) : null}
       {canCancel ? (
         <Button
           variant="danger"
           onClick={() => void handleCancel()}
-          disabled={cancelMutation.isLoading}
+          disabled={cancelMutation.isLoading || lineActionsDisabled}
         >
           {cancelMutation.isLoading ? (
             <Spinner className="h-4 w-4" />
@@ -850,12 +1162,14 @@ const SalesOrderDetailPage = () => {
             </CardContent>
           </Card>
 
-          <OrderPayment
-            customerOrderId={order.id}
-            onPaid={() => {
-              void loyaltyQuery.refetch();
-            }}
-          />
+          <div id="sales-order-payments">
+            <OrderPayment
+              customerOrderId={order.id}
+              onPaid={() => {
+                void loyaltyQuery.refetch();
+              }}
+            />
+          </div>
           {loyaltyQuery.data ? (
             <Card>
               <CardHeader>
@@ -1147,6 +1461,9 @@ const SalesOrderDetailPage = () => {
               ) : null}
             </CardHeader>
             <CardContent className="space-y-3">
+              {isEditable && lines.length ? (
+                <p className="text-xs text-muted-foreground">{t("fastSale.inlineHint")}</p>
+              ) : null}
               {!lines.length ? (
                 <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                   <EmptyIcon className="mx-auto mb-2 h-5 w-5" aria-hidden />
@@ -1161,7 +1478,9 @@ const SalesOrderDetailPage = () => {
                           <TableHead>{t("product")}</TableHead>
                           <TableHead>{t("variant")}</TableHead>
                           <TableHead>{t("qty")}</TableHead>
-                          <TableHead>{t("unitPrice")}</TableHead>
+                          <TableHead>
+                            {t("unitPrice")} · {orderCurrencyCode}
+                          </TableHead>
                           <TableHead>{t("lineTotal")}</TableHead>
                           <TableHead className="text-right">{tCommon("actions")}</TableHead>
                         </TableRow>
@@ -1188,9 +1507,15 @@ const SalesOrderDetailPage = () => {
                               </div>
                             </TableCell>
                             <TableCell>{line.variant?.name ?? t("variantBase")}</TableCell>
-                            <TableCell>{line.qty}</TableCell>
                             <TableCell>
-                              {formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
+                              {isEditable
+                                ? renderInlineLineInput(line.id, "qty", "desktop")
+                                : line.qty}
+                            </TableCell>
+                            <TableCell>
+                              {isEditable && canManualPrice
+                                ? renderInlineLineInput(line.id, "price", "desktop")
+                                : formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
                             </TableCell>
                             <TableCell>
                               {formatKgsMoney(line.lineTotalKgs, locale, orderCurrencySource)}
@@ -1215,6 +1540,7 @@ const SalesOrderDetailPage = () => {
                                             icon: DeleteIcon,
                                             variant: "danger",
                                             onSelect: async () => {
+                                              if (inlinePendingRef.current.size) return;
                                               if (
                                                 !(await confirm({
                                                   description: t("confirmRemoveLine"),
@@ -1227,6 +1553,18 @@ const SalesOrderDetailPage = () => {
                                                 lineId: line.id,
                                               });
                                             },
+                                            disabled: lineActionsDisabled,
+                                          },
+                                        ]
+                                      : []),
+                                    ...(canCorrectDeclinedLine
+                                      ? [
+                                          {
+                                            key: "declined",
+                                            label: t("fastSale.declinedAction"),
+                                            icon: DeleteIcon,
+                                            variant: "danger" as const,
+                                            onSelect: () => openDeclinedLineDialog(line.id),
                                             disabled: lineActionsDisabled,
                                           },
                                         ]
@@ -1269,13 +1607,23 @@ const SalesOrderDetailPage = () => {
                           <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                             <div>
                               <p>{t("qty")}</p>
-                              <p className="font-medium text-foreground">{line.qty}</p>
+                              {isEditable ? (
+                                renderInlineLineInput(line.id, "qty", "mobile")
+                              ) : (
+                                <p className="font-medium text-foreground">{line.qty}</p>
+                              )}
                             </div>
                             <div>
-                              <p>{t("unitPrice")}</p>
-                              <p className="font-medium text-foreground">
-                                {formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
+                              <p>
+                                {t("unitPrice")} · {orderCurrencyCode}
                               </p>
+                              {isEditable && canManualPrice ? (
+                                renderInlineLineInput(line.id, "price", "mobile")
+                              ) : (
+                                <p className="font-medium text-foreground">
+                                  {formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
+                                </p>
+                              )}
                             </div>
                             <div>
                               <p>{t("lineTotal")}</p>
@@ -1284,36 +1632,55 @@ const SalesOrderDetailPage = () => {
                               </p>
                             </div>
                           </div>
-                          {isEditable ? (
+                          {isEditable || canCorrectDeclinedLine ? (
                             <div className="flex justify-end">
                               <RowActions
                                 moreLabel={tCommon("moreActions")}
                                 actions={[
-                                  {
-                                    key: "edit",
-                                    label: t("editLine"),
-                                    icon: EditIcon,
-                                    onSelect: () => openEditLineDialog(line.id),
-                                    disabled: lineActionsDisabled,
-                                  },
-                                  {
-                                    key: "remove",
-                                    label: t("removeLine"),
-                                    icon: DeleteIcon,
-                                    variant: "danger",
-                                    onSelect: async () => {
-                                      if (
-                                        !(await confirm({
-                                          description: t("confirmRemoveLine"),
-                                          confirmVariant: "danger",
-                                        }))
-                                      ) {
-                                        return;
-                                      }
-                                      void removeLineMutation.mutateAsync({ lineId: line.id });
-                                    },
-                                    disabled: lineActionsDisabled,
-                                  },
+                                  ...(isEditable
+                                    ? [
+                                        {
+                                          key: "edit",
+                                          label: t("editLine"),
+                                          icon: EditIcon,
+                                          onSelect: () => openEditLineDialog(line.id),
+                                          disabled: lineActionsDisabled,
+                                        },
+                                        {
+                                          key: "remove",
+                                          label: t("removeLine"),
+                                          icon: DeleteIcon,
+                                          variant: "danger",
+                                          onSelect: async () => {
+                                            if (inlinePendingRef.current.size) return;
+                                            if (
+                                              !(await confirm({
+                                                description: t("confirmRemoveLine"),
+                                                confirmVariant: "danger",
+                                              }))
+                                            ) {
+                                              return;
+                                            }
+                                            void removeLineMutation.mutateAsync({
+                                              lineId: line.id,
+                                            });
+                                          },
+                                          disabled: lineActionsDisabled,
+                                        },
+                                      ]
+                                    : []),
+                                  ...(canCorrectDeclinedLine
+                                    ? [
+                                        {
+                                          key: "declined",
+                                          label: t("fastSale.declinedAction"),
+                                          icon: DeleteIcon,
+                                          variant: "danger" as const,
+                                          onSelect: () => openDeclinedLineDialog(line.id),
+                                          disabled: lineActionsDisabled,
+                                        },
+                                      ]
+                                    : []),
                                 ]}
                               />
                             </div>
@@ -1331,6 +1698,124 @@ const SalesOrderDetailPage = () => {
       {confirmDialog}
 
       <Modal
+        open={Boolean(declinedLine)}
+        onOpenChange={(open) => {
+          if (!open && !removeDeclinedLineMutation.isLoading) setDeclinedLine(null);
+        }}
+        title={t("fastSale.declinedTitle")}
+        subtitle={declinedLine?.name}
+      >
+        {declinedLine ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t(
+                declinedLine.status === CustomerOrderStatus.COMPLETED
+                  ? "fastSale.declinedCompletedHint"
+                  : "fastSale.declinedReadyHint",
+              )}
+            </p>
+            {declinedLine.status === CustomerOrderStatus.COMPLETED &&
+            paymentInfoQuery.isFetching ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                <Spinner className="h-4 w-4" />
+                {tCommon("loading")}
+              </p>
+            ) : declinedLine.status === CustomerOrderStatus.COMPLETED && paymentInfoQuery.error ? (
+              <QueryErrorState
+                error={paymentInfoQuery.error}
+                onRetry={() => void paymentInfoQuery.refetch()}
+              />
+            ) : declinedLine.status === CustomerOrderStatus.COMPLETED &&
+              paymentInfoQuery.data?.hasEvidence ? (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-sm">{t("fastSale.paidRemovalBlocked")}</p>
+                <Button variant="secondary" asChild onClick={() => setDeclinedLine(null)}>
+                  <Link href="#sales-order-payments">{t("fastSale.openPayment")}</Link>
+                </Button>
+              </div>
+            ) : null}
+            <div className="space-y-1.5">
+              <label htmlFor="declined-line-reason" className="text-sm font-medium">
+                {t("fastSale.reason")}
+              </label>
+              <Textarea
+                id="declined-line-reason"
+                value={declinedReason}
+                onChange={(event) => setDeclinedReason(event.target.value)}
+                placeholder={t("fastSale.reasonPlaceholder")}
+                required
+                maxLength={500}
+                rows={3}
+                disabled={declinedSubmitted || removeDeclinedLineMutation.isLoading}
+              />
+            </div>
+            {declinedLine.lastLine ? (
+              <div className="space-y-2 rounded-md border border-danger/30 p-3">
+                <p className="text-sm text-danger">{t("fastSale.declinedLastLineHint")}</p>
+                <label
+                  htmlFor="declined-line-cancel-order"
+                  className="flex items-start gap-2 text-sm"
+                >
+                  <Checkbox
+                    id="declined-line-cancel-order"
+                    className="mt-0.5"
+                    checked={confirmCancelLastLine}
+                    onCheckedChange={(value) => setConfirmCancelLastLine(value === true)}
+                    disabled={declinedSubmitted || removeDeclinedLineMutation.isLoading}
+                  />
+                  <span>{t("fastSale.confirmCancelLastLine")}</span>
+                </label>
+              </div>
+            ) : null}
+            {removeDeclinedLineMutation.error ? (
+              <div className="space-y-2">
+                <p role="alert" className="text-sm text-danger">
+                  {translateError(tErrors, removeDeclinedLineMutation.error)}
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setDeclinedLine(null);
+                    void refetchAll();
+                  }}
+                >
+                  {t("fastSale.reload")}
+                </Button>
+              </div>
+            ) : null}
+            <ModalFooter>
+              <Button
+                variant="secondary"
+                disabled={removeDeclinedLineMutation.isLoading}
+                onClick={() => setDeclinedLine(null)}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => void handleRemoveDeclinedLine()}
+                disabled={
+                  removeDeclinedLineMutation.isLoading ||
+                  !declinedReason.trim() ||
+                  (declinedLine.lastLine && !confirmCancelLastLine) ||
+                  (declinedLine.status === CustomerOrderStatus.COMPLETED &&
+                    (paymentInfoQuery.isFetching ||
+                      !paymentInfoQuery.data ||
+                      Boolean(paymentInfoQuery.error) ||
+                      paymentInfoQuery.data.hasEvidence))
+                }
+              >
+                {removeDeclinedLineMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                {declinedSubmitted && removeDeclinedLineMutation.error
+                  ? tCommon("tryAgain")
+                  : t("fastSale.confirmDeclined")}
+              </Button>
+            </ModalFooter>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
         open={lineDialogMode !== null}
         onOpenChange={(open) => {
           if (!open) {
@@ -1346,7 +1831,9 @@ const SalesOrderDetailPage = () => {
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">{t("product")}</p>
                 <ScanInput
+                  ref={lineSearchInputRef}
                   context="linePicker"
+                  disabled={lineActionsDisabled}
                   value={lineSearch}
                   onValueChange={(nextValue) => {
                     setLineSearch(nextValue);
@@ -1423,7 +1910,7 @@ const SalesOrderDetailPage = () => {
                     setLinePriceInput("");
                     setLinePriceEdited(false);
                   }}
-                  disabled={!selectedProduct}
+                  disabled={!selectedProduct || lineActionsDisabled}
                 >
                   <SelectTrigger aria-label={t("variant")}>
                     <SelectValue placeholder={t("variantPlaceholder")} />
@@ -1467,6 +1954,7 @@ const SalesOrderDetailPage = () => {
               type="text"
               inputMode="decimal"
               value={lineQtyInput}
+              disabled={lineActionsDisabled}
               onChange={(event) => setLineQtyInput(event.target.value)}
             />
           </div>
@@ -1479,7 +1967,11 @@ const SalesOrderDetailPage = () => {
               id="sales-order-line-price"
               value={displayedLinePriceInput}
               placeholder={t("priceNotSet")}
-              disabled={!canManualPrice || (lineDialogMode === "add" && !selectedProduct)}
+              disabled={
+                lineActionsDisabled ||
+                !canManualPrice ||
+                (lineDialogMode === "add" && !selectedProduct)
+              }
               aria-invalid={linePriceEdited && manualLinePrice === null}
               aria-describedby="sales-order-line-price-hint"
               onChange={(event) => {
@@ -1514,7 +2006,7 @@ const SalesOrderDetailPage = () => {
 
           <ModalFooter>
             <Button variant="secondary" onClick={closeLineDialog}>
-              {tCommon("cancel")}
+              {tCommon(lineDialogMode === "add" ? "close" : "cancel")}
             </Button>
             <Button
               onClick={() => void handleSubmitLine()}

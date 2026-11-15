@@ -1,12 +1,13 @@
 "use client";
 import { parseQuantity, roundQuantity } from "@/lib/quantity";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
+import { z } from "zod";
 
-import { AddIcon, DeleteIcon } from "@/components/icons";
+import { AddIcon, CheckIcon, ChevronDownIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { PageHeader } from "@/components/page-header";
@@ -18,9 +19,10 @@ import {
 } from "@/components/sales-order-customer-select";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ScanInput } from "@/components/ScanInput";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { PriceInput } from "@/components/ui/price-input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +48,14 @@ import {
 } from "@/lib/customerContact";
 import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import {
+  clearPendingSalesOrderSale,
+  isSafeSalesOrderFailure,
+  readPendingSalesOrderSale,
+  writePendingSalesOrderSale,
+  type PendingSalesOrderSale,
+} from "@/lib/salesOrderPendingSale";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 import { resolveLegacySalesReturnRedirect } from "@/lib/salesOrderReturnRoute";
 
@@ -77,13 +87,20 @@ const NewSalesOrderPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session } = useSession();
+  const ownerRef = useRef<{ userId: string; organizationId: string } | null>(null);
+  ownerRef.current =
+    session?.user?.id && session.user.organizationId
+      ? { userId: session.user.id, organizationId: session.user.organizationId }
+      : null;
   const canSetPrice = ["ADMIN", "MANAGER", "STAFF", "CASHIER"].includes(session?.user?.role ?? "");
+  const canPostSale = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedStoreId = searchParams.get("storeId");
   const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"), "/sales/orders");
   const utils = trpc.useUtils();
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const legacyReturnRedirect = resolveLegacySalesReturnRedirect(searchParams);
 
   const storesQuery = trpc.stores.list.useQuery();
@@ -95,8 +112,11 @@ const NewSalesOrderPage = () => {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [notes, setNotes] = useState("");
+  const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [lineSearch, setLineSearch] = useState("");
-  const [showLineSearchResults, setShowLineSearchResults] = useState(false);
+  const debouncedLineSearch = useDebouncedValue(lineSearch.trim(), 250);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const lineInputsRef = useRef(new Map<string, HTMLInputElement>());
   const [pendingQty, setPendingQty] = useState("1");
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
   const draftLinesRef = useRef(draftLines);
@@ -105,7 +125,48 @@ const NewSalesOrderPage = () => {
   const [isRefreshingPrices, setIsRefreshingPrices] = useState(false);
   const [pricingFailed, setPricingFailed] = useState(false);
   const [isAddingLine, setIsAddingLine] = useState(false);
-  const createAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
+  const addingLineRef = useRef(false);
+  const submissionRef = useRef(false);
+  const [pendingSale, setPendingSale] = useState<PendingSalesOrderSale | null>(null);
+  const pendingSaleRef = useRef<PendingSalesOrderSale | null>(null);
+  const [recoveryLoaded, setRecoveryLoaded] = useState(false);
+  const [storageFailed, setStorageFailed] = useState(false);
+  const createAttemptRef = useRef<{
+    payload: string;
+    idempotencyKey: string;
+    ownerKey: string;
+  } | null>(null);
+  const currentOwnerKey = () => (ownerRef.current ? JSON.stringify(ownerRef.current) : "");
+
+  useEffect(() => {
+    const owner = ownerRef.current;
+    setRecoveryLoaded(false);
+    setStorageFailed(false);
+    pendingSaleRef.current = null;
+    setPendingSale(null);
+    createAttemptRef.current = null;
+    setDraftLines([]);
+    setStoreId("");
+    setSelectedCustomer(null);
+    setCustomerSelectionTouched(false);
+    setCustomerName("");
+    setCustomerEmail("");
+    setCustomerPhone("");
+    setCustomerAddress("");
+    setNotes("");
+    setLineSearch("");
+    setPendingQty("1");
+    if (!owner) return;
+    try {
+      const pending = readPendingSalesOrderSale(window.sessionStorage, owner);
+      pendingSaleRef.current = pending;
+      setPendingSale(pending);
+    } catch {
+      setStorageFailed(true);
+    } finally {
+      setRecoveryLoaded(true);
+    }
+  }, [session?.user?.id, session?.user?.organizationId]);
 
   useEffect(() => {
     if (!storeId && storesQuery.data?.[0]) {
@@ -132,8 +193,13 @@ const NewSalesOrderPage = () => {
         productId: line.productId,
         price: line.priceEdited
           ? line.unitPriceKgs
-          : (await utils.salesOrders.linePrice.fetch({ productId: line.productId, storeId }))
-              .unitPriceKgs,
+          : await (async () => {
+              const resolved = await utils.salesOrders.linePrice.fetch({
+                productId: line.productId,
+                storeId,
+              });
+              return resolved.hasConfiguredPrice === false ? null : resolved.unitPriceKgs;
+            })(),
       })),
     )
       .then((prices) => {
@@ -146,7 +212,12 @@ const NewSalesOrderPage = () => {
             return {
               ...line,
               unitPriceKgs: price,
-              priceInput: price === null ? line.priceInput : salesOrderPriceInput(price, store),
+              priceInput:
+                price === null
+                  ? line.priceEdited
+                    ? line.priceInput
+                    : ""
+                  : salesOrderPriceInput(price, store),
               lineTotalKgs: line.qty > 0 ? toLineTotal(line.qty, price) : null,
             };
           }),
@@ -173,23 +244,91 @@ const NewSalesOrderPage = () => {
   };
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch.trim(), storeId: storeId || undefined, limit: 25 },
-    { enabled: lineSearch.trim().length >= 1 },
+    { q: debouncedLineSearch, storeId: storeId || undefined, limit: 50 },
+    { enabled: Boolean(storeId) && debouncedLineSearch.length >= 1, keepPreviousData: false },
   );
 
   const createMutation = trpc.salesOrders.createDraft.useMutation({
-    onSuccess: (order) => {
+    onSuccess: (order, variables) => {
+      const attempt = createAttemptRef.current;
+      if (
+        !attempt ||
+        attempt.idempotencyKey !== variables.idempotencyKey ||
+        attempt.ownerKey !== currentOwnerKey()
+      )
+        return;
       createAttemptRef.current = null;
       toast({ variant: "success", description: t("createSuccess") });
       router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      const attempt = createAttemptRef.current;
+      if (
+        !attempt ||
+        attempt.idempotencyKey !== variables.idempotencyKey ||
+        attempt.ownerKey !== currentOwnerKey()
+      )
+        return;
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
 
+  const saleMutation = trpc.salesOrders.createSale.useMutation({
+    onSuccess: (order, variables) => {
+      const pending = pendingSaleRef.current;
+      const owner = ownerRef.current;
+      if (
+        !pending ||
+        !owner ||
+        pending.userId !== owner.userId ||
+        pending.organizationId !== owner.organizationId ||
+        pending.input.idempotencyKey !== variables.idempotencyKey
+      )
+        return;
+      try {
+        clearPendingSalesOrderSale(window.sessionStorage, pending);
+      } catch {
+        /* Replaying the same key is still safe. */
+      }
+      pendingSaleRef.current = null;
+      setPendingSale(null);
+      createAttemptRef.current = null;
+      toast({ variant: "success", description: t("completeSuccess") });
+      router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
+    },
+    onError: (error, variables) => {
+      const pending = pendingSaleRef.current;
+      const owner = ownerRef.current;
+      if (
+        !pending ||
+        !owner ||
+        pending.userId !== owner.userId ||
+        pending.organizationId !== owner.organizationId ||
+        pending.input.idempotencyKey !== variables.idempotencyKey
+      )
+        return;
+      if (pending && isSafeSalesOrderFailure(error)) {
+        try {
+          clearPendingSalesOrderSale(window.sessionStorage, pending);
+          pendingSaleRef.current = null;
+          setPendingSale(null);
+        } catch {
+          setStorageFailed(true);
+        }
+      }
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+  const isSaving =
+    createMutation.isLoading ||
+    saleMutation.isLoading ||
+    Boolean(pendingSale) ||
+    !recoveryLoaded ||
+    storageFailed;
+
   const addDraftLine = async (product: ProductSearchResult): Promise<boolean> => {
-    if (isAddingLine || isRefreshingPrices || createMutation.isLoading) return false;
+    if (addingLineRef.current || isRefreshingPrices || isSaving || submissionRef.current)
+      return false;
     if (!storeId) {
       toast({ variant: "error", description: t("storeRequired") });
       return false;
@@ -204,17 +343,19 @@ const NewSalesOrderPage = () => {
     const normalizedQty = qty;
 
     let unitPriceKgs: number | null = null;
+    addingLineRef.current = true;
     setIsAddingLine(true);
     try {
       const pricing = await utils.salesOrders.linePrice.fetch({
         productId: product.id,
         storeId,
       });
-      unitPriceKgs = pricing.unitPriceKgs;
+      unitPriceKgs = pricing.hasConfiguredPrice === false ? null : pricing.unitPriceKgs;
     } catch (error) {
       toast({ variant: "error", description: tErrors("genericMessage") });
       return false;
     } finally {
+      addingLineRef.current = false;
       setIsAddingLine(false);
     }
 
@@ -262,9 +403,7 @@ const NewSalesOrderPage = () => {
       };
       return next;
     });
-    setLineSearch("");
     setPendingQty("1");
-    setShowLineSearchResults(false);
     return true;
   };
 
@@ -274,7 +413,6 @@ const NewSalesOrderPage = () => {
       return false;
     }
     if (result.kind === "multiple") {
-      setShowLineSearchResults(true);
       return true;
     }
     return addDraftLine({
@@ -327,15 +465,34 @@ const NewSalesOrderPage = () => {
     );
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (postSale = false) => {
+    if (submissionRef.current || isSaving) return;
+    const attemptOwner = ownerRef.current;
+    if (!attemptOwner) return;
+    const attemptOwnerKey = JSON.stringify(attemptOwner);
     if (!storeId) {
       toast({ variant: "error", description: t("storeRequired") });
       return;
     }
 
     if (isRefreshingPrices || isAddingLine || pricingFailed) return;
+    if (postSale && !draftLines.length) {
+      toast({ variant: "error", description: tErrors("salesOrderEmpty") });
+      return;
+    }
     if (draftLines.some((line) => line.qty <= 0 || !Number.isFinite(line.qty))) {
       toast({ variant: "error", description: t("qtyPositive") });
+      return;
+    }
+    if (orderTotalKgs > 9_999_999_999.99) {
+      toast({ variant: "error", description: tErrors("invalidInput") });
+      return;
+    }
+    if (
+      customerEmail.trim() &&
+      !z.string().email().max(254).safeParse(customerEmail.trim()).success
+    ) {
+      toast({ variant: "error", description: tErrors("customerEmailInvalid") });
       return;
     }
 
@@ -382,325 +539,477 @@ const NewSalesOrderPage = () => {
           : {}),
       })),
     };
-    const serializedPayload = JSON.stringify(payload);
-    const existingAttempt = createAttemptRef.current;
-    const idempotencyKey =
-      existingAttempt?.payload === serializedPayload
-        ? existingAttempt.idempotencyKey
-        : crypto.randomUUID();
-    createAttemptRef.current = { payload: serializedPayload, idempotencyKey };
+    submissionRef.current = true;
+    try {
+      if (
+        postSale &&
+        !(await confirm({
+          title: t("workspace.postSale"),
+          description: t("workspace.postConfirmation", {
+            store: selectedStore?.name ?? "",
+            total: formatKgsMoney(orderTotalKgs, locale, selectedStore),
+          }),
+          confirmLabel: t("workspace.postSale"),
+        }))
+      )
+        return;
+      if (currentOwnerKey() !== attemptOwnerKey) return;
+      const serializedPayload = JSON.stringify({ ...payload, postSale });
+      const existingAttempt = createAttemptRef.current;
+      const idempotencyKey =
+        existingAttempt?.payload === serializedPayload
+          ? existingAttempt.idempotencyKey
+          : crypto.randomUUID();
+      createAttemptRef.current = {
+        payload: serializedPayload,
+        idempotencyKey,
+        ownerKey: attemptOwnerKey,
+      };
 
-    await createMutation.mutateAsync({ ...payload, idempotencyKey });
+      if (postSale) {
+        const pending: PendingSalesOrderSale = {
+          version: 1,
+          ...attemptOwner,
+          input: { ...payload, idempotencyKey },
+          storeName: selectedStore?.name ?? "",
+          totalLabel: formatKgsMoney(orderTotalKgs, locale, selectedStore),
+        };
+        try {
+          writePendingSalesOrderSale(window.sessionStorage, pending);
+        } catch {
+          setStorageFailed(true);
+          toast({ variant: "error", description: t("workspace.storageFailed") });
+          return;
+        }
+        pendingSaleRef.current = pending;
+        setPendingSale(pending);
+        await saleMutation.mutateAsync(pending.input);
+      } else await createMutation.mutateAsync({ ...payload, idempotencyKey });
+    } catch {
+      // The mutation shows its translated error. Keep the draft and retry key.
+    } finally {
+      submissionRef.current = false;
+    }
   };
 
   const orderTotalKgs = useMemo(
     () =>
-      draftLines.reduce((total, line) => {
-        return total + (line.lineTotalKgs ?? 0);
-      }, 0),
+      draftLines.reduce((cents, line) => cents + Math.round((line.lineTotalKgs ?? 0) * 100), 0) /
+      100,
     [draftLines],
   );
+
+  const focusNextLine = (
+    event: KeyboardEvent<HTMLInputElement>,
+    index: number,
+    field: "qty" | "price",
+  ) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    const line = draftLines[index];
+    if (!line || (field === "qty" ? line.qty <= 0 : line.unitPriceKgs === null)) return;
+    const next = draftLines[index + 1];
+    const input = next
+      ? lineInputsRef.current.get(`${next.productId}:${field}`)
+      : searchInputRef.current;
+    input?.focus();
+    input?.select();
+  };
 
   if (legacyReturnRedirect) {
     return <SalesOrderReturnRedirect href={legacyReturnRedirect} label={tCommon("loading")} />;
   }
 
   return (
-    <div>
-      <PageHeader title={t("new")} subtitle={t("newSubtitle")} />
+    <div className="space-y-4 pb-4">
+      <PageHeader title={t("workspace.title")} subtitle={t("workspace.subtitle")} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("detailsTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <FormGrid>
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">{t("store")}</p>
-              <Select
-                value={storeId}
-                onValueChange={setStoreId}
-                disabled={isAddingLine || isRefreshingPrices || createMutation.isLoading}
-              >
-                <SelectTrigger aria-label={t("store")}>
-                  <SelectValue placeholder={tCommon("selectStore")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(storesQuery.data ?? []).map((store) => (
-                    <SelectItem key={store.id} value={store.id}>
-                      {store.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      {pendingSale ? (
+        <section className="bazaar-doc-surface space-y-3 border-warning/40 p-4" role="status">
+          <h2 className="text-sm font-semibold">{t("workspace.recoveryTitle")}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t("workspace.recoveryHint", {
+              store: pendingSale.storeName,
+              total: pendingSale.totalLabel,
+            })}
+          </p>
+          <Button
+            type="button"
+            disabled={saleMutation.isLoading}
+            onClick={() => void saleMutation.mutateAsync(pendingSale.input).catch(() => {})}
+          >
+            {saleMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+            {t("workspace.recoveryRetry")}
+          </Button>
+        </section>
+      ) : null}
+      {storageFailed ? (
+        <p role="alert" className="rounded-md border border-danger/30 p-4 text-sm text-danger">
+          {t("workspace.storageFailed")}
+        </p>
+      ) : null}
 
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">
-                {t("customerCard")} ({tCommon("optional")})
-              </p>
-              <SalesOrderCustomerSelect
-                storeId={storeId}
-                customerId={selectedCustomer?.id ?? null}
-                customerName={selectedCustomer?.name ?? ""}
-                onSelect={chooseCustomer}
-                disabled={createMutation.isLoading}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">
-                {t("customerName")} ({tCommon("optional")})
-              </p>
-              <Input
-                value={customerName}
-                onChange={(event) => setCustomerName(event.target.value)}
-                placeholder={t("customerNamePlaceholder")}
-                maxLength={180}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">
-                {t("customerEmail")} ({tCommon("optional")})
-              </p>
-              <Input
-                type="email"
-                value={customerEmail}
-                onChange={(event) => setCustomerEmail(event.target.value)}
-                placeholder={t("customerEmailPlaceholder")}
-                maxLength={254}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">
-                {t("customerPhone")} ({tCommon("optional")})
-              </p>
-              <Input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={customerPhone}
-                onChange={(event) => setCustomerPhone(event.target.value)}
-                placeholder={t("customerPhonePlaceholder")}
-                maxLength={64}
-              />
-            </div>
-
-            <div className="space-y-1.5 md:col-span-2">
-              <p className="text-sm font-medium">
-                {t("customerAddress")} ({tCommon("optional")})
-              </p>
-              <Input
-                value={customerAddress}
-                onChange={(event) => setCustomerAddress(event.target.value)}
-                placeholder={t("customerAddressPlaceholder")}
-                maxLength={512}
-              />
-            </div>
-
-            <div className="space-y-1.5 md:col-span-2">
-              <p className="text-sm font-medium">{t("notes")}</p>
-              <Textarea
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder={t("notesPlaceholder")}
-                maxLength={2000}
-                rows={4}
-              />
-            </div>
-          </FormGrid>
-
-          <div className="space-y-3 rounded-md border border-border p-3">
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{t("linesTitle")}</p>
-              <p className="text-xs text-muted-foreground">{t("lineDialogSubtitle")}</p>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
-              <div className="relative">
-                <ScanInput
-                  context="linePicker"
-                  value={lineSearch}
-                  onValueChange={(nextValue) => {
-                    setLineSearch(nextValue);
-                    setShowLineSearchResults(true);
-                  }}
-                  onFocus={() => setShowLineSearchResults(true)}
-                  onBlur={() => {
-                    window.setTimeout(() => setShowLineSearchResults(false), 150);
-                  }}
-                  placeholder={t("productSearchPlaceholder")}
-                  ariaLabel={t("productSearchPlaceholder")}
-                  supportsTabSubmit
-                  showDropdown={false}
-                  onResolved={handleLineScanResolved}
+      <section className="bazaar-doc-surface space-y-4 p-4" aria-label={t("detailsTitle")}>
+        {storesQuery.error ? (
+          <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
+        ) : null}
+        <FormGrid>
+          <div className="space-y-1.5">
+            <Label>{t("store")}</Label>
+            <Select
+              value={storeId}
+              onValueChange={setStoreId}
+              disabled={isAddingLine || isRefreshingPrices || isSaving}
+            >
+              <SelectTrigger aria-label={t("store")}>
+                <SelectValue placeholder={tCommon("selectStore")} />
+              </SelectTrigger>
+              <SelectContent>
+                {(storesQuery.data ?? []).map((store) => (
+                  <SelectItem key={store.id} value={store.id}>
+                    {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("customerCard")}</Label>
+            <SalesOrderCustomerSelect
+              storeId={storeId}
+              customerId={selectedCustomer?.id ?? null}
+              customerName={selectedCustomer?.name ?? ""}
+              onSelect={chooseCustomer}
+              disabled={isSaving}
+            />
+          </div>
+        </FormGrid>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={showCustomerDetails}
+          aria-controls="sales-customer-details"
+          onClick={() => setShowCustomerDetails((value) => !value)}
+        >
+          <ChevronDownIcon
+            className={`h-4 w-4 transition-transform ${showCustomerDetails ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+          {t("workspace.customerDetails")}
+        </Button>
+        {showCustomerDetails ? (
+          <div id="sales-customer-details">
+            <FormGrid className="border-t border-border pt-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="sales-customer-name">{t("customerName")}</Label>
+                <Input
+                  id="sales-customer-name"
+                  value={customerName}
+                  onChange={(event) => setCustomerName(event.target.value)}
+                  placeholder={t("customerNamePlaceholder")}
+                  maxLength={180}
+                  disabled={isSaving}
                 />
-                {showLineSearchResults && lineSearch.trim().length > 0 ? (
-                  <div className="absolute z-[90] mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-background shadow-lg">
-                    {productSearchQuery.isLoading ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        {tCommon("loading")}
-                      </div>
-                    ) : productSearchQuery.data?.length ? (
-                      productSearchQuery.data.map((product) => (
-                        <ProductSearchResultItem
-                          key={product.id}
-                          product={product}
-                          currencySource={selectedStore}
-                          rightSlot={
-                            <AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                          }
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => {
-                            void addDraftLine(product as ProductSearchResult);
-                          }}
-                        />
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        {tCommon("nothingFound")}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sales-customer-email">{t("customerEmail")}</Label>
+                <Input
+                  id="sales-customer-email"
+                  type="email"
+                  value={customerEmail}
+                  onChange={(event) => setCustomerEmail(event.target.value)}
+                  placeholder={t("customerEmailPlaceholder")}
+                  maxLength={254}
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sales-customer-phone">{t("customerPhone")}</Label>
+                <Input
+                  id="sales-customer-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={customerPhone}
+                  onChange={(event) => setCustomerPhone(event.target.value)}
+                  placeholder={t("customerPhonePlaceholder")}
+                  maxLength={64}
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sales-customer-address">{t("customerAddress")}</Label>
+                <Input
+                  id="sales-customer-address"
+                  value={customerAddress}
+                  onChange={(event) => setCustomerAddress(event.target.value)}
+                  placeholder={t("customerAddressPlaceholder")}
+                  maxLength={512}
+                  disabled={isSaving}
+                />
+              </div>
+            </FormGrid>
+          </div>
+        ) : null}
+      </section>
 
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <section className="bazaar-doc-surface min-w-0 p-4" aria-label={t("workspace.searchTitle")}>
+          <h2 className="mb-3 text-base font-semibold">{t("workspace.searchTitle")}</h2>
+          <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-end gap-2">
+            <div className="min-w-0 space-y-1.5">
+              <Label htmlFor="sales-product-search">{tCommon("search")}</Label>
+              <ScanInput
+                ref={searchInputRef}
+                context="linePicker"
+                storeId={storeId || undefined}
+                value={lineSearch}
+                onValueChange={setLineSearch}
+                placeholder={t("productSearchPlaceholder")}
+                ariaLabel={t("productSearchPlaceholder")}
+                supportsTabSubmit
+                showDropdown={false}
+                enableProductSearch={false}
+                onResolved={handleLineScanResolved}
+                disabled={!storeId || isSaving}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sales-add-qty">{t("qty")}</Label>
               <Input
+                id="sales-add-qty"
                 type="text"
                 inputMode="decimal"
                 value={pendingQty}
                 onChange={(event) => setPendingQty(event.target.value)}
-                className="sm:max-w-[120px]"
-                aria-label={t("qty")}
-                disabled={isAddingLine || isRefreshingPrices || createMutation.isLoading}
+                disabled={isAddingLine || isRefreshingPrices || isSaving}
               />
             </div>
-
-            {draftLines.length ? (
-              <div className="space-y-2">
-                {draftLines.map((line) => (
-                  <div
-                    key={line.productId}
-                    className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0 space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium">{line.productName}</p>
-                        {line.isBundle ? (
-                          <Badge variant="muted">{t("bundleProductLabel")}</Badge>
-                        ) : null}
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">{line.productSku}</p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span>
-                          {t("lineTotal")}:{" "}
-                          {line.lineTotalKgs === null
-                            ? t("priceNotSet")
-                            : formatKgsMoney(line.lineTotalKgs, locale, selectedStore)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex w-full items-end gap-2 sm:w-auto sm:shrink-0">
-                      <label className="min-w-0 flex-1 space-y-1 text-xs text-muted-foreground sm:w-24 sm:flex-none">
-                        <span>{t("qty")}</span>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={line.qtyInput}
-                          onChange={(event) =>
-                            updateDraftLineQty(line.productId, event.target.value)
-                          }
-                          className="h-9 w-full"
-                          disabled={isRefreshingPrices || createMutation.isLoading}
-                        />
-                      </label>
-                      <label className="min-w-0 flex-1 space-y-1 text-xs text-muted-foreground sm:w-36 sm:flex-none">
-                        <span>
-                          {t("unitPrice")} · {currencyCode}
-                        </span>
-                        <PriceInput
-                          value={line.priceInput}
-                          onChange={(event) =>
-                            updateDraftLinePrice(line.productId, event.target.value)
-                          }
-                          placeholder={t("priceNotSet")}
-                          className="h-9 w-full"
-                          aria-invalid={line.priceEdited && line.unitPriceKgs === null}
-                          disabled={!canSetPrice || isRefreshingPrices || createMutation.isLoading}
-                        />
-                      </label>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="secondary"
-                            size="icon"
-                            onClick={() => removeDraftLine(line.productId)}
-                            aria-label={t("removeLine")}
-                            disabled={isRefreshingPrices || createMutation.isLoading}
-                          >
-                            <DeleteIcon className="h-4 w-4" aria-hidden />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t("removeLine")}</TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("noLines")}</p>
-            )}
-            {isRefreshingPrices ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+          </div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {t("workspace.searchHint")}
+          </p>
+          <div className="bazaar-doc-search-list mt-3" aria-live="polite">
+            {lineSearch.trim().length < 1 ? (
+              <p className="px-3 py-6 text-sm text-muted-foreground">
+                {t("workspace.searchEmpty")}
+              </p>
+            ) : lineSearch.trim() !== debouncedLineSearch || productSearchQuery.isLoading ? (
+              <div
+                className="flex items-center gap-2 px-3 py-6 text-sm text-muted-foreground"
+                role="status"
+              >
                 <Spinner className="h-4 w-4" />
                 {tCommon("loading")}
               </div>
-            ) : null}
-            {pricingFailed ? (
-              <QueryErrorState onRetry={() => setPricingRevision((value) => value + 1)} />
-            ) : null}
-            {draftLines.length ? (
-              <p className="text-xs text-muted-foreground">{t("documentPriceHint")}</p>
-            ) : null}
+            ) : productSearchQuery.error ? (
+              <QueryErrorState
+                error={productSearchQuery.error}
+                onRetry={() => void productSearchQuery.refetch()}
+              />
+            ) : productSearchQuery.data?.length ? (
+              productSearchQuery.data.map((product) => (
+                <ProductSearchResultItem
+                  key={product.id}
+                  product={product}
+                  currencySource={selectedStore}
+                  wrapName
+                  selected={draftLines.some((line) => line.productId === product.id)}
+                  rightSlot={
+                    draftLines.some((line) => line.productId === product.id) ? (
+                      <CheckIcon className="h-4 w-4 text-primary" aria-hidden />
+                    ) : (
+                      <AddIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    )
+                  }
+                  onMouseDown={(event) => event.preventDefault()}
+                  disabled={isAddingLine || isRefreshingPrices || isSaving}
+                  onClick={() => void addDraftLine(product as ProductSearchResult)}
+                />
+              ))
+            ) : (
+              <p className="px-3 py-6 text-sm text-muted-foreground">{tCommon("nothingFound")}</p>
+            )}
           </div>
+        </section>
 
-          <p className="text-xs text-muted-foreground">{t("orderWithoutShift")}</p>
-
-          <div className="rounded-md border border-border p-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-muted-foreground">{t("total")}</span>
-              <span className="font-semibold text-foreground">
-                {formatKgsMoney(orderTotalKgs, locale, selectedStore)}
-              </span>
+        <section className="bazaar-doc-surface min-w-0 space-y-4 p-4" aria-label={t("linesTitle")}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">{t("linesTitle")}</h2>
+            <Badge variant="muted">
+              {t("workspace.positionCount", { count: draftLines.length })}
+            </Badge>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">{t("workspace.keyboardHint")}</p>
+          {draftLines.length ? (
+            <div className="space-y-2">
+              {draftLines.map((line, index) => (
+                <div
+                  key={line.productId}
+                  className="bazaar-doc-line-row grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_5rem_6.25rem_2.25rem] md:items-end md:gap-2"
+                  data-sales-draft-line
+                >
+                  <div className="min-w-0 space-y-1 md:self-center">
+                    <p className="break-words text-sm font-medium [overflow-wrap:anywhere]">
+                      {line.productName}
+                    </p>
+                    <p className="break-words text-xs text-muted-foreground">{line.productSku}</p>
+                    {line.isBundle ? (
+                      <Badge variant="muted">{t("bundleProductLabel")}</Badge>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground">
+                      {t("lineTotal")}:{" "}
+                      <span className="font-medium text-foreground">
+                        {line.lineTotalKgs === null
+                          ? t("priceNotSet")
+                          : formatKgsMoney(line.lineTotalKgs, locale, selectedStore)}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_2.25rem] items-end gap-2 md:contents">
+                    <label className="min-w-0 space-y-1 text-xs text-muted-foreground">
+                      <span>{t("qty")}</span>
+                      <Input
+                        ref={(node) => {
+                          if (node) lineInputsRef.current.set(`${line.productId}:qty`, node);
+                          else lineInputsRef.current.delete(`${line.productId}:qty`);
+                        }}
+                        type="text"
+                        inputMode="decimal"
+                        value={line.qtyInput}
+                        aria-label={`${t("qty")} · ${line.productName}`}
+                        aria-invalid={line.qty <= 0}
+                        onChange={(event) => updateDraftLineQty(line.productId, event.target.value)}
+                        onKeyDown={(event) => focusNextLine(event, index, "qty")}
+                        className="h-10 w-full"
+                        disabled={isRefreshingPrices || isSaving}
+                      />
+                    </label>
+                    <label className="min-w-0 space-y-1 text-xs text-muted-foreground">
+                      <span>
+                        {t("unitPrice")} · {currencyCode}
+                      </span>
+                      <PriceInput
+                        ref={(node) => {
+                          if (node) lineInputsRef.current.set(`${line.productId}:price`, node);
+                          else lineInputsRef.current.delete(`${line.productId}:price`);
+                        }}
+                        value={line.priceInput}
+                        onChange={(event) =>
+                          updateDraftLinePrice(line.productId, event.target.value)
+                        }
+                        onKeyDown={(event) => focusNextLine(event, index, "price")}
+                        placeholder={t("priceNotSet")}
+                        aria-label={`${t("unitPrice")} · ${line.productName}`}
+                        aria-invalid={line.priceEdited && line.unitPriceKgs === null}
+                        className="h-10 w-full"
+                        disabled={!canSetPrice || isRefreshingPrices || isSaving}
+                      />
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-9"
+                          onClick={() => removeDraftLine(line.productId)}
+                          aria-label={`${t("removeLine")} · ${line.productName}`}
+                          disabled={isRefreshingPrices || isSaving}
+                        >
+                          <DeleteIcon className="h-4 w-4 text-danger" aria-hidden />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("removeLine")}</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+              ))}
             </div>
-            {draftLines.some((line) => line.unitPriceKgs === null) ? (
-              <p className="mt-2 text-xs text-danger">{t("priceNotSetBlocking")}</p>
-            ) : null}
+          ) : (
+            <p className="rounded-md border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
+              {t("noLines")}
+            </p>
+          )}
+          {isRefreshingPrices ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : null}
+          {pricingFailed ? (
+            <QueryErrorState onRetry={() => setPricingRevision((value) => value + 1)} />
+          ) : null}
+          <div className="space-y-1.5">
+            <Label htmlFor="sales-notes">{t("notes")}</Label>
+            <Textarea
+              id="sales-notes"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder={t("notesPlaceholder")}
+              maxLength={2000}
+              rows={2}
+              disabled={isSaving}
+            />
           </div>
-
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+            <span className="text-sm text-muted-foreground">{t("total")}</span>
+            <strong className="text-xl">
+              {formatKgsMoney(orderTotalKgs, locale, selectedStore)}
+            </strong>
+          </div>
+          {draftLines.some((line) => line.unitPriceKgs === null) ? (
+            <p className="text-xs text-danger" role="alert">
+              {t("priceNotSetBlocking")}
+            </p>
+          ) : null}
+          <p className="text-xs leading-5 text-muted-foreground">{t("workspace.postHint")}</p>
+          <div className="flex flex-wrap gap-2">
+            {canPostSale ? (
+              <Button
+                type="button"
+                className="min-h-10 flex-1"
+                onClick={() => void handleCreate(true)}
+                disabled={
+                  isSaving ||
+                  isRefreshingPrices ||
+                  isAddingLine ||
+                  pricingFailed ||
+                  !storeId ||
+                  !draftLines.length
+                }
+              >
+                {saleMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <CheckIcon className="h-4 w-4" aria-hidden />
+                )}
+                {t("workspace.postSale")}
+              </Button>
+            ) : null}
             <Button
-              variant="secondary"
-              className="w-full sm:w-auto"
+              type="button"
+              variant={canPostSale ? "secondary" : "primary"}
+              className="min-h-10 flex-1"
+              onClick={() => void handleCreate(false)}
+              disabled={isSaving || isRefreshingPrices || isAddingLine || pricingFailed || !storeId}
+            >
+              {createMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {t("workspace.saveDraft")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
               onClick={() => router.push(returnTo)}
+              disabled={isSaving}
             >
               {tCommon("cancel")}
             </Button>
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => void handleCreate()}
-              disabled={
-                createMutation.isLoading || isRefreshingPrices || isAddingLine || pricingFailed
-              }
-            >
-              {createMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-              {t("create")}
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </section>
+      </div>
+      {confirmDialog}
     </div>
   );
 };
