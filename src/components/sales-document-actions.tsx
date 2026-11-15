@@ -65,10 +65,11 @@ export function SalesDocumentActions({
       });
       if (nextAction === "print") {
         const result = await printPdfBlob(blob);
+        const nativeShareStatus = "nativeShareStatus" in result ? result.nativeShareStatus : undefined;
         if (
           !result.autoPrintAttempted &&
-          result.nativeShareStatus !== "cancelled" &&
-          result.nativeShareStatus !== "discarded"
+          nativeShareStatus !== "cancelled" &&
+          nativeShareStatus !== "discarded"
         ) {
           toast({ variant: "info", description: t("printFallback") });
         }
