@@ -424,6 +424,38 @@ describeDb("immediate ordinary sales and explicit declined-item corrections", ()
     expect(await prisma.stockMovement.count({ where: { referenceId: sale.id, type: "RETURN" } })).toBe(2);
   });
 
+  it("posts and corrects a fifty-line sale atomically while preserving all original lines", async () => {
+    const f = await fixture();
+    const products = Array.from({ length: 48 }, (_, index) => ({
+      id: randomUUID(), organizationId: f.org.id, supplierId: f.supplier.id,
+      sku: `FAST-BATCH-${index}`, name: `Batch product ${index}`,
+      unit: f.baseUnit.code, baseUnitId: f.baseUnit.id, basePriceKgs: 10,
+    }));
+    await prisma.product.createMany({ data: products });
+    await prisma.storeProduct.createMany({ data: products.map((product) => ({ organizationId: f.org.id, storeId: f.store.id, productId: product.id, isActive: true })) });
+    await prisma.inventorySnapshot.createMany({ data: products.map((product) => ({ storeId: f.store.id, productId: product.id, variantKey: "BASE", onHand: 5 })) });
+    const sale = await f.api.salesOrders.createSale({
+      ...orderInput(f),
+      lines: [f.product, f.second, ...products].map((product) => ({ productId: product.id, qty: 1 })),
+    });
+    const original = await savedOrder(sale.id);
+    const result = await f.api.salesOrders.removeDeclinedLine(await amendmentInput(f, sale.id));
+    expect(result.replacementId).toBeTruthy();
+    const corrected = await savedOrder(result.replacementId!);
+    expect((await savedOrder(sale.id)).lines).toEqual(original.lines);
+    expect(original.lines).toHaveLength(50);
+    expect(corrected.lines).toHaveLength(49);
+    expect(corrected.lines.some((line) => line.productId === f.second.id)).toBe(false);
+    expect(Number(corrected.totalKgs)).toBe(Number(original.totalKgs) - 50);
+    expect(await prisma.stockMovement.count({ where: { referenceId: sale.id, type: "RETURN" } })).toBe(50);
+    expect(await prisma.stockMovement.count({ where: { referenceId: corrected.id, type: "SALE" } })).toBe(49);
+    const stock = await prisma.inventorySnapshot.findMany({ where: { storeId: f.store.id } });
+    expect(stock.find((row) => row.productId === f.product.id)!.onHand).toBe(19);
+    expect(stock.find((row) => row.productId === f.second.id)!.onHand).toBe(20);
+    for (const product of products) expect(stock.find((row) => row.productId === product.id)!.onHand).toBe(4);
+    expect(await prisma.salePayment.count()).toBe(0);
+  }, 30_000);
+
   it("serializes a period close with a correction so the stored totals match the committed sales", async () => {
     const f = await fixture();
     const sale = await f.api.salesOrders.createSale(orderInput(f));

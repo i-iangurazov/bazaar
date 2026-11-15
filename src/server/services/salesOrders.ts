@@ -84,6 +84,9 @@ const normalizeOptionalText = (value?: string | null) => {
 };
 
 const MAX_ORDER_MONEY_KGS = 9_999_999_999.99;
+// A correction can reverse and repost dozens of real stock movements. Keep the
+// transaction bounded without applying a different timeout to established flows.
+const FAST_SALE_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 60_000 };
 
 // Ordinary order editing uses the same roles as POS price editing. Read current
 // membership inside the transaction so revoked store access cannot be reused.
@@ -1034,7 +1037,7 @@ const createCustomerOrderOperation = async (
   // Completed operation replays must also use current membership, rather than
   // trusting the role saved in a browser session or an old operation result.
   if (immediate) {
-    await prisma.$transaction((tx) => assertSalesManagerStoreAccessTx(tx, input));
+    await prisma.$transaction((tx) => assertSalesManagerStoreAccessTx(tx, input), FAST_SALE_TRANSACTION_OPTIONS);
   }
   let createdResult: CustomerOrderDraftResult | null = null;
   let completion: CustomerOrderCompletion | null = null;
@@ -1043,6 +1046,7 @@ const createCustomerOrderOperation = async (
       organizationId: input.organizationId,
       storeId: input.storeId,
       scope: immediate ? "salesOrders.createSale.v1" : "salesOrders.createDraft.v1",
+      ...(immediate ? { transactionOptions: FAST_SALE_TRANSACTION_OPTIONS } : {}),
       principal: {
         type: OperationRequestPrincipalType.AUTHENTICATED_USER,
         id: input.actorId,
@@ -1927,7 +1931,7 @@ export const postCustomerSale = async (input: CompleteCustomerOrderInput) => {
       allowImmediate: true,
       completionEventKey: `salesOrders.postSale:${input.organizationId}:${input.actorId}:${input.idempotencyKey}`,
     }));
-  });
+  }, FAST_SALE_TRANSACTION_OPTIONS);
   if (!result.replayed) publishCustomerOrderCompletion(result.result);
   return result.result;
 };
@@ -2104,7 +2108,7 @@ export const removeDeclinedCustomerOrderLine = async (input: RemoveDeclinedCusto
       });
       return { id: order.id, status: CustomerOrderStatus.CANCELED, replacementId: replacement?.id ?? null, replacementNumber: replacement?.number ?? null };
     });
-  });
+  }, FAST_SALE_TRANSACTION_OPTIONS);
   if (!operation.replayed) {
     if (completion) publishCustomerOrderCompletion(completion);
     if (originalChange) {
