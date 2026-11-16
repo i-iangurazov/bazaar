@@ -295,12 +295,18 @@ describe("compact optional measurement choices", () => {
   it("measures only the actual BAZAAR WhatsApp link without passing its URL", () => {
     render(<MarketingAnalytics />);
     const anchor = document.createElement("a");
-    anchor.href = "https://wa.me/996709911300?text=private";
+    anchor.href = "https://wa.me/996509911300?text=private";
     anchor.innerHTML = "<span>Contact</span>";
     anchor.addEventListener("click", event => event.preventDefault());
     document.body.appendChild(anchor);
     act(() => fireEvent.click(anchor.firstChild!));
     expect(state.track).toHaveBeenCalledExactlyOnceWith("contact_whatsapp_click");
+    anchor.href = "https://wa.me/996500000000?text=private";
+    act(() => fireEvent.click(anchor));
+    expect(state.track).toHaveBeenCalledTimes(1);
+    anchor.href = "http://wa.me/996509911300";
+    act(() => fireEvent.click(anchor));
+    expect(state.track).toHaveBeenCalledTimes(1);
     anchor.href = "https://example.invalid/";
     act(() => fireEvent.click(anchor));
     expect(state.track).toHaveBeenCalledTimes(1);

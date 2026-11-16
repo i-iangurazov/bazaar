@@ -4,6 +4,7 @@ import { Fragment, type ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getMarketingCopy, type MarketingCopy } from "@/content/marketing";
 import { formatCurrency } from "@/lib/i18nFormat";
+import { bazaarContact } from "@/lib/bazaarContact";
 import { MarketingLocaleSwitcher } from "./MarketingLocaleSwitcher";
 import { getPlanCatalogEntries } from "@/server/billing/planCatalog";
 import { legalPublicationState } from "@/lib/legalPublication";
@@ -28,7 +29,7 @@ import { getMarketingPreviewData } from "@/content/marketing/preview";
 import { PosIcon, InventoryIcon, ReportsIcon } from "@/components/icons";
 import styles from "./marketing.module.css";
 
-const whatsappUrl = "https://wa.me/996709911300";
+const whatsappUrl = bazaarContact.whatsappUrl;
 
 const Arrow = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">

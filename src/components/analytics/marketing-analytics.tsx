@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { CloseIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { bazaarContact } from "@/lib/bazaarContact";
 import {
   Dialog,
   DialogBody,
@@ -138,7 +139,7 @@ export function MarketingAnalytics() {
         publicMarketingPage(window.location.pathname) &&
         anchor.protocol === "https:" &&
         anchor.hostname === "wa.me" &&
-        anchor.pathname === "/996709911300"
+        anchor.pathname === bazaarContact.whatsappPath
       )
         trackMarketingEvent("contact_whatsapp_click");
       interceptPrivateMarketingLink(event);

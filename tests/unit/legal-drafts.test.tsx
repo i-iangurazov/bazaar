@@ -162,7 +162,7 @@ describe("reviewable legal pages", () => {
   );
 
   it("uses approved seller contacts and the KGS account while withholding the private home address", () => {
-    expect(sellerDraft.phone).toBe("+996 709 911 300");
+    expect(sellerDraft.phone).toBe("+996 509 911 300");
     expect(sellerDraft.email).toBe("support@bazaar.kg");
     expect(sellerDraft.accountCurrency).toBe("KGS");
     expect(sellerDraft.accountNumber).toBeNull();
