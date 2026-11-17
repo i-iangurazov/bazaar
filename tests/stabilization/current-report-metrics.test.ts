@@ -31,6 +31,7 @@ async function withProjection(run: (tx: Prisma.TransactionClient) => Promise<voi
       ["CustomerOrderStatus", Object.values(CustomerOrderStatus)],
       ["PosReturnStatus", Object.values(PosReturnStatus)],
       ["PosPaymentMethod", Object.values(PosPaymentMethod)],
+      ["SalePaymentSettlement", ["ACTUAL", "OFFSET", "PENDING", "VOID"]],
     ] as const) {
       await tx.$executeRawUnsafe(`DROP TYPE IF EXISTS pg_temp."${name}"`);
       await tx.$executeRawUnsafe(`CREATE TYPE pg_temp."${name}" AS ENUM (${values.map(value => "'" + value + "'").join(",")})`);
@@ -38,12 +39,13 @@ async function withProjection(run: (tx: Prisma.TransactionClient) => Promise<voi
     const ddl = [
       `CREATE TEMP TABLE "CustomerOrder" (id text PRIMARY KEY, "organizationId" text NOT NULL, "storeId" text NOT NULL, "registerId" text, "createdById" text, "isPosSale" boolean NOT NULL DEFAULT true, "isHeld" boolean NOT NULL DEFAULT false, status pg_temp."CustomerOrderStatus" NOT NULL DEFAULT 'COMPLETED', "completedAt" timestamp, "createdAt" timestamp DEFAULT CURRENT_TIMESTAMP, "totalKgs" numeric(12,2) NOT NULL DEFAULT 0, "discountKgs" numeric(12,2) NOT NULL DEFAULT 0) ON COMMIT DROP`,
       `CREATE TEMP TABLE "SaleReturn" (id text PRIMARY KEY, "organizationId" text NOT NULL, "storeId" text NOT NULL, "registerId" text, "createdById" text, "completedById" text, status pg_temp."PosReturnStatus" NOT NULL DEFAULT 'COMPLETED', "completedAt" timestamp, "totalKgs" numeric(12,2) NOT NULL DEFAULT 0) ON COMMIT DROP`,
-      `CREATE TEMP TABLE "SalePayment" (id text PRIMARY KEY, "organizationId" text NOT NULL, "customerOrderId" text, "saleReturnId" text, method pg_temp."PosPaymentMethod" NOT NULL, "amountKgs" numeric(12,2) NOT NULL, "isRefund" boolean NOT NULL) ON COMMIT DROP`,
+      `CREATE TEMP TABLE "SalePayment" (id text PRIMARY KEY, "organizationId" text NOT NULL, "customerOrderId" text, "saleReturnId" text, method pg_temp."PosPaymentMethod" NOT NULL, "amountKgs" numeric(12,2) NOT NULL, "isRefund" boolean NOT NULL, "settlementStatus" pg_temp."SalePaymentSettlement" NOT NULL DEFAULT 'ACTUAL', "refundRequestId" text) ON COMMIT DROP`,
       `CREATE TEMP TABLE "Product" (id text PRIMARY KEY, "organizationId" text NOT NULL, sku text NOT NULL, name text NOT NULL, category text, categories text[] NOT NULL DEFAULT '{}') ON COMMIT DROP`,
       `CREATE TEMP TABLE "ProductVariant" (id text PRIMARY KEY, "productId" text, name text, sku text) ON COMMIT DROP`,
       `CREATE TEMP TABLE "ProductBarcode" (id text PRIMARY KEY, "productId" text, value text, "createdAt" timestamp) ON COMMIT DROP`,
       `CREATE TEMP TABLE "CustomerOrderLine" (id text PRIMARY KEY, "customerOrderId" text NOT NULL, "productId" text NOT NULL, "variantId" text, "variantKey" text NOT NULL DEFAULT 'BASE', qty integer NOT NULL, "lineTotalKgs" numeric(12,2) NOT NULL, "lineCostTotalKgs" numeric(12,2), "unitCostKgs" numeric(12,2)) ON COMMIT DROP`,
       `CREATE TEMP TABLE "SaleReturnLine" (id text PRIMARY KEY, "saleReturnId" text NOT NULL, "productId" text NOT NULL, "variantId" text, "variantKey" text NOT NULL DEFAULT 'BASE', qty integer NOT NULL, "lineTotalKgs" numeric(12,2) NOT NULL) ON COMMIT DROP`,
+      `CREATE TEMP TABLE "SalesOrderCorrection" (id text PRIMARY KEY, "organizationId" text NOT NULL, "saleReturnId" text) ON COMMIT DROP`,
     ];
     for (const statement of ddl) await tx.$executeRawUnsafe(statement);
     const query = vi.spyOn(prisma, "$queryRaw").mockImplementation((statement) => tx.$queryRaw(statement));
