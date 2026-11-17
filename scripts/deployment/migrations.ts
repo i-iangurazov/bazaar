@@ -8,6 +8,26 @@ import { resolveMigrationDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20261114110000_product_photo_features":
+    "13f4fd872deda89ac210cd8c2f4b968d433a302857f3f5e08162b9de6adeab9e",
+  "20261113140000_apple_temporary_upward_rounding":
+    "7d637cab8fdc8d519a32f1f52ed790cb755dfc381d79adfe982aecf4d0c7f808",
+  "20261113130000_apple_temporary_minimum_charge":
+    "c928c60955d3f34b0a4c919bd40ffa59cc9fec60e3c685e6434ac8585c18b323",
+  "20261113120000_apple_consumption_information":
+    "adc1b13b7c9b3c673662a25577ee8b13e6f9fd33f3e115ad2b3d0ed0a8e4c34a",
+  "20261111170000_apple_completion_utc_clock":
+    "5b2bdce206b878ba9c616fbaf661c2c585acf81384de54ce2da334fd6f41016e",
+  "20261111160000_apple_deferred_outcomes":
+    "66437a9da6224b1cfcc3a3c7d4ddc3be695119c7a00547a1256fa76f7c14201e",
+  "20261111150000_apple_temporary_upgrades":
+    "a13faf83ce11ad2c39480fbce1791299b82fd4fa58971bf3548f905c629a714f",
+  "20261111140000_apple_native_attempt_recovery":
+    "1b3d22538c669d7f940e45dc14127842c25fe14accbe753c8a2b7e3efed32d0b",
+  "20261111130000_apple_lifecycle_recovery":
+    "4d43cb3a27d30016fde92eb2465ff9f6ec8f148faf8d41495be89063fde2dc10",
+  "20261111120000_ios_apple_billing_privacy":
+    "734e62c89a76aaedb153eb0b8029021f7713074b4526ca5501dac9abd41e2f38",
   "20261117130000_sales_correction_settlement":
     "78207fa470de40fa3427f9e10438cffb0982e7a8403f1a4c69fb01959d2f9dc6",
   "20261116170000_client_feedback_sales":
