@@ -481,4 +481,202 @@ describeDb("analytics", () => {
     expect(preview?.lines).toHaveLength(1);
     expect(preview?.lines[0]?.product.primaryBarcode).toBe("1234567890123");
   });
+
+  it("excludes correction returns and non-actual settlement rows from POS analytics", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const call = { id: adminUser.id, email: adminUser.email, role: adminUser.role, organizationId: org.id };
+    const adminCaller = createTestCaller(call);
+    const completedAt = new Date("2026-07-01T10:00:00Z");
+    const register = await prisma.posRegister.create({
+      data: { organizationId: org.id, storeId: store.id, name: "Analytics register", code: "AN-REG" },
+    });
+    const shift = await prisma.registerShift.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        openedById: adminUser.id,
+      },
+    });
+    const posSale = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        shiftId: shift.id,
+        number: "POS-AN-SETTLE",
+        status: "COMPLETED",
+        isPosSale: true,
+        completedAt,
+        createdAt: completedAt,
+        createdById: adminUser.id,
+        subtotalKgs: 100,
+        totalKgs: 100,
+      },
+    });
+    await prisma.salePayment.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        shiftId: shift.id,
+        customerOrderId: posSale.id,
+        method: PosPaymentMethod.CASH,
+        amountKgs: 100,
+        isRefund: false,
+        settlementStatus: "ACTUAL",
+        createdAt: completedAt,
+      },
+    });
+
+    // Historical behaviour: a POS-processed return stays in POS analytics even
+    // when its original order was online. Only R7 correction returns are new
+    // documents that must not move POS analytics.
+    const onlineOrder = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        number: "ONLINE-RETURNED",
+        status: "COMPLETED",
+        isPosSale: false,
+        completedAt,
+        createdAt: completedAt,
+        createdById: adminUser.id,
+        subtotalKgs: 100,
+        totalKgs: 100,
+      },
+    });
+    const posReturn = await prisma.saleReturn.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        shiftId: shift.id,
+        originalSaleId: onlineOrder.id,
+        number: "POS-RETURN-LEGACY",
+        status: "COMPLETED",
+        completedAt,
+        createdAt: completedAt,
+        createdById: adminUser.id,
+        completedById: adminUser.id,
+        subtotalKgs: 20,
+        totalKgs: 20,
+      },
+    });
+    await prisma.salePayment.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: onlineOrder.id,
+          saleReturnId: posReturn.id,
+          method: PosPaymentMethod.CASH,
+          amountKgs: 20,
+          isRefund: true,
+          settlementStatus: "ACTUAL",
+          createdAt: completedAt,
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: onlineOrder.id,
+          saleReturnId: posReturn.id,
+          method: PosPaymentMethod.TRANSFER,
+          amountKgs: 5,
+          isRefund: true,
+          settlementStatus: "PENDING",
+          createdAt: completedAt,
+        },
+      ],
+    });
+
+    const correctedOrder = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        number: "ONLINE-CORRECTED",
+        status: "COMPLETED",
+        isPosSale: false,
+        completedAt,
+        createdAt: completedAt,
+        createdById: adminUser.id,
+        subtotalKgs: 100,
+        totalKgs: 100,
+      },
+    });
+    const correctionReturn = await prisma.saleReturn.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        shiftId: shift.id,
+        originalSaleId: correctedOrder.id,
+        number: "CORRECTION-RETURN-1",
+        status: "COMPLETED",
+        completedAt,
+        createdAt: completedAt,
+        createdById: adminUser.id,
+        completedById: adminUser.id,
+        subtotalKgs: 40,
+        totalKgs: 40,
+      },
+    });
+    await prisma.salesOrderCorrection.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        number: "CR-AN-1",
+        originalOrderId: correctedOrder.id,
+        saleReturnId: correctionReturn.id,
+        reason: "Analytics settlement test",
+        createdById: adminUser.id,
+      },
+    });
+    await prisma.salePayment.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: correctedOrder.id,
+          saleReturnId: correctionReturn.id,
+          method: PosPaymentMethod.TRANSFER,
+          amountKgs: 25,
+          isRefund: true,
+          settlementStatus: "PENDING",
+          createdAt: completedAt,
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: correctedOrder.id,
+          saleReturnId: correctionReturn.id,
+          method: PosPaymentMethod.CASH,
+          amountKgs: 15,
+          isRefund: true,
+          settlementStatus: "OFFSET",
+          createdAt: completedAt,
+        },
+      ],
+    });
+
+    const overview = await adminCaller.analytics.salesOverview({
+      storeId: store.id,
+      dateFrom: "2026-07-01",
+      dateTo: "2026-07-01",
+    });
+    expect(overview.series[0]).toMatchObject({
+      date: "2026-07-01",
+      grossSalesKgs: 100,
+      returnsKgs: 20,
+      netSalesKgs: 80,
+      receiptCount: 1,
+      returnCount: 1,
+    });
+    expect(overview.totals.paymentBreakdown.CASH).toBe(100);
+    expect(overview.totals.refundBreakdown.CASH).toBe(20);
+    expect(overview.totals.refundBreakdown.TRANSFER).toBe(0);
+  });
 });

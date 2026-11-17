@@ -1,4 +1,10 @@
-import { CustomerOrderStatus, PosPaymentMethod, PosReturnStatus, Prisma } from "@prisma/client";
+import {
+  CustomerOrderStatus,
+  PosPaymentMethod,
+  PosReturnStatus,
+  Prisma,
+  SalePaymentSettlement,
+} from "@prisma/client";
 
 import { defaultTimeZone } from "@/lib/timezone";
 import { prisma } from "@/server/db/prisma";
@@ -134,6 +140,9 @@ const buildReturnScopeFilter = (scope: SalesAnalyticsScope) => {
     Prisma.sql`r."organizationId" = ${scope.organizationId}`,
     Prisma.sql`r."status" = ${PosReturnStatus.COMPLETED}::"PosReturnStatus"`,
     Prisma.sql`r."completedAt" IS NOT NULL`,
+    // R7 corrections already reverse the original sale on its own documents;
+    // they are not POS-processed returns and must not move POS analytics.
+    Prisma.sql`NOT EXISTS (SELECT 1 FROM "SalesOrderCorrection" c WHERE c."saleReturnId" = r."id")`,
   ];
   if (scope.storeId) {
     filters.push(Prisma.sql`r."storeId" = ${scope.storeId}`);
@@ -230,6 +239,7 @@ export const getSalesAnalyticsOverview = async (
         where: {
           organizationId: input.organizationId,
           isRefund: false,
+          settlementStatus: SalePaymentSettlement.ACTUAL,
           customerOrder: {
             organizationId: input.organizationId,
             isPosSale: true,
@@ -254,9 +264,11 @@ export const getSalesAnalyticsOverview = async (
         where: {
           organizationId: input.organizationId,
           isRefund: true,
+          settlementStatus: SalePaymentSettlement.ACTUAL,
           saleReturn: {
             organizationId: input.organizationId,
             status: PosReturnStatus.COMPLETED,
+            correction: null,
             completedAt: { gte: range.fromUtc, lt: range.toUtcExclusive },
             ...(input.storeId
               ? { storeId: input.storeId }

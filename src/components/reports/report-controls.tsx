@@ -18,18 +18,64 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Table as BaseTable } from "@/components/ui/table";
+import { scrollChildIntoHorizontalView } from "@/lib/horizontalScrollFocus";
 
 export function ReportTable(props: ComponentProps<typeof BaseTable>) {
   const t = useTranslations("reporting");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const sync = () => {
+      const next = container.scrollWidth > container.clientWidth + 1;
+      setOverflows((current) => (current === next ? current : next));
+    };
+    sync();
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
+    const observeChildren = () => {
+      for (const child of Array.from(container.children)) {
+        resizeObserver?.observe(child);
+      }
+    };
+    resizeObserver?.observe(container);
+    observeChildren();
+    const mutationObserver =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            sync();
+            // Content changes can replace the table node; re-observe it so a
+            // later width change still updates the hint.
+            resizeObserver?.disconnect();
+            resizeObserver?.observe(container);
+            observeChildren();
+          });
+    mutationObserver?.observe(container, { childList: true, subtree: true, characterData: true });
+    return () => {
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+    };
+  }, []);
   return (
-    <div
-      role="region"
-      aria-label={t("tableScroll")}
-      tabIndex={0}
-      className="max-w-full overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-    >
-      <BaseTable {...props} sortable={false} />
-    </div>
+    <>
+      {overflows ? (
+        <p className="mb-2 text-xs text-muted-foreground">{t("tableScrollHint")}</p>
+      ) : null}
+      <div
+        ref={containerRef}
+        role="region"
+        aria-label={t("tableScroll")}
+        tabIndex={0}
+        className="max-w-full overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+        onFocusCapture={(event) =>
+          scrollChildIntoHorizontalView(event.currentTarget, event.target)
+        }
+      >
+        <BaseTable {...props} sortable={false} />
+      </div>
+    </>
   );
 }
 

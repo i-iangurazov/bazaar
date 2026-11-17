@@ -43,8 +43,11 @@ describe("mobile sales and receipts source", () => {
     expect(source).toContain('id="sales-order-statusLabel"');
     expect(source).toContain('tabIndex={lifecycleView === "ACTIVE" ? 0 : -1}');
     expect(source).not.toContain('aria-modal="true"');
+    expect(source).toContain("renderDesktop={(visibleItems) => (");
     expect(source).toContain("renderMobile={(order) => (");
-    expect(source).toContain('<Table className="min-w-[1080px]" data-tour="sales-orders-table">');
-    expect(source).toContain('<TableHead>{t("customerAddress")}</TableHead>');
+    expect(source).toContain(
+      '<Table className="min-w-[1055px] table-fixed" data-tour="sales-orders-table">',
+    );
+    expect(source).toContain('{t("customerAddress")}');
   });
 });

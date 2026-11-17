@@ -104,7 +104,8 @@ export async function getOperationsReport(
       CASE WHEN pay."isRefund" THEN -pay."amountKgs" ELSE pay."amountKgs" END::numeric AS amount
     FROM "SalePayment" pay JOIN "Store" s ON s.id = pay."storeId"
     JOIN "CustomerOrder" o ON o.id = pay."customerOrderId" AND o."organizationId" = ${input.organizationId}
-    WHERE ${storeScope} AND pay."organizationId" = ${input.organizationId} AND ${dates(Prisma.sql`pay."createdAt"`)}`
+    WHERE ${storeScope} AND pay."organizationId" = ${input.organizationId} AND ${dates(Prisma.sql`pay."createdAt"`)}
+      AND pay."settlementStatus" = 'ACTUAL'`
         : input.view === "cash"
           ? Prisma.sql`
     SELECT m.id, m.reason AS name, m."createdAt" AS date, s.id AS "storeId", s.name AS "storeName",

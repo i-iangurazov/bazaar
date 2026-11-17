@@ -17,3 +17,31 @@ export function resolveStoreSellingPrice<T>(input: {
   }
   return { price: input.standard, source: "STANDARD" };
 }
+
+/**
+ * Document price modes must never mix retail into a wholesale document.
+ * Unlike the POS resolver, a missing wholesale price is reported instead of
+ * silently falling back to retail. A null standard means "no configured price".
+ */
+export function resolveStrictStoreSellingPrice<T>(input: {
+  enabled: boolean;
+  mode: StorePriceMode;
+  standard: T | null;
+  retail?: T | null;
+  wholesale?: T | null;
+}): { price: T | null; source: "STANDARD" | "RETAIL" | "WHOLESALE" | "MISSING"; hasPrice: boolean } {
+  if (!input.enabled) {
+    return input.standard != null
+      ? { price: input.standard, source: "STANDARD", hasPrice: true }
+      : { price: null, source: "MISSING", hasPrice: false };
+  }
+  if (input.mode === "WHOLESALE") {
+    return input.wholesale != null
+      ? { price: input.wholesale, source: "WHOLESALE", hasPrice: true }
+      : { price: null, source: "MISSING", hasPrice: false };
+  }
+  const retail = input.retail ?? input.standard;
+  return retail != null
+    ? { price: retail, source: input.retail != null ? "RETAIL" : "STANDARD", hasPrice: true }
+    : { price: null, source: "MISSING", hasPrice: false };
+}

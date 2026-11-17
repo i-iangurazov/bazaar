@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseSalesOrderPriceInput,
+  salesOrderDocumentCurrencySource,
   salesOrderLineTotal,
   salesOrderPriceInput,
 } from "@/lib/salesOrderPriceInput";
+import { currencySourceWithFallback } from "@/lib/currencyDisplay";
 
 describe("manual sales order price input", () => {
   it("accepts localized decimals and explicit zero, rejecting incomplete or invalid amounts", () => {
@@ -35,5 +37,42 @@ describe("manual sales order price input", () => {
     ).toBe(99.47);
     expect(parseSalesOrderPriceInput("0", snapshot)).toBe(0);
     expect(parseSalesOrderPriceInput("9999999999.99", snapshot)).toBeNull();
+  });
+
+  it("uses the saved order snapshot after the store currency rate changes", () => {
+    const order = { currencyCode: "USD", currencyRateKgsPerUnit: 80 };
+    const storeBefore = { currencyCode: "USD", currencyRateKgsPerUnit: 80 };
+    const storeAfter = { currencyCode: "USD", currencyRateKgsPerUnit: 100 };
+    for (const source of [
+      currencySourceWithFallback(order, storeBefore),
+      currencySourceWithFallback(order, storeAfter),
+    ]) {
+      expect(salesOrderPriceInput(800, source)).toBe("10");
+      expect(parseSalesOrderPriceInput("10", source)).toBe(800);
+    }
+
+    // A missing snapshot still resolves through the current store.
+    const fallback = currencySourceWithFallback({ currencyCode: null }, storeAfter);
+    expect(salesOrderPriceInput(1000, fallback)).toBe("10");
+    expect(parseSalesOrderPriceInput("10", fallback)).toBe(1000);
+  });
+
+  it("selects the saved snapshot for edits and the current store for a new draft", () => {
+    const order = { currencyCode: "USD", currencyRateKgsPerUnit: 80 };
+    const changedStore = { currencyCode: "USD", currencyRateKgsPerUnit: 100 };
+
+    expect(salesOrderDocumentCurrencySource({ isEdit: true, order, store: changedStore })).toBe(
+      order,
+    );
+    expect(
+      salesOrderDocumentCurrencySource({
+        isEdit: true,
+        order: { currencyCode: null, currencyRateKgsPerUnit: null },
+        store: changedStore,
+      }),
+    ).toBe(changedStore);
+    expect(salesOrderDocumentCurrencySource({ isEdit: false, order, store: changedStore })).toBe(
+      changedStore,
+    );
   });
 });

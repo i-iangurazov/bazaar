@@ -1,4 +1,9 @@
 import { getOrderPaymentInfo, recordOrderPayment } from "@/server/services/salesOrderPayments";
+import {
+  correctCompletedCustomerOrder,
+  quoteSalesOrderCorrection,
+  resolveCorrectionRefundRequest,
+} from "@/server/services/salesOrderCorrections";
 import { CustomerOrderEmailType, CustomerOrderStatus, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
@@ -6,6 +11,7 @@ import { cashierProcedure, managerProcedure, protectedProcedure, rateLimit, rout
 import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
 import { salesOrderLifecycleViews } from "@/lib/salesOrderLifecycle";
+import { zonedDayEnd, zonedDayStart } from "@/lib/timezone";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   assertUserCanAccessStore,
@@ -25,13 +31,16 @@ import {
   getCustomerOrderLinePrice,
   listCustomerOrders,
   listCustomerOrderCustomerOptions,
+  listSalesOrderEmployeeOptions,
   setCustomerOrderArchived,
   markCustomerOrderReady,
   removeCustomerOrderLine,
   removeDeclinedCustomerOrderLine,
   postCustomerSale,
+  quoteCustomerOrderPriceMode,
   sendCustomerOrderEmail,
   setCustomerOrderCustomer,
+  updateCustomerOrder,
   updateCustomerOrderTracking,
   updateCustomerOrderLine,
 } from "@/server/services/salesOrders";
@@ -39,9 +48,11 @@ import {
 const optionalEmailSchema = z.string().trim().email().max(254).optional().nullable();
 const optionalTrackingTextSchema = z.string().trim().max(512).optional().nullable();
 const optionalUnitPriceSchema = z.number().finite().min(0).max(9_999_999_999.99).optional();
+const orderPriceModeSchema = z.enum(["RETAIL", "WHOLESALE"]);
 const createOrderInputSchema = z.object({
   storeId: z.string().min(1),
   idempotencyKey: z.string().min(8),
+  priceMode: orderPriceModeSchema.optional(),
   customerId: z.string().min(1).optional().nullable(),
   customerName: z.string().max(180).optional().nullable(),
   customerEmail: optionalEmailSchema,
@@ -57,8 +68,33 @@ const createOrderInputSchema = z.object({
   })).optional(),
 });
 
-const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  try {
+const updateOrderInputSchema = z.object({
+  customerOrderId: z.string().min(1),
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
+  storeId: z.string().min(1),
+  idempotencyKey: z.string().min(8),
+  priceMode: orderPriceModeSchema.optional(),
+  customerId: z.string().min(1).optional().nullable(),
+  customerName: z.string().max(180).optional().nullable(),
+  customerEmail: optionalEmailSchema,
+  customerPhone: z.string().max(64).optional().nullable(),
+  customerAddress: z.string().max(512).optional().nullable(),
+  notes: z.string().max(2_000).optional().nullable(),
+  lines: z
+    .array(
+      z.object({
+        lineId: z.string().min(1).optional().nullable(),
+        productId: z.string().min(1),
+        variantId: z.string().optional().nullable(),
+        qty: z.number().multipleOf(0.001).positive(),
+        unitPriceKgs: optionalUnitPriceSchema,
+        priceSource: z.enum(["RETAIL", "WHOLESALE", "MANUAL"]).optional(),
+      }),
+    )
+    .max(500),
+});
+
+const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {  try {
     await assertFeatureEnabled({
       organizationId: ctx.user.organizationId,
       feature: "customerOrders",
@@ -138,6 +174,7 @@ export const salesOrdersRouter = router({
         storeId: z.string().min(1),
         productId: z.string().min(1),
         variantId: z.string().min(1).optional().nullable(),
+        priceMode: orderPriceModeSchema.optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -170,6 +207,21 @@ export const salesOrdersRouter = router({
         throw toTRPCError(error);
       }
     }),
+
+  employeeOptions: salesOrdersProtectedProcedure
+    .input(z.object({ storeId: z.string().min(1).nullable().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      try {
+        const storeScope = await resolveSalesOrderStoreScope(ctx, input?.storeId ?? undefined);
+        return await listSalesOrderEmployeeOptions({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          ...storeScope,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   setArchived: salesOrdersManagerProcedure
     .input(z.object({ customerOrderId: z.string().min(1), archived: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
@@ -193,23 +245,141 @@ export const salesOrdersRouter = router({
   recordPayment: cashierProcedure.input(z.object({ customerOrderId: z.string(), shiftId: z.string(), amountKgs: z.number().positive(), method: z.enum(["CASH", "CARD", "TRANSFER", "OTHER"]), idempotencyKey: z.string().min(8) })).mutation(async ({ctx,input}) => {
     try { await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "customerOrders" }); return await recordOrderPayment({ ...input, user: ctx.user, requestId: ctx.requestId }); } catch (error) { throw toTRPCError(error); }
   }),
+  correctionQuote: salesOrdersManagerProcedure
+    .input(
+      z.object({
+        originalOrderId: z.string().min(1),
+        priceMode: orderPriceModeSchema.optional(),
+        returns: z
+          .array(
+            z.object({
+              lineId: z.string().min(1),
+              qty: z.number().multipleOf(0.001).positive(),
+              restock: z.boolean().default(true),
+            }),
+          )
+          .max(500)
+          .default([]),
+        additions: z
+          .array(
+            z.object({
+              productId: z.string().min(1),
+              variantId: z.string().optional().nullable(),
+              qty: z.number().multipleOf(0.001).positive(),
+              unitPriceKgs: optionalUnitPriceSchema,
+            }),
+          )
+          .max(500)
+          .default([]),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await quoteSalesOrderCorrection({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  correct: salesOrdersManagerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 10, prefix: "sales-orders-correct" }))
+    .input(
+      z.object({
+        originalOrderId: z.string().min(1),
+        expectedFingerprint: z.string().length(64),
+        reason: z.string().trim().min(1).max(500),
+        notes: z.string().max(2_000).optional().nullable(),
+        priceMode: orderPriceModeSchema.optional(),
+        returns: z
+          .array(
+            z.object({
+              lineId: z.string().min(1),
+              qty: z.number().multipleOf(0.001).positive(),
+              restock: z.boolean().default(true),
+            }),
+          )
+          .max(500)
+          .default([]),
+        additions: z
+          .array(
+            z.object({
+              productId: z.string().min(1),
+              variantId: z.string().optional().nullable(),
+              qty: z.number().multipleOf(0.001).positive(),
+              unitPriceKgs: optionalUnitPriceSchema,
+            }),
+          )
+          .max(500)
+          .default([]),
+        shiftId: z.string().min(1),
+        paymentMethod: z.enum(["CASH", "CARD", "TRANSFER", "OTHER"]),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await correctCompletedCustomerOrder({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  resolveCorrectionRefund: salesOrdersManagerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 10, prefix: "sales-orders-correction-refund" }))
+    .input(
+      z.object({
+        refundRequestId: z.string().min(1),
+        action: z.enum(["RESOLVED", "CANCELED"]),
+        shiftId: z.string().min(1).optional().nullable(),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await resolveCorrectionRefundRequest({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   metrics: salesOrdersManagerProcedure
     .input(
       z.object({
         storeId: z.string().optional(),
-        dateFrom: z.coerce.date(),
-        dateTo: z.coerce.date(),
+        employeeId: z.string().optional(),
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+        fromDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        toDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         groupBy: z.enum(["day", "week"]).default("day"),
       }),
     )
     .query(async ({ ctx, input }) => {
       try {
         const storeScope = await resolveSalesOrderStoreScope(ctx, input.storeId);
+        const from = input.fromDay ? zonedDayStart(input.fromDay) : input.dateFrom;
+        const to = input.toDay ? zonedDayEnd(input.toDay) : input.dateTo;
+        if (!from || !to) throw new AppError("invalidInput", "BAD_REQUEST", 400);
         return await getSalesOrderMetrics({
           organizationId: ctx.user.organizationId,
           ...storeScope,
-          dateFrom: input.dateFrom,
-          dateTo: input.dateTo,
+          employeeId: input.employeeId,
+          dateFrom: from,
+          dateTo: to,
           groupBy: input.groupBy,
         });
       } catch (error) {
@@ -224,8 +394,11 @@ export const salesOrdersRouter = router({
           storeId: z.string().optional(),
           status: z.nativeEnum(CustomerOrderStatus).optional(),
           search: z.string().optional(),
+          employeeId: z.string().optional(),
           dateFrom: z.coerce.date().optional(),
           dateTo: z.coerce.date().optional(),
+          createdFromDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          createdToDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(200).optional(),
           sortBy: z.enum(["createdAt", "number", "totalKgs", "customerName"]).optional(),
@@ -238,13 +411,24 @@ export const salesOrdersRouter = router({
     .query(async ({ ctx, input }) => {
       try {
         const storeScope = await resolveSalesOrderStoreScope(ctx, input?.storeId);
+        const createdFrom = input?.createdFromDay
+          ? zonedDayStart(input.createdFromDay)
+          : undefined;
+        const createdTo = input?.createdToDay ? zonedDayEnd(input.createdToDay) : undefined;
+        if (
+          (input?.createdFromDay && !createdFrom) ||
+          (input?.createdToDay && !createdTo)
+        ) {
+          throw new AppError("invalidInput", "BAD_REQUEST", 400);
+        }
         return await listCustomerOrders({
           organizationId: ctx.user.organizationId,
           ...storeScope,
           status: input?.status,
           search: input?.search?.trim() || undefined,
-          dateFrom: input?.dateFrom,
-          dateTo: input?.dateTo,
+          employeeId: input?.employeeId || undefined,
+          dateFrom: input?.dateFrom ?? createdFrom ?? undefined,
+          dateTo: input?.dateTo ?? createdTo ?? undefined,
           page: input?.page ?? 1,
           pageSize: input?.pageSize ?? 25,
           sortBy: input?.sortBy,
@@ -326,6 +510,7 @@ export const salesOrdersRouter = router({
         const operation = await createCustomerOrderDraftOperation({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
+          priceMode: input.priceMode,
           idempotencyKey: input.idempotencyKey,
           customerId: input.customerId,
           customerName: input.customerName,
@@ -343,8 +528,50 @@ export const salesOrdersRouter = router({
       }
     }),
 
-  setCustomer: salesOrdersProtectedProcedure
+  update: salesOrdersProtectedProcedure
+    .input(updateOrderInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
+        return await updateCustomerOrder({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  quotePriceMode: salesOrdersProtectedProcedure
     .input(
+      z.object({
+        storeId: z.string().min(1),
+        priceMode: orderPriceModeSchema,
+        lines: z
+          .array(
+            z.object({
+              productId: z.string().min(1),
+              variantId: z.string().optional().nullable(),
+            }),
+          )
+          .max(500),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await quoteCustomerOrderPriceMode({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  setCustomer: salesOrdersProtectedProcedure    .input(
       z.object({
         customerOrderId: z.string(),
         customerId: z.string().min(1).optional().nullable(),

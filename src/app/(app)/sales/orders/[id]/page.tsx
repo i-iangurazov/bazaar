@@ -13,13 +13,16 @@ import { OrderPayment } from "@/components/pos/order-payment";
 import { FormGrid } from "@/components/form-layout";
 import {
   AddIcon,
+  AdjustIcon,
   CheckIcon,
   CloseIcon,
   DeleteIcon,
   EditIcon,
   EmptyIcon,
   MailIcon,
+  PdfIcon,
   SendIcon,
+  StatusWarningIcon,
   TruckIcon,
 } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
@@ -28,6 +31,10 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
 import { SalesDocumentActions } from "@/components/sales-document-actions";
+import {
+  CorrectionRefundQueuePanel,
+  type CorrectionRefundQueueRequest,
+} from "@/components/sales-order-correction-refund-panel";
 import {
   SalesOrderCustomerSelect,
   type SalesOrderCustomerOption,
@@ -64,8 +71,10 @@ import {
   isValidOptionalCustomerPhone,
 } from "@/lib/customerContact";
 import { formatDate } from "@/lib/i18nFormat";
+import { scrollChildIntoHorizontalView } from "@/lib/horizontalScrollFocus";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { parseSalesOrderPriceInput, salesOrderPriceInput } from "@/lib/salesOrderPriceInput";
+import { correctionDifferenceLabelKind } from "@/lib/salesOrderCorrectionDisplay";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
@@ -239,6 +248,7 @@ const SalesOrderDetailPage = () => {
       productId: selectedProduct?.id ?? "",
       storeId: orderStore?.id ?? "",
       variantId: selectedVariant === "BASE" ? null : selectedVariant,
+      priceMode: orderQuery.data?.priceMode === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
     },
     {
       enabled: lineDialogMode === "add" && Boolean(selectedProduct?.id) && Boolean(orderStore?.id),
@@ -267,6 +277,12 @@ const SalesOrderDetailPage = () => {
     { enabled: Boolean(params.id), retry: false },
   );
   const lines = useMemo(() => order?.lines ?? [], [order?.lines]);
+  // Posting is guarded on the server; the detail view names the exact lines so
+  // the operator can resolve them without guessing which row is blocking.
+  const unresolvedPriceLines = useMemo(
+    () => lines.filter((line) => line.priceSource === "MISSING"),
+    [lines],
+  );
 
   const isEditable =
     order?.status === CustomerOrderStatus.DRAFT || order?.status === CustomerOrderStatus.CONFIRMED;
@@ -1034,10 +1050,30 @@ const SalesOrderDetailPage = () => {
         <Link href={returnTo}>{tCommon("back")}</Link>
       </Button>
       {order ? <SalesDocumentActions orderId={order.id} number={order.number} /> : null}
+      {order && isEditable ? (
+        <Button variant="secondary" asChild>
+          <Link
+            href={`/sales/orders/${encodeURIComponent(order.id)}/edit?returnTo=${encodeURIComponent(returnTo)}`}
+          >
+            <EditIcon className="h-4 w-4" aria-hidden />
+            {t("editOrder")}
+          </Link>
+        </Button>
+      ) : null}
+      {order && order.status === CustomerOrderStatus.COMPLETED && canFinalize ? (
+        <Button variant="secondary" asChild>
+          <Link
+            href={`/sales/orders/${encodeURIComponent(order.id)}/correction?returnTo=${encodeURIComponent(`/sales/orders/${order.id}`)}`}
+          >
+            <AdjustIcon className="h-4 w-4" aria-hidden />
+            {t("correctOrder")}
+          </Link>
+        </Button>
+      ) : null}
       {canCancel ? (
         <Button
           onClick={() => void handlePostSale()}
-          disabled={lineActionsDisabled || !lines.length}
+          disabled={lineActionsDisabled || !lines.length || unresolvedPriceLines.length > 0}
         >
           {postSaleMutation.isLoading ? (
             <Spinner className="h-4 w-4" />
@@ -1099,6 +1135,21 @@ const SalesOrderDetailPage = () => {
         subtitle={t("detailsSubtitle")}
         action={headerActions}
       />
+      {order && unresolvedPriceLines.length > 0 ? (
+        <div
+          role="alert"
+          data-testid="sales-order-missing-price"
+          className="mb-4 flex gap-2 rounded-md border border-danger/40 bg-danger/10 p-3 text-sm text-danger"
+        >
+          <StatusWarningIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div className="space-y-1">
+            <p>{t("priceMode.missingPosting", { count: unresolvedPriceLines.length })}</p>
+            <p className="text-xs">
+              {unresolvedPriceLines.map((line) => line.product.name).join(", ")}
+            </p>
+          </div>
+        </div>
+      ) : null}
       {isEditable ? (
         <p className="mb-4 text-sm text-muted-foreground">{t("orderWithoutShift")}</p>
       ) : null}
@@ -1137,6 +1188,28 @@ const SalesOrderDetailPage = () => {
                   <p className="text-sm font-medium text-foreground">{order.store.name}</p>
                 </div>
                 <div>
+                  <p className="text-xs text-muted-foreground">{t("createdBy")}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {order.createdBy?.name ??
+                      (order.source === "API" ? t("systemActor") : t("unknownEmployee"))}
+                  </p>
+                </div>
+                {order.status === CustomerOrderStatus.COMPLETED ? (
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("completedBy")}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {order.completedBy?.name ??
+                        (order.source === "API" ? t("systemActor") : t("unknownEmployee"))}
+                    </p>
+                  </div>
+                ) : null}
+                <div>
+                  <p className="text-xs text-muted-foreground">{t("priceModeLabel")}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {order.priceMode === "WHOLESALE" ? t("priceModeWholesale") : t("priceModeRetail")}
+                  </p>
+                </div>
+                <div>
                   <p className="text-xs text-muted-foreground">{t("created")}</p>
                   <p className="text-sm font-medium text-foreground">
                     {formatDate(order.createdAt, locale)}
@@ -1165,11 +1238,190 @@ const SalesOrderDetailPage = () => {
           <div id="sales-order-payments">
             <OrderPayment
               customerOrderId={order.id}
+              currency={orderCurrencySource}
               onPaid={() => {
                 void loyaltyQuery.refetch();
               }}
             />
           </div>
+          {order.corrections.length ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("correctionsTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {order.corrections.map((correction) => (
+                  <div
+                    key={correction.id}
+                    className="rounded-md border border-border p-3 text-sm"
+                    data-testid="sales-order-correction"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium">
+                        {correction.number}
+                        <span className="ml-2 font-normal text-muted-foreground">
+                          {formatDate(correction.createdAt, locale)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {correction.createdBy?.name ?? t("unknownEmployee")}
+                      </p>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                      {correction.reason}
+                    </p>
+                    {(() => {
+                      const refundRequest =
+                        (correction.saleReturn?.refundRequests?.[0] ??
+                          null) as CorrectionRefundQueueRequest | null;
+                      const transferPending = correction.paymentMethod === "TRANSFER";
+                      const actualRefundedKgs =
+                        transferPending && refundRequest
+                          ? refundRequest.payment?.settlementStatus === "ACTUAL"
+                            ? Number(refundRequest.payment.amountKgs)
+                            : 0
+                          : Number(correction.refundKgs);
+                      const pendingRefundKgs =
+                        refundRequest?.status === "OPEN" ? Number(refundRequest.amountKgs) : 0;
+                      const offsetKgs = Number(correction.offsetKgs);
+                      const netDifferenceKgs = Math.max(
+                        Number(correction.refundKgs),
+                        Number(correction.chargeKgs),
+                      );
+                      const differenceKind = correctionDifferenceLabelKind({
+                        refundRequestStatus: refundRequest?.status,
+                        refundKgs: Number(correction.refundKgs),
+                        chargeKgs: Number(correction.chargeKgs),
+                      });
+                      const differenceLabel =
+                        differenceKind === "refundCanceled"
+                          ? t("correctionRefundCanceled")
+                          : differenceKind === "refundPending"
+                            ? t("correctionPendingRefund")
+                            : differenceKind === "refundPaid"
+                              ? t("correctionRefundPaid")
+                              : differenceKind === "charge"
+                                ? t("correctionToPay")
+                                : t("correctionNoDifference");
+                      return (
+                        <>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                {t("correctionReturned")}
+                              </p>
+                              <p className="font-medium tabular-nums">
+                                {formatKgsMoney(
+                                  Number(correction.returnedKgs),
+                                  locale,
+                                  orderCurrencySource,
+                                )}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">{t("correctionAdded")}</p>
+                              <p className="font-medium tabular-nums">
+                                {formatKgsMoney(
+                                  Number(correction.addedKgs),
+                                  locale,
+                                  orderCurrencySource,
+                                )}
+                              </p>
+                            </div>
+                            {offsetKgs > 0 ? (
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  {t("correctionOffset")}
+                                </p>
+                                <p className="font-medium tabular-nums">
+                                  {formatKgsMoney(offsetKgs, locale, orderCurrencySource)}
+                                </p>
+                              </div>
+                            ) : null}
+                            <div>
+                              <p className="text-xs text-muted-foreground">{differenceLabel}</p>
+                              <p className="font-medium tabular-nums">
+                                {formatKgsMoney(netDifferenceKgs, locale, orderCurrencySource)}
+                              </p>
+                            </div>
+                            {Number(correction.refundKgs) > 0 ? (
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  {t("correctionActualRefund")}
+                                </p>
+                                <p className="font-medium tabular-nums">
+                                  {formatKgsMoney(actualRefundedKgs, locale, orderCurrencySource)}
+                                </p>
+                              </div>
+                            ) : null}
+                            {pendingRefundKgs > 0 ? (
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  {t("correctionPendingRefund")}
+                                </p>
+                                <p className="font-medium tabular-nums text-warning">
+                                  {formatKgsMoney(pendingRefundKgs, locale, orderCurrencySource)}
+                                </p>
+                              </div>
+                            ) : null}
+                            {Number(correction.chargeKgs) > 0 ? (
+                              <div>
+                                <p className="text-xs text-muted-foreground">
+                                  {t("correctionActualCharge")}
+                                </p>
+                                <p className="font-medium tabular-nums">
+                                  {formatKgsMoney(
+                                    Number(correction.chargeKgs),
+                                    locale,
+                                    orderCurrencySource,
+                                  )}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                            {correction.saleReturn ? (
+                              <span className="text-muted-foreground">
+                                {t("correctionReturnNumber", {
+                                  number: correction.saleReturn.number,
+                                })}
+                              </span>
+                            ) : null}
+                            {correction.additionOrder ? (
+                              <Link
+                                className="font-medium text-foreground underline-offset-2 hover:underline"
+                                href={`/sales/orders/${encodeURIComponent(correction.additionOrder.id)}`}
+                              >
+                                {t("correctionAdditionNumber", {
+                                  number: correction.additionOrder.number,
+                                })}
+                              </Link>
+                            ) : null}
+                            <a
+                              className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
+                              href={`/api/sales/orders/${encodeURIComponent(order.id)}/corrections/${encodeURIComponent(correction.id)}/pdf`}
+                            >
+                              <PdfIcon className="h-3.5 w-3.5" aria-hidden />
+                              {t("correctionPdf")}
+                            </a>
+                          </div>
+                          <CorrectionRefundQueuePanel
+                            customerOrderId={order.id}
+                            request={refundRequest}
+                            actualRefundedKgs={actualRefundedKgs}
+                            pendingRefundKgs={pendingRefundKgs}
+                            shifts={paymentInfoQuery.data?.shifts ?? []}
+                            canManage={canFinalize}
+                            currency={orderCurrencySource}
+                          />
+                        </>
+                      );
+                    })()}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
           {loyaltyQuery.data ? (
             <Card>
               <CardHeader>
@@ -1471,7 +1723,12 @@ const SalesOrderDetailPage = () => {
                 </div>
               ) : (
                 <>
-                  <div className="hidden overflow-x-auto md:block">
+                  <div
+                    className="hidden overflow-x-auto md:block"
+                    onFocusCapture={(event) =>
+                      scrollChildIntoHorizontalView(event.currentTarget, event.target)
+                    }
+                  >
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1503,6 +1760,16 @@ const SalesOrderDetailPage = () => {
                                   <p className="truncate text-xs text-muted-foreground">
                                     {line.product.sku}
                                   </p>
+                                  {line.priceSource === "MISSING" ? (
+                                    <p className="truncate text-xs font-medium text-danger">
+                                      {t("priceMode.missingLine", {
+                                        mode:
+                                          order.priceMode === "WHOLESALE"
+                                            ? t("priceMode.wholesale")
+                                            : t("priceMode.retail"),
+                                      })}
+                                    </p>
+                                  ) : null}
                                 </div>
                               </div>
                             </TableCell>
@@ -1578,6 +1845,9 @@ const SalesOrderDetailPage = () => {
                       </TableBody>
                     </Table>
                   </div>
+                  <p className="mt-2 hidden text-xs text-muted-foreground md:block">
+                    {t("horizontalScrollHint")}
+                  </p>
 
                   <div className="space-y-3 md:hidden">
                     {lines.map((line) => (
@@ -1598,6 +1868,16 @@ const SalesOrderDetailPage = () => {
                                 <p className="truncate text-xs text-muted-foreground">
                                   {line.product.sku}
                                 </p>
+                                {line.priceSource === "MISSING" ? (
+                                  <p className="truncate text-xs font-medium text-danger">
+                                    {t("priceMode.missingLine", {
+                                      mode:
+                                        order.priceMode === "WHOLESALE"
+                                          ? t("priceMode.wholesale")
+                                          : t("priceMode.retail"),
+                                    })}
+                                  </p>
+                                ) : null}
                               </div>
                             </div>
                             <p className="text-xs text-muted-foreground">
@@ -2019,7 +2299,8 @@ const SalesOrderDetailPage = () => {
                     (!hasManualLinePrice &&
                       (linePriceQuery.isFetching ||
                         Boolean(linePriceQuery.error) ||
-                        !linePriceQuery.data))))
+                        !linePriceQuery.data ||
+                        linePriceQuery.data.hasConfiguredPrice === false))))
               }
             >
               {lineActionsDisabled ? <Spinner className="h-4 w-4" /> : null}

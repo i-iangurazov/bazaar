@@ -50,15 +50,20 @@ describe("legacy sales return route", () => {
   });
 
   it("removes the misleading normal-sale return presentation branch", async () => {
-    const source = await readFile(
+    const pageSource = await readFile(
       path.join(process.cwd(), "src/app/(app)/sales/orders/new/page.tsx"),
       "utf8",
     );
+    const sharedFormSource = await readFile(
+      path.join(process.cwd(), "src/components/sales-order-form.tsx"),
+      "utf8",
+    );
 
-    expect(source).toContain("<SalesOrderReturnRedirect");
-    expect(source).toContain("if (legacyReturnRedirect)");
-    expect(source).not.toContain("isReturnMode");
-    expect(source).not.toContain('t("returnModeHint")');
-    expect(source).not.toContain('t("newReturn")');
+    expect(pageSource).toContain("<SalesOrderForm");
+    expect(sharedFormSource).toContain("<SalesOrderReturnRedirect");
+    expect(sharedFormSource).toContain("if (legacyReturnRedirect)");
+    expect(sharedFormSource).not.toContain("isReturnMode");
+    expect(sharedFormSource).not.toContain('t("returnModeHint")');
+    expect(sharedFormSource).not.toContain('t("newReturn")');
   });
 });

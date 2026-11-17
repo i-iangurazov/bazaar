@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { ArrowDownIcon, ArrowUpIcon, SortIcon } from "@/components/icons";
+import { scrollChildIntoHorizontalView } from "@/lib/horizontalScrollFocus";
 import { cn } from "@/lib/utils";
 
 type TableSortDirection = "asc" | "desc";
@@ -23,6 +24,8 @@ type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
 };
 type TableHeadProps = React.ThHTMLAttributes<HTMLTableCellElement> & {
   sortable?: boolean;
+  /** Keep the full label by wrapping instead of truncating it. */
+  wrap?: boolean;
 };
 
 const SortableTableContext = React.createContext<SortableTableContextValue | null>(null);
@@ -240,13 +243,17 @@ Table.displayName = "Table";
 export const TableContainer = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+>(({ className, onFocusCapture, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
       "relative min-w-0 max-w-full overflow-x-auto rounded-lg border border-border bg-card",
       className,
     )}
+    onFocusCapture={(event) => {
+      scrollChildIntoHorizontalView(event.currentTarget, event.target);
+      onFocusCapture?.(event);
+    }}
     {...props}
   />
 ));
@@ -336,7 +343,7 @@ export const TableRow = React.forwardRef<
 TableRow.displayName = "TableRow";
 
 export const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
-  ({ className, children, onClick, sortable = true, ...props }, ref) => {
+  ({ className, children, onClick, sortable = true, wrap = false, ...props }, ref) => {
     const sortableTable = React.useContext(SortableTableContext);
     const columnIndex = getColumnIndex(props as Record<string, unknown>);
     const sortableColumnIndex = columnIndex ?? -1;
@@ -384,7 +391,7 @@ export const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
               )
             }
           >
-            <span className="truncate">{children}</span>
+            <span className={wrap ? "whitespace-normal break-words" : "truncate"}>{children}</span>
             {isActive ? (
               sortableTable?.sortState?.direction === "asc" ? (
                 <ArrowUpIcon className="h-3.5 w-3.5 shrink-0 text-foreground" aria-hidden />

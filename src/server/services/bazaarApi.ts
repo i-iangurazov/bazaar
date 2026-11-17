@@ -6,7 +6,9 @@ import {
   CustomerOrderStatus,
   CustomerSource,
   OperationRequestPrincipalType,
+  type PosPaymentMethod,
   Prisma,
+  SalePaymentSettlement,
   StockMovementType,
 } from "@prisma/client";
 
@@ -464,6 +466,7 @@ const bazaarApiOrderSelect = {
       method: true,
       amountKgs: true,
       isRefund: true,
+      settlementStatus: true,
     },
     orderBy: { createdAt: "asc" },
   },
@@ -479,16 +482,47 @@ const convertOrderMoney = (
   currencyCode: SupportedCurrencyCode,
 ) => roundMoney(convertFromKgs(toMoney(valueKgs), currencyRateKgsPerUnit, currencyCode));
 
-const resolveBazaarApiOrderPayment = (order: BazaarApiOrderRecord) => {
+const isSettledBazaarApiCredit = (payment: {
+  isRefund: boolean;
+  settlementStatus: SalePaymentSettlement;
+}) =>
+  !payment.isRefund &&
+  (payment.settlementStatus === SalePaymentSettlement.ACTUAL ||
+    payment.settlementStatus === SalePaymentSettlement.OFFSET);
+
+const isActualBazaarApiRefund = (payment: {
+  isRefund: boolean;
+  settlementStatus: SalePaymentSettlement;
+}) =>
+  payment.isRefund && payment.settlementStatus === SalePaymentSettlement.ACTUAL;
+
+type BazaarApiPaymentSummaryInput = {
+  payments: Array<{
+    method: PosPaymentMethod;
+    amountKgs: Prisma.Decimal | number;
+    isRefund: boolean;
+    settlementStatus: SalePaymentSettlement;
+  }>;
+  totalKgs: Prisma.Decimal | number | null | undefined;
+};
+
+/** Pure settlement resolution shared by the public API order projection. */
+export const resolveBazaarApiPayment = (input: BazaarApiPaymentSummaryInput) => {
   const paidKgs = roundMoney(
-    order.payments.reduce((sum, payment) => {
+    input.payments.reduce((sum, payment) => {
       const amount = toMoney(payment.amountKgs);
-      return payment.isRefund ? sum - amount : sum + amount;
+      if (isSettledBazaarApiCredit(payment)) return sum + amount;
+      if (isActualBazaarApiRefund(payment)) return sum - amount;
+      return sum;
     }, 0),
   );
-  const totalKgs = roundMoney(toMoney(order.totalKgs));
+  const totalKgs = roundMoney(toMoney(input.totalKgs));
   const methods = Array.from(
-    new Set(order.payments.filter((payment) => !payment.isRefund).map((payment) => payment.method)),
+    new Set(
+      input.payments
+        .filter(isSettledBazaarApiCredit)
+        .map((payment) => payment.method),
+    ),
   );
   const status = paidKgs <= 0 ? "UNPAID" : paidKgs + 0.01 < totalKgs ? "PARTIALLY_PAID" : "PAID";
 
@@ -499,6 +533,9 @@ const resolveBazaarApiOrderPayment = (order: BazaarApiOrderRecord) => {
     paidKgs,
   };
 };
+
+const resolveBazaarApiOrderPayment = (order: BazaarApiOrderRecord) =>
+  resolveBazaarApiPayment({ payments: order.payments, totalKgs: order.totalKgs });
 
 const resolveBazaarApiFulfillmentStatus = (order: BazaarApiOrderRecord) => {
   const trackingStatus = normalizeOptionalText(order.trackingStatus);

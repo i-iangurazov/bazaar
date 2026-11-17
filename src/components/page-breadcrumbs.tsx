@@ -90,6 +90,8 @@ const segmentLabel = (
       return tBreadcrumbs("orders");
     case "orders":
       return tNav("salesOrders");
+    case "correction":
+      return tBreadcrumbs("correction");
     case "operations":
       return tNav("groups.operations");
     case "integrations":

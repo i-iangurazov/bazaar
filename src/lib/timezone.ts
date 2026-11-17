@@ -53,3 +53,29 @@ export const resolveBusinessDayBounds = (now = new Date()) => {
     sevenDaysStart: businessDateOnlyToUtc(today, -6),
   };
 };
+
+export const isValidCalendarDay = (value: string) => {
+  try {
+    parseDateOnlyParts(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** List filters use the store's Bishkek calendar day, not the browser timezone. */
+export const zonedDayStart = (value: string) => {
+  try {
+    return businessDateOnlyToUtc(value);
+  } catch {
+    return null;
+  }
+};
+
+export const zonedDayEnd = (value: string) => {
+  try {
+    return businessDateOnlyEndUtc(value);
+  } catch {
+    return null;
+  }
+};

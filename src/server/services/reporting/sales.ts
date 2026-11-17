@@ -135,7 +135,8 @@ export function salesEventsSql(
     AND ${inStores(Prisma.sql`r."storeId"`, input.storeIds)}
     AND ${inStores(Prisma.sql`o."storeId"`, input.storeIds)}
     ${commercialScope} ${customerScope}
-    AND r.status = 'COMPLETED' AND r."completedAt" IS NOT NULL AND ${channel} <> 'orders'
+    AND r.status = 'COMPLETED' AND r."completedAt" IS NOT NULL
+    AND (${channel} = 'all' OR o."isPosSale" = (${channel} = 'pos'))
     ${input.registerId ? Prisma.sql`AND r."registerId" = ${input.registerId}` : Prisma.empty}
     ${input.cashierId === "__unknown__" ? Prisma.sql`AND COALESCE(r."completedById", r."createdById") IS NULL` : input.cashierId ? Prisma.sql`AND COALESCE(r."completedById", r."createdById") = ${input.cashierId}` : Prisma.empty}`;
   const filter: Prisma.Sql[] = [];

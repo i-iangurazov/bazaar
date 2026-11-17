@@ -2109,4 +2109,159 @@ describeDb("inventory service", () => {
 
     await assertSnapshotMatchesLedger(store.id, product.id);
   });
+
+  it("does not count pending, void or offset refunds as sale money in product movements", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+    const completedAt = new Date("2026-05-01T10:00:00Z");
+    const register = await prisma.posRegister.create({
+      data: { organizationId: org.id, storeId: store.id, name: "Settlement register", code: "SETTLE-1" },
+    });
+    const shift = await prisma.registerShift.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        openedById: adminUser.id,
+      },
+    });
+    const order = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        number: "INV-SETTLE-ORDER",
+        status: "COMPLETED",
+        isPosSale: false,
+        completedAt,
+        createdAt: completedAt,
+        createdById: adminUser.id,
+        subtotalKgs: 100,
+        totalKgs: 100,
+      },
+    });
+    await prisma.salePayment.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        shiftId: shift.id,
+        customerOrderId: order.id,
+        method: "CASH",
+        amountKgs: 100,
+        isRefund: false,
+        settlementStatus: "ACTUAL",
+        createdAt: completedAt,
+      },
+    });
+    await prisma.stockMovement.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        type: StockMovementType.SALE,
+        qtyDelta: -1,
+        referenceType: "CustomerOrder",
+        referenceId: order.id,
+        note: order.number,
+        createdById: adminUser.id,
+      },
+    });
+    const saleReturn = await prisma.saleReturn.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        shiftId: shift.id,
+        originalSaleId: order.id,
+        number: "INV-SETTLE-RETURN",
+        status: "COMPLETED",
+        completedAt,
+        createdAt: completedAt,
+        createdById: adminUser.id,
+        completedById: adminUser.id,
+        subtotalKgs: 40,
+        totalKgs: 40,
+      },
+    });
+    await prisma.salePayment.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: order.id,
+          saleReturnId: saleReturn.id,
+          method: "TRANSFER",
+          amountKgs: 25,
+          isRefund: true,
+          settlementStatus: "PENDING",
+          createdAt: completedAt,
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: order.id,
+          saleReturnId: saleReturn.id,
+          method: "CASH",
+          amountKgs: 5,
+          isRefund: true,
+          settlementStatus: "VOID",
+          createdAt: completedAt,
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          shiftId: shift.id,
+          customerOrderId: order.id,
+          saleReturnId: saleReturn.id,
+          method: "CASH",
+          amountKgs: 10,
+          isRefund: true,
+          settlementStatus: "OFFSET",
+          createdAt: completedAt,
+        },
+      ],
+    });
+    await prisma.stockMovement.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        type: StockMovementType.RETURN,
+        qtyDelta: 1,
+        referenceType: "SaleReturn",
+        referenceId: saleReturn.id,
+        note: saleReturn.number,
+        createdById: adminUser.id,
+      },
+    });
+
+    const saleJournal = await caller.inventory.productMovements({
+      type: "SALE",
+      search: order.number,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(saleJournal.items).toHaveLength(1);
+    expect(saleJournal.items[0]).toMatchObject({
+      paymentStatus: "PAID",
+      paidAmount: 100,
+    });
+
+    const returnJournal = await caller.inventory.productMovements({
+      type: "RETURN",
+      search: saleReturn.number,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(returnJournal.items).toHaveLength(1);
+    expect(returnJournal.items[0]).toMatchObject({
+      paymentStatus: "UNPAID",
+      paidAmount: 0,
+    });
+  });
 });

@@ -243,4 +243,73 @@ import { seedReportingFixture } from "../helpers/reportingFixture";
     expect(warning.inventory.products.rows).toHaveLength(1);
     expect(warning.sales30d.revenueKgs).toBe(0);
   });
+
+  it("excludes pending, offset and void settlement rows from the payments cashflow", async () => {
+    const f = await seedReportingFixture(prisma);
+    await prisma.salePayment.createMany({
+      data: [
+        {
+          organizationId: f.org.id,
+          storeId: f.store.id,
+          shiftId: f.shift.id,
+          customerOrderId: f.sale.id,
+          method: "TRANSFER",
+          amountKgs: 70,
+          isRefund: true,
+          settlementStatus: "PENDING",
+          createdAt: f.sale.completedAt!,
+        },
+        {
+          organizationId: f.org.id,
+          storeId: f.store.id,
+          shiftId: f.shift.id,
+          customerOrderId: f.sale.id,
+          method: "CASH",
+          amountKgs: 30,
+          isRefund: false,
+          settlementStatus: "OFFSET",
+          createdAt: f.sale.completedAt!,
+        },
+        {
+          organizationId: f.org.id,
+          storeId: f.store.id,
+          shiftId: f.shift.id,
+          customerOrderId: f.sale.id,
+          method: "CARD",
+          amountKgs: 20,
+          isRefund: false,
+          settlementStatus: "VOID",
+          createdAt: f.sale.completedAt!,
+        },
+      ],
+    });
+    const payments = await getOperationsReport(
+      prisma,
+      { ...f.input, view: "payments" },
+      { now: f.now },
+    );
+    expect(payments.summary).toMatchObject({
+      amountKgs: 260,
+      inflowKgs: 360,
+      outflowKgs: 100,
+      count: 3,
+    });
+    expect(payments.items).toHaveLength(3);
+    const ids = payments.items.map((item) => item.id);
+    expect(ids).not.toContain(
+      (await prisma.salePayment.findFirstOrThrow({
+        where: { customerOrderId: f.sale.id, settlementStatus: "PENDING" },
+      })).id,
+    );
+    expect(ids).not.toContain(
+      (await prisma.salePayment.findFirstOrThrow({
+        where: { customerOrderId: f.sale.id, settlementStatus: "OFFSET" },
+      })).id,
+    );
+    expect(ids).not.toContain(
+      (await prisma.salePayment.findFirstOrThrow({
+        where: { customerOrderId: f.sale.id, settlementStatus: "VOID" },
+      })).id,
+    );
+  });
 });

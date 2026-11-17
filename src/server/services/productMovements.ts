@@ -700,13 +700,20 @@ const buildProductMovementJournalCte = (input: {
       ON g."documentReferenceType" = 'STOCK_COUNT' AND sc."id" = g."documentReferenceId"
     LEFT JOIN LATERAL (
       SELECT
-        COALESCE(SUM(CASE WHEN sp."isRefund" = true THEN -sp."amountKgs" ELSE sp."amountKgs" END), 0)::numeric AS "paidAmount"
+        COALESCE(SUM(CASE
+          WHEN sp."isRefund" = false AND sp."settlementStatus" IN ('ACTUAL', 'OFFSET') THEN sp."amountKgs"
+          WHEN sp."isRefund" = true AND sp."settlementStatus" = 'ACTUAL' THEN -sp."amountKgs"
+          ELSE 0
+        END), 0)::numeric AS "paidAmount"
       FROM "SalePayment" sp
       WHERE sp."customerOrderId" = co."id"
     ) co_payments ON true
     LEFT JOIN LATERAL (
       SELECT
-        COALESCE(SUM(CASE WHEN sp."isRefund" = true THEN sp."amountKgs" ELSE -sp."amountKgs" END), 0)::numeric AS "refundedAmount"
+        COALESCE(SUM(CASE
+          WHEN sp."isRefund" = true AND sp."settlementStatus" = 'ACTUAL' THEN sp."amountKgs"
+          ELSE 0
+        END), 0)::numeric AS "refundedAmount"
       FROM "SalePayment" sp
       WHERE sp."saleReturnId" = sr."id"
     ) sr_payments ON true

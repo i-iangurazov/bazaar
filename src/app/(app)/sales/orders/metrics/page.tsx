@@ -27,10 +27,15 @@ import {
 } from "@/components/ui/table";
 import { EmptyIcon, SalesOrdersIcon } from "@/components/icons";
 import { formatKgsMoney } from "@/lib/currencyDisplay";
+import { formatDate } from "@/lib/i18nFormat";
+import {
+  formatSalesOrderMargin,
+  salesOrderMetricsProfitability,
+  salesOrderMetricsTrendMoney,
+} from "@/lib/salesOrderMetricsDisplay";
+import { businessDateKey } from "@/lib/timezone";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-
-const toDateValue = (date: Date) => date.toISOString().slice(0, 10);
 
 const SalesOrdersMetricsPage = () => {
   const t = useTranslations("salesOrders");
@@ -42,24 +47,29 @@ const SalesOrdersMetricsPage = () => {
   const canView = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
   const now = useMemo(() => new Date(), []);
-  const initialFrom = useMemo(() => {
-    const value = new Date(now);
-    value.setDate(value.getDate() - 30);
-    return toDateValue(value);
-  }, [now]);
-  const initialTo = useMemo(() => toDateValue(now), [now]);
+  const initialFrom = useMemo(
+    () => businessDateKey(new Date(now.getTime() - 30 * 86_400_000)),
+    [now],
+  );
+  const initialTo = useMemo(() => businessDateKey(now), [now]);
 
   const [storeId, setStoreId] = useState<string>("all");
+  const [employeeId, setEmployeeId] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<string>(initialFrom);
   const [dateTo, setDateTo] = useState<string>(initialTo);
   const [groupBy, setGroupBy] = useState<"day" | "week">("day");
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
+  const employeesQuery = trpc.salesOrders.employeeOptions.useQuery(
+    storeId === "all" ? {} : { storeId },
+    { enabled: canView },
+  );
   const metricsQuery = trpc.salesOrders.metrics.useQuery(
     {
-      storeId: storeId === "all" ? undefined : storeId,
-      dateFrom: new Date(`${dateFrom}T00:00:00.000Z`),
-      dateTo: new Date(`${dateTo}T23:59:59.999Z`),
+      ...(storeId === "all" ? {} : { storeId }),
+      ...(employeeId === "all" ? {} : { employeeId }),
+      fromDay: dateFrom,
+      toDay: dateTo,
       groupBy,
     },
     { enabled: canView && Boolean(dateFrom) && Boolean(dateTo) },
@@ -79,6 +89,8 @@ const SalesOrdersMetricsPage = () => {
   }
 
   const summary = metricsQuery.data?.summary;
+  const profitability = summary ? salesOrderMetricsProfitability(summary) : null;
+  const costsComplete = profitability?.costsComplete ?? true;
   const revenueSeries = metricsQuery.data?.revenueSeries ?? [];
   const profitSeries = metricsQuery.data?.profitSeries ?? [];
   const costSeries = metricsQuery.data?.costSeries ?? [];
@@ -86,12 +98,14 @@ const SalesOrdersMetricsPage = () => {
   const topBundles = metricsQuery.data?.topBundlesByRevenue ?? [];
   const selectedStore = storeId === "all" ? null : storesQuery.data?.find((store) => store.id === storeId) ?? null;
   const formatMetricsMoney = (amountKgs: number) => formatKgsMoney(amountKgs, locale, selectedStore);
+  const formatMetricOrDash = (amountKgs: number | null) =>
+    amountKgs === null ? "—" : formatMetricsMoney(amountKgs);
 
   const seriesRows = revenueSeries.map((revenueItem, index) => ({
     date: revenueItem.date,
     revenueKgs: revenueItem.revenueKgs,
-    costKgs: costSeries[index]?.costKgs ?? 0,
-    profitKgs: profitSeries[index]?.profitKgs ?? 0,
+    costKgs: salesOrderMetricsTrendMoney(costSeries[index]?.costKgs ?? 0, costsComplete),
+    profitKgs: salesOrderMetricsTrendMoney(profitSeries[index]?.profitKgs ?? 0, costsComplete),
   }));
 
   return (
@@ -114,7 +128,7 @@ const SalesOrdersMetricsPage = () => {
           <CardTitle>{t("metricsFiltersTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
             <Select value={storeId} onValueChange={setStoreId}>
               <SelectTrigger aria-label={t("store")}>
                 <SelectValue placeholder={t("store")} />
@@ -124,6 +138,19 @@ const SalesOrdersMetricsPage = () => {
                 {(storesQuery.data ?? []).map((store) => (
                   <SelectItem key={store.id} value={store.id}>
                     {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={employeeId} onValueChange={setEmployeeId}>
+              <SelectTrigger aria-label={t("employeeFilter")}>
+                <SelectValue placeholder={t("employeeFilter")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allEmployees")}</SelectItem>
+                {(employeesQuery.data ?? []).map((employee) => (
+                  <SelectItem key={employee.id} value={employee.id}>
+                    {employee.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -152,6 +179,7 @@ const SalesOrdersMetricsPage = () => {
           </div>
         </CardContent>
       </Card>
+      <p className="mt-3 text-sm text-muted-foreground">{t("metricsPeriodHint")}</p>
       {storeId === "all" ? (
         <p className="mt-3 text-sm text-muted-foreground">
           {t("metricsBaseCurrencyNotice")}
@@ -183,7 +211,7 @@ const SalesOrdersMetricsPage = () => {
             <CardContent className="py-4">
               <p className="text-xs text-muted-foreground">{t("metricsCost")}</p>
               <p className="text-lg font-semibold text-foreground">
-                {formatMetricsMoney(summary.totalCostKgs)}
+                {formatMetricOrDash(profitability?.costKgs ?? null)}
               </p>
             </CardContent>
           </Card>
@@ -191,7 +219,7 @@ const SalesOrdersMetricsPage = () => {
             <CardContent className="py-4">
               <p className="text-xs text-muted-foreground">{t("metricsProfit")}</p>
               <p className="text-lg font-semibold text-foreground">
-                {formatMetricsMoney(summary.totalProfitKgs)}
+                {formatMetricOrDash(profitability?.profitKgs ?? null)}
               </p>
             </CardContent>
           </Card>
@@ -212,10 +240,21 @@ const SalesOrdersMetricsPage = () => {
           <Card>
             <CardContent className="py-4">
               <p className="text-xs text-muted-foreground">{t("metricsMargin")}</p>
-              <p className="text-lg font-semibold text-foreground">{summary.marginPct.toFixed(2)}%</p>
+              <p className="text-lg font-semibold text-foreground">
+                {formatSalesOrderMargin(profitability?.marginPct ?? null, locale)}
+              </p>
             </CardContent>
           </Card>
         </div>
+      ) : null}
+
+      {summary && profitability && !profitability.costsComplete ? (
+        <p
+          role="status"
+          className="mt-3 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm text-foreground/80"
+        >
+          {t("metricsCostIncomplete", { count: summary.missingCostLines })}
+        </p>
       ) : null}
 
       <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -238,10 +277,14 @@ const SalesOrdersMetricsPage = () => {
                   <TableBody>
                     {seriesRows.map((row) => (
                       <TableRow key={row.date}>
-                        <TableCell>{row.date}</TableCell>
+                        <TableCell>{formatDate(row.date, locale)}</TableCell>
                         <TableCell>{formatMetricsMoney(row.revenueKgs)}</TableCell>
-                        <TableCell>{formatMetricsMoney(row.costKgs)}</TableCell>
-                        <TableCell>{formatMetricsMoney(row.profitKgs)}</TableCell>
+                        <TableCell>
+                          {row.costKgs === null ? "—" : formatMetricsMoney(row.costKgs)}
+                        </TableCell>
+                        <TableCell>
+                          {row.profitKgs === null ? "—" : formatMetricsMoney(row.profitKgs)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

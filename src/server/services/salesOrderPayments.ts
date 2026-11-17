@@ -1,4 +1,4 @@
-import { Prisma, type PosPaymentMethod } from "@prisma/client";
+import { Prisma, type PosPaymentMethod, SalePaymentSettlement } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "./errors";
 import { assertUserCanAccessStore, type StoreAccessUser } from "./storeAccess";
@@ -13,11 +13,30 @@ export async function getOrderPaymentInfo(user: StoreAccessUser, customerOrderId
   if (!order) throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
   await assertUserCanAccessStore(prisma, user, order.storeId);
   const [payments, shifts] = await Promise.all([
-    prisma.salePayment.aggregate({ where: { customerOrderId, isRefund: false }, _sum: { amountKgs: true }, _count: true }),
+    prisma.salePayment.groupBy({
+      by: ["settlementStatus"],
+      where: {
+        customerOrderId,
+        isRefund: false,
+        settlementStatus: { in: [SalePaymentSettlement.ACTUAL, SalePaymentSettlement.OFFSET] },
+      },
+      _sum: { amountKgs: true },
+      _count: { _all: true },
+    }),
     prisma.registerShift.findMany({ where: { organizationId: user.organizationId, storeId: order.storeId, status: "OPEN", register: { isActive: true } }, select: { id: true, register: { select: { name: true } } }, orderBy: { openedAt: "desc" } }),
   ]);
-  const paid = payments._sum.amountKgs ?? new Prisma.Decimal(0);
-  return { canReturn: order.status === "COMPLETED" && paid.gte(order.totalKgs), returnLines: order.lines.map(line => ({ id: line.id, name: [line.product.name, line.variant?.name].filter(Boolean).join(" · "), qty: line.qty, lineTotalKgs: Number(line.lineTotalKgs), returnedQty: line.saleReturnLines.reduce((n, row) => n + row.qty, 0), refundedKgs: line.saleReturnLines.reduce((n, row) => n + Number(row.lineTotalKgs), 0) })), paidKgs: paid.toNumber(), hasEvidence: payments._count > 0, remainingKgs: Prisma.Decimal.max(0, order.totalKgs.minus(paid)).toNumber(), canPay: order.status === "COMPLETED", shifts: shifts.map((shift) => ({ id: shift.id, name: shift.register.name })) };
+  const paid = payments.reduce(
+    (sum, row) => sum.plus(row._sum.amountKgs ?? new Prisma.Decimal(0)),
+    new Prisma.Decimal(0),
+  );
+  const actualPaid = payments
+    .filter((row) => row.settlementStatus === SalePaymentSettlement.ACTUAL)
+    .reduce((sum, row) => sum.plus(row._sum.amountKgs ?? new Prisma.Decimal(0)), new Prisma.Decimal(0));
+  const offset = payments
+    .filter((row) => row.settlementStatus === SalePaymentSettlement.OFFSET)
+    .reduce((sum, row) => sum.plus(row._sum.amountKgs ?? new Prisma.Decimal(0)), new Prisma.Decimal(0));
+  const evidenceCount = payments.reduce((sum, row) => sum + row._count._all, 0);
+  return { canReturn: order.status === "COMPLETED" && paid.gte(order.totalKgs), returnLines: order.lines.map(line => ({ id: line.id, name: [line.product.name, line.variant?.name].filter(Boolean).join(" · "), qty: line.qty, lineTotalKgs: Number(line.lineTotalKgs), returnedQty: line.saleReturnLines.reduce((n, row) => n + row.qty, 0), refundedKgs: line.saleReturnLines.reduce((n, row) => n + Number(row.lineTotalKgs), 0) })), paidKgs: paid.toNumber(), actualPaidKgs: actualPaid.toNumber(), offsetKgs: offset.toNumber(), hasEvidence: evidenceCount > 0, remainingKgs: Prisma.Decimal.max(0, order.totalKgs.minus(paid)).toNumber(), canPay: order.status === "COMPLETED", shifts: shifts.map((shift) => ({ id: shift.id, name: shift.register.name })) };
 }
 
 /** Staff records money actually received into an existing open shift. No stock rewrite. */
@@ -31,7 +50,7 @@ export async function recordOrderPayment(input: { user: StoreAccessUser; custome
       await assertUserCanAccessStore(tx, input.user, order.storeId);
       const shift = await tx.registerShift.findFirst({ where: { id: input.shiftId, organizationId: input.user.organizationId, storeId: order.storeId, status: "OPEN", register: { isActive: true } }, include: { store: true } });
       if (!shift) throw new AppError("posShiftNotOpen", "CONFLICT", 409);
-      const paid = await tx.salePayment.aggregate({ where: { customerOrderId: order.id, isRefund: false }, _sum: { amountKgs: true } });
+      const paid = await tx.salePayment.aggregate({ where: { customerOrderId: order.id, isRefund: false, settlementStatus: { in: [SalePaymentSettlement.ACTUAL, SalePaymentSettlement.OFFSET] } }, _sum: { amountKgs: true } });
       const amount = new Prisma.Decimal(input.amountKgs);
       const paidTotal = (paid._sum.amountKgs ?? new Prisma.Decimal(0)).plus(amount);
       if (!amount.gt(0) || amount.decimalPlaces() > 2 || paidTotal.gt(order.totalKgs)) throw new AppError("posPaymentTotalMismatch", "CONFLICT", 409);

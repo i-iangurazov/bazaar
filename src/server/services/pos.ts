@@ -22,6 +22,7 @@ import {
   RegisterShiftStatus,
   Role,
   RefundRequestStatus,
+  SalePaymentSettlement,
   StockMovementType,
 } from "@prisma/client";
 
@@ -476,7 +477,7 @@ const nextPosSaleNumber = async (tx: Prisma.TransactionClient, organizationId: s
   return `S-${String(sequence).padStart(6, "0")}`;
 };
 
-const nextPosReturnNumber = async (tx: Prisma.TransactionClient, organizationId: string) => {
+export const nextPosReturnNumber = async (tx: Prisma.TransactionClient, organizationId: string) => {
   const rows = await tx.$queryRaw<Array<{ posReturnNumber: number }>>(Prisma.sql`
     INSERT INTO "OrganizationCounter" ("organizationId", "salesOrderNumber", "posSaleNumber", "posReturnNumber", "updatedAt")
     VALUES (${organizationId}, 0, 0, 1, NOW())
@@ -983,6 +984,7 @@ const loadShiftReport = async (
       where: {
         organizationId: input.organizationId,
         shiftId: input.shiftId,
+        settlementStatus: SalePaymentSettlement.ACTUAL,
         OR: [
           {
             isRefund: false,
@@ -1850,6 +1852,7 @@ export const listRegisterShifts = async (input: {
           where: {
             organizationId: input.organizationId,
             shiftId: { in: shiftIds },
+            settlementStatus: SalePaymentSettlement.ACTUAL,
             OR: [
               {
                 isRefund: false,
@@ -5322,7 +5325,7 @@ export const completePosSale = async (input: {
 
 const assertOnlineOrderPaidForReturn = async (tx: Prisma.TransactionClient, order: { id: string; isPosSale: boolean; totalKgs: Prisma.Decimal }) => {
   if (order.isPosSale) return;
-  const payments = await tx.salePayment.aggregate({ where: { customerOrderId: order.id, isRefund: false }, _sum: { amountKgs: true } });
+  const payments = await tx.salePayment.aggregate({ where: { customerOrderId: order.id, isRefund: false, settlementStatus: { in: [SalePaymentSettlement.ACTUAL, SalePaymentSettlement.OFFSET] } }, _sum: { amountKgs: true } });
   if ((payments._sum.amountKgs ?? new Prisma.Decimal(0)).lt(order.totalKgs)) throw new AppError("onlineReturnRequiresPayment", "CONFLICT", 409);
 };
 
@@ -5441,7 +5444,7 @@ export const createSaleReturnDraft = async (input: {
   });
 };
 
-const refundLineCaps = async (tx: Prisma.TransactionClient, customerOrderId: string) => {
+export const refundLineCaps = async (tx: Prisma.TransactionClient, customerOrderId: string) => {
   const order = await tx.customerOrder.findUniqueOrThrow({ where: { id: customerOrderId }, select: { totalKgs: true, lines: { select: { id: true, lineTotalKgs: true }, orderBy: { id: "asc" } } } });
   const gross = order.lines.reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0));
   const paidTotal = Prisma.Decimal.max(0, Prisma.Decimal.min(gross, order.totalKgs));
@@ -5455,11 +5458,19 @@ const refundLineCaps = async (tx: Prisma.TransactionClient, customerOrderId: str
 };
 
 /** Caller holds the source order lock. Receipt corrections already reduce net
- * tender; merchandise refunds consume that remaining tender exactly once. */
-const assertRefundWithinPaidAmount = async (tx: Prisma.TransactionClient, customerOrderId: string, orderTotal: Prisma.Decimal, additionalRefund: Prisma.Decimal) => {
+ * tender; merchandise refunds consume that remaining tender exactly once.
+ * Pending and offset refunds reserve the cap; void requests release it. */
+export const assertRefundWithinPaidAmount = async (tx: Prisma.TransactionClient, customerOrderId: string, orderTotal: Prisma.Decimal, additionalRefund: Prisma.Decimal) => {
   const [totals] = await tx.$queryRaw<Array<{ netTender: Prisma.Decimal; returned: Prisma.Decimal }>>`
-    SELECT COALESCE(SUM(CASE WHEN NOT "isRefund" THEN "amountKgs" WHEN "saleReturnId" IS NULL THEN -"amountKgs" ELSE 0 END), 0) AS "netTender",
-      COALESCE(SUM(CASE WHEN "isRefund" AND "saleReturnId" IS NOT NULL THEN "amountKgs" ELSE 0 END), 0) AS returned
+    SELECT COALESCE(SUM(CASE
+        WHEN NOT "isRefund" AND "settlementStatus" IN ('ACTUAL', 'OFFSET') THEN "amountKgs"
+        WHEN "isRefund" AND "saleReturnId" IS NULL AND "settlementStatus" = 'ACTUAL' THEN -"amountKgs"
+        ELSE 0
+      END), 0) AS "netTender",
+      COALESCE(SUM(CASE
+        WHEN "isRefund" AND "saleReturnId" IS NOT NULL AND "settlementStatus" IN ('ACTUAL', 'OFFSET', 'PENDING') THEN "amountKgs"
+        ELSE 0
+      END), 0) AS returned
     FROM "SalePayment" WHERE "customerOrderId" = ${customerOrderId}
   `;
   if ((totals?.returned ?? new Prisma.Decimal(0)).plus(additionalRefund).gt(Prisma.Decimal.min(totals?.netTender ?? new Prisma.Decimal(0), orderTotal))) {
@@ -5482,7 +5493,7 @@ const allocatedReturnDelta = (
     .minus(previouslyRefunded);
 };
 
-const allocatedReturnAmount = async (tx: Prisma.TransactionClient, line: { id: string; customerOrderId: string; qty: number; lineTotalKgs: Prisma.Decimal }, qty: number, excludeReturnLineId?: string, cap?: Prisma.Decimal) => {
+export const allocatedReturnAmount = async (tx: Prisma.TransactionClient, line: { id: string; customerOrderId: string; qty: number; lineTotalKgs: Prisma.Decimal }, qty: number, excludeReturnLineId?: string, cap?: Prisma.Decimal) => {
   const previous = await tx.saleReturnLine.aggregate({
     where: { customerOrderLineId: line.id, saleReturn: { status: "COMPLETED" }, ...(excludeReturnLineId ? { id: { not: excludeReturnLineId } } : {}) },
     _sum: { qty: true, lineTotalKgs: true },
@@ -5491,7 +5502,7 @@ const allocatedReturnAmount = async (tx: Prisma.TransactionClient, line: { id: s
   return allocatedReturnDelta(refundable, line.qty, previous._sum.qty ?? 0, qty, previous._sum.lineTotalKgs ?? new Prisma.Decimal(0));
 };
 
-const assertReturnLineAvailable = async (
+export const assertReturnLineAvailable = async (
   tx: Prisma.TransactionClient,
   input: {
     customerOrderLineId: string;

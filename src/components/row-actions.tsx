@@ -11,6 +11,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,8 @@ type RowAction = {
   openInNewTab?: boolean;
   disabled?: boolean;
   variant?: string;
+  /** Render a separator before this item (used for destructive actions). */
+  separatorBefore?: boolean;
 };
 
 type RowActionsProps = {
@@ -129,6 +132,11 @@ export const RowActions = ({
     return (
       <DropdownMenuItem
         key={action.key}
+        className={
+          action.variant === "danger"
+            ? "text-danger focus:bg-danger/10 focus:text-danger data-[highlighted]:bg-danger/10 data-[highlighted]:text-danger"
+            : undefined
+        }
         onSelect={() => runAfterMenuClose(action.onSelect)}
         disabled={action.disabled}
       >
@@ -181,7 +189,12 @@ export const RowActions = ({
               queueMicrotask(action);
             }}
           >
-            {menuActions.map(renderMenuAction)}
+            {menuActions.map((action) => (
+              <React.Fragment key={action.key}>
+                {action.separatorBefore ? <DropdownMenuSeparator /> : null}
+                {renderMenuAction(action)}
+              </React.Fragment>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}

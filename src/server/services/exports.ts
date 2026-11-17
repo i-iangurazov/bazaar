@@ -13,6 +13,7 @@ import {
   PosReturnStatus,
   Prisma,
   RegisterShiftStatus,
+  SalePaymentSettlement,
   StockMovementType,
   type ExportJob,
 } from "@prisma/client";
@@ -52,7 +53,7 @@ type ComplianceFlags = {
   enableEttn: boolean;
 };
 
-type StoreSummary = {
+export type StoreSummary = {
   id: string;
   name: string;
   code: string;
@@ -1001,7 +1002,7 @@ const buildReceiptsRegistryRows = async (
   });
 };
 
-const buildShiftReportRows = async (
+export const buildShiftReportRows = async (
   organizationId: string,
   store: StoreSummary,
   periodStart: Date,
@@ -1056,6 +1057,7 @@ const buildShiftReportRows = async (
       where: {
         organizationId,
         shiftId: { in: shiftIds },
+        settlementStatus: SalePaymentSettlement.ACTUAL,
         OR: [
           {
             isRefund: false,

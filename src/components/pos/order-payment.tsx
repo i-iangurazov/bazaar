@@ -1,16 +1,26 @@
 "use client";
 import { OrderReturn } from "./order-return";
 import { useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { trpc } from "@/lib/trpc";
 import { reportError } from "@/lib/reporting";
+import { formatKgsMoney, type CurrencySource } from "@/lib/currencyDisplay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
-export function OrderPayment({ customerOrderId, onPaid }: { customerOrderId: string; onPaid: () => void }) {
+export function OrderPayment({
+  customerOrderId,
+  onPaid,
+  currency,
+}: {
+  customerOrderId: string;
+  onPaid: () => void;
+  currency: CurrencySource;
+}) {
   const t = useTranslations("salesOrders.payment"); const errors = useTranslations("errors");
+  const locale = useLocale();
   const { data: session } = useSession();
   const query = trpc.salesOrders.paymentInfo.useQuery({ customerOrderId });
   const [shiftId, setShiftId] = useState(""); const [amount, setAmount] = useState("");
@@ -22,8 +32,15 @@ export function OrderPayment({ customerOrderId, onPaid }: { customerOrderId: str
   const canRecord = ["ADMIN", "MANAGER", "CASHIER"].includes(session?.user?.role ?? "");
   const selectedShift = shiftId || data.shifts[0]?.id || "";
   const amountKgs = amount === "" ? data.remainingKgs : Number(amount);
+  // Payment rows are stored in KGS. Display the order's own currency snapshot,
+  // while the entry field stays an explicit KGS amount.
+  const money = (valueKgs: number) => formatKgsMoney(valueKgs, locale, currency);
   return <Card><CardHeader><CardTitle>{t("title")}</CardTitle></CardHeader><CardContent className="space-y-3">
-    <p>{data.hasEvidence ? t("received", { amount: data.paidKgs }) : t("unknown")}</p>
+    <p>{data.hasEvidence ? t("received", { amount: money(data.actualPaidKgs) }) : t("unknown")}</p>
+    {data.hasEvidence && data.offsetKgs > 0 ? <>
+      <p>{t("offsetSettled", { amount: money(data.offsetKgs) })}</p>
+      <p>{t("settledTotal", { amount: money(data.paidKgs) })}</p>
+    </> : null}
     {canRecord && data.canPay && data.remainingKgs > 0 ? <>
       <p className="text-sm text-muted-foreground">{t("actualMoney")}</p>
       {!data.shifts.length ? <p>{t("openShiftRequired")}</p> : <div className="grid gap-3 sm:grid-cols-3">

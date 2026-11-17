@@ -155,24 +155,28 @@ describeDb("immediate ordinary sales and explicit declined-item corrections", ()
     expect(await prisma.customerOrder.count()).toBe(0);
   });
 
-  it("requires a configured or explicit price only for a new immediate sale and accepts an intentional zero", async () => {
+  it("requires a resolved price for new and saved sales and accepts an intentional zero", async () => {
     const f = await fixture();
     await prisma.storePrice.deleteMany({ where: { storeId: f.store.id, productId: f.product.id } });
     await prisma.product.update({ where: { id: f.product.id }, data: { basePriceKgs: null } });
     const input = { ...orderInput(f), lines: [{ productId: f.product.id, qty: 1 }] };
-    expect(await f.api.salesOrders.linePrice({ storeId: f.store.id, productId: f.product.id })).toEqual({ unitPriceKgs: 0, hasConfiguredPrice: false });
+    expect(await f.api.salesOrders.linePrice({ storeId: f.store.id, productId: f.product.id })).toEqual({ unitPriceKgs: 0, hasConfiguredPrice: false, priceMode: "RETAIL", priceSource: "MISSING" });
     const before = await accounting(f);
     await expect(f.api.salesOrders.createSale(input)).rejects.toMatchObject({ message: "salesOrderPriceRequired", code: "BAD_REQUEST" });
     expect(await accounting(f)).toEqual(before);
-    // Older drafts and their saved zero-price snapshots retain their policy.
+    // A saved draft keeps its zero-price snapshot for editing, but an unresolved
+    // line cannot be posted in either price mode.
     const legacy = await f.api.salesOrders.createDraft({ ...input, idempotencyKey: randomUUID() });
     expect(Number((await savedOrder(legacy.id)).totalKgs)).toBe(0);
-    await f.api.salesOrders.postSale({ customerOrderId: legacy.id, idempotencyKey: randomUUID() });
+    await expect(
+      f.api.salesOrders.postSale({ customerOrderId: legacy.id, idempotencyKey: randomUUID() }),
+    ).rejects.toMatchObject({ message: "salesOrderPriceRequired" });
+    expect((await savedOrder(legacy.id)).status).toBe("DRAFT");
     const manual = await f.api.salesOrders.createSale({ ...input, idempotencyKey: randomUUID(), lines: [{ productId: f.product.id, qty: 1, unitPriceKgs: 0 }] });
     expect(Number((await savedOrder(manual.id)).totalKgs)).toBe(0);
     expect((await savedOrder(manual.id)).lines[0]!.priceSource).toBe("MANUAL");
     await prisma.product.update({ where: { id: f.product.id }, data: { basePriceKgs: 0 } });
-    expect(await f.api.salesOrders.linePrice({ storeId: f.store.id, productId: f.product.id })).toEqual({ unitPriceKgs: 0, hasConfiguredPrice: true });
+    expect(await f.api.salesOrders.linePrice({ storeId: f.store.id, productId: f.product.id })).toEqual({ unitPriceKgs: 0, hasConfiguredPrice: true, priceMode: "RETAIL", priceSource: "STANDARD" });
     const configured = await f.api.salesOrders.createSale({ ...input, idempotencyKey: randomUUID() });
     expect(Number((await savedOrder(configured.id)).totalKgs)).toBe(0);
     const beforeNegative = await accounting(f);

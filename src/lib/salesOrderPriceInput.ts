@@ -1,5 +1,22 @@
-import { displayMoneyFromKgs, resolveCurrency, type CurrencySource } from "@/lib/currencyDisplay";
+import {
+  currencySourceWithFallback,
+  displayMoneyFromKgs,
+  resolveCurrency,
+  type CurrencySource,
+} from "@/lib/currencyDisplay";
 import { parsePriceInput } from "@/lib/priceInput";
+
+/**
+ * Picks the currency used by a sales-order document. A saved order always keeps
+ * its own snapshot (the store rate may change later); a new draft follows the
+ * currently selected store.
+ */
+export const salesOrderDocumentCurrencySource = (input: {
+  isEdit: boolean;
+  order?: CurrencySource;
+  store?: CurrencySource;
+}): CurrencySource =>
+  input.isEdit ? currencySourceWithFallback(input.order, input.store) : input.store;
 
 export const salesOrderPriceInput = (amountKgs: number, currency: CurrencySource) =>
   String(Number(displayMoneyFromKgs(amountKgs, currency).toFixed(2)));

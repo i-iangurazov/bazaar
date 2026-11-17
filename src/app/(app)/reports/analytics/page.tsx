@@ -27,7 +27,7 @@ import { ReportMetric } from "@/components/reports/report-metric";
 import { OnlineSalesReport } from "@/components/reports/online-sales-report";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
-import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { reportHref, salesViews, type SalesView } from "@/lib/reporting";
 import { trpc } from "@/lib/trpc";
 import { reportError } from "@/lib/reporting";
@@ -574,8 +574,8 @@ function AnalyticsReportContent() {
               {data.period.comparisonAvailable === false
                 ? t("futurePeriod")
                 : t("comparison", {
-                    from: data.period.previousDateFrom,
-                    to: data.period.previousDateTo,
+                    from: formatDate(data.period.previousDateFrom, locale),
+                    to: formatDate(data.period.previousDateTo, locale),
                   })}
               {data.period.partial ? ` · ${t("partialPeriod")}` : ""}
             </p>
@@ -588,7 +588,7 @@ function AnalyticsReportContent() {
             >
               <div className="max-w-3xl">
                 <h2 className="text-sm font-semibold">{t("qualityTitle")}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-foreground/80">
                   {t("qualityNote", {
                     percent: percent(totals.coveragePercent),
                     unknown: totals.unknownCostLines,

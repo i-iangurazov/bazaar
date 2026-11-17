@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -12,6 +12,7 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -23,11 +24,14 @@ import {
 } from "@/components/ui/table";
 import {
   AddIcon,
+  AdjustIcon,
   ArchiveIcon,
   RestoreIcon,
   CheckIcon,
   CloseIcon,
+  EditIcon,
   EmptyIcon,
+  PrintIcon,
   ViewIcon,
 } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -43,6 +47,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
+import { scrollChildIntoHorizontalView } from "@/lib/horizontalScrollFocus";
 import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -59,14 +64,25 @@ const parsePositiveInteger = (value: string | null, fallback: number, max: numbe
 const parseOption = <T extends string>(value: string | null, options: readonly T[], fallback: T) =>
   value && options.includes(value as T) ? (value as T) : fallback;
 
-const SalesOrdersPage = () => {
+const SalesOrdersPageContent = () => {
   const t = useTranslations("salesOrders");
   const tCommon = useTranslations("common");
+  const tDocuments = useTranslations("salesDocuments");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session } = useSession();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const [documentTarget, setDocumentTarget] = useState<{ id: string; number: string } | null>(null);
+  const actionTriggerRefs = useRef(new Map<string, HTMLButtonElement[]>());
+  const documentReturnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (documentTarget) return;
+    const target = documentReturnFocusRef.current;
+    if (!target?.isConnected) return;
+    const timer = window.setTimeout(() => target.focus(), 50);
+    return () => window.clearTimeout(timer);
+  }, [documentTarget]);
   const pathname = usePathname() ?? "/sales/orders";
   const searchParams = useSearchParams();
   const currentQueryString = searchParams.toString();
@@ -80,6 +96,9 @@ const SalesOrdersPage = () => {
   const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 200);
   const search = searchParams.get("search") ?? "";
   const storeId = searchParams.get("storeId") || "all";
+  const employeeId = searchParams.get("employeeId") || "all";
+  const createdFromDay = searchParams.get("createdFromDay") ?? "";
+  const createdToDay = searchParams.get("createdToDay") ?? "";
   const statusFilter = parseOption(
     searchParams.get("status"),
     salesOrderStatuses,
@@ -122,6 +141,10 @@ const SalesOrdersPage = () => {
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const showAllStoresFilter = stores.length !== 1;
+  const employeesQuery = trpc.salesOrders.employeeOptions.useQuery({
+    storeId: storeId === "all" ? undefined : storeId,
+  });
+  const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
 
   const listQuery = trpc.salesOrders.list.useQuery(
     {
@@ -129,6 +152,9 @@ const SalesOrdersPage = () => {
       pageSize,
       search: search.trim() || undefined,
       storeId: storeId === "all" ? undefined : storeId,
+      employeeId: employeeId === "all" ? undefined : employeeId,
+      createdFromDay: createdFromDay || undefined,
+      createdToDay: createdToDay || undefined,
       status: statusFilter === "all" ? undefined : statusFilter,
       sortBy,
       sortDirection,
@@ -240,12 +266,116 @@ const SalesOrdersPage = () => {
     status === CustomerOrderStatus.CONFIRMED ||
     status === CustomerOrderStatus.READY;
 
+  const orderActions = (order: (typeof items)[number]) => [
+    {
+      key: "view",
+      label: tCommon("view"),
+      icon: ViewIcon,
+      href: orderHref(order.id),
+    },
+    ...(order.status === CustomerOrderStatus.DRAFT ||
+    order.status === CustomerOrderStatus.CONFIRMED
+      ? [
+          {
+            key: "edit",
+            label: t("editOrder"),
+            icon: EditIcon,
+            href: `/sales/orders/${encodeURIComponent(order.id)}/edit?returnTo=${encodeURIComponent(listReturnUrl)}`,
+          },
+        ]
+      : []),
+    ...(canFinalize && order.status === CustomerOrderStatus.COMPLETED
+      ? [
+          {
+            key: "correct",
+            label: t("correctOrder"),
+            icon: AdjustIcon,
+            href: `/sales/orders/${encodeURIComponent(order.id)}/correction?returnTo=${encodeURIComponent(listReturnUrl)}`,
+          },
+        ]
+      : []),
+    {
+      key: "document",
+      label: tDocuments("open"),
+      icon: PrintIcon,
+      onSelect: () => {
+        const triggers = actionTriggerRefs.current.get(order.id) ?? [];
+        documentReturnFocusRef.current =
+          triggers.find((trigger) => trigger.offsetParent !== null) ?? triggers[0] ?? null;
+        setDocumentTarget({ id: order.id, number: order.number });
+      },
+    },
+    ...(canFinalize && !order.archivedAt && order.status === CustomerOrderStatus.READY
+      ? [
+          {
+            key: "complete",
+            label: t("complete"),
+            icon: CheckIcon,
+            onSelect: () => {
+              void completeMutation.mutateAsync({
+                customerOrderId: order.id,
+                idempotencyKey:
+                  typeof crypto !== "undefined" && "randomUUID" in crypto
+                    ? crypto.randomUUID()
+                    : `sales-order-${Date.now()}`,
+              });
+            },
+            disabled: completeMutation.isLoading,
+          },
+        ]
+      : []),
+    ...archiveActions(order),
+    ...(canFinalize && !order.archivedAt && canCancel(order.status)
+      ? [
+          {
+            key: "cancel",
+            label: t("cancel"),
+            icon: CloseIcon,
+            variant: "danger",
+            separatorBefore: true,
+            onSelect: async () => {
+              if (
+                !(await confirm({
+                  description: t("confirmCancel"),
+                  confirmVariant: "danger",
+                }))
+              ) {
+                return;
+              }
+              void cancelMutation.mutateAsync({ customerOrderId: order.id });
+            },
+            disabled: cancelMutation.isLoading,
+          },
+        ]
+      : []),
+  ];
+
   const sourceLabel = (source?: string | null) =>
     source === "API"
       ? t("source.api")
       : source === "CATALOG"
         ? t("source.catalog")
         : t("source.manual");
+
+  const defaultSort = sortBy === "createdAt" && sortDirection === "desc";
+  const currentSortLabel =
+    sortBy === "number"
+      ? t("sortNumberAsc")
+      : sortBy === "customerName"
+        ? t("sortCustomerAsc")
+        : sortBy === "totalKgs"
+          ? sortDirection === "asc"
+            ? t("sortTotalAsc")
+            : t("sortTotalDesc")
+          : sortDirection === "asc"
+            ? t("sortOldest")
+            : t("sortNewest");
+  const activeExtraFilterCount = Number(statusFilter !== "all") + Number(!defaultSort);
+
+  const employeeLabel = (order: {
+    source?: string | null;
+    createdBy?: { name: string; isActive: boolean } | null;
+  }) => order.createdBy?.name ?? (order.source === "API" ? t("systemActor") : t("unknownEmployee"));
 
   return (
     <div className="space-y-6">
@@ -367,93 +497,207 @@ const SalesOrdersPage = () => {
                     },
                   ]
                 : []),
+              ...(!defaultSort
+                ? [
+                    {
+                      key: "sort",
+                      label: `${t("sortLabel")}: ${currentSortLabel}`,
+                      onRemove: () =>
+                        updateListParams({ sortBy: null, sortDirection: null, page: null }),
+                    },
+                  ]
+                : []),
+              ...(employeeId !== "all"
+                ? [
+                    {
+                      key: "employee",
+                      label: `${t("employeeFilter")}: ${
+                        employees.find((employee) => employee.id === employeeId)?.name ??
+                        t("unknownEmployee")
+                      }`,
+                      onRemove: () => setFilter("employeeId", null),
+                    },
+                  ]
+                : []),
+              ...(createdFromDay || createdToDay
+                ? [
+                    {
+                      key: "period",
+                      label: `${t("createdPeriod")}: ${createdFromDay || "…"} — ${createdToDay || "…"}`,
+                      onRemove: () =>
+                        updateListParams({ createdFromDay: null, createdToDay: null, page: null }),
+                    },
+                  ]
+                : []),
             ]}
-            onReset={() => updateListParams({ search: null, status: null, page: null })}
-          >
-            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <ListSearch
-                value={search}
-                onChange={(value) => setFilter("search", value)}
-                label={tCommon("search")}
-                placeholder={t("searchPlaceholder")}
-              />
-              <FilterField id="sales-order-store" label={t("store")}>
-                <Select
-                  value={storeId === "all" && stores.length === 1 ? stores[0].id : storeId}
-                  onValueChange={(value) => {
-                    setFilter("storeId", value === "all" ? null : value);
-                  }}
-                >
-                  <SelectTrigger id="sales-order-store" aria-label={t("store")}>
-                    <SelectValue placeholder={t("store")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {showAllStoresFilter ? (
-                      <SelectItem value="all">{tCommon("allStores")}</SelectItem>
-                    ) : null}
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
+            onReset={() =>
+              updateListParams({
+                search: null,
+                status: null,
+                sortBy: null,
+                sortDirection: null,
+                employeeId: null,
+                createdFromDay: null,
+                createdToDay: null,
+                page: null,
+              })
+            }
+            extraCount={activeExtraFilterCount}
+            extra={
+              <div className="contents" data-testid="sales-order-extra-filters">
+                <FilterField id="sales-order-statusLabel" label={t("statusLabel")}>
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(value) => {
+                      setFilter("status", value === "all" ? null : value);
+                    }}
+                  >
+                    <SelectTrigger id="sales-order-statusLabel" aria-label={t("statusLabel")}>
+                      <SelectValue placeholder={t("statusLabel")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("allStatuses")}</SelectItem>
+                      <SelectItem value="DRAFT">
+                        {getCustomerOrderStatusLabel(t, "DRAFT")}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FilterField>
-              <FilterField id="sales-order-statusLabel" label={t("statusLabel")}>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) => {
-                    setFilter("status", value === "all" ? null : value);
-                  }}
-                >
-                  <SelectTrigger id="sales-order-statusLabel" aria-label={t("statusLabel")}>
-                    <SelectValue placeholder={t("statusLabel")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("allStatuses")}</SelectItem>
-                    <SelectItem value="DRAFT">{getCustomerOrderStatusLabel(t, "DRAFT")}</SelectItem>
-                    <SelectItem value="CONFIRMED">
-                      {getCustomerOrderStatusLabel(t, "CONFIRMED")}
+                      <SelectItem value="CONFIRMED">
+                        {getCustomerOrderStatusLabel(t, "CONFIRMED")}
+                      </SelectItem>
+                      <SelectItem value="READY">
+                        {getCustomerOrderStatusLabel(t, "READY")}
+                      </SelectItem>
+                      <SelectItem value="COMPLETED">
+                        {getCustomerOrderStatusLabel(t, "COMPLETED")}
+                      </SelectItem>
+                      <SelectItem value="CANCELED">
+                        {getCustomerOrderStatusLabel(t, "CANCELED")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FilterField>
+                <FilterField id="sales-order-sortLabel" label={t("sortLabel")}>
+                  <Select
+                    value={`${sortBy}:${sortDirection}`}
+                    onValueChange={(value) => {
+                      const [nextSortBy, nextDirection] = value.split(":") as [
+                        (typeof salesOrderSortOptions)[number],
+                        "asc" | "desc",
+                      ];
+                      updateListParams({
+                        sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                        sortDirection: nextDirection === "desc" ? null : nextDirection,
+                        page: null,
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="sales-order-sortLabel" aria-label={t("sortLabel")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
+                      <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
+                      <SelectItem value="number:asc">{t("sortNumberAsc")}</SelectItem>
+                      <SelectItem value="customerName:asc">{t("sortCustomerAsc")}</SelectItem>
+                      <SelectItem value="totalKgs:desc">{t("sortTotalDesc")}</SelectItem>
+                      <SelectItem value="totalKgs:asc">{t("sortTotalAsc")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FilterField>
+              </div>
+            }
+          >
+            <ListSearch
+              value={search}
+              onChange={(value) => setFilter("search", value)}
+              label={tCommon("search")}
+              placeholder={t("searchPlaceholder")}
+            />
+            <FilterField id="sales-order-store" label={t("store")}>
+              <Select
+                value={storeId === "all" && stores.length === 1 ? stores[0].id : storeId}
+                onValueChange={(value) => {
+                  setFilter("storeId", value === "all" ? null : value);
+                }}
+              >
+                <SelectTrigger id="sales-order-store" aria-label={t("store")}>
+                  <SelectValue placeholder={t("store")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {showAllStoresFilter ? (
+                    <SelectItem value="all">{tCommon("allStores")}</SelectItem>
+                  ) : null}
+                  {stores.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
                     </SelectItem>
-                    <SelectItem value="READY">{getCustomerOrderStatusLabel(t, "READY")}</SelectItem>
-                    <SelectItem value="COMPLETED">
-                      {getCustomerOrderStatusLabel(t, "COMPLETED")}
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField id="sales-order-employee" label={t("employeeFilter")}>
+              <Select
+                value={employeeId}
+                onValueChange={(value) => setFilter("employeeId", value === "all" ? null : value)}
+              >
+                <SelectTrigger id="sales-order-employee" aria-label={t("employeeFilter")}>
+                  <SelectValue placeholder={t("employeeFilter")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("allEmployees")}</SelectItem>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee.id} value={employee.id}>
+                      {employee.name}
+                      {employee.isActive ? "" : ` (${t("inactiveEmployee")})`}
                     </SelectItem>
-                    <SelectItem value="CANCELED">
-                      {getCustomerOrderStatusLabel(t, "CANCELED")}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </FilterField>
-              <FilterField id="sales-order-sortLabel" label={t("sortLabel")}>
-                <Select
-                  value={`${sortBy}:${sortDirection}`}
-                  onValueChange={(value) => {
-                    const [nextSortBy, nextDirection] = value.split(":") as [
-                      (typeof salesOrderSortOptions)[number],
-                      "asc" | "desc",
-                    ];
-                    updateListParams({
-                      sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
-                      sortDirection: nextDirection === "desc" ? null : nextDirection,
-                      page: null,
-                    });
-                  }}
-                >
-                  <SelectTrigger id="sales-order-sortLabel" aria-label={t("sortLabel")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
-                    <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
-                    <SelectItem value="number:asc">{t("sortNumberAsc")}</SelectItem>
-                    <SelectItem value="customerName:asc">{t("sortCustomerAsc")}</SelectItem>
-                    <SelectItem value="totalKgs:desc">{t("sortTotalDesc")}</SelectItem>
-                    <SelectItem value="totalKgs:asc">{t("sortTotalAsc")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FilterField>
-            </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <fieldset className="min-w-0 flex-1 basis-80" data-testid="sales-order-period-group">
+              <legend className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                {t("createdPeriod")}
+              </legend>
+              <div className="grid min-w-0 grid-cols-2 gap-2">
+                <div className="min-w-0">
+                  <label
+                    htmlFor="sales-order-created-from"
+                    className="mb-1 block text-[11px] leading-4 text-muted-foreground"
+                  >
+                    {t("createdFrom")}
+                  </label>
+                  <Input
+                    id="sales-order-created-from"
+                    type="date"
+                    value={createdFromDay}
+                    max={createdToDay || undefined}
+                    aria-describedby="sales-order-created-period-hint"
+                    onChange={(event) => setFilter("createdFromDay", event.target.value || null)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label
+                    htmlFor="sales-order-created-to"
+                    className="mb-1 block text-[11px] leading-4 text-muted-foreground"
+                  >
+                    {t("createdTo")}
+                  </label>
+                  <Input
+                    id="sales-order-created-to"
+                    type="date"
+                    value={createdToDay}
+                    min={createdFromDay || undefined}
+                    aria-describedby="sales-order-created-period-hint"
+                    onChange={(event) => setFilter("createdToDay", event.target.value || null)}
+                  />
+                </div>
+              </div>
+            </fieldset>
+            <p
+              id="sales-order-created-period-hint"
+              className="min-w-0 flex-1 basis-64 text-xs leading-5 text-muted-foreground"
+            >
+              {t("createdPeriodHint")}
+            </p>
           </ListToolbar>
 
           {listQuery.error ? (
@@ -470,26 +714,57 @@ const SalesOrdersPage = () => {
             onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
               <div className="bazaar-admin-table-shell">
-                <div className="bazaar-admin-table-scroll">
-                  <Table className="min-w-[1080px]" data-tour="sales-orders-table">
+                <div
+                  className="bazaar-admin-table-scroll"
+                  onFocusCapture={(event) =>
+                    scrollChildIntoHorizontalView(event.currentTarget, event.target)
+                  }
+                >
+                  <Table className="min-w-[1055px] table-fixed" data-tour="sales-orders-table">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("number")}</TableHead>
-                        <TableHead>{t("customer")}</TableHead>
-                        <TableHead>{t("customerAddress")}</TableHead>
-                        <TableHead>{t("store")}</TableHead>
-                        <TableHead>{t("statusLabel")}</TableHead>
-                        <TableHead>{t("trackingNumber")}</TableHead>
-                        <TableHead>{t("sourceLabel")}</TableHead>
-                        <TableHead>{t("total")}</TableHead>
-                        <TableHead>{t("created")}</TableHead>
-                        <TableHead className="text-right">{tCommon("actions")}</TableHead>
+                        <TableHead wrap className="w-[80px]">
+                          {t("number")}
+                        </TableHead>
+                        <TableHead wrap className="w-[80px]">
+                          {t("customer")}
+                        </TableHead>
+                        <TableHead wrap className="w-[120px]">
+                          {t("customerAddress")}
+                        </TableHead>
+                        <TableHead wrap className="w-[80px]">
+                          {t("store")}
+                        </TableHead>
+                        <TableHead wrap className="w-[100px]">
+                          {t("employee")}
+                        </TableHead>
+                        <TableHead wrap className="w-[110px]">
+                          {t("statusLabel")}
+                        </TableHead>
+                        <TableHead wrap className="w-[80px]">
+                          {t("trackingNumber")}
+                        </TableHead>
+                        <TableHead wrap className="w-[80px]">
+                          {t("sourceLabel")}
+                        </TableHead>
+                        <TableHead wrap className="w-[90px]">
+                          {t("total")}
+                        </TableHead>
+                        <TableHead wrap className="w-[80px]">
+                          {t("created")}
+                        </TableHead>
+                        <TableHead
+                          sortable={false}
+                          className="w-[64px] px-1 text-right"
+                        >
+                          {tCommon("actions")}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((order) => (
                         <TableRow key={order.id}>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <Link
                               className="font-medium text-foreground"
                               href={orderHref(order.id)}
@@ -498,10 +773,16 @@ const SalesOrdersPage = () => {
                             </Link>
                           </TableCell>
                           <TableCell>{order.customerName || tCommon("notAvailable")}</TableCell>
-                          <TableCell className="max-w-[220px] truncate">
+                          <TableCell className="whitespace-normal break-words">
                             {order.customerAddress || tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>{order.store.name}</TableCell>
+                          <TableCell
+                            className="max-w-[150px] truncate"
+                            title={employeeLabel(order)}
+                          >
+                            {employeeLabel(order)}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={statusVariant(order.status)}>
                               {getCustomerOrderStatusLabel(t, order.status)}
@@ -530,66 +811,24 @@ const SalesOrdersPage = () => {
                           </TableCell>
                           <TableCell>{formatDate(order.createdAt, locale)}</TableCell>
                           <TableCell>
-                            <div className="flex items-center justify-end gap-1">
-                              <SalesDocumentActions orderId={order.id} number={order.number} iconOnly variant="ghost" />
+                            <div className="flex items-center justify-end">
                               <RowActions
-                                maxInline={4}
-                                moreLabel={tCommon("moreActions")}
-                                actions={[
-                                  {
-                                    key: "view",
-                                    label: tCommon("view"),
-                                    icon: ViewIcon,
-                                    href: orderHref(order.id),
-                                  },
-                                  ...(canFinalize &&
-                                  !order.archivedAt &&
-                                  order.status === CustomerOrderStatus.READY
-                                    ? [
-                                        {
-                                          key: "complete",
-                                          label: t("complete"),
-                                          icon: CheckIcon,
-                                          onSelect: () => {
-                                            void completeMutation.mutateAsync({
-                                              customerOrderId: order.id,
-                                              idempotencyKey:
-                                                typeof crypto !== "undefined" &&
-                                                "randomUUID" in crypto
-                                                  ? crypto.randomUUID()
-                                                  : `sales-order-${Date.now()}`,
-                                            });
-                                          },
-                                          disabled: completeMutation.isLoading,
-                                        },
-                                      ]
-                                    : []),
-                                  ...(canFinalize && !order.archivedAt && canCancel(order.status)
-                                    ? [
-                                        {
-                                          key: "cancel",
-                                          label: t("cancel"),
-                                          icon: CloseIcon,
-                                          variant: "danger",
-                                          onSelect: async () => {
-                                            if (
-                                              !(await confirm({
-                                                description: t("confirmCancel"),
-                                                confirmVariant: "danger",
-                                              }))
-                                            ) {
-                                              return;
-                                            }
-                                            void cancelMutation.mutateAsync({
-                                              customerOrderId: order.id,
-                                            });
-                                          },
-                                          disabled: cancelMutation.isLoading,
-                                        },
-                                      ]
-                                    : []),
-                                  ...archiveActions(order),
-                                ]}
+                                maxInline={0}
+                                moreLabel={t("orderActions", { number: order.number })}
+                                moreTriggerRef={(node) => {
+                                  const current = actionTriggerRefs.current.get(order.id) ?? [];
+                                  if (node) {
+                                    if (!current.includes(node)) {
+                                      actionTriggerRefs.current.set(order.id, [...current, node]);
+                                    }
+                                  } else {
+                                    actionTriggerRefs.current.set(
+                                      order.id,
+                                      current.filter((item) => item !== node),
+                                    );
+                                  }
+                                }}
+                                actions={orderActions(order)}
                               />
                             </div>
                           </TableCell>
@@ -598,6 +837,9 @@ const SalesOrdersPage = () => {
                     </TableBody>
                   </Table>
                 </div>
+                <p className="mt-2 text-xs text-muted-foreground min-[1400px]:hidden">
+                  {t("horizontalScrollHint")}
+                </p>
               </div>
             )}
             renderMobile={(order) => (
@@ -624,6 +866,10 @@ const SalesOrdersPage = () => {
                     <div>
                       <p>{t("store")}</p>
                       <p className="font-medium text-foreground">{order.store.name}</p>
+                    </div>
+                    <div>
+                      <p>{t("employee")}</p>
+                      <p className="font-medium text-foreground">{employeeLabel(order)}</p>
                     </div>
                     <div className="col-span-2">
                       <p>{t("customerAddress")}</p>
@@ -658,63 +904,24 @@ const SalesOrdersPage = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-end gap-1">
-                    <SalesDocumentActions orderId={order.id} number={order.number} iconOnly variant="ghost" />
+                  <div className="flex items-center justify-end">
                     <RowActions
-                      maxInline={4}
-                      moreLabel={tCommon("moreActions")}
-                      actions={[
-                        {
-                          key: "view",
-                          label: tCommon("view"),
-                          icon: ViewIcon,
-                          href: orderHref(order.id),
-                        },
-                        ...(canFinalize &&
-                        !order.archivedAt &&
-                        order.status === CustomerOrderStatus.READY
-                          ? [
-                              {
-                                key: "complete",
-                                label: t("complete"),
-                                icon: CheckIcon,
-                                onSelect: () => {
-                                  void completeMutation.mutateAsync({
-                                    customerOrderId: order.id,
-                                    idempotencyKey:
-                                      typeof crypto !== "undefined" && "randomUUID" in crypto
-                                        ? crypto.randomUUID()
-                                        : `sales-order-${Date.now()}`,
-                                  });
-                                },
-                                disabled: completeMutation.isLoading,
-                              },
-                            ]
-                          : []),
-                        ...(canFinalize && !order.archivedAt && canCancel(order.status)
-                          ? [
-                              {
-                                key: "cancel",
-                                label: t("cancel"),
-                                icon: CloseIcon,
-                                variant: "danger",
-                                onSelect: async () => {
-                                  if (
-                                    !(await confirm({
-                                      description: t("confirmCancel"),
-                                      confirmVariant: "danger",
-                                    }))
-                                  ) {
-                                    return;
-                                  }
-                                  void cancelMutation.mutateAsync({ customerOrderId: order.id });
-                                },
-                                disabled: cancelMutation.isLoading,
-                              },
-                            ]
-                          : []),
-                        ...archiveActions(order),
-                      ]}
+                      maxInline={0}
+                      moreLabel={t("orderActions", { number: order.number })}
+                      moreTriggerRef={(node) => {
+                        const current = actionTriggerRefs.current.get(order.id) ?? [];
+                        if (node) {
+                          if (!current.includes(node)) {
+                            actionTriggerRefs.current.set(order.id, [...current, node]);
+                          }
+                        } else {
+                          actionTriggerRefs.current.set(
+                            order.id,
+                            current.filter((item) => item !== node),
+                          );
+                        }
+                      }}
+                      actions={orderActions(order)}
                     />
                   </div>
                 </CardContent>
@@ -741,8 +948,38 @@ const SalesOrdersPage = () => {
         </CardContent>
       </Card>
       {confirmDialog}
+      <SalesDocumentActions
+        orderId={documentTarget?.id ?? ""}
+        number={documentTarget?.number ?? ""}
+        open={Boolean(documentTarget)}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) return;
+          const id = documentTarget?.id;
+          setDocumentTarget(null);
+          if (id) {
+            window.setTimeout(() => {
+              const triggers = actionTriggerRefs.current.get(id) ?? [];
+              (triggers.find((trigger) => trigger.offsetParent !== null) ?? triggers[0])?.focus();
+            }, 60);
+          }
+        }}
+        trigger={null}
+        returnFocusRef={documentReturnFocusRef}
+      />
     </div>
   );
 };
+
+const SalesOrdersPage = () => (
+  <Suspense
+    fallback={
+      <div className="bazaar-admin-empty min-h-[12rem]">
+        <span>…</span>
+      </div>
+    }
+  >
+    <SalesOrdersPageContent />
+  </Suspense>
+);
 
 export default SalesOrdersPage;

@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { toIntlLocale } from "@/lib/locales";
+import {
+  correctionDifferenceLabelKind,
+  type CorrectionDifferenceLabelKind,
+} from "@/lib/salesOrderCorrectionDisplay";
 import type { SalesDocumentKind, SalesDocumentPayload } from "@/server/services/salesDocuments";
 
 export type SalesDocumentPdfLabels = {
@@ -98,10 +102,12 @@ function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumen
   const lineHeight = font + 3;
   let y = 0;
   let page = 0;
+  let rowsOnPage = 0;
 
   const newPage = (table = false) => {
     doc.addPage({ size: "A4", margin: 0 });
     page += 1;
+    rowsOnPage = 0;
     if (job.status === "DRAFT" || job.status === "CANCELED") {
       doc.save().fillOpacity(0.055).translate(298, 420).rotate(-25);
       doc.fontSize(58).fillColor(BLACK).text(labels.statuses[job.status], -240, -32, { width: 480, align: "center", lineBreak: false });
@@ -159,6 +165,23 @@ function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumen
   ensure(50);
   tableHeader();
 
+  // Reserve the closing block (totals plus signatures) before the last rows.
+  // A row that would leave the totals or signatures behind moves to the next
+  // page together with them, so no near-empty signature-only page is created.
+  const totalRows: Array<{ label: string; value: number; emphasis: boolean }> = [];
+  if (job.discountKgs > 0 || job.subtotalKgs !== job.totalKgs)
+    totalRows.push({ label: labels.subtotal, value: job.subtotalKgs, emphasis: false });
+  if (job.discountKgs > 0)
+    totalRows.push({ label: labels.discount, value: job.discountKgs, emphasis: false });
+  totalRows.push({ label: labels.total, value: job.totalKgs, emphasis: true });
+  const totalsHeight = totalRows.reduce((total, row) => {
+    const size = row.emphasis ? 13 : 9;
+    const lines = wrap(doc, `${row.label}: ${money(job, row.value, locale)}`, width, size);
+    return total + lines.length * (size + 3) + 7;
+  }, 0);
+  const footerHeight = 14 + totalsHeight + 46;
+  const footerReserve = footerHeight <= bottom - 125 ? footerHeight : 0;
+
   for (const [index, item] of job.items.entries()) {
     const name = [item.name, item.variantName, item.sku ? `${labels.sku}: ${item.sku}` : null].filter(Boolean).join("\n");
     const cells = [String(index + 1), name, quantity(item.qty, locale), item.unit, money(job, item.unitPriceKgs, locale), money(job, item.lineTotalKgs, locale)]
@@ -167,7 +190,12 @@ function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumen
     const rowHeight = maxLines * lineHeight + 12;
     // A normal row should start and finish on one page. Split only a row that
     // is taller than an entire continuation page (for example an enormous name).
-    if (rowHeight <= bottom - 125 && y + rowHeight > bottom) newPage(true);
+    if (
+      rowHeight <= bottom - 125 &&
+      (rowsOnPage > 0 ? y + rowHeight + footerReserve > bottom : y + rowHeight > bottom)
+    ) {
+      newPage(true);
+    }
     let offset = 0;
     while (offset < maxLines) {
       const minHeight = Math.min(maxLines - offset, 3) * lineHeight + 12;
@@ -183,22 +211,22 @@ function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumen
       offset += count;
       if (offset < maxLines) newPage(true);
     }
+    rowsOnPage += 1;
   }
   if (!job.items.length) paragraph(labels.empty, 9, 8);
+  // Huge split rows can still end near the bottom; move the whole closing
+  // block rather than letting `ensure(46)` orphan the signatures.
+  if (footerReserve && y + footerReserve > bottom) newPage(true);
   y += 14;
   const totalRow = (label: string, value: number, emphasis = false) => {
     const text = `${label}: ${money(job, value, locale)}`;
     const size = emphasis ? 13 : 9;
     const lines = wrap(doc, text, width, size);
-    ensure(lines.length * (size + 3) + 7);
     drawLines(doc, lines, left, y, width, size, "right");
     y += lines.length * (size + 3) + 7;
   };
-  if (job.discountKgs > 0 || job.subtotalKgs !== job.totalKgs) totalRow(labels.subtotal, job.subtotalKgs);
-  if (job.discountKgs > 0) totalRow(labels.discount, job.discountKgs);
-  totalRow(labels.total, job.totalKgs, true);
-  ensure(72);
-  y += 30;
+  for (const row of totalRows) totalRow(row.label, row.value, row.emphasis);
+  y += 22;
   doc.moveTo(left, y).lineTo(left + 205, y).strokeColor(BLACK).lineWidth(0.6).stroke();
   doc.moveTo(left + 285, y).lineTo(left + width, y).stroke();
   drawLines(doc, [labels.issuedBy], left, y + 5, 205, 8, "left", GRAY);
@@ -290,4 +318,234 @@ function renderGoodsReceipt(doc: Pdf, job: SalesDocumentPayload, labels: SalesDo
     drawLines(doc, wrap(doc, labels.nonFiscal, width, 7), left, height - footerHeight + 3, width, 7, "center", GRAY);
     if (pages.length > 1) drawLines(doc, [`${labels.page} ${pageIndex + 1}/${pages.length}`], left, height - 12, width, 6.5, "right", GRAY);
   }
+}
+
+export type SalesCorrectionPdfPayload = {
+  correctionNumber: string;
+  createdAt: Date;
+  reason: string;
+  notes: string | null;
+  originalNumber: string;
+  originalCreatedAt: Date;
+  storeName: string;
+  customerName: string;
+  sellerName: string;
+  sellerInn: string | null;
+  returnedKgs: number;
+  addedKgs: number;
+  /** Part of the return settled by added goods instead of money. */
+  offsetKgs: number;
+  refundKgs: number;
+  chargeKgs: number;
+  /** Status of the linked manual refund request, when the refund is not immediate. */
+  refundRequestStatus: "OPEN" | "RESOLVED" | "CANCELED" | null;
+  returnedItems: Array<{ name: string; sku: string; qty: number; unitPriceKgs: number; lineTotalKgs: number }>;
+  addedItems: Array<{ name: string; sku: string; qty: number; unitPriceKgs: number; lineTotalKgs: number }>;
+  currencyCode: string;
+  currencyRateKgsPerUnit: number;
+};
+
+export type SalesCorrectionPdfLabels = {
+  title: string;
+  number: string;
+  date: string;
+  original: string;
+  reason: string;
+  notes: string;
+  store: string;
+  customer: string;
+  seller: string;
+  inn: string;
+  returnedTitle: string;
+  addedTitle: string;
+  product: string;
+  sku: string;
+  quantity: string;
+  price: string;
+  amount: string;
+  returnedTotal: string;
+  addedTotal: string;
+  offsetSettled: string;
+  difference: string;
+  toRefund: string;
+  toRefundPending: string;
+  toRefundPaid: string;
+  refundCanceled: string;
+  toPay: string;
+  noDifference: string;
+  empty: string;
+  issuedBy: string;
+  receivedBy: string;
+  nonFiscal: string;
+  page: string;
+};
+
+/**
+ * The act must state the actual money state of a manual refund instead of
+ * always claiming money is still owed. Kept pure so the PDF route and tests
+ * share the same labels.
+ */
+export const correctionPdfDifferenceLabel = (
+  kind: CorrectionDifferenceLabelKind,
+  labels: Pick<
+    SalesCorrectionPdfLabels,
+    "toRefund" | "toRefundPending" | "toRefundPaid" | "refundCanceled"
+  >,
+) => {
+  if (kind === "refundPending") return labels.toRefundPending;
+  if (kind === "refundPaid") return labels.toRefundPaid;
+  if (kind === "refundCanceled") return labels.refundCanceled;
+  return labels.toRefund;
+};
+
+/** Builds the act's single money-difference line; also used by PDF tests. */
+export const correctionPdfDifferenceText = (input: {
+  refundKgs: number;
+  chargeKgs: number;
+  refundRequestStatus: "OPEN" | "RESOLVED" | "CANCELED" | null;
+  labels: SalesCorrectionPdfLabels;
+  moneyText: (value: number) => string;
+}) => {
+  const kind = correctionDifferenceLabelKind({
+    refundRequestStatus: input.refundRequestStatus,
+    refundKgs: input.refundKgs,
+    chargeKgs: input.chargeKgs,
+  });
+  const difference =
+    input.refundKgs > 0
+      ? `${correctionPdfDifferenceLabel(kind, input.labels)} — ${input.moneyText(input.refundKgs)}`
+      : input.chargeKgs > 0
+        ? `${input.labels.toPay} — ${input.moneyText(input.chargeKgs)}`
+        : input.labels.noDifference;
+  return `${input.labels.difference}: ${difference}`;
+};
+
+/** A correction is its own document; the original invoice is never rewritten. */
+export async function buildSalesCorrectionPdf(input: {
+  job: SalesCorrectionPdfPayload;
+  locale: string;
+  labels: SalesCorrectionPdfLabels;
+}): Promise<Buffer> {
+  const { job, labels, locale } = input;
+  const doc = new PDFDocument({ autoFirstPage: false, margin: 0, bufferPages: true });
+  doc.registerFont("Body", fontPath()).font("Body");
+  const chunks: Buffer[] = [];
+  const finished = new Promise<Buffer>((resolve, reject) => {
+    doc.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+  });
+  const left = 36;
+  const width = 523.28;
+  const bottom = 780;
+  let y = 0;
+  const moneyText = (value: number) =>
+    formatKgsMoney(value, toIntlLocale(locale), {
+      currencyCode: job.currencyCode,
+      currencyRateKgsPerUnit: job.currencyRateKgsPerUnit,
+    } as never, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const line = (text: string, size = 9, color = BLACK, gap = 4) => {
+    const lines = wrap(doc, text, width, size);
+    for (const value of lines) {
+      if (y + size + 3 > bottom) newPage();
+      drawLines(doc, [value], left, y, width, size, "left", color);
+      y += size + 3;
+    }
+    y += gap;
+  };
+  const newPage = () => {
+    doc.addPage({ size: "A4", margin: 0 });
+    y = 34;
+    drawLines(doc, ["BAZAAR"], left, 24, width, 8, "left", GRAY);
+    drawLines(doc, wrap(doc, labels.title, width, 17), left, 40, width, 17);
+    y = 74;
+  };
+  const table = (title: string, items: SalesCorrectionPdfPayload["returnedItems"]) => {
+    line(title, 11, BLACK, 6);
+    if (!items.length) {
+      line(labels.empty, 8.5, GRAY, 6);
+      return;
+    }
+    const cols = [235, 45, 65, 85, 93];
+    const header = [labels.product, labels.quantity, labels.price, labels.amount, labels.sku];
+    let x = left;
+    for (let index = 0; index < header.length; index += 1) {
+      drawLines(doc, [header[index]!], x + 3, y, cols[index]! - 6, 8, index === 0 || index === 4 ? "left" : "right");
+      x += cols[index]!;
+    }
+    y += 13;
+    doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor("#999999").stroke();
+    y += 5;
+    for (const item of items) {
+      const nameLines = wrap(doc, item.name, cols[0]! - 6, 8.5);
+      const skuLines = wrap(doc, item.sku, cols[4]! - 4, 7.5);
+      const rowLines = Math.max(nameLines.length, skuLines.length);
+      const height = rowLines * 11 + 8;
+      if (y + height > bottom) newPage();
+      drawLines(doc, nameLines, left + 3, y, cols[0]! - 6, 8.5);
+      drawLines(doc, [String(item.qty)], left + cols[0]! + 3, y, cols[1]! - 6, 8.5, "right");
+      drawLines(doc, [moneyText(item.unitPriceKgs)], left + cols[0]! + cols[1]! + 3, y, cols[2]! - 6, 8.5, "right");
+      drawLines(doc, [moneyText(item.lineTotalKgs)], left + cols[0]! + cols[1]! + cols[2]! + 3, y, cols[3]! - 6, 8.5, "right");
+      drawLines(doc, skuLines, left + cols[0]! + cols[1]! + cols[2]! + cols[3]! + 3, y, cols[4]! - 4, 7.5, "left", GRAY);
+      y += height;
+      doc.moveTo(left, y - 3).lineTo(left + width, y - 3).lineWidth(0.3).strokeColor("#cccccc").stroke();
+    }
+    y += 5;
+  };
+
+  newPage();
+  line(`${labels.number}: ${job.correctionNumber}    ${labels.date}: ${formatDateTime(job.createdAt, locale)}`, 9);
+  line(`${labels.original}: ${job.originalNumber}    ${labels.date}: ${formatDateTime(job.originalCreatedAt, locale)}`, 9);
+  y += 4;
+  line(`${labels.seller}: ${job.sellerName}`, 9);
+  if (job.sellerInn) line(`${labels.inn}: ${job.sellerInn}`, 9);
+  line(`${labels.store}: ${job.storeName}`, 9);
+  line(`${labels.customer}: ${job.customerName || "—"}`, 9);
+  y += 6;
+  line(`${labels.reason}: ${job.reason}`, 9);
+  if (job.notes) line(`${labels.notes}: ${job.notes}`, 8.5, GRAY);
+  y += 8;
+
+  table(labels.returnedTitle, job.returnedItems);
+  table(labels.addedTitle, job.addedItems);
+
+  const differenceText = correctionPdfDifferenceText({
+    refundKgs: job.refundKgs,
+    chargeKgs: job.chargeKgs,
+    refundRequestStatus: job.refundRequestStatus,
+    labels,
+    moneyText,
+  });
+  const closingLines: Array<{ text: string; size: number }> = [
+    { text: `${labels.returnedTotal}: ${moneyText(job.returnedKgs)}`, size: 9 },
+    { text: `${labels.addedTotal}: ${moneyText(job.addedKgs)}`, size: 9 },
+  ];
+  if (job.offsetKgs > 0) {
+    closingLines.push({ text: `${labels.offsetSettled}: ${moneyText(job.offsetKgs)}`, size: 9 });
+  }
+  closingLines.push({ text: differenceText, size: 11 });
+  // Keep the totals and signatures together: reserve the whole closing block
+  // before drawing it, so a long act does not orphan the signatures.
+  const closingHeight =
+    closingLines.reduce(
+      (total, entry) =>
+        total + wrap(doc, entry.text, width, entry.size).length * (entry.size + 3) + 4,
+      0,
+    ) + 20 + 50;
+  if (y + closingHeight > bottom) newPage();
+  for (const entry of closingLines) line(entry.text, entry.size);
+  y += 20;
+  doc.moveTo(left, y).lineTo(left + 205, y).strokeColor(BLACK).lineWidth(0.6).stroke();
+  doc.moveTo(left + 285, y).lineTo(left + width, y).stroke();
+  drawLines(doc, [labels.issuedBy], left, y + 5, 205, 8, "left", GRAY);
+  drawLines(doc, [labels.receivedBy], left + 285, y + 5, width - 285, 8, "left", GRAY);
+
+  const range = doc.bufferedPageRange();
+  for (let index = 0; index < range.count; index += 1) {
+    doc.switchToPage(index);
+    drawLines(doc, wrap(doc, labels.nonFiscal, width - 75, 7.5), left, 811, width - 75, 7.5, "left", GRAY);
+    drawLines(doc, [`${labels.page} ${index + 1}/${range.count}`], left + width - 70, 811, 70, 7.5, "right", GRAY);
+  }
+  doc.end();
+  return finished;
 }

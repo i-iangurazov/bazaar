@@ -254,31 +254,39 @@ const CustomerDatabasePage = () => {
     [selectedExportColumns],
   );
   const formErrors = useMemo(() => {
-    const errors: string[] = [];
+    const errors: Array<{ id: string; message: string }> = [];
     const persistedCustomer = form.id
       ? (customers.find((customer) => customer.id === form.id) ??
         (customerDetail?.customer.id === form.id ? customerDetail.customer : null))
       : null;
     if (!form.name.trim()) {
-      errors.push(t("validation.nameRequired"));
+      errors.push({ id: "customer-name-error", message: t("validation.nameRequired") });
     }
     if (!form.email.trim() && !form.phone.trim()) {
-      errors.push(t("validation.contactRequired"));
+      errors.push({ id: "customer-contact-error", message: t("validation.contactRequired") });
     }
     if (
       !isValidOptionalCustomerPhone(form.phone) &&
       form.phone.trim() !== (persistedCustomer?.phone?.trim() ?? "")
     ) {
-      errors.push(tErrors("customerPhoneInvalid"));
+      errors.push({ id: "customer-phone-error", message: tErrors("customerPhoneInvalid") });
     }
     if (
       !isValidOptionalCustomerAddress(form.address) &&
       form.address.trim() !== (persistedCustomer?.address?.trim() ?? "")
     ) {
-      errors.push(tErrors("customerAddressInvalid"));
+      errors.push({ id: "customer-address-error", message: tErrors("customerAddressInvalid") });
     }
     return errors;
   }, [customerDetail, customers, form, t, tErrors]);
+  const shownErrorIds = useMemo(() => new Set(formErrors.map((error) => error.id)), [formErrors]);
+  const emailDescribedBy = shownErrorIds.has("customer-contact-error")
+    ? "customer-contact-error"
+    : undefined;
+  const phoneDescribedBy =
+    ["customer-contact-error", "customer-phone-error"]
+      .filter((id) => shownErrorIds.has(id))
+      .join(" ") || undefined;
 
   const openAdd = () => {
     if (!canManageCustomers || !selectedStore) return;
@@ -1033,6 +1041,10 @@ const CustomerDatabasePage = () => {
             <Input
               id="customer-name"
               value={form.name}
+              aria-invalid={shownErrorIds.has("customer-name-error") || undefined}
+              aria-describedby={
+                shownErrorIds.has("customer-name-error") ? "customer-name-error" : undefined
+              }
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             />
           </div>
@@ -1043,6 +1055,8 @@ const CustomerDatabasePage = () => {
                 id="customer-email"
                 type="email"
                 value={form.email}
+                aria-invalid={shownErrorIds.has("customer-contact-error") || undefined}
+                aria-describedby={emailDescribedBy}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, email: event.target.value }))
                 }
@@ -1056,6 +1070,8 @@ const CustomerDatabasePage = () => {
                 inputMode="tel"
                 autoComplete="tel"
                 value={form.phone}
+                aria-invalid={Boolean(phoneDescribedBy) || undefined}
+                aria-describedby={phoneDescribedBy}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, phone: event.target.value }))
                 }
@@ -1076,7 +1092,9 @@ const CustomerDatabasePage = () => {
           {formErrors.length ? (
             <div className="bazaar-admin-error">
               {formErrors.map((error) => (
-                <p key={error}>{error}</p>
+                <p key={error.id} id={error.id}>
+                  {error.message}
+                </p>
               ))}
             </div>
           ) : null}

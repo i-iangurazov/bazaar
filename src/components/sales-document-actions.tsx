@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ComponentProps } from "react";
+import { useId, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { useTranslations } from "next-intl";
 
 import { DownloadIcon, PrintIcon } from "@/components/icons";
@@ -36,6 +36,10 @@ export function SalesDocumentActions({
   iconOnly = false,
   className,
   disabled = false,
+  open,
+  onOpenChange,
+  trigger,
+  returnFocusRef,
 }: {
   orderId: string;
   number: string;
@@ -43,12 +47,23 @@ export function SalesDocumentActions({
   iconOnly?: boolean;
   className?: string;
   disabled?: boolean;
+  /** Controlled open state for use from an external actions menu. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** `null` renders the dialog without its own trigger. */
+  trigger?: ReactNode | null;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const t = useTranslations("salesDocuments");
   const tCommon = useTranslations("common");
   const { toast } = useToast();
   const selectId = useId();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = open ?? internalOpen;
+  const setDialogOpen = (value: boolean) => {
+    if (open === undefined) setInternalOpen(value);
+    onOpenChange?.(value);
+  };
   const [kind, setKind] = useState<DocumentKind>("invoice");
   const [action, setAction] = useState<"print" | "download" | null>(null);
   const [failed, setFailed] = useState(false);
@@ -86,28 +101,42 @@ export function SalesDocumentActions({
 
   return (
     <Dialog
-      open={open}
+      open={dialogOpen}
       onOpenChange={(value) => {
         if (action) return;
-        setOpen(value);
+        setDialogOpen(value);
         setFailed(false);
       }}
     >
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant={variant}
-          size={iconOnly ? "icon" : "default"}
-          className={className}
-          disabled={disabled || !orderId}
-          aria-label={t("open")}
-          title={t("open")}
-        >
-          <PrintIcon className="h-4 w-4" aria-hidden />
-          {!iconOnly ? t("open") : null}
-        </Button>
-      </DialogTrigger>
-      <DialogContent size="sm" showClose={!action}>
+      {trigger === null ? null : (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button
+              type="button"
+              variant={variant}
+              size={iconOnly ? "icon" : "default"}
+              className={className}
+              disabled={disabled || !orderId}
+              aria-label={t("open")}
+              title={t("open")}
+            >
+              <PrintIcon className="h-4 w-4" aria-hidden />
+              {!iconOnly ? t("open") : null}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
+      <DialogContent
+        size="sm"
+        showClose={!action}
+        onCloseAutoFocus={(event) => {
+          const target = returnFocusRef?.current;
+          if (target?.isConnected) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t("title", { number })}</DialogTitle>
           <DialogDescription>{t("description")}</DialogDescription>
@@ -144,7 +173,7 @@ export function SalesDocumentActions({
             type="button"
             variant="ghost"
             disabled={Boolean(action)}
-            onClick={() => setOpen(false)}
+            onClick={() => setDialogOpen(false)}
           >
             {tCommon("cancel")}
           </Button>

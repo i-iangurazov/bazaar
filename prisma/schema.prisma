@@ -182,6 +182,13 @@ enum RefundRequestStatus {
   CANCELED
 }
 
+enum SalePaymentSettlement {
+  ACTUAL
+  OFFSET
+  PENDING
+  VOID
+}
+
 enum MarkingCodeStatus {
   CAPTURED
   VOIDED
@@ -606,6 +613,7 @@ model Organization {
   salePayments                  SalePayment[]
   cashDrawerMovements           CashDrawerMovement[]
   saleReturns                   SaleReturn[]
+  salesOrderCorrections         SalesOrderCorrection[]
   fiscalReceipts                FiscalReceipt[]
   kkmConnectorDevices           KkmConnectorDevice[]
   kkmConnectorPairingCodes      KkmConnectorPairingCode[]
@@ -904,6 +912,7 @@ model User {
   purchaseOrdersCreated         PurchaseOrder[]                   @relation("purchaseOrdersCreated")
   purchaseOrdersUpdated         PurchaseOrder[]                   @relation("purchaseOrdersUpdated")
   customerOrdersCreated         CustomerOrder[]                   @relation("customerOrdersCreated")
+  customerOrdersCompleted       CustomerOrder[]                   @relation("customerOrdersCompleted")
   customerOrdersUpdated         CustomerOrder[]                   @relation("customerOrdersUpdated")
   customerOrderEmailLogs        CustomerOrderEmailLog[]           @relation("customerOrderEmailLogsTriggered")
   customersCreated              Customer[]                        @relation("customersCreated")
@@ -938,6 +947,7 @@ model User {
   cashDrawerMovementsCreated    CashDrawerMovement[]              @relation("cashDrawerMovementsCreated")
   saleReturnsCreated            SaleReturn[]                      @relation("saleReturnsCreated")
   saleReturnsCompleted          SaleReturn[]                      @relation("saleReturnsCompleted")
+  salesOrderCorrectionsCreated  SalesOrderCorrection[]            @relation("salesOrderCorrectionCreatedBy")
   kkmPairingCodesCreated        KkmConnectorPairingCode[]         @relation("kkmPairingCodeCreatedBy")
   storePrinterSettingsUpdated   StorePrinterSettings[]            @relation("storePrinterSettingsUpdatedBy")
   refundRequestsCreated         RefundRequest[]                   @relation("refundRequestsCreatedBy")
@@ -983,6 +993,7 @@ model OrganizationCounter {
   salesOrderNumber Int      @default(0)
   posSaleNumber    Int      @default(0)
   posReturnNumber  Int      @default(0)
+  salesCorrectionNumber Int @default(0)
   updatedAt        DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1067,6 +1078,7 @@ model Store {
   forecastSnapshots           ForecastSnapshot[]
   purchaseOrders              PurchaseOrder[]
   customerOrders              CustomerOrder[]
+  salesOrderCorrections       SalesOrderCorrection[]
   operationRequests           OperationRequest[]
   customerOrderEmailLogs      CustomerOrderEmailLog[]
   customers                   Customer[]
@@ -2542,6 +2554,7 @@ model CustomerOrder {
   archivedAt              DateTime?
   completedEventId        String?             @unique
   createdById             String?
+  completedById           String?
   updatedById             String?
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
@@ -2559,13 +2572,17 @@ model CustomerOrder {
   markingCodeCaptures       MarkingCodeCapture[]
   emailAutomationDeliveries EmailAutomationDelivery[]
   createdBy                 User?                     @relation("customerOrdersCreated", fields: [createdById], references: [id])
+  completedBy               User?                     @relation("customerOrdersCompleted", fields: [completedById], references: [id])
   updatedBy                 User?                     @relation("customerOrdersUpdated", fields: [updatedById], references: [id])
+  corrections               SalesOrderCorrection[]    @relation("salesOrderCorrectionOriginal")
+  correctionAdditions       SalesOrderCorrection[]    @relation("salesOrderCorrectionAddition")
 
   @@unique([organizationId, number])
   @@index([storeId, status, createdAt])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, storeId, source, externalOrderId], map: "CustomerOrder_external_identity_idx")
   @@index([organizationId, createdAt])
+  @@index([organizationId, createdById, createdAt], map: "CustomerOrder_employee_created_idx")
   @@index([organizationId, saleChannel, storeId, status, completedAt], map: "CustomerOrder_commercial_channel_report_idx")
   @@index([organizationId, customerId, storeId, status, completedAt], map: "CustomerOrder_customer_report_idx")
   @@index([organizationId, isPosSale, archivedAt, createdAt])
@@ -3042,6 +3059,8 @@ model RegisterShift {
   payments      SalePayment[]
   cashMovements CashDrawerMovement[]
   returns       SaleReturn[]
+  salesOrderCorrections SalesOrderCorrection[]
+  refundRequests RefundRequest[]
 
   @@index([organizationId, storeId, status, openedAt])
   @@index([registerId, status, openedAt])
@@ -3060,6 +3079,8 @@ model SalePayment {
   currencyRateKgsPerUnit Decimal?         @db.Decimal(18, 6)
   providerRef            String?
   isRefund               Boolean          @default(false)
+  settlementStatus       SalePaymentSettlement @default(ACTUAL)
+  refundRequestId        String?          @unique
   createdAt              DateTime         @default(now())
   createdById            String?
 
@@ -3068,6 +3089,7 @@ model SalePayment {
   shift         RegisterShift @relation(fields: [shiftId], references: [id])
   customerOrder CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
   saleReturn    SaleReturn?   @relation(fields: [saleReturnId], references: [id])
+  refundRequest RefundRequest? @relation("refundRequestPayment", fields: [refundRequestId], references: [id])
   createdBy     User?         @relation("salePaymentsCreated", fields: [createdById], references: [id])
 
   @@index([organizationId, storeId, createdAt])
@@ -3127,6 +3149,7 @@ model SaleReturn {
   lines          SaleReturnLine[]
   payments       SalePayment[]
   refundRequests RefundRequest[]
+  correction     SalesOrderCorrection?
   createdBy      User             @relation("saleReturnsCreated", fields: [createdById], references: [id])
   completedBy    User?            @relation("saleReturnsCompleted", fields: [completedById], references: [id])
 
@@ -3147,6 +3170,7 @@ model SaleReturnLine {
   lineTotalKgs        Decimal  @db.Decimal(12, 2)
   unitCostKgs         Decimal? @db.Decimal(12, 2)
   lineCostTotalKgs    Decimal? @db.Decimal(12, 2)
+  restock             Boolean  @default(true)
 
   saleReturn        SaleReturn        @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
   customerOrderLine CustomerOrderLine @relation(fields: [customerOrderLineId], references: [id])
@@ -3156,6 +3180,43 @@ model SaleReturnLine {
   @@unique([saleReturnId, customerOrderLineId])
   @@index([saleReturnId])
   @@index([productId, variantId])
+}
+
+model SalesOrderCorrection {
+  id               String   @id @default(cuid())
+  organizationId   String
+  storeId          String
+  number           String
+  originalOrderId  String
+  saleReturnId     String?  @unique
+  additionOrderId  String?  @unique
+  shiftId          String?
+  reason           String   @db.VarChar(500)
+  notes            String?
+  returnedKgs      Decimal  @default(0) @db.Decimal(12, 2)
+  addedKgs         Decimal  @default(0) @db.Decimal(12, 2)
+  offsetKgs        Decimal  @default(0) @db.Decimal(12, 2)
+  refundKgs        Decimal  @default(0) @db.Decimal(12, 2)
+  chargeKgs        Decimal  @default(0) @db.Decimal(12, 2)
+  restock          Boolean  @default(true)
+  paymentMethod    PosPaymentMethod?
+  before           Json?
+  after            Json?
+  createdById      String
+  createdAt        DateTime @default(now())
+
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  store         Store         @relation(fields: [storeId], references: [id])
+  originalOrder CustomerOrder @relation("salesOrderCorrectionOriginal", fields: [originalOrderId], references: [id])
+  additionOrder CustomerOrder? @relation("salesOrderCorrectionAddition", fields: [additionOrderId], references: [id])
+  saleReturn    SaleReturn?   @relation(fields: [saleReturnId], references: [id])
+  shift         RegisterShift? @relation(fields: [shiftId], references: [id])
+  createdBy     User          @relation("salesOrderCorrectionCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([organizationId, number])
+  @@index([originalOrderId, createdAt])
+  @@index([organizationId, storeId, createdAt])
+  @@index([createdById, createdAt])
 }
 
 model FiscalReceipt {
@@ -3242,6 +3303,8 @@ model RefundRequest {
   originalSaleId         String
   status                 RefundRequestStatus @default(OPEN)
   paymentMethod          PosPaymentMethod
+  amountKgs              Decimal             @default(0) @db.Decimal(12, 2)
+  shiftId                String?
   currencyCode           String?
   currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
   reasonCode             String
@@ -3252,12 +3315,14 @@ model RefundRequest {
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  store        Store         @relation(fields: [storeId], references: [id])
-  saleReturn   SaleReturn    @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
-  originalSale CustomerOrder @relation(fields: [originalSaleId], references: [id], onDelete: Cascade)
-  createdBy    User          @relation("refundRequestsCreatedBy", fields: [createdById], references: [id])
-  reviewedBy   User?         @relation("refundRequestsReviewedBy", fields: [reviewedById], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id])
+  store        Store          @relation(fields: [storeId], references: [id])
+  shift        RegisterShift? @relation(fields: [shiftId], references: [id])
+  saleReturn   SaleReturn     @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+  originalSale CustomerOrder  @relation(fields: [originalSaleId], references: [id], onDelete: Cascade)
+  payment      SalePayment?   @relation("refundRequestPayment")
+  createdBy    User           @relation("refundRequestsCreatedBy", fields: [createdById], references: [id])
+  reviewedBy   User?          @relation("refundRequestsReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([organizationId, storeId, status, createdAt])
   @@index([saleReturnId])

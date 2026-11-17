@@ -128,13 +128,18 @@ export function ListToolbar({
             variant="secondary"
             aria-expanded={expanded}
             aria-controls={id}
+            aria-label={
+              extraCount > 0 ? t("moreFiltersWithCount", { count: extraCount }) : t("moreFilters")
+            }
             onClick={() => setExpanded(!expanded)}
             className="ml-auto shrink-0"
           >
             <AdjustIcon className="h-4 w-4" aria-hidden />
             {t("moreFilters")}
             {extraCount > 0 ? (
-              <span className="rounded bg-primary/10 px-1.5 text-primary">{extraCount}</span>
+              <span aria-hidden className="rounded bg-primary/10 px-1.5 text-primary">
+                {extraCount}
+              </span>
             ) : null}
             <ChevronDownIcon className={cn("h-3.5 w-3.5", expanded && "rotate-180")} aria-hidden />
           </Button>

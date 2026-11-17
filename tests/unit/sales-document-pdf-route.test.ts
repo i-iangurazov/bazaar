@@ -29,11 +29,14 @@ describe("sales document HTTP contract", () => {
     expect((await call(query)).status).toBe(400);
     expect(mocks.project).not.toHaveBeenCalled();
   });
-  it("downloads a no-cache attachment using a safe record-ID filename and live projection", async () => {
+  it("downloads a no-cache attachment using a safe document-number filename and live projection", async () => {
     const response = await call("?kind=goods_receipt&action=download");
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
-    expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="goods_receipt-sale-1.pdf"');
+    expect(response.headers.get("Content-Disposition")).toMatch(
+      /^attachment; filename="goods_receipt-SALE-+01\.pdf"$/,
+    );
+    expect(response.headers.get("Content-Disposition")).not.toMatch(/[\r\n]/);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
     expect(mocks.project).toHaveBeenCalledWith({ actorId: "live-user", organizationId: "org-1", customerOrderId: "sale-1", locale: "ru" });
     expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ kind: "goods_receipt" }));

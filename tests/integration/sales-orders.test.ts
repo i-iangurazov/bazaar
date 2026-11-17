@@ -599,6 +599,7 @@ describeDb("sales orders", () => {
 
   it("completes customer order and creates SALE ledger movements", async () => {
     const { org, store, product, adminUser } = await seedBase();
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
 
     await adjustStock({
       organizationId: org.id,
@@ -673,6 +674,7 @@ describeDb("sales orders", () => {
 
   it("keeps complete idempotent", async () => {
     const { org, store, product, adminUser } = await seedBase();
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
 
     await adjustStock({
       organizationId: org.id,

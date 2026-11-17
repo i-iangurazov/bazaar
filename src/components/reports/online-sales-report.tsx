@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
-import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { reportError } from "@/lib/reporting";
 import { trpc } from "@/lib/trpc";
 
@@ -503,8 +503,8 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
             data.period.comparisonAvailable !== false && (
               <p className="text-xs text-muted-foreground">
                 {r("comparison", {
-                  from: data.period.previousDateFrom,
-                  to: data.period.previousDateTo,
+                  from: formatDate(data.period.previousDateFrom, locale),
+                  to: formatDate(data.period.previousDateTo, locale),
                 })}
               </p>
             )}
