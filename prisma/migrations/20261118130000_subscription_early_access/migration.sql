@@ -1,0 +1,178 @@
+-- Reviewed early access for an already-paid future subscription period.
+-- This is not an invoice, payment, credit, trial or lifetime grant.
+
+CREATE TABLE "SubscriptionEarlyAccess" (
+  "id" TEXT NOT NULL,
+  "organizationId" TEXT NOT NULL,
+  "invoiceId" TEXT NOT NULL,
+  "periodId" TEXT NOT NULL,
+  "startsAt" TIMESTAMP(3) NOT NULL,
+  "endsAt" TIMESTAMP(3) NOT NULL,
+  "purchaseSnapshot" JSONB NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "SubscriptionEarlyAccess_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "SubscriptionEarlyAccess_window_check" CHECK ("endsAt" > "startsAt"),
+  CONSTRAINT "SubscriptionEarlyAccess_organizationId_fkey"
+    FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "SubscriptionEarlyAccess_invoiceId_fkey"
+    FOREIGN KEY ("invoiceId") REFERENCES "SubscriptionInvoice"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT "SubscriptionEarlyAccess_periodId_fkey"
+    FOREIGN KEY ("periodId") REFERENCES "SubscriptionPeriod"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE UNIQUE INDEX "SubscriptionEarlyAccess_organizationId_periodId_key"
+  ON "SubscriptionEarlyAccess"("organizationId", "periodId");
+CREATE INDEX "SubscriptionEarlyAccess_organizationId_startsAt_endsAt_idx"
+  ON "SubscriptionEarlyAccess"("organizationId", "startsAt", "endsAt");
+
+CREATE OR REPLACE FUNCTION "validateSubscriptionEarlyAccess"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE period "SubscriptionPeriod"; invoice "SubscriptionInvoice";
+        organization "Organization"; contract "SubscriptionContract";
+BEGIN
+  SELECT * INTO organization FROM "Organization" WHERE id = NEW."organizationId";
+  SELECT * INTO contract FROM "SubscriptionContract" WHERE "organizationId" = NEW."organizationId";
+  IF organization.id IS NULL OR contract."organizationId" IS NULL OR
+     organization."subscriptionBillingMode" <> 'SELF_SERVE' OR
+     organization."subscriptionStatus" <> 'ACTIVE' OR contract."lifetimeAccess" THEN
+    RAISE EXCEPTION 'earlyAccessEligibilityInvalid' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."startsAt" > CURRENT_TIMESTAMP OR NEW."startsAt" >= NEW."endsAt" THEN
+    RAISE EXCEPTION 'earlyAccessWindowInvalid' USING ERRCODE = '23514';
+  END IF;
+  SELECT * INTO period FROM "SubscriptionPeriod"
+    WHERE id = NEW."periodId" AND "organizationId" = NEW."organizationId" FOR UPDATE;
+  SELECT * INTO invoice FROM "SubscriptionInvoice"
+    WHERE id = NEW."invoiceId" AND "organizationId" = NEW."organizationId" FOR UPDATE;
+  IF period.id IS NULL OR invoice.id IS NULL OR period."invoiceId" IS DISTINCT FROM invoice.id OR
+     period."revokedAt" IS NOT NULL OR period."dependencyRevokedAt" IS NOT NULL OR
+     period."startsAt" IS DISTINCT FROM NEW."endsAt" OR period."startsAt" <= CURRENT_TIMESTAMP OR
+     period."purchaseSnapshot" IS DISTINCT FROM NEW."purchaseSnapshot" OR
+     period.plan::text IS DISTINCT FROM NEW."purchaseSnapshot"->>'plan' THEN
+    RAISE EXCEPTION 'earlyAccessPeriodMismatch' USING ERRCODE = '23514';
+  END IF;
+  IF invoice.status <> 'PAID' OR invoice."paidAt" IS NULL OR invoice."isTest" OR
+     invoice."providerPaymentId" IS NULL OR invoice."purchaseSnapshot" IS NULL OR
+     invoice."purchaseSnapshot" IS DISTINCT FROM NEW."purchaseSnapshot" OR
+     NOT EXISTS (
+       SELECT 1 FROM "SubscriptionPaymentEvent"
+       WHERE "invoiceId" = invoice.id AND state = 'PAID'
+         AND source IN ('CALLBACK', 'RECONCILIATION')
+     ) OR EXISTS (SELECT 1 FROM "ManualSubscriptionRefund" WHERE "invoiceId" = invoice.id) THEN
+    RAISE EXCEPTION 'earlyAccessPaymentNotConfirmed' USING ERRCODE = '23514';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM "SubscriptionPeriod" active
+    WHERE active."organizationId" = NEW."organizationId" AND active."revokedAt" IS NULL
+      AND active."dependencyRevokedAt" IS NULL AND active."startsAt" <= CURRENT_TIMESTAMP
+      AND active."endsAt" > CURRENT_TIMESTAMP
+  ) THEN
+    RAISE EXCEPTION 'earlyAccessAlreadyActive' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END; $$;
+
+CREATE TRIGGER "SubscriptionEarlyAccess_validation"
+  BEFORE INSERT ON "SubscriptionEarlyAccess"
+  FOR EACH ROW EXECUTE FUNCTION "validateSubscriptionEarlyAccess"();
+
+CREATE OR REPLACE FUNCTION "protectSubscriptionEarlyAccess"() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'Subscription early access grant is immutable' USING ERRCODE = '23514';
+END; $$;
+
+CREATE TRIGGER "SubscriptionEarlyAccess_immutable"
+  BEFORE UPDATE OR DELETE ON "SubscriptionEarlyAccess"
+  FOR EACH ROW EXECUTE FUNCTION "protectSubscriptionEarlyAccess"();
+
+-- Capacity reads the reviewed early grant before the trial/base fallback.
+CREATE OR REPLACE FUNCTION "enforceSubscriptionCapacity"() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE org_id TEXT; contract "SubscriptionContract"; org "Organization";
+        terms JSONB; effective JSONB; early_capacity JSONB; resource TEXT;
+        capacity INTEGER; future_capacity INTEGER; used BIGINT;
+BEGIN
+  org_id := NEW."organizationId";
+  IF org_id IS NULL THEN RETURN NEW; END IF;
+  IF TG_TABLE_NAME = 'Product' THEN
+    IF NEW."isDeleted" OR (TG_OP = 'UPDATE' AND NOT OLD."isDeleted" AND OLD."organizationId" = org_id) THEN RETURN NEW; END IF;
+    resource := 'maxProducts';
+  ELSIF TG_TABLE_NAME = 'User' THEN
+    IF NOT NEW."isActive" OR (TG_OP = 'UPDATE' AND OLD."isActive" AND OLD."organizationId" IS NOT DISTINCT FROM org_id) THEN RETURN NEW; END IF;
+    resource := 'maxActiveUsers';
+  ELSE
+    IF TG_OP = 'UPDATE' AND OLD."organizationId" = org_id THEN RETURN NEW; END IF;
+    resource := 'maxStores';
+  END IF;
+  SELECT * INTO contract FROM "SubscriptionContract" WHERE "organizationId" = org_id;
+  IF contract."catalogVersion" IS DISTINCT FROM '2026-11' OR contract."lifetimeAccess" THEN RETURN NEW; END IF;
+  SELECT * INTO org FROM "Organization" WHERE id = org_id FOR UPDATE;
+  SELECT "purchaseSnapshot"->'entitlements' INTO effective FROM "SubscriptionPeriod"
+    WHERE "revokedAt" IS NULL AND "dependencyRevokedAt" IS NULL AND ("parentPeriodId" IS NULL OR "endsAt">CURRENT_TIMESTAMP) AND "organizationId" = org_id AND "startsAt" <= CURRENT_TIMESTAMP
+    ORDER BY "startsAt" DESC, "createdAt" DESC, id DESC LIMIT 1;
+  SELECT "purchaseSnapshot"->'entitlements' INTO early_capacity FROM "SubscriptionEarlyAccess"
+    WHERE "organizationId" = org_id AND "startsAt" <= CURRENT_TIMESTAMP AND "endsAt" > CURRENT_TIMESTAMP
+    ORDER BY "startsAt" DESC, "createdAt" DESC, id DESC LIMIT 1;
+  terms := COALESCE(effective, early_capacity, CASE WHEN org."subscriptionBillingMode" = 'SELF_SERVE' THEN contract."trialOffer"->'entitlements' END, contract."termsSnapshot"->'plans'->(CASE WHEN org.plan::text = 'PRO' THEN 'BUSINESS' ELSE org.plan::text END));
+  capacity := (terms->'limits'->>resource)::INTEGER;
+  IF capacity IS NULL OR capacity < 1 THEN
+    RAISE EXCEPTION 'billingContractNeedsReview' USING ERRCODE = '23514';
+  END IF;
+  IF TG_TABLE_NAME = 'Product' THEN
+    SELECT COUNT(*) INTO used FROM "Product" WHERE "organizationId" = org_id AND NOT "isDeleted" AND id <> NEW.id;
+  ELSIF TG_TABLE_NAME = 'User' THEN
+    SELECT COUNT(*) INTO used FROM "User" WHERE "organizationId" = org_id AND "isActive" AND id <> NEW.id;
+  ELSE
+    SELECT COUNT(*) INTO used FROM "Store" WHERE "organizationId" = org_id AND id <> NEW.id;
+  END IF;
+  SELECT MIN((candidate->'limits'->>resource)::INTEGER) INTO future_capacity FROM (
+    SELECT "purchaseSnapshot"->'entitlements' AS candidate FROM "SubscriptionPeriod"
+      WHERE "revokedAt" IS NULL AND "dependencyRevokedAt" IS NULL AND ("parentPeriodId" IS NULL OR "endsAt">CURRENT_TIMESTAMP) AND "organizationId" = org_id AND "startsAt" > CURRENT_TIMESTAMP
+    UNION ALL
+    SELECT "purchaseSnapshot"->'entitlements' AS candidate FROM "SubscriptionInvoice"
+      WHERE "organizationId" = org_id AND "pendingSlot" = org_id AND status::text IN ('CREATING','PENDING','REVIEW')
+    UNION ALL
+    SELECT "purchaseSnapshot"->'entitlements' AS candidate FROM "ApplePurchaseIntent"
+      WHERE "organizationId" = org_id AND scope = 'SUBSCRIPTION' AND status IN ('PENDING','REVIEW')
+    UNION ALL
+    SELECT "pendingChangeOffer"->'entitlements' AS candidate FROM "AppleSubscriptionChain"
+      WHERE "organizationId" = org_id AND "pendingChangeOffer" IS NOT NULL AND "autoRenewEnabled" IS TRUE
+  ) choices;
+  capacity := LEAST(capacity, COALESCE(future_capacity, capacity));
+  IF used >= capacity THEN
+    RAISE EXCEPTION 'subscriptionCapacityExceeded:%', resource USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END; $$;
+
+CREATE OR REPLACE FUNCTION "assertSubscriptionFeatureConfiguration"(org_id TEXT, feature TEXT) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE contract "SubscriptionContract"; org "Organization"; effective JSONB; early_features JSONB;
+BEGIN
+  SELECT * INTO contract FROM "SubscriptionContract" WHERE "organizationId" = org_id;
+  IF contract."catalogVersion" IS DISTINCT FROM '2026-11' OR contract."lifetimeAccess" THEN RETURN; END IF;
+  SELECT * INTO org FROM "Organization" WHERE id = org_id FOR UPDATE;
+  SELECT "purchaseSnapshot"->'entitlements' INTO effective FROM "SubscriptionPeriod"
+    WHERE "revokedAt" IS NULL AND "dependencyRevokedAt" IS NULL AND ("parentPeriodId" IS NULL OR "endsAt">CURRENT_TIMESTAMP) AND "organizationId" = org_id AND "startsAt" <= CURRENT_TIMESTAMP
+    ORDER BY "startsAt" DESC, "createdAt" DESC, id DESC LIMIT 1;
+  SELECT "purchaseSnapshot"->'entitlements' INTO early_features FROM "SubscriptionEarlyAccess"
+    WHERE "organizationId" = org_id AND "startsAt" <= CURRENT_TIMESTAMP AND "endsAt" > CURRENT_TIMESTAMP
+    ORDER BY "startsAt" DESC, "createdAt" DESC, id DESC LIMIT 1;
+  effective := COALESCE(effective, early_features, CASE WHEN org."subscriptionBillingMode" = 'SELF_SERVE' THEN contract."trialOffer"->'entitlements' END, contract."termsSnapshot"->'plans'->(CASE WHEN org.plan::text = 'PRO' THEN 'BUSINESS' ELSE org.plan::text END));
+  IF NOT COALESCE((effective->'features'->>feature)::boolean, false) THEN
+    RAISE EXCEPTION 'featureLockedPlan' USING ERRCODE = '23514';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM "SubscriptionPeriod" WHERE "revokedAt" IS NULL AND "dependencyRevokedAt" IS NULL AND ("parentPeriodId" IS NULL OR "endsAt">CURRENT_TIMESTAMP) AND "organizationId" = org_id AND "startsAt" > CURRENT_TIMESTAMP
+      AND NOT COALESCE(("purchaseSnapshot"->'entitlements'->'features'->>feature)::boolean, false)
+  ) OR EXISTS (
+    SELECT 1 FROM "SubscriptionInvoice" WHERE "organizationId" = org_id AND "pendingSlot" = org_id
+      AND status::text IN ('CREATING','PENDING','REVIEW')
+      AND NOT COALESCE(("purchaseSnapshot"->'entitlements'->'features'->>feature)::boolean, false)
+  ) OR EXISTS (
+    SELECT 1 FROM "ApplePurchaseIntent" WHERE "organizationId" = org_id AND scope = 'SUBSCRIPTION' AND status IN ('PENDING','REVIEW')
+      AND NOT COALESCE(("purchaseSnapshot"->'entitlements'->'features'->>feature)::boolean, false)
+  ) OR EXISTS (
+    SELECT 1 FROM "AppleSubscriptionChain" WHERE "organizationId" = org_id AND "pendingChangeOffer" IS NOT NULL AND "autoRenewEnabled" IS TRUE
+      AND NOT COALESCE(("pendingChangeOffer"->'entitlements'->'features'->>feature)::boolean, false)
+  ) THEN
+    RAISE EXCEPTION 'billingScheduledFeatureRestriction' USING ERRCODE = '23514';
+  END IF;
+END; $$;

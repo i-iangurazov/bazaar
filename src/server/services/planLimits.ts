@@ -22,6 +22,7 @@ import { contractPlan, createContractTerms, planDefinitionSchema, readContractTe
 import { readPurchaseSnapshot } from "@/server/billing/purchaseSnapshot";
 import { AppError } from "@/server/services/errors";
 import { readTrialOffer } from "@/server/billing/trialPolicy";
+import { findActiveSubscriptionEarlyAccess } from "@/server/billing/subscriptionEarlyAccess";
 
 export type PlanTier = PlanCode;
 export type PlanLimits = {
@@ -133,6 +134,10 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     throw new AppError("orgNotFound", "NOT_FOUND", 404);
   }
   const lifetimeAccess = Boolean(org.subscriptionContract?.lifetimeAccess || LIFETIME_ORGANIZATION_IDS.has(org.id));
+  const earlyAccess = org.subscriptionBillingMode === "SELF_SERVE" && !lifetimeAccess
+    ? await findActiveSubscriptionEarlyAccess(org.id, db)
+    : null;
+  const earlyPurchase = readPurchaseSnapshot(earlyAccess?.purchaseSnapshot);
   const latestStartedPeriod = org.subscriptionBillingMode === "SELF_SERVE" && !lifetimeAccess
     ? await db.subscriptionPeriod.findFirst({
         where: { organizationId, revokedAt: null, dependencyRevokedAt: null, startsAt: { lte: new Date() },
@@ -163,7 +168,7 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
   const hasPreview = Boolean(org.subscriptionContract?.trialOffer) && !lifetimeAccess &&
     org.subscriptionBillingMode === "SELF_SERVE";
   const futurePurchase = readPurchaseSnapshot(initialTrialPurchase?.purchaseSnapshot);
-  const purchase = readPurchaseSnapshot((latestPeriod ?? (hasPreview ? null : initialTrialPurchase))?.purchaseSnapshot);
+  const purchase = readPurchaseSnapshot((latestPeriod ?? (hasPreview ? null : initialTrialPurchase))?.purchaseSnapshot) ?? earlyPurchase;
   const version = catalogVersion(org.subscriptionContract?.catalogVersion);
   const terms = readContractTerms(org.subscriptionContract?.termsSnapshot) ?? createContractTerms(version);
   if (terms.catalogVersion !== version) throw new AppError("billingContractNeedsReview", "CONFLICT", 409);
@@ -183,10 +188,11 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     entitlements,
     trialOffer,
     paidCoverageGap,
-    subscriptionPaymentSource: !activePeriod && preserved ? "MANUAL" : appleTransaction ? "APPLE" : latestPeriod?.invoiceId ? "GATEWAY" : "MANUAL",
+    subscriptionPaymentSource: !activePeriod && preserved ? "MANUAL" : earlyAccess && !activePeriod ? "EARLY_ACCESS" : appleTransaction ? "APPLE" : latestPeriod?.invoiceId ? "GATEWAY" : "MANUAL",
     appleGraceEndsAt: appleChain?.graceExpiresAt ?? null,
     activeSubscriptionPeriod: activePeriod,
-    activePurchase: purchase ?? (trialOffer ? futurePurchase : null),
+    activePurchase: activePeriod ? purchase : trialOffer ? futurePurchase : null,
+    earlyAccess,
   };
 };
 

@@ -627,6 +627,7 @@ model Organization {
   subscriptionInvoices          SubscriptionInvoice[]
   subscriptionPeriods           SubscriptionPeriod[]
   subscriptionContract          SubscriptionContract?
+  subscriptionEarlyAccessGrants SubscriptionEarlyAccess[]
   subscriptionReminders         SubscriptionReminder[]
   subscriptionPaymentNotifications SubscriptionPaymentNotification[]
   manualSubscriptionRefunds     ManualSubscriptionRefund[]
@@ -682,6 +683,23 @@ model SubscriptionContract {
   selectedSenderDomain       String?
   createdAt                  DateTime     @default(now())
   organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+/// A reviewed, time-boxed early grant backed by an already-paid invoice and its
+/// future SubscriptionPeriod. It never creates money or a new invoice.
+model SubscriptionEarlyAccess {
+  id               String   @id @default(cuid())
+  organizationId   String
+  invoiceId        String
+  periodId         String
+  startsAt         DateTime
+  endsAt           DateTime
+  purchaseSnapshot Json
+  createdAt        DateTime @default(now())
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, periodId])
+  @@index([organizationId, startsAt, endsAt])
 }
 
 enum SubscriptionBillingMode {

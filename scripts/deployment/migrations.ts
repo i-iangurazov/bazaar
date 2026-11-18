@@ -8,6 +8,8 @@ import { resolveMigrationDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20261118130000_subscription_early_access":
+    "52c737bfa4c860b72ae9e2db905db103b227674b809a42001e441ad3326276a1",
   "20261114110000_product_photo_features":
     "13f4fd872deda89ac210cd8c2f4b968d433a302857f3f5e08162b9de6adeab9e",
   "20261113140000_apple_temporary_upward_rounding":
