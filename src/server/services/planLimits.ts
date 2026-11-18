@@ -191,7 +191,10 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
     subscriptionPaymentSource: !activePeriod && preserved ? "MANUAL" : earlyAccess && !activePeriod ? "EARLY_ACCESS" : appleTransaction ? "APPLE" : latestPeriod?.invoiceId ? "GATEWAY" : "MANUAL",
     appleGraceEndsAt: appleChain?.graceExpiresAt ?? null,
     activeSubscriptionPeriod: activePeriod,
-    activePurchase: activePeriod ? purchase : trialOffer ? futurePurchase : null,
+    // Preserve the previous fallback for every organization without an early
+    // grant. During early access the future paid cycle must not become the
+    // current usage window before it starts.
+    activePurchase: earlyAccess && !activePeriod ? null : purchase ?? (trialOffer ? futurePurchase : null),
     earlyAccess,
   };
 };
