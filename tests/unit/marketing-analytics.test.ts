@@ -305,7 +305,7 @@ describe("optional marketing analytics", () => {
 
   it("loads only the configured tag and sends manual public views without query, hash or referrer", async () => {
     const analytics = await import("@/lib/marketingAnalytics");
-    window.history.replaceState({}, "", "/ru?email=private@example.invalid&phone=996709911300#secret");
+    window.history.replaceState({}, "", "/ru?email=private@example.invalid&phone=996509911300#secret");
     analytics.writeAnalyticsConsent("granted");
     analytics.synchronizeMarketingAnalytics("/ru");
     analytics.synchronizeMarketingAnalytics("/ru"); // React effect replay is not another visit.
@@ -327,7 +327,7 @@ describe("optional marketing analytics", () => {
       .toBeLessThan(queued.findIndex(command => command[0] === "config"));
     // Initial consent is already known: no post-config grant reconfiguration.
     expect(queued.filter(command => command[0] === "consent")).toHaveLength(1);
-    expect(JSON.stringify(commands())).not.toMatch(/private@example|996709911300|#secret|\?email=/);
+    expect(JSON.stringify(commands())).not.toMatch(/private@example|996509911300|#secret|\?email=/);
   });
 
   it("waits for SDK event processing before disabling analytics and replacing the public document", async () => {

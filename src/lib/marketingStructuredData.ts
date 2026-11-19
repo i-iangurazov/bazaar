@@ -1,4 +1,5 @@
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { bazaarContact } from "@/lib/bazaarContact";
 import { marketingHomePath, marketingSiteUrl } from "@/lib/marketingSeo";
 
 type MarketingStructuredDataOptions = {
@@ -50,7 +51,7 @@ export const getMarketingStructuredData = ({
         contactPoint: {
           "@type": "ContactPoint" as const,
           contactType: "customer support",
-          telephone: "+996709911300",
+          telephone: bazaarContact.phone,
           email: "support@bazaar.kg",
         },
       },

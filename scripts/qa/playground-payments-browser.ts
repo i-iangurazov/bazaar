@@ -238,7 +238,7 @@ try {
   await page.goto(`${base}/billing`, { waitUntil: "networkidle" });
   const pending = page.locator("[data-pending-invoice]");
   await pending.getByText(ru.billing.payments.reviewHint).waitFor();
-  assert.equal(await pending.locator('a[href="https://wa.me/996709911300"]').count(), 1);
+  assert.equal(await pending.locator('a[href="https://wa.me/996509911300"]').count(), 1);
   await page.locator(`[data-subscription-invoice="${invoice.id}"] summary`).click();
   await page.getByText("Synthetic UI seller", { exact: true }).waitFor();
   await page

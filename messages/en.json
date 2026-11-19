@@ -767,7 +767,7 @@
     "ctaTitle": "Need higher limits?",
     "ctaHint": "Contact us on WhatsApp or request an upgrade to a higher plan.",
     "ctaWhatsapp": "Contact us on WhatsApp",
-    "ctaWhatsappLink": "https://wa.me/996709911300",
+    "ctaWhatsappLink": "https://wa.me/996509911300",
     "empty": "Plan information is unavailable.",
     "publicPricing": {
       "title": "Clear plans for your store",
@@ -8249,7 +8249,7 @@
     "supportBody": "Open Bazaar Guide and contact support. Never send a password, API key, or payment data in a support message.",
     "supportAction": "Open support",
     "operatorTitle": "Who provides the service",
-    "operatorBody": "The Bazaar operator provides the software and processes information required to operate it. Verified supplier information is published on the requisites page after payment onboarding is complete. Contact Bazaar Guide or +996 709 911 300 with data requests. An organization uploading information about its customers and employees is responsible for lawful collection and access granted to its users.",
+    "operatorBody": "The Bazaar operator provides the software and processes information required to operate it. Verified supplier information is published on the requisites page after payment onboarding is complete. Contact Bazaar Guide or +996 509 911 300 with data requests. An organization uploading information about its customers and employees is responsible for lawful collection and access granted to its users.",
     "appleRefundsTitle": "Information for Apple refunds",
     "appleRefundsBody": "Apple may request service delivery information to review a refund for a particular purchase. Only after the purchaser gives separate, optional consent may Bazaar send Apple that purchase’s identifier, consent and the purchaser’s answers about delivery and any trial, sample or information about functionality before purchase. For an “undelivered” answer, Apple’s API requires a consumption value of 0%; this classifies an undelivered service and does not measure user activity. No percentage is sent for delivered services. The response does not include a recommendation to approve or decline the refund, Baam content, organization documents, address, email or payment details. Unknown answers are not inferred: sharing waits for known answers. Declining or withdrawing consent does not block purchased access or requesting a refund. You can withdraw consent in your profile under Privacy and account, including after a role or organization change. Loss of required permissions, leaving the organization, deactivation or account deletion also stops further sharing under that consent. Withdrawal does not remove information Apple has already received; records of choices and delivery may be retained to document consent, security and refund handling. Apple decides refunds.",
     "paymentsTitle": "Subscription payments",

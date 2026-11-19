@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
+import { bazaarContact } from "@/lib/bazaarContact";
 import { toPlanCode, type PlanCode } from "@/lib/billing/plans";
 import { formatCurrencyKGS, formatDate, formatDateTime } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
@@ -395,7 +396,7 @@ function WebSubscriptionPayments({
             ) : null}
             {!settings.data.canPurchase && !settings.data.lifetimeAccess && !pending ? (
               <Button asChild variant="secondary">
-                <a href="https://wa.me/996709911300" target="_blank" rel="noreferrer">
+                <a href={bazaarContact.whatsappUrl} target="_blank" rel="noreferrer">
                   {t("support")}
                 </a>
               </Button>
@@ -474,7 +475,7 @@ function WebSubscriptionPayments({
                   </Button>
                   {pending.status === "REVIEW" || legacyPending ? (
                     <Button asChild variant="secondary">
-                      <a href="https://wa.me/996709911300" target="_blank" rel="noreferrer">
+                      <a href={bazaarContact.whatsappUrl} target="_blank" rel="noreferrer">
                         {t("support")}
                       </a>
                     </Button>

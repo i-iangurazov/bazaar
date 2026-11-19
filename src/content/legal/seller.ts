@@ -1,4 +1,5 @@
 import type { SellerDetails } from "./types";
+import { bazaarContact } from "@/lib/bazaarContact";
 
 // Safe public defaults only. Verified registration and banking details are loaded
 // on the server; committing a draft must never publish the owner's documents.
@@ -11,7 +12,7 @@ export const sellerDraft: SellerDetails = {
   registrationAuthority: null,
   registeredAddress: null,
   correspondenceAddress: null,
-  phone: "+996 709 911 300",
+  phone: bazaarContact.displayPhone,
   email: "support@bazaar.kg",
   bankName: null,
   beneficiary: null,

@@ -11,6 +11,7 @@ import { getPlanCatalogEntries } from "@/server/billing/planCatalog";
 import { loadPublicSellerLegalName } from "@/server/legal/seller";
 import { legalPublicationState } from "@/lib/legalPublication";
 import { formatNumber } from "@/lib/i18nFormat";
+import { bazaarContact } from "@/lib/bazaarContact";
 import { TRIAL_DAYS } from "@/lib/billing/trial";
 import { marketingHomePath, marketingSiteUrl } from "@/lib/marketingSeo";
 import { marketingSolutionPath, solutionPages, type SolutionId } from "@/lib/marketingSolutions";
@@ -310,7 +311,7 @@ export const SolutionsPage = async ({ locale, id }: { locale: Locale; id?: Solut
           <Link href="/privacy">{landing.footer.privacy}</Link>
           {publishedLegal ? <Link href="/legal/requisites">{landing.footer.legal}</Link> : null}
           <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
-          <a href="https://wa.me/996709911300">+996 709 911 300</a>
+          <a href={bazaarContact.whatsappUrl}>{bazaarContact.displayPhone}</a>
         </nav>
         <MarketingLocaleSwitcher />
       </footer>
