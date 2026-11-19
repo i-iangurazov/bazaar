@@ -23,7 +23,7 @@ jobs:
         with:
           node-version-file: .node-version
       - name: Verify scanner failure handling
-        run: node --test scripts/deployment/osv-results.test.mjs scripts/deployment/dependency-policy.test.mjs scripts/deployment/picomatch-exception.test.mjs
+        run: node --test scripts/deployment/osv-results.test.mjs scripts/deployment/dependency-policy.test.mjs
       - name: Scan lockfile with OSV v2.3.0
         id: scanner
         # Exit 1 means findings; the report gate and reporter still must run.
@@ -60,14 +60,12 @@ jobs:
           NODE
       - name: Verify narrowly scoped publisher archive policy
         run: node scripts/deployment/dependency-policy.mjs --report osv-results.json
-      - name: Apply reviewed picomatch exception
-        run: node scripts/deployment/picomatch-exception.mjs --report osv-results.json --output osv-results.gated.json
       - name: Report findings without hiding scanner failures
         id: reporter
         uses: google/osv-scanner-action/osv-reporter-action@9ca325867d8b4f9a3ccd4a0ca372e3cc7fcee3ef # v2.3.0
         with:
           scan-args: |-
-            --new=osv-results.gated.json
+            --new=osv-results.json
             --output=osv-results.sarif
             --gh-annotations=false
             --fail-on-vuln=true
@@ -78,7 +76,6 @@ jobs:
           name: dependency-security-results
           path: |
             osv-results.json
-            osv-results.gated.json
             osv-results.sarif
           if-no-files-found: error
       - name: Upload dependency results to code scanning
