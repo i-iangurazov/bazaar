@@ -145,4 +145,85 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
     expect(result.lineCount).toBe(2);
     expect(await prisma.stockMovement.count({ where: { referenceId: result.transferId } })).toBe(4);
   });
+
+  it("edits a transfer taking longer than five seconds without losing the transaction", async () => {
+    const f = await seedBase({ plan: "ENTERPRISE" });
+    const destination = await prisma.store.create({
+      data: { organizationId: f.org.id, name: "Edit destination", code: "EDIT-DST" },
+    });
+    await prisma.inventorySnapshot.create({
+      data: { storeId: f.store.id, productId: f.product.id, onHand: 100 },
+    });
+    await prisma.stockMovement.create({
+      data: { storeId: f.store.id, productId: f.product.id, type: "RECEIVE", qtyDelta: 100 },
+    });
+    const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+    const transfer = await caller.inventory.transfer({
+      fromStoreId: f.store.id,
+      toStoreId: destination.id,
+      lines: [{ productId: f.product.id, qty: 5 }],
+      idempotencyKey: "slow-edit-create",
+    });
+    // Real PostgreSQL latency reproduces the production five-second edit timeout.
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION test_slow_transfer_edit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW."type" = 'TRANSFER_OUT' AND NEW."productId" = '${f.product.id}' THEN
+        PERFORM pg_sleep(5.2); END IF; RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER test_slow_transfer_edit BEFORE INSERT ON "StockMovement"
+      FOR EACH ROW EXECUTE FUNCTION test_slow_transfer_edit()`);
+    try {
+      const documentKey = `TRANSFER:TRANSFER:${transfer.transferId}`;
+      const editInput = {
+        documentKey,
+        reason: "slow edit regression",
+        lines: [{ productId: f.product.id, quantity: 7 }],
+        idempotencyKey: "slow-edit-save",
+      };
+      const started = Date.now();
+      const edit = await caller.inventory.editProductMovementDocument(editInput);
+      expect(Date.now() - started).toBeGreaterThan(5_000);
+      expect(edit).toMatchObject({ totalQuantity: 7 });
+      const onHand = async (storeId: string) =>
+        (await prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId,
+              productId: f.product.id,
+              variantKey: "BASE",
+            },
+          },
+          select: { onHand: true },
+        }))?.onHand;
+      expect(await onHand(f.store.id)).toBe(93);
+      expect(await onHand(destination.id)).toBe(7);
+      const document = await caller.inventory.productMovementDocument({ documentKey });
+      expect(document?.positionsCount).toBe(1);
+      expect(document?.totalQuantity).toBe(7);
+      const movementCount = await prisma.stockMovement.count({
+        where: { referenceId: transfer.transferId },
+      });
+
+      // The same idempotency key replays the terminal receipt without new movements.
+      const replay = await caller.inventory.editProductMovementDocument(editInput);
+      expect(replay).toMatchObject({ totalQuantity: 7 });
+      expect(await onHand(f.store.id)).toBe(93);
+      expect(await onHand(destination.id)).toBe(7);
+
+      // Even a different key with the same desired document is a stock no-op.
+      const newKey = await caller.inventory.editProductMovementDocument({
+        ...editInput,
+        idempotencyKey: "slow-edit-save-new-key",
+      });
+      expect(newKey).toMatchObject({ totalQuantity: 7 });
+      expect(await onHand(f.store.id)).toBe(93);
+      expect(await onHand(destination.id)).toBe(7);
+      expect(await prisma.stockMovement.count({
+        where: { referenceId: transfer.transferId },
+      })).toBe(movementCount);
+    } finally {
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS test_slow_transfer_edit ON "StockMovement"',
+      );
+      await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS test_slow_transfer_edit()");
+    }
+  }, 30_000);
 });
