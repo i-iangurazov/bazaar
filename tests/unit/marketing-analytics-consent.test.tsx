@@ -295,7 +295,7 @@ describe("compact optional measurement choices", () => {
   it("measures only the actual BAZAAR WhatsApp link without passing its URL", () => {
     render(<MarketingAnalytics />);
     const anchor = document.createElement("a");
-    anchor.href = "https://wa.me/996709911300?text=private";
+    anchor.href = "https://wa.me/996509911300?text=private";
     anchor.innerHTML = "<span>Contact</span>";
     anchor.addEventListener("click", event => event.preventDefault());
     document.body.appendChild(anchor);

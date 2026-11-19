@@ -18,7 +18,7 @@ for (const item of [...campaign.items, ...campaign.ads])
       utm_campaign: campaign.campaign,
       utm_content: id,
     }).toString();
-    const demo = new URL("https://wa.me/996709911300");
+    const demo = new URL("https://wa.me/996509911300");
     demo.searchParams.set(
       "text",
       `${locale === "ru" ? "Здравствуйте! Хочу посмотреть BAZAAR." : "Саламатсызбы! BAZAAR менен таанышкым келет."} [IG:${item.id.toUpperCase()}:${locale.toUpperCase()}]`,

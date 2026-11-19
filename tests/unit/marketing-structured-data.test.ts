@@ -45,7 +45,7 @@ describe("marketing structured identity", () => {
       url: "https://www.bazaar.kg/",
       logo: { url: "https://www.bazaar.kg/brand/logo.png", width: 724, height: 181 },
       sameAs: ["https://www.instagram.com/bazaar.pos/"],
-      contactPoint: { telephone: "+996709911300", email: "support@bazaar.kg" },
+      contactPoint: { telephone: "+996509911300", email: "support@bazaar.kg" },
     });
   });
 

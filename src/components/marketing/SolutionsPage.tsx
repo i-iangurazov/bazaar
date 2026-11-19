@@ -310,7 +310,7 @@ export const SolutionsPage = async ({ locale, id }: { locale: Locale; id?: Solut
           <Link href="/privacy">{landing.footer.privacy}</Link>
           {publishedLegal ? <Link href="/legal/requisites">{landing.footer.legal}</Link> : null}
           <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
-          <a href="https://wa.me/996709911300">+996 709 911 300</a>
+          <a href="https://wa.me/996509911300">+996 509 911 300</a>
         </nav>
         <MarketingLocaleSwitcher />
       </footer>

@@ -11,7 +11,7 @@ export const sellerDraft: SellerDetails = {
   registrationAuthority: null,
   registeredAddress: null,
   correspondenceAddress: null,
-  phone: "+996 709 911 300",
+  phone: "+996 509 911 300",
   email: "support@bazaar.kg",
   bankName: null,
   beneficiary: null,

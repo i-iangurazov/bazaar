@@ -138,7 +138,7 @@ export function MarketingAnalytics() {
         publicMarketingPage(window.location.pathname) &&
         anchor.protocol === "https:" &&
         anchor.hostname === "wa.me" &&
-        anchor.pathname === "/996709911300"
+        anchor.pathname === "/996509911300"
       )
         trackMarketingEvent("contact_whatsapp_click");
       interceptPrivateMarketingLink(event);

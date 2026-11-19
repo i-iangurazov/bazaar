@@ -28,7 +28,7 @@ import { getMarketingPreviewData } from "@/content/marketing/preview";
 import { PosIcon, InventoryIcon, ReportsIcon } from "@/components/icons";
 import styles from "./marketing.module.css";
 
-const whatsappUrl = "https://wa.me/996709911300";
+const whatsappUrl = "https://wa.me/996509911300";
 
 const Arrow = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">

@@ -53,7 +53,7 @@ describe("privacy matches subscription, AI and real seller processing", () => {
       expect(root.textContent).toContain("DeepSeek");
       expect(root.textContent).toContain("OpenAI");
       expect(root.textContent).toContain("KGS");
-      expect(root.textContent).toContain("+996 709 911 300");
+      expect(root.textContent).toContain("+996 509 911 300");
       expect(root.textContent).not.toMatch(/\b\d{14,16}\b|placeholder/i);
       expect(root.querySelector('a[href="/help"]')).not.toBeNull();
       expect(root.querySelector('#apple-refund-data')?.textContent).toContain(copy.appleRefundsBody);

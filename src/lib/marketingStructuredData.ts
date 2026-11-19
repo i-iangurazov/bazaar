@@ -50,7 +50,7 @@ export const getMarketingStructuredData = ({
         contactPoint: {
           "@type": "ContactPoint" as const,
           contactType: "customer support",
-          telephone: "+996709911300",
+          telephone: "+996509911300",
           email: "support@bazaar.kg",
         },
       },
