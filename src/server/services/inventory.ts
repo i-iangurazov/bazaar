@@ -2340,7 +2340,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
     );
 
     return { ...editResult, replayed };
-  });
+  }, { maxWait: 10_000, timeout: 120_000 });
 
   if (!result.replayed) {
     result.changedItems.forEach((item) => {
