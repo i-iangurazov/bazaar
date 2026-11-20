@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 
@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { isValidOptionalCustomerPhone } from "@/lib/customerContact";
+import { isValidOptionalCustomerAddress, isValidOptionalCustomerPhone } from "@/lib/customerContact";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -54,6 +54,7 @@ export function SalesOrderCustomerSelect({
   const tErrors = useTranslations("errors");
   const { data: session } = useSession();
   const { toast } = useToast();
+  const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(createDefaultOpen);
   const [search, setSearch] = useState("");
@@ -64,8 +65,27 @@ export function SalesOrderCustomerSelect({
   const [address, setAddress] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
 
-  const canCreateCustomer =
-    session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const userId = session?.user?.id;
+  const organizationId = session?.user?.organizationId;
+  const canCreateCustomer = Boolean(
+    userId &&
+      organizationId &&
+      storeId &&
+      !disabled &&
+      ["ADMIN", "MANAGER", "STAFF", "CASHIER"].includes(session?.user?.role ?? ""),
+  );
+  const createScope = useRef<{ storeId: string; userId: string; organizationId: string } | null>(
+    null,
+  );
+  const createInFlight = useRef(false);
+
+  useLayoutEffect(() => {
+    createScope.current =
+      canCreateCustomer && userId && organizationId ? { storeId, userId, organizationId } : null;
+    return () => {
+      createScope.current = null;
+    };
+  }, [canCreateCustomer, organizationId, storeId, userId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -82,16 +102,72 @@ export function SalesOrderCustomerSelect({
     setPhone("");
     setAddress("");
     setFieldError(null);
-  }, [storeId]);
+  }, [organizationId, storeId, userId]);
 
   const query = trpc.salesOrders.customerOptions.useQuery(
     { storeId, search: debouncedSearch || undefined, limit: 25 },
     { enabled: open && Boolean(storeId) && !disabled, keepPreviousData: false },
   );
 
-  const createMutation = trpc.customers.create.useMutation({
-    onSuccess: (result) => {
+  // Use the same store-scoped customer creation operation available from the till.
+  const createMutation = trpc.pos.customers.create.useMutation();
+  const addressError = fieldError === tErrors("customerAddressInvalid");
+
+  const choose = (customer: SalesOrderCustomerOption | null) => {
+    onSelect(customer);
+    setOpen(false);
+    setSearch("");
+    setDebouncedSearch("");
+  };
+
+  const openCreate = (initialName?: string) => {
+    if (!canCreateCustomer || createInFlight.current) return;
+    createMutation.reset();
+    setFieldError(null);
+    if (initialName) setName(initialName);
+    setCreateOpen(true);
+  };
+
+  const submitNewCustomer = async () => {
+    const scope = createScope.current;
+    if (!scope || createInFlight.current) return;
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedAddress = address.trim();
+    if (trimmedName.length < 1) {
+      setFieldError(t("customerNameRequired"));
+      return;
+    }
+    if (!trimmedEmail && !trimmedPhone) {
+      setFieldError(t("customerContactRequired"));
+      return;
+    }
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setFieldError(t("customerEmailInvalid"));
+      return;
+    }
+    if (!isValidOptionalCustomerPhone(trimmedPhone)) {
+      setFieldError(t("customerPhoneInvalid"));
+      return;
+    }
+    if (!isValidOptionalCustomerAddress(trimmedAddress)) {
+      setFieldError(tErrors("customerAddressInvalid"));
+      return;
+    }
+    setFieldError(null);
+    createInFlight.current = true;
+    try {
+      const result = await createMutation.mutateAsync({
+        storeId: scope.storeId,
+        name: trimmedName,
+        email: trimmedEmail || null,
+        phone: trimmedPhone || null,
+        address: trimmedAddress || null,
+      });
+      if (createScope.current !== scope) return;
       const customer = result.customer;
+      void utils.salesOrders.customerOptions.invalidate();
       toast({
         variant: "success",
         description:
@@ -110,47 +186,11 @@ export function SalesOrderCustomerSelect({
         phone: customer.phone ?? null,
         address: customer.address ?? null,
       });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-
-  const choose = (customer: SalesOrderCustomerOption | null) => {
-    onSelect(customer);
-    setOpen(false);
-    setSearch("");
-    setDebouncedSearch("");
-  };
-
-  const submitNewCustomer = () => {
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    const trimmedPhone = phone.trim();
-    if (trimmedName.length < 1) {
-      setFieldError(t("customerNameRequired"));
-      return;
+    } catch {
+      // Keep the input in the dialog and show the mutation error there for retry.
+    } finally {
+      createInFlight.current = false;
     }
-    if (!trimmedEmail && !trimmedPhone) {
-      setFieldError(t("customerContactRequired"));
-      return;
-    }
-    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setFieldError(t("customerEmailInvalid"));
-      return;
-    }
-    if (trimmedPhone && !isValidOptionalCustomerPhone(trimmedPhone)) {
-      setFieldError(t("customerPhoneInvalid"));
-      return;
-    }
-    setFieldError(null);
-    createMutation.mutate({
-      storeId,
-      name: trimmedName,
-      email: trimmedEmail || null,
-      phone: trimmedPhone || null,
-      address: address.trim() || null,
-    });
   };
 
   return (
@@ -188,7 +228,7 @@ export function SalesOrderCustomerSelect({
                 type="button"
                 variant="secondary"
                 className="w-full"
-                onClick={() => setCreateOpen(true)}
+                onClick={() => openCreate()}
                 data-testid="sales-order-new-customer"
               >
                 {t("createCustomer")}
@@ -228,10 +268,7 @@ export function SalesOrderCustomerSelect({
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={() => {
-                      setName(search.trim());
-                      setCreateOpen(true);
-                    }}
+                    onClick={() => openCreate(search.trim())}
                   >
                     {t("createCustomerNamed", { name: search.trim() })}
                   </Button>
@@ -251,9 +288,9 @@ export function SalesOrderCustomerSelect({
       </Dialog>
 
       <Dialog
-        open={createOpen}
+        open={createOpen && canCreateCustomer}
         onOpenChange={(value) => {
-          if (createMutation.isLoading) return;
+          if (createInFlight.current) return;
           setCreateOpen(value);
           if (!value) setFieldError(null);
         }}
@@ -270,6 +307,7 @@ export function SalesOrderCustomerSelect({
                 id="new-order-customer-name"
                 value={name}
                 maxLength={180}
+                disabled={createMutation.isLoading}
                 autoFocus
                 aria-invalid={fieldError === t("customerNameRequired")}
                 aria-describedby={
@@ -298,6 +336,7 @@ export function SalesOrderCustomerSelect({
                   value={phone}
                   inputMode="tel"
                   maxLength={64}
+                  disabled={createMutation.isLoading}
                   placeholder={t("customerPhoneExample")}
                   aria-invalid={
                     fieldError === t("customerPhoneInvalid") ||
@@ -325,6 +364,7 @@ export function SalesOrderCustomerSelect({
                   value={email}
                   type="email"
                   maxLength={254}
+                  disabled={createMutation.isLoading}
                   aria-invalid={
                     fieldError === t("customerEmailInvalid") ||
                     fieldError === t("customerContactRequired")
@@ -345,7 +385,7 @@ export function SalesOrderCustomerSelect({
                 />
               </div>
             </div>
-            {fieldError && fieldError !== t("customerNameRequired") ? (
+            {fieldError && !addressError && fieldError !== t("customerNameRequired") ? (
               <p
                 id="new-order-customer-contact-error"
                 role="alert"
@@ -359,9 +399,18 @@ export function SalesOrderCustomerSelect({
               <Input
                 id="new-order-customer-address"
                 value={address}
-                maxLength={512}
+                maxLength={500}
+                disabled={createMutation.isLoading}
+                aria-invalid={addressError}
+                aria-describedby={addressError ? "new-order-customer-address-error" : undefined}
+                className={addressError ? "border-danger focus:border-danger" : undefined}
                 onChange={(event) => setAddress(event.target.value)}
               />
+              {addressError ? (
+                <p id="new-order-customer-address-error" role="alert" className="text-sm text-danger">
+                  {fieldError}
+                </p>
+              ) : null}
             </div>
             <p className="text-xs text-muted-foreground">{t("createCustomerContactHint")}</p>
             {createMutation.error ? (
@@ -379,7 +428,11 @@ export function SalesOrderCustomerSelect({
             >
               {tCommon("cancel")}
             </Button>
-            <Button type="button" disabled={createMutation.isLoading} onClick={submitNewCustomer}>
+            <Button
+              type="button"
+              disabled={createMutation.isLoading}
+              onClick={() => void submitNewCustomer()}
+            >
               {createMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {t("createCustomerSubmit")}
             </Button>

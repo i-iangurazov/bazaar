@@ -16,6 +16,7 @@ const pending: PendingSalesOrderSale = {
   input: {
     storeId: "store-one",
     idempotencyKey: "retry-original-key",
+    priceMode: "WHOLESALE",
     customerId: null,
     lines: [{ productId: "product-one", variantId: null, qty: 2, unitPriceKgs: 68.5 }],
   },

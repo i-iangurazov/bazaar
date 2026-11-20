@@ -678,7 +678,7 @@ describeDb("R6 inline customer creation", () => {
       idempotencyKey: randomUUID(),
       requestId: randomUUID(),
     });
-    const created = await f.api.customers.create({
+    const created = await f.api.pos.customers.create({
       storeId: f.store.id,
       name: "Инлайн Клиент",
       phone: "+996700777888",
@@ -695,6 +695,48 @@ describeDb("R6 inline customer creation", () => {
     const detail = await f.api.customers.detail({ customerId: created.customer.id });
     expect(detail.recentOrders.some((order) => order.id === sale.id)).toBe(true);
   });
+
+  it.each(["staffUser", "cashierUser"] as const)(
+    "lets %s add a customer to an order without a register shift, within assigned stores",
+    async (actor) => {
+      const f = await seedApi();
+      const user = f[actor];
+      const api = createTestCaller(asUser(user));
+      const otherStore = await prisma.store.create({
+        data: { organizationId: f.org.id, name: "Other Store", code: "R6-OTHER" },
+      });
+      const contact = {
+        storeId: f.store.id,
+        name: "New Customer",
+        phone: "+996 (700) 777-888",
+      };
+
+      await expect(api.pos.customers.create({ ...contact, storeId: otherStore.id }))
+        .rejects.toMatchObject({ message: "storeAccessDenied" });
+      await expect(api.customers.create(contact)).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+      const created = await api.pos.customers.create(contact);
+      expect(created.action).toBe("created");
+      expect(created.customer).toMatchObject({
+        organizationId: f.org.id,
+        storeId: f.store.id,
+        createdById: user.id,
+        phone: "+996700777888",
+      });
+      const repeated = await api.pos.customers.create({ ...contact, phone: "+996700777888" });
+      expect(repeated.customer.id).toBe(created.customer.id);
+      expect(await prisma.customer.count({ where: { organizationId: f.org.id } })).toBe(1);
+
+      const draft = await api.salesOrders.createDraft({
+        storeId: f.store.id,
+        customerId: created.customer.id,
+        idempotencyKey: randomUUID(),
+      });
+      expect(await prisma.customerOrder.findUniqueOrThrow({ where: { id: draft.id } }))
+        .toMatchObject({ customerId: created.customer.id, customerName: "New Customer" });
+      expect(await prisma.registerShift.count({ where: { organizationId: f.org.id } })).toBe(0);
+    },
+  );
 
   it("matches an existing contact and never merges different people by name alone", async () => {
     const f = await seedApi();

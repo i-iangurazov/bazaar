@@ -4,8 +4,6 @@ import { AppError } from "@/server/services/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
-export type SalesDocumentKind = "invoice" | "goods_receipt";
-
 export type SalesDocumentPayload = {
   id: string;
   organizationId: string;

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import PDFDocument from "pdfkit";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildSalesDocumentPdf, type SalesDocumentPdfLabels } from "@/server/services/salesDocumentPdf";
 import type { SalesDocumentPayload } from "@/server/services/salesDocuments";
@@ -38,9 +39,88 @@ describe("sales documents PDF layout", () => {
     }
   });
 
-  it("wraps a single exceptionally long name over pages instead of drawing beyond a page", async () => {
-    const pdf = await buildSalesDocumentPdf({ job: { ...job, items: [{ ...job.items[0]!, name: "ДлинноеНазваниеБезПробелов".repeat(200) }] }, kind: "invoice", locale: "ru", labels: labels("ru") });
+  it.each(["invoice", "invoice_without_prices"] as const)("wraps a single exceptionally long %s name across A4 pages", async (kind) => {
+    const pdf = await buildSalesDocumentPdf({ job: { ...job, items: [{ ...job.items[0]!, name: "ДлинноеНазваниеБезПробелов".repeat(200) }] }, kind, locale: "ru", labels: labels("ru") });
     expect(pages(pdf)).toBeGreaterThan(1);
     expect(dimensions(pdf).every(([, height]) => height! <= 842)).toBe(true);
+  });
+
+  it.each(["ru", "kg", "en"])("fits 18 short delivery rows on one A4 page in %s", async (locale) => {
+    const pdf = await buildSalesDocumentPdf({
+      job: {
+        ...job,
+        items: Array.from({ length: 18 }, (_, index) => ({
+          ...job.items[0]!,
+          id: `line-${index}`,
+          name: `Кабель ${index + 1} · өтө бышык`,
+        })),
+      },
+      kind: "invoice_without_prices",
+      locale,
+      labels: labels(locale),
+    });
+    expect(pages(pdf)).toBe(1);
+    expect(dimensions(pdf)[0]![0]).toBeCloseTo(595.28, 2);
+    expect(dimensions(pdf)[0]![1]).toBeCloseTo(841.89, 2);
+    expect(pdf.toString("latin1")).toContain("/FontFile2");
+  });
+
+  it("prints item, variant, unit and quantity without price fields or private party details", async () => {
+    const text = vi.spyOn(PDFDocument.prototype, "text");
+    const ru = labels("ru");
+    try {
+      const pdf = await buildSalesDocumentPdf({
+        job: {
+          ...job,
+          discountKgs: 15,
+          totalKgs: 99.06,
+          seller: { ...job.seller, name: "Private seller name" },
+          customer: { name: "Private customer name", phone: "+996555000222", address: "Private street", email: "qa@example.com" },
+        },
+        kind: "invoice_without_prices",
+        locale: "ru",
+        labels: ru,
+      });
+      const printed = text.mock.calls.map(([value]) => String(value));
+      expect(printed).toEqual(expect.arrayContaining([
+        ru.invoiceWithoutPrices, ru.product, ru.unit, ru.quantity, "Кабель · Чёрный", "кг", "0,125",
+      ]));
+      for (const value of [ru.price, ru.amount, ru.subtotal, ru.discount, ru.total, ru.seller, ru.customer]) {
+        expect(printed).not.toContain(value);
+      }
+      expect(printed.join("\n")).not.toMatch(/Private|qa@example\.com|\+996|12345678901234|SKU-001|USD|KGS/);
+      expect(printed.join("\n")).not.toMatch(/912[,.]5|114[,.]06|99[,.]06/);
+      expect(pdf.toString("latin1")).not.toContain("Private seller name");
+    } finally {
+      text.mockRestore();
+    }
+  });
+
+  it("repeats delivery headers and keeps every long row and the last-page signatures", async () => {
+    const text = vi.spyOn(PDFDocument.prototype, "text");
+    const ru = labels("ru");
+    const items = Array.from({ length: 50 }, (_, index) => ({
+      ...job.items[0]!,
+      id: `line-${index}`,
+      name: `Позиция ${index + 1} · ${"Длинное описание товара, которое переносится на следующую строку. ".repeat(3)}`,
+    }));
+    try {
+      const pdf = await buildSalesDocumentPdf({
+        job: { ...job, status: "DRAFT", items },
+        kind: "invoice_without_prices",
+        locale: "ru",
+        labels: ru,
+      });
+      const printed = text.mock.calls.map(([value]) => String(value));
+      const pageCount = pages(pdf);
+      expect(pageCount).toBeGreaterThan(1);
+      expect(printed.filter((line) => line === ru.product)).toHaveLength(pageCount);
+      expect(printed.filter((line) => line === ru.issuedBy)).toHaveLength(1);
+      expect(printed.filter((line) => line === ru.receivedBy)).toHaveLength(1);
+      expect(printed.filter((line) => line.startsWith("Позиция "))).toHaveLength(items.length);
+      expect(printed).toContain(`${ru.page} ${pageCount}/${pageCount}`);
+    } finally {
+      text.mockRestore();
+    }
   });
 });

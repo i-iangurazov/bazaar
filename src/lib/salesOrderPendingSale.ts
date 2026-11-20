@@ -4,6 +4,7 @@ const id = z.string().min(1).max(200);
 const inputSchema = z.object({
   storeId: id,
   idempotencyKey: z.string().min(8).max(200),
+  priceMode: z.enum(["RETAIL", "WHOLESALE"]).optional(),
   customerId: id.nullable().optional(),
   customerName: z.string().max(180).nullable().optional(),
   customerEmail: z.string().max(254).nullable().optional(),

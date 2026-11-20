@@ -174,16 +174,18 @@ const SalesOrderDetailPage = () => {
         : t("source.manual");
 
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
-  const canManualPrice = ["ADMIN", "MANAGER", "STAFF", "CASHIER"].some(
-    (role) => role === session?.user?.role,
-  );
 
   const orderQuery = trpc.salesOrders.getById.useQuery(
     { customerOrderId },
     { enabled: Boolean(customerOrderId) },
   );
-  const orderStore = orderQuery.data?.store ?? null;
-  const orderCurrencySource = currencySourceWithFallback(orderQuery.data, orderStore);
+  const order = orderQuery.data;
+  const isEditable =
+    !!order &&
+    !order.isPosSale &&
+    (order.status === CustomerOrderStatus.DRAFT || order.status === CustomerOrderStatus.CONFIRMED);
+  const orderStore = order?.store ?? null;
+  const orderCurrencySource = currencySourceWithFallback(order, orderStore);
   const { currencyCode: orderCurrencyCode } = resolveCurrency(orderCurrencySource);
 
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -248,7 +250,7 @@ const SalesOrderDetailPage = () => {
       productId: selectedProduct?.id ?? "",
       storeId: orderStore?.id ?? "",
       variantId: selectedVariant === "BASE" ? null : selectedVariant,
-      priceMode: orderQuery.data?.priceMode === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
+      priceMode: order?.priceMode === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
     },
     {
       enabled: lineDialogMode === "add" && Boolean(selectedProduct?.id) && Boolean(orderStore?.id),
@@ -259,15 +261,16 @@ const SalesOrderDetailPage = () => {
   const manualLinePrice = linePriceEdited
     ? parseSalesOrderPriceInput(linePriceInput, orderCurrencySource)
     : null;
-  const hasManualLinePrice = canManualPrice && linePriceEdited && manualLinePrice !== null;
+  const hasManualLinePrice = linePriceEdited && manualLinePrice !== null;
+  const hasAutomaticLinePrice =
+    !linePriceQuery.isFetching && !linePriceQuery.error && !!linePriceQuery.data?.hasConfiguredPrice;
   const displayedLinePriceInput =
     lineDialogMode === "add" && !linePriceEdited
-      ? linePriceQuery.data
+      ? linePriceQuery.data?.hasConfiguredPrice
         ? salesOrderPriceInput(linePriceQuery.data.unitPriceKgs, orderCurrencySource)
         : ""
       : linePriceInput;
 
-  const order = orderQuery.data;
   const paymentInfoQuery = trpc.salesOrders.paymentInfo.useQuery(
     { customerOrderId },
     { enabled: Boolean(order && canFinalize && order.status === CustomerOrderStatus.COMPLETED) },
@@ -283,9 +286,6 @@ const SalesOrderDetailPage = () => {
     () => lines.filter((line) => line.priceSource === "MISSING"),
     [lines],
   );
-
-  const isEditable =
-    order?.status === CustomerOrderStatus.DRAFT || order?.status === CustomerOrderStatus.CONFIRMED;
 
   useEffect(() => {
     if (!order) {
@@ -562,7 +562,9 @@ const SalesOrderDetailPage = () => {
     setSelectedVariant(line.variantId ?? "BASE");
     setEditingLineId(line.id);
     setLineQtyInput(String(line.qty));
-    setLinePriceInput(salesOrderPriceInput(line.unitPriceKgs, orderCurrencySource));
+    setLinePriceInput(
+      line.priceSource === "MISSING" ? "" : salesOrderPriceInput(line.unitPriceKgs, orderCurrencySource),
+    );
     setLinePriceEdited(false);
   };
 
@@ -693,7 +695,7 @@ const SalesOrderDetailPage = () => {
   };
 
   const handleSubmitLine = async () => {
-    if (!order) {
+    if (!order || !isEditable) {
       return;
     }
     const normalizedQty = parseQuantity(lineQtyInput);
@@ -722,10 +724,7 @@ const SalesOrderDetailPage = () => {
       toast({ variant: "error", description: t("productRequired") });
       return;
     }
-    if (
-      !hasManualLinePrice &&
-      (linePriceQuery.isFetching || linePriceQuery.error || !linePriceQuery.data)
-    ) {
+    if (!hasManualLinePrice && !hasAutomaticLinePrice) {
       toast({ variant: "error", description: t("priceNotSetBlocking") });
       return;
     }
@@ -752,7 +751,7 @@ const SalesOrderDetailPage = () => {
     const line = lines.find((item) => item.id === lineId);
     const raw = inlineDraftsRef.current[lineId]?.[field];
     if (raw === undefined) return true;
-    if (!isEditable || !line || (field === "price" && !canManualPrice)) return false;
+    if (!isEditable || !line) return false;
     const value =
       field === "qty" ? parseQuantity(raw) : parseSalesOrderPriceInput(raw, orderCurrencySource);
     if (value === null || (field === "qty" && value <= 0)) {
@@ -762,7 +761,9 @@ const SalesOrderDetailPage = () => {
       });
       return false;
     }
-    if (value === (field === "qty" ? line.qty : line.unitPriceKgs)) {
+    const previousValue = field === "qty" ? line.qty : line.unitPriceKgs;
+    const replacesMissingPrice = field === "price" && line.priceSource === "MISSING";
+    if (value === previousValue && !replacesMissingPrice) {
       setInlineDraftValue(lineId, field);
       return true;
     }
@@ -822,7 +823,9 @@ const SalesOrderDetailPage = () => {
       raw ??
       (field === "qty"
         ? String(line.qty)
-        : salesOrderPriceInput(line.unitPriceKgs, orderCurrencySource));
+        : line.priceSource === "MISSING"
+          ? ""
+          : salesOrderPriceInput(line.unitPriceKgs, orderCurrencySource));
     const parsed =
       raw === undefined
         ? undefined
@@ -1241,6 +1244,7 @@ const SalesOrderDetailPage = () => {
               currency={orderCurrencySource}
               onPaid={() => {
                 void loyaltyQuery.refetch();
+                void utils.salesOrders.list.invalidate();
               }}
             />
           </div>
@@ -1733,7 +1737,6 @@ const SalesOrderDetailPage = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>{t("product")}</TableHead>
-                          <TableHead>{t("variant")}</TableHead>
                           <TableHead>{t("qty")}</TableHead>
                           <TableHead>
                             {t("unitPrice")} · {orderCurrencyCode}
@@ -1760,6 +1763,11 @@ const SalesOrderDetailPage = () => {
                                   <p className="truncate text-xs text-muted-foreground">
                                     {line.product.sku}
                                   </p>
+                                  {line.variant?.name ? (
+                                    <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                                      {line.variant.name}
+                                    </p>
+                                  ) : null}
                                   {line.priceSource === "MISSING" ? (
                                     <p className="truncate text-xs font-medium text-danger">
                                       {t("priceMode.missingLine", {
@@ -1773,16 +1781,17 @@ const SalesOrderDetailPage = () => {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell>{line.variant?.name ?? t("variantBase")}</TableCell>
                             <TableCell>
                               {isEditable
                                 ? renderInlineLineInput(line.id, "qty", "desktop")
                                 : line.qty}
                             </TableCell>
                             <TableCell>
-                              {isEditable && canManualPrice
+                              {isEditable
                                 ? renderInlineLineInput(line.id, "price", "desktop")
-                                : formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
+                                : line.priceSource === "MISSING"
+                                  ? t("priceNotSet")
+                                  : formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
                             </TableCell>
                             <TableCell>
                               {formatKgsMoney(line.lineTotalKgs, locale, orderCurrencySource)}
@@ -1853,36 +1862,36 @@ const SalesOrderDetailPage = () => {
                     {lines.map((line) => (
                       <Card key={line.id} className="border-border">
                         <CardContent className="space-y-3 p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <ProductImageThumb
-                                imageUrl={
-                                  line.product.photoUrl ?? line.product.images?.[0]?.url ?? null
-                                }
-                                name={line.product.name}
-                              />
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-foreground">
-                                  {line.product.name}
+                          <div className="flex min-w-0 items-center gap-3">
+                            <ProductImageThumb
+                              imageUrl={
+                                line.product.photoUrl ?? line.product.images?.[0]?.url ?? null
+                              }
+                              name={line.product.name}
+                            />
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {line.product.name}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {line.product.sku}
+                              </p>
+                              {line.variant?.name ? (
+                                <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                                  {line.variant.name}
                                 </p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {line.product.sku}
+                              ) : null}
+                              {line.priceSource === "MISSING" ? (
+                                <p className="truncate text-xs font-medium text-danger">
+                                  {t("priceMode.missingLine", {
+                                    mode:
+                                      order.priceMode === "WHOLESALE"
+                                        ? t("priceMode.wholesale")
+                                        : t("priceMode.retail"),
+                                  })}
                                 </p>
-                                {line.priceSource === "MISSING" ? (
-                                  <p className="truncate text-xs font-medium text-danger">
-                                    {t("priceMode.missingLine", {
-                                      mode:
-                                        order.priceMode === "WHOLESALE"
-                                          ? t("priceMode.wholesale")
-                                          : t("priceMode.retail"),
-                                    })}
-                                  </p>
-                                ) : null}
-                              </div>
+                              ) : null}
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              {line.variant?.name ?? t("variantBase")}
-                            </p>
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                             <div>
@@ -1897,11 +1906,13 @@ const SalesOrderDetailPage = () => {
                               <p>
                                 {t("unitPrice")} · {orderCurrencyCode}
                               </p>
-                              {isEditable && canManualPrice ? (
+                              {isEditable ? (
                                 renderInlineLineInput(line.id, "price", "mobile")
                               ) : (
                                 <p className="font-medium text-foreground">
-                                  {formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
+                                  {line.priceSource === "MISSING"
+                                    ? t("priceNotSet")
+                                    : formatKgsMoney(line.unitPriceKgs, locale, orderCurrencySource)}
                                 </p>
                               )}
                             </div>
@@ -2181,36 +2192,40 @@ const SalesOrderDetailPage = () => {
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium">{t("variant")}</p>
-                <Select
-                  value={selectedVariant}
-                  onValueChange={(value) => {
-                    setSelectedVariant(value);
-                    setLinePriceInput("");
-                    setLinePriceEdited(false);
-                  }}
-                  disabled={!selectedProduct || lineActionsDisabled}
-                >
-                  <SelectTrigger aria-label={t("variant")}>
-                    <SelectValue placeholder={t("variantPlaceholder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BASE">{t("variantBase")}</SelectItem>
-                    {selectedProductVariants.map((variant) => (
-                      <SelectItem key={variant.id} value={variant.id}>
-                        {variant.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedProductQuery.error ? (
-                  <QueryErrorState
-                    error={selectedProductQuery.error}
-                    onRetry={() => void selectedProductQuery.refetch()}
-                  />
-                ) : null}
-              </div>
+              {selectedProductVariants.length ? (
+                <div className="space-y-1.5">
+                  <label htmlFor="sales-order-line-variant" className="text-sm font-medium">
+                    {t("variantWithExamples")}
+                  </label>
+                  <Select
+                    value={selectedVariant}
+                    onValueChange={(value) => {
+                      setSelectedVariant(value);
+                      setLinePriceInput("");
+                      setLinePriceEdited(false);
+                    }}
+                    disabled={!isEditable || lineActionsDisabled}
+                  >
+                    <SelectTrigger id="sales-order-line-variant">
+                      <SelectValue placeholder={t("variantPlaceholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BASE">{t("variantBase")}</SelectItem>
+                      {selectedProductVariants.map((variant) => (
+                        <SelectItem key={variant.id} value={variant.id}>
+                          {variant.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {selectedProductQuery.error ? (
+                <QueryErrorState
+                  error={selectedProductQuery.error}
+                  onRetry={() => void selectedProductQuery.refetch()}
+                />
+              ) : null}
             </>
           ) : (
             <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
@@ -2218,8 +2233,9 @@ const SalesOrderDetailPage = () => {
                 {selectedProduct?.name ?? currentLine?.product.name}
               </p>
               <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                {selectedProduct?.sku ?? currentLine?.product.sku} ·{" "}
-                {currentLine?.variant?.name ?? t("variantBase")}
+                {[selectedProduct?.sku ?? currentLine?.product.sku, currentLine?.variant?.name]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
           )}
@@ -2234,7 +2250,7 @@ const SalesOrderDetailPage = () => {
               type="text"
               inputMode="decimal"
               value={lineQtyInput}
-              disabled={lineActionsDisabled}
+              disabled={!isEditable || lineActionsDisabled}
               onChange={(event) => setLineQtyInput(event.target.value)}
             />
           </div>
@@ -2248,8 +2264,8 @@ const SalesOrderDetailPage = () => {
               value={displayedLinePriceInput}
               placeholder={t("priceNotSet")}
               disabled={
+                !isEditable ||
                 lineActionsDisabled ||
-                !canManualPrice ||
                 (lineDialogMode === "add" && !selectedProduct)
               }
               aria-invalid={linePriceEdited && manualLinePrice === null}
@@ -2278,7 +2294,7 @@ const SalesOrderDetailPage = () => {
                   error={linePriceQuery.error}
                   onRetry={() => void linePriceQuery.refetch()}
                 />
-              ) : !linePriceQuery.data ? (
+              ) : !linePriceQuery.data?.hasConfiguredPrice && !hasManualLinePrice ? (
                 <p className="text-xs text-muted-foreground">{t("priceNotSet")}</p>
               ) : null
             ) : null}
@@ -2291,16 +2307,12 @@ const SalesOrderDetailPage = () => {
             <Button
               onClick={() => void handleSubmitLine()}
               disabled={
+                !isEditable ||
                 lineActionsDisabled ||
                 selectedProductQuery.isFetching ||
                 (linePriceEdited && !hasManualLinePrice) ||
                 (lineDialogMode === "add" &&
-                  (!selectedProduct ||
-                    (!hasManualLinePrice &&
-                      (linePriceQuery.isFetching ||
-                        Boolean(linePriceQuery.error) ||
-                        !linePriceQuery.data ||
-                        linePriceQuery.data.hasConfiguredPrice === false))))
+                  (!selectedProduct || (!hasManualLinePrice && !hasAutomaticLinePrice)))
               }
             >
               {lineActionsDisabled ? <Spinner className="h-4 w-4" /> : null}

@@ -12,6 +12,7 @@ import {
   CustomerOrderStatus,
   EmailAutomationTrigger,
   OperationRequestPrincipalType,
+  type PosPaymentMethod,
   SalePaymentSettlement,
   StockMovementType,
 } from "@prisma/client";
@@ -671,8 +672,37 @@ export const listCustomerOrders = async (input: {
     }),
   ]);
 
+  // Receipts identify the payment method; offsets, pending settlements and refunds do not.
+  const paymentTotals = items.length
+    ? await prisma.salePayment.groupBy({
+        by: ["customerOrderId", "method"],
+        where: {
+          organizationId: input.organizationId,
+          customerOrderId: { in: items.map(({ id }) => id) },
+          isRefund: false,
+          settlementStatus: SalePaymentSettlement.ACTUAL,
+          amountKgs: { gt: 0 },
+        },
+        _sum: { amountKgs: true },
+        orderBy: { method: "asc" },
+      })
+    : [];
+  const paymentsByOrder = new Map<string, Array<{ method: PosPaymentMethod; amountKgs: number }>>();
+  for (const payment of paymentTotals) {
+    const entry = { method: payment.method, amountKgs: Number(payment._sum.amountKgs) };
+    const payments = paymentsByOrder.get(payment.customerOrderId);
+    if (payments) {
+      payments.push(entry);
+    } else {
+      paymentsByOrder.set(payment.customerOrderId, [entry]);
+    }
+  }
+
   return {
-    items: items.map(serializeOrder),
+    items: items.map((order) => ({
+      ...serializeOrder(order),
+      receivedPayments: paymentsByOrder.get(order.id) ?? [],
+    })),
     total,
     page: input.page,
     pageSize: input.pageSize,

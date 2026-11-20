@@ -5397,7 +5397,7 @@
     "confirmRemoveLine": "Remove item from customer order?",
     "lineDialogAddTitle": "New item",
     "lineDialogEditTitle": "Edit item",
-    "lineDialogSubtitle": "Specify the product, variant, quantity, and price.",
+    "lineDialogSubtitle": "Enter the quantity and price.",
     "saveLine": "Save item",
     "lineAdded": "Item added.",
     "lineUpdated": "Item updated.",
@@ -5441,8 +5441,8 @@
       "method": "Payment method",
       "amountKgs": "Amount, KGS",
       "CASH": "Cash",
-      "CARD": "Card",
-      "TRANSFER": "Cashless",
+      "CARD": "Non-cash (card)",
+      "TRANSFER": "Non-cash (transfer)",
       "OTHER": "Other",
       "confirm": "Confirm receipt",
       "retry": "Retry confirmation"
@@ -5478,7 +5478,7 @@
     },
     "selectCustomer": "Select customer",
     "selectedCustomer": "Customer selected",
-    "customerSearch": "Customer name, phone or email",
+    "customerSearch": "Name, phone or email",
     "customerSelectionHint": "Choose a customer record to include this order in their history.",
     "noCustomerMatches": "No customers found. Try another name, phone or email.",
     "withoutCustomerCard": "Without a customer record",
@@ -5512,7 +5512,13 @@
       "notEditable": "This order cannot be edited here. Completed sales are corrected with a separate action.",
       "saveChanges": "Save changes",
       "staleConflict": "The order was already changed by another user.",
-      "staleConflictHint": "Your input is still on screen. Reload to see the current version, then apply your changes again."
+      "staleConflictHint": "Your input is still on screen. Reload to see the current version, then apply your changes again.",
+      "localDraftSaved": "Draft saved in this tab",
+      "localDraftRestored": "Draft restored",
+      "localDraftStorageFailed": "The browser could not save the draft. Save the order before leaving.",
+      "discardLocalDraft": "Clear draft",
+      "discardLocalDraftHint": "Clear the products and details of the unfinished order in this tab?",
+      "localDraftStoreUnavailable": "The draft’s store is unavailable. Choose a store to continue."
     },
     "fastSale": {
       "post": "Complete sale",
@@ -5701,7 +5707,8 @@
     "unitPriceShort": "Price",
     "horizontalScrollHint": "If the table does not fit, scroll it horizontally.",
     "correctionRefundCannotCancel": "This request cannot be canceled: the goods have already been accepted for return. Confirm the payout instead.",
-    "orderActions": "Order actions {number}"
+    "orderActions": "Order actions {number}",
+    "variantWithExamples": "Product variant (size, color)"
   },
   "suppliers": {
     "title": "Suppliers",
@@ -9698,7 +9705,8 @@
         "READY": "Ready for pickup",
         "COMPLETED": "Completed",
         "CANCELED": "Canceled"
-      }
+      },
+      "invoiceWithoutPrices": "Delivery note without prices"
     },
     "open": "Invoice / sales receipt",
     "title": "Sale documents {number}",
@@ -9744,6 +9752,7 @@
       "receivedBy": "Received by",
       "nonFiscal": "Not a fiscal receipt.",
       "page": "Page"
-    }
+    },
+    "invoiceWithoutPrices": "Delivery note without prices"
   }
 }

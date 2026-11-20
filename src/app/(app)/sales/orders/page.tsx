@@ -377,6 +377,24 @@ const SalesOrdersPageContent = () => {
     createdBy?: { name: string; isActive: boolean } | null;
   }) => order.createdBy?.name ?? (order.source === "API" ? t("systemActor") : t("unknownEmployee"));
 
+  const renderReceivedPayments = (order: (typeof items)[number]) => {
+    if (!order.receivedPayments?.length) return tCommon("notAvailable");
+
+    const currency = currencySourceWithFallback(order, order.store);
+    return (
+      <ul className="space-y-1">
+        {order.receivedPayments.map(({ method, amountKgs }) => (
+          <li key={method} className="leading-tight">
+            <span className="block">{t(`payment.${method}`)}</span>
+            <span className="block whitespace-nowrap text-xs font-normal text-muted-foreground">
+              {formatKgsMoney(amountKgs, locale, currency)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -720,7 +738,7 @@ const SalesOrdersPageContent = () => {
                     scrollChildIntoHorizontalView(event.currentTarget, event.target)
                   }
                 >
-                  <Table className="min-w-[1055px] table-fixed" data-tour="sales-orders-table">
+                  <Table className="min-w-[1195px] table-fixed" data-tour="sales-orders-table">
                     <TableHeader>
                       <TableRow>
                         <TableHead wrap className="w-[80px]">
@@ -750,12 +768,15 @@ const SalesOrdersPageContent = () => {
                         <TableHead wrap className="w-[90px]">
                           {t("total")}
                         </TableHead>
+                        <TableHead wrap sortable={false} className="w-[140px]">
+                          {t("payment.method")}
+                        </TableHead>
                         <TableHead wrap className="w-[80px]">
                           {t("created")}
                         </TableHead>
                         <TableHead
                           sortable={false}
-                          className="w-[64px] px-1 text-right"
+                          className="sticky right-0 z-10 w-[64px] bg-card px-1 text-right shadow-[-10px_0_14px_-14px_rgba(15,23,42,0.35)]"
                         >
                           {tCommon("actions")}
                         </TableHead>
@@ -809,8 +830,9 @@ const SalesOrdersPageContent = () => {
                               currencySourceWithFallback(order, order.store),
                             )}
                           </TableCell>
+                          <TableCell className="whitespace-normal">{renderReceivedPayments(order)}</TableCell>
                           <TableCell>{formatDate(order.createdAt, locale)}</TableCell>
-                          <TableCell>
+                          <TableCell className="sticky right-0 z-10 bg-card shadow-[-10px_0_14px_-14px_rgba(15,23,42,0.35)]">
                             <div className="flex items-center justify-end">
                               <RowActions
                                 maxInline={0}
@@ -837,7 +859,7 @@ const SalesOrdersPageContent = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground min-[1400px]:hidden">
+                <p className="mt-2 text-xs text-muted-foreground min-[1540px]:hidden">
                   {t("horizontalScrollHint")}
                 </p>
               </div>
@@ -896,6 +918,10 @@ const SalesOrdersPageContent = () => {
                           currencySourceWithFallback(order, order.store),
                         )}
                       </p>
+                    </div>
+                    <div>
+                      <p>{t("payment.method")}</p>
+                      <div className="font-medium text-foreground">{renderReceivedPayments(order)}</div>
                     </div>
                     <div>
                       <p>{t("created")}</p>

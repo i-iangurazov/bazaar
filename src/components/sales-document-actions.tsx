@@ -26,8 +26,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
-
-type DocumentKind = "invoice" | "goods_receipt";
+import { isSalesDocumentKind, type SalesDocumentKind } from "@/lib/salesDocumentKind";
 
 export function SalesDocumentActions({
   orderId,
@@ -64,7 +63,7 @@ export function SalesDocumentActions({
     if (open === undefined) setInternalOpen(value);
     onOpenChange?.(value);
   };
-  const [kind, setKind] = useState<DocumentKind>("invoice");
+  const [kind, setKind] = useState<SalesDocumentKind>("invoice");
   const [action, setAction] = useState<"print" | "download" | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -89,7 +88,7 @@ export function SalesDocumentActions({
           toast({ variant: "info", description: t("printFallback") });
         }
       } else {
-        const safeNumber = number.replace(/[^\p{L}\p{N}_.-]/gu, "-") || "document";
+        const safeNumber = number.replace(/[^\p{L}\p{N}_.-]/gu, "-").slice(0, 120) || "document";
         downloadPdfBlob(blob, `bazaar-${safeNumber}-${kind}.pdf`);
       }
     } catch {
@@ -148,7 +147,8 @@ export function SalesDocumentActions({
               value={kind}
               disabled={Boolean(action)}
               onValueChange={(value) => {
-                setKind(value === "goods_receipt" ? "goods_receipt" : "invoice");
+                if (!isSalesDocumentKind(value)) return;
+                setKind(value);
                 setFailed(false);
               }}
             >
@@ -157,6 +157,7 @@ export function SalesDocumentActions({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="invoice">{t("invoice")}</SelectItem>
+                <SelectItem value="invoice_without_prices">{t("invoiceWithoutPrices")}</SelectItem>
                 <SelectItem value="goods_receipt">{t("goodsReceipt")}</SelectItem>
               </SelectContent>
             </Select>

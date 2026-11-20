@@ -133,7 +133,7 @@ describeDb("BZR-03 missing price posting guard", () => {
     );
   });
 
-  it("blocks a RETAIL draft after addLine and posts once a zero manual price is set", async () => {
+  it.each(["update", "updateLine"] as const)("posts a draft after %s saves a manual zero for a missing price", async (method) => {
     const f = await fixture();
     const draft = await f.api.salesOrders.createDraft({
       storeId: f.store.id,
@@ -150,6 +150,7 @@ describeDb("BZR-03 missing price posting guard", () => {
       where: { customerOrderId: draft.id, productId: f.unpriced.id },
     });
     expect(added.priceSource).toBe("MISSING");
+    expect(Number(added.unitPriceKgs)).toBe(0);
 
     await expect(
       f.api.salesOrders.postSale({ customerOrderId: draft.id, idempotencyKey: randomUUID() }),
@@ -158,27 +159,37 @@ describeDb("BZR-03 missing price posting guard", () => {
       (await prisma.customerOrder.findUniqueOrThrow({ where: { id: draft.id } })).status,
     ).toBe("DRAFT");
 
-    const current = await prisma.customerOrder.findUniqueOrThrow({
-      where: { id: draft.id },
-      include: { lines: true },
-    });
-    await f.api.salesOrders.update({
-      customerOrderId: draft.id,
-      expectedUpdatedAt: current.updatedAt.toISOString(),
-      storeId: f.store.id,
-      lines: current.lines.map((line) =>
-        line.productId === f.unpriced.id
-          ? {
-              lineId: line.id,
-              productId: line.productId,
-              qty: line.qty,
-              unitPriceKgs: 0,
-              priceSource: "MANUAL" as const,
-            }
-          : { lineId: line.id, productId: line.productId, qty: line.qty },
-      ),
-      idempotencyKey: randomUUID(),
-    });
+    if (method === "updateLine") {
+      const resolved = await f.api.salesOrders.updateLine({ lineId: added.id, unitPriceKgs: 0 });
+      expect(resolved).toMatchObject({
+        unitPriceKgs: 0,
+        qty: 1,
+        priceSource: "MANUAL",
+        manualPrice: true,
+      });
+    } else {
+      const current = await prisma.customerOrder.findUniqueOrThrow({
+        where: { id: draft.id },
+        include: { lines: true },
+      });
+      await f.api.salesOrders.update({
+        customerOrderId: draft.id,
+        expectedUpdatedAt: current.updatedAt.toISOString(),
+        storeId: f.store.id,
+        lines: current.lines.map((line) =>
+          line.productId === f.unpriced.id
+            ? {
+                lineId: line.id,
+                productId: line.productId,
+                qty: line.qty,
+                unitPriceKgs: 0,
+                priceSource: "MANUAL" as const,
+              }
+            : { lineId: line.id, productId: line.productId, qty: line.qty },
+        ),
+        idempotencyKey: randomUUID(),
+      });
+    }
 
     await f.api.salesOrders.postSale({ customerOrderId: draft.id, idempotencyKey: randomUUID() });
     const completed = await prisma.customerOrder.findUniqueOrThrow({

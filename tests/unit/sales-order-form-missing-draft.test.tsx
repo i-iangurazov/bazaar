@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     store,
     order,
     mode: "edit" as "edit" | "create",
+    userId: "user-1",
     toast: vi.fn(),
     push: vi.fn(),
     updateMutate: vi.fn(async (_input: Record<string, unknown>) => order),
@@ -79,7 +80,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("next-auth/react", () => ({
   useSession: () => ({
     data: {
-      user: { id: "user-1", organizationId: "org-1", role: "ADMIN" },
+      user: { id: mocks.userId, organizationId: "org-1", role: "ADMIN" },
     },
     status: "authenticated",
   }),
@@ -192,6 +193,8 @@ afterEach(cleanup);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.userId = "user-1";
+  window.sessionStorage.clear();
 });
 
 describe("BZR-03 saving an incomplete MISSING draft", () => {
@@ -263,6 +266,65 @@ describe("BZR-03 saving an incomplete MISSING draft", () => {
     expect(screen.getAllByText(ru.salesOrders.priceNotSetBlocking).length).toBeGreaterThan(0);
     fireEvent.click(postButton);
     expect(mocks.saleMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("unfinished customer order recovery", () => {
+  it("restores a decimal price, quantities and notes after leaving the form", async () => {
+    const first = renderForm("create");
+    await waitFor(() =>
+      expect((screen.getByTestId("sales-order-save") as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "resolve product" }));
+    const priceLabel = `${ru.salesOrders.unitPrice} · Unpriced item`;
+    const qtyLabel = `${ru.salesOrders.qty} · Unpriced item`;
+    fireEvent.change(await screen.findByLabelText(priceLabel), { target: { value: "68,5" } });
+    fireEvent.change(screen.getByLabelText(qtyLabel), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText(ru.salesOrders.notes), {
+      target: { value: "Оставить на выдаче" },
+    });
+    expect(mocks.createMutate).not.toHaveBeenCalled();
+    first.unmount();
+
+    mocks.userId = "user-2";
+    const other = renderForm("create");
+    expect((await screen.findByLabelText(ru.salesOrders.notes) as HTMLTextAreaElement).value).toBe("");
+    expect(screen.queryByLabelText(priceLabel)).toBeNull();
+    other.unmount();
+
+    mocks.userId = "user-1";
+    renderForm("create");
+    expect(await screen.findByText(ru.salesOrders.workspace.localDraftRestored)).toBeTruthy();
+    expect((screen.getByLabelText(qtyLabel) as HTMLInputElement).value).toBe("2");
+    expect((screen.getByLabelText(priceLabel) as HTMLInputElement).value).toBe("68,5");
+    expect((screen.getByLabelText(ru.salesOrders.notes) as HTMLTextAreaElement).value).toBe(
+      "Оставить на выдаче",
+    );
+    expect(mocks.createMutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: ru.salesOrders.workspace.discardLocalDraft }));
+    await waitFor(() => expect(screen.queryByLabelText(priceLabel)).toBeNull());
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("reuses the same idempotency key after a lost save response and remount", async () => {
+    mocks.createMutate.mockRejectedValueOnce(new Error("connection lost"));
+    const first = renderForm("create");
+    await waitFor(() =>
+      expect((screen.getByTestId("sales-order-save") as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.change(screen.getByLabelText(ru.salesOrders.notes), {
+      target: { value: "Отложить до вечера" },
+    });
+    fireEvent.click(screen.getByTestId("sales-order-save"));
+    await waitFor(() => expect(mocks.createMutate).toHaveBeenCalledTimes(1));
+    const request = mocks.createMutate.mock.calls[0]![0];
+    first.unmount();
+
+    renderForm("create");
+    await screen.findByText(ru.salesOrders.workspace.localDraftRestored);
+    fireEvent.click(screen.getByTestId("sales-order-save"));
+    await waitFor(() => expect(mocks.createMutate).toHaveBeenCalledTimes(2));
+    expect(mocks.createMutate.mock.calls[1]![0]).toEqual(request);
   });
 });
 

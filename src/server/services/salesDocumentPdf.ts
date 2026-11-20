@@ -5,14 +5,15 @@ import { join } from "node:path";
 import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { toIntlLocale } from "@/lib/locales";
+import type { SalesDocumentKind } from "@/lib/salesDocumentKind";
 import {
   correctionDifferenceLabelKind,
   type CorrectionDifferenceLabelKind,
 } from "@/lib/salesOrderCorrectionDisplay";
-import type { SalesDocumentKind, SalesDocumentPayload } from "@/server/services/salesDocuments";
+import type { SalesDocumentPayload } from "@/server/services/salesDocuments";
 
 export type SalesDocumentPdfLabels = {
-  invoice: string; goodsReceipt: string; number: string; date: string; status: string;
+  invoice: string; invoiceWithoutPrices: string; goodsReceipt: string; number: string; date: string; status: string;
   seller: string; customer: string; unnamedCustomer: string; store: string; inn: string;
   phone: string; email: string; address: string; product: string; sku: string; quantity: string;
   unit: string; price: string; amount: string; subtotal: string; discount: string; total: string;
@@ -83,14 +84,136 @@ export async function buildSalesDocumentPdf(input: {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
   });
-  const { job, labels, locale } = input;
-  const title = input.kind === "invoice" ? labels.invoice : labels.goodsReceipt;
+  const { job, kind, labels, locale } = input;
+  const titles: Record<SalesDocumentKind, string> = {
+    invoice: labels.invoice,
+    invoice_without_prices: labels.invoiceWithoutPrices,
+    goods_receipt: labels.goodsReceipt,
+  };
+  const title = titles[kind];
   doc.info.Title = `${title} ${job.number}`;
-  doc.info.Author = job.seller.name;
-  if (input.kind === "invoice") renderInvoice(doc, job, labels, locale, title);
+  doc.info.Author = kind === "invoice_without_prices" ? "BAZAAR" : job.seller.name;
+  if (kind === "invoice_without_prices") renderInvoiceWithoutPrices(doc, job, labels, locale, title);
+  else if (kind === "invoice") renderInvoice(doc, job, labels, locale, title);
   else renderGoodsReceipt(doc, job, labels, locale, title);
   doc.end();
   return finished;
+}
+
+type PriceFreeInvoice = Pick<SalesDocumentPayload, "number" | "createdAt" | "status"> & {
+  items: Pick<SalesDocumentPayload["items"][number], "name" | "variantName" | "unit" | "qty">[];
+};
+
+function renderInvoiceWithoutPrices(
+  doc: Pdf,
+  job: PriceFreeInvoice,
+  labels: SalesDocumentPdfLabels,
+  locale: string,
+  title: string,
+) {
+  const left = 36;
+  const width = 523.28;
+  const bottom = 782;
+  const font = 9;
+  const lineHeight = font + 3;
+  const padding = 4;
+  const signaturesHeight = 48;
+  const columns = [
+    { label: "№", width: 30, align: "left" },
+    { label: labels.product, width: 365.28, align: "left" },
+    { label: labels.unit, width: 57, align: "left" },
+    { label: labels.quantity, width: 71, align: "right" },
+  ] as const;
+  const headerLines = columns.map((column) => wrap(doc, column.label, column.width - 8, font));
+  const headerHeight = Math.max(...headerLines.map((lines) => lines.length)) * lineHeight + 2 * padding;
+  const heading = wrap(doc, title, width, 17);
+  const detailsY = 41 + heading.length * 20 + 5;
+  const details = [
+    `${labels.number}: ${job.number}     ${labels.date}: ${formatDateTime(job.createdAt, locale)}`,
+    `${labels.status}: ${labels.statuses[job.status]}`,
+  ].flatMap((line) => wrap(doc, line, width, 9));
+  const headerY = detailsY + details.length * lineHeight + 12;
+  const tableTop = headerY + headerHeight;
+  if (tableTop + lineHeight + 2 * padding + signaturesHeight > bottom) {
+    throw new Error("salesDocumentHeaderTooTall");
+  }
+  let y = 0;
+
+  const drawRow = (cells: string[][], height: number) => {
+    let x = left;
+    for (const [index, column] of columns.entries()) {
+      drawLines(doc, cells[index]!, x + 4, y + padding, column.width - 8, font, column.align);
+      x += column.width;
+    }
+    y += height;
+  };
+
+  const newPage = () => {
+    doc.addPage({ size: "A4", margin: 0 });
+    if (job.status === "DRAFT" || job.status === "CANCELED") {
+      doc.save().fillOpacity(0.055).translate(298, 420).rotate(-25);
+      doc.fontSize(58).fillColor(BLACK).text(labels.statuses[job.status], -240, -32, {
+        width: 480, align: "center", lineBreak: false,
+      });
+      doc.restore();
+    }
+    drawLines(doc, ["BAZAAR"], left, 26, width, 8, "left", GRAY);
+    drawLines(doc, heading, left, 41, width, 17);
+    drawLines(doc, details, left, detailsY, width, 9);
+    y = headerY;
+    doc.rect(left, y, width, headerHeight).fill("#f0f0f0");
+    drawRow(headerLines, headerHeight);
+  };
+
+  newPage();
+  for (const [index, item] of job.items.entries()) {
+    const name = [item.name, item.variantName].filter(Boolean).join(" · ");
+    const cells = [String(index + 1), name, item.unit, quantity(item.qty, locale)]
+      .map((text, column) => wrap(doc, text, columns[column]!.width - 8, font));
+    const lineCount = Math.max(...cells.map((cell) => cell.length));
+    const rowHeight = lineCount * lineHeight + 2 * padding;
+    const lastRow = index === job.items.length - 1;
+    const fullPageFits = rowHeight <= bottom - tableTop;
+    const reserve = lastRow && rowHeight + signaturesHeight <= bottom - tableTop ? signaturesHeight : 0;
+    // Move an ordinary row to the next page before splitting taller rows.
+    if (fullPageFits && y + rowHeight + reserve > bottom) newPage();
+
+    let offset = 0;
+    while (offset < lineCount) {
+      const availableLines = Math.floor((bottom - y - 2 * padding) / lineHeight);
+      let count = Math.min(lineCount - offset, availableLines);
+      if (lastRow && offset + count === lineCount && y + count * lineHeight + 2 * padding + signaturesHeight > bottom) {
+        // Keep the signatures with the tail of an exceptionally long row.
+        // A single line also moves with them if the current page is full.
+        count -= 1;
+      }
+      if (count < 1) {
+        newPage();
+        continue;
+      }
+      drawRow(cells.map((cell) => cell.slice(offset, offset + count)), count * lineHeight + 2 * padding);
+      doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.4).strokeColor("#cccccc").stroke();
+      offset += count;
+      if (offset < lineCount) newPage();
+    }
+  }
+  if (!job.items.length) {
+    drawLines(doc, [labels.empty], left + 4, y + padding, width - 8, font);
+    y += lineHeight + 2 * padding;
+  }
+
+  const signaturesY = y + 22;
+  doc.moveTo(left, signaturesY).lineTo(left + 205, signaturesY).strokeColor(BLACK).lineWidth(0.6).stroke();
+  doc.moveTo(left + 285, signaturesY).lineTo(left + width, signaturesY).stroke();
+  drawLines(doc, [labels.issuedBy], left, signaturesY + 5, 205, 8, "left", GRAY);
+  drawLines(doc, [labels.receivedBy], left + 285, signaturesY + 5, width - 285, 8, "left", GRAY);
+
+  const range = doc.bufferedPageRange();
+  for (let index = 0; index < range.count; index += 1) {
+    doc.switchToPage(index);
+    drawLines(doc, wrap(doc, labels.nonFiscal, width - 75, 7.5), left, 811, width - 75, 7.5, "left", GRAY);
+    drawLines(doc, [`${labels.page} ${index + 1}/${range.count}`], left + width - 70, 811, 70, 7.5, "right", GRAY);
+  }
 }
 
 function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumentPdfLabels, locale: string, title: string) {

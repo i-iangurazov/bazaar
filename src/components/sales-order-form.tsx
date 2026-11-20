@@ -1,7 +1,7 @@
 "use client";
 import { parseQuantity, roundQuantity } from "@/lib/quantity";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -53,6 +53,13 @@ import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
+  clearSalesOrderDraft,
+  readSalesOrderDraft,
+  writeSalesOrderDraft,
+  type SalesOrderDraft,
+  type SalesOrderDraftLine as DraftLine,
+} from "@/lib/salesOrderDraftRecovery";
+import {
   clearPendingSalesOrderSale,
   isSafeSalesOrderFailure,
   readPendingSalesOrderSale,
@@ -67,24 +74,6 @@ type ProductSearchResult = {
   name: string;
   sku: string;
   isBundle?: boolean;
-};
-
-type DraftLine = {
-  lineId?: string | null;
-  productId: string;
-  variantId?: string | null;
-  productName: string;
-  productSku: string;
-  qty: number;
-  qtyInput: string;
-  isBundle: boolean;
-  unitPriceKgs: number | null;
-  lineTotalKgs: number | null;
-  priceInput: string;
-  priceEdited: boolean;
-  priceTouched?: boolean;
-  priceSource?: "RETAIL" | "WHOLESALE" | "STANDARD" | "MISSING" | "MANUAL";
-  repriced?: boolean;
 };
 
 const toLineTotal = salesOrderLineTotal;
@@ -108,11 +97,14 @@ export const SalesOrderForm = ({
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session } = useSession();
+  const userId = session?.user?.id;
+  const organizationId = session?.user?.organizationId;
+  const owner = useMemo(
+    () => userId && organizationId ? { userId, organizationId } : null,
+    [userId, organizationId],
+  );
   const ownerRef = useRef<{ userId: string; organizationId: string } | null>(null);
-  ownerRef.current =
-    session?.user?.id && session.user.organizationId
-      ? { userId: session.user.id, organizationId: session.user.organizationId }
-      : null;
+  ownerRef.current = owner;
   const canSetPrice = ["ADMIN", "MANAGER", "STAFF", "CASHIER"].includes(session?.user?.role ?? "");
   const canPostSale = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const router = useRouter();
@@ -164,60 +156,144 @@ export const SalesOrderForm = ({
   const submissionRef = useRef(false);
   const [pendingSale, setPendingSale] = useState<PendingSalesOrderSale | null>(null);
   const pendingSaleRef = useRef<PendingSalesOrderSale | null>(null);
-  const [recoveryLoaded, setRecoveryLoaded] = useState(false);
+  const [recoveryOwner, setRecoveryOwner] = useState("");
   const [storageFailed, setStorageFailed] = useState(false);
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const draftIdRef = useRef<string | null>(null);
   const createAttemptRef = useRef<{
     payload: string;
     idempotencyKey: string;
     ownerKey: string;
   } | null>(null);
   const currentOwnerKey = () => (ownerRef.current ? JSON.stringify(ownerRef.current) : "");
+  const ownerKey = currentOwnerKey();
+  const recoveryLoaded = isEdit || Boolean(ownerKey && recoveryOwner === ownerKey);
 
-  useEffect(() => {
-    if (isEdit) {
-      setRecoveryLoaded(true);
-      return;
-    }
-    const owner = ownerRef.current;
-    setRecoveryLoaded(false);
-    setStorageFailed(false);
-    pendingSaleRef.current = null;
-    setPendingSale(null);
-    createAttemptRef.current = null;
-    setDraftLines([]);
-    setStoreId("");
-    setSelectedCustomer(null);
-    setCustomerSelectionTouched(false);
-    setCustomerName("");
-    setCustomerEmail("");
-    setCustomerPhone("");
-    setCustomerAddress("");
-    setNotes("");
-    setLineSearch("");
-    setPendingQty("1");
-    if (!owner) return;
-    try {
-      const pending = readPendingSalesOrderSale(window.sessionStorage, owner);
-      pendingSaleRef.current = pending;
-      setPendingSale(pending);
-    } catch {
-      setStorageFailed(true);
-    } finally {
-      setRecoveryLoaded(true);
-    }
-  }, [isEdit, session?.user?.id, session?.user?.organizationId]);
+  const fillNewOrder = useCallback((draft: SalesOrderDraft | null) => {
+    setDraftLines(draft?.lines ?? []);
+    setStoreId(draft?.storeId ?? "");
+    setPriceMode(draft?.priceMode ?? "RETAIL");
+    setSelectedCustomer(draft?.selectedCustomer ?? null);
+    setCustomerSelectionTouched(draft?.customerSelectionTouched ?? false);
+    setCustomerName(draft?.customerName ?? "");
+    setCustomerEmail(draft?.customerEmail ?? "");
+    setCustomerPhone(draft?.customerPhone ?? "");
+    setCustomerAddress(draft?.customerAddress ?? "");
+    setNotes(draft?.notes ?? "");
+    setLineSearch(draft?.lineSearch ?? "");
+    setPendingQty(draft?.pendingQty ?? "1");
+    setShowCustomerDetails(false);
+    setIsRefreshingPrices(false);
+    setPricingFailed(false);
+    setMissingPriceLineIds([]);
+    setMissingPriceLabels([]);
+  }, []);
 
   useEffect(() => {
     if (isEdit) return;
+    setStorageFailed(false);
+    setDraftStorageFailed(false);
+    pendingSaleRef.current = null;
+    setPendingSale(null);
+    createAttemptRef.current = null;
+    let draft: SalesOrderDraft | null = null;
+    if (owner) {
+      try {
+        const pending = readPendingSalesOrderSale(window.sessionStorage, owner);
+        pendingSaleRef.current = pending;
+        setPendingSale(pending);
+      } catch {
+        setStorageFailed(true);
+      }
+      try {
+        draft = readSalesOrderDraft(window.sessionStorage, owner);
+        if (draft?.saveAttempt) createAttemptRef.current = { ...draft.saveAttempt, ownerKey };
+      } catch {
+        setDraftStorageFailed(true);
+      }
+    }
+    // While replaying a pending sale, keep the token that belongs to it.
+    draftIdRef.current = pendingSaleRef.current && draft ? draft.id : crypto.randomUUID();
+    fillNewOrder(draft);
+    setDraftRestored(Boolean(draft));
+    setRecoveryOwner(ownerKey);
+  }, [isEdit, owner, ownerKey, fillNewOrder]);
+
+  useEffect(() => {
+    if (isEdit || !recoveryLoaded) return;
     if (!storeId && storesQuery.data?.[0]) {
       const available = requestedStoreId
         ? storesQuery.data.find((store) => store.id === requestedStoreId)
         : storesQuery.data[0];
       if (available) setStoreId(available.id);
     }
-  }, [isEdit, storeId, storesQuery.data, requestedStoreId]);
+  }, [isEdit, recoveryLoaded, storeId, storesQuery.data, requestedStoreId]);
 
   const selectedStore = storesQuery.data?.find((store) => store.id === storeId) ?? null;
+  const needsDraftStore = !isEdit && Boolean(storeId && storesQuery.data && !selectedStore);
+  const hasLocalDraft = Boolean(
+    draftLines.length || selectedCustomer || customerName || customerEmail || customerPhone ||
+    customerAddress || notes || lineSearch || pendingQty !== "1" || priceMode !== "RETAIL",
+  );
+
+  const persistNewOrder = useCallback(() => {
+    const draftId = draftIdRef.current;
+    if (
+      isEdit || !recoveryLoaded || !owner || ownerRef.current !== owner ||
+      !draftId || pendingSaleRef.current
+    ) return;
+    const attempt = createAttemptRef.current;
+    try {
+      if (hasLocalDraft || attempt) {
+        writeSalesOrderDraft(window.sessionStorage, owner, {
+          id: draftId,
+          storeId,
+          priceMode,
+          selectedCustomer,
+          customerSelectionTouched,
+          customerName,
+          customerEmail,
+          customerPhone,
+          customerAddress,
+          notes,
+          lineSearch,
+          pendingQty,
+          lines: draftLines,
+          saveAttempt: attempt && {
+            payload: attempt.payload,
+            idempotencyKey: attempt.idempotencyKey,
+          },
+        });
+        setDraftStorageFailed(false);
+      } else {
+        clearSalesOrderDraft(window.sessionStorage, owner, draftId);
+      }
+    } catch {
+      setDraftStorageFailed(true);
+    }
+  }, [
+    isEdit, recoveryLoaded, owner, hasLocalDraft, storeId, priceMode, selectedCustomer,
+    customerSelectionTouched, customerName, customerEmail, customerPhone, customerAddress,
+    notes, lineSearch, pendingQty, draftLines,
+  ]);
+
+  useEffect(() => {
+    persistNewOrder();
+  }, [persistNewOrder]);
+
+  const forgetNewOrder = () => {
+    const owner = ownerRef.current;
+    const draftId = draftIdRef.current;
+    if (!owner || !draftId) return;
+    try {
+      clearSalesOrderDraft(window.sessionStorage, owner, draftId);
+      setDraftStorageFailed(false);
+    } catch {
+      setDraftStorageFailed(true);
+    }
+    draftIdRef.current = null;
+  };
   // Edit mode keeps the document currency snapshot: the store rate may change
   // later without silently reinterpreting saved KGS line values.
   const documentCurrencySource = salesOrderDocumentCurrencySource({
@@ -358,10 +434,14 @@ export const SalesOrderForm = ({
 
   // Changing the selling store refreshes suggested prices without discarding negotiated prices.
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit || !recoveryLoaded || pendingSaleRef.current) return;
     const currentLines = draftLinesRef.current;
     const store = storesQuery.data?.find((item) => item.id === storeId);
-    if (!store || !currentLines.length) return;
+    if (!store || !currentLines.length) {
+      setIsRefreshingPrices(false);
+      setPricingFailed(false);
+      return;
+    }
     let active = true;
     setIsRefreshingPrices(true);
     setPricingFailed(false);
@@ -396,14 +476,11 @@ export const SalesOrderForm = ({
             return {
               ...line,
               unitPriceKgs: price,
-              priceSource:
-                price === null ? "MISSING" : (refreshed.priceSource as DraftLine["priceSource"]),
+              priceSource: line.priceEdited ? "MANUAL" : refreshed.priceSource,
               priceInput:
-                price === null
-                  ? line.priceEdited
-                    ? line.priceInput
-                    : ""
-                  : salesOrderPriceInput(price, store),
+                line.priceEdited && parseSalesOrderPriceInput(line.priceInput, store) === price
+                  ? line.priceInput
+                  : price === null ? "" : salesOrderPriceInput(price, store),
               lineTotalKgs: line.qty > 0 ? toLineTotal(line.qty, price) : null,
             };
           }),
@@ -418,7 +495,7 @@ export const SalesOrderForm = ({
     return () => {
       active = false;
     };
-  }, [isEdit, storeId, priceMode, pricingRevision, storesQuery.data, utils]);
+  }, [isEdit, recoveryLoaded, storeId, priceMode, pricingRevision, storesQuery.data, utils]);
 
   const chooseCustomer = (customer: SalesOrderCustomerOption | null) => {
     setCustomerSelectionTouched(true);
@@ -433,7 +510,11 @@ export const SalesOrderForm = ({
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: debouncedLineSearch, storeId: storeId || undefined, limit: 50 },
-    { enabled: Boolean(storeId) && debouncedLineSearch.length >= 1, keepPreviousData: false },
+    {
+      enabled:
+        recoveryLoaded && Boolean(isEdit ? storeId : selectedStore) && debouncedLineSearch.length >= 1,
+      keepPreviousData: false,
+    },
   );
 
   const createMutation = trpc.salesOrders.createDraft.useMutation({
@@ -445,6 +526,7 @@ export const SalesOrderForm = ({
         attempt.ownerKey !== currentOwnerKey()
       )
         return;
+      forgetNewOrder();
       createAttemptRef.current = null;
       toast({ variant: "success", description: t("createSuccess") });
       router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
@@ -480,6 +562,7 @@ export const SalesOrderForm = ({
       }
       pendingSaleRef.current = null;
       setPendingSale(null);
+      forgetNewOrder();
       createAttemptRef.current = null;
       toast({ variant: "success", description: t("completeSuccess") });
       router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
@@ -538,7 +621,7 @@ export const SalesOrderForm = ({
   const addDraftLine = async (product: ProductSearchResult): Promise<boolean> => {
     if (addingLineRef.current || isRefreshingPrices || isSaving || submissionRef.current)
       return false;
-    if (!storeId) {
+    if (!storeId || (!isEdit && !selectedStore)) {
       toast({ variant: "error", description: t("storeRequired") });
       return false;
     }
@@ -553,6 +636,8 @@ export const SalesOrderForm = ({
 
     let unitPriceKgs: number | null = null;
     let resolvedSource: DraftLine["priceSource"] = "STANDARD";
+    const requestOwner = currentOwnerKey();
+    const requestDraftId = draftIdRef.current;
     addingLineRef.current = true;
     setIsAddingLine(true);
     try {
@@ -561,6 +646,9 @@ export const SalesOrderForm = ({
         storeId,
         priceMode,
       });
+      if (currentOwnerKey() !== requestOwner || draftIdRef.current !== requestDraftId) {
+        return false;
+      }
       unitPriceKgs = pricing.hasConfiguredPrice === false ? null : pricing.unitPriceKgs;
       resolvedSource = pricing.priceSource as DraftLine["priceSource"];
     } catch (error) {
@@ -668,9 +756,11 @@ export const SalesOrderForm = ({
     setMissingPriceLineIds([]);
     setMissingPriceLabels([]);
     setDraftLines((current) => current.filter((line) => draftLineKey(line) !== key));
+    if (pricingFailed) setPricingRevision((revision) => revision + 1);
   };
 
   const updateDraftLinePrice = (key: string, rawValue: string) => {
+    if (!isEdit && !selectedStore) return;
     const price = parseSalesOrderPriceInput(rawValue, documentCurrencySource);
     setMissingPriceLineIds([]);
     setMissingPriceLabels([]);
@@ -694,6 +784,10 @@ export const SalesOrderForm = ({
 
   const changePriceMode = async (nextMode: "RETAIL" | "WHOLESALE") => {
     if (nextMode === priceMode || isSaving || isRefreshingPrices) return;
+    const requestOwner = currentOwnerKey();
+    const requestDraftId = draftIdRef.current;
+    const isCurrentDraft = () =>
+      currentOwnerKey() === requestOwner && draftIdRef.current === requestDraftId;
     if (!selectedStore?.organization?.retailWholesaleEnabled) {
       setPriceMode(nextMode);
       return;
@@ -715,6 +809,7 @@ export const SalesOrderForm = ({
         confirmVariant: "danger",
       });
     }
+    if (!isCurrentDraft()) return;
     setIsRefreshingPrices(true);
     setPricingFailed(false);
     try {
@@ -726,6 +821,7 @@ export const SalesOrderForm = ({
           variantId: line.variantId ?? null,
         })),
       });
+      if (!isCurrentDraft()) return;
       const byKey = new Map(
         quote.items.map((item) => [`${item.productId}:${item.variantId ?? "BASE"}`, item]),
       );
@@ -769,12 +865,14 @@ export const SalesOrderForm = ({
       setMissingPriceLineIds(missing);
       setPriceMode(nextMode);
     } catch (error) {
-      toast({
-        variant: "error",
-        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
-      });
+      if (isCurrentDraft()) {
+        toast({
+          variant: "error",
+          description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
+        });
+      }
     } finally {
-      setIsRefreshingPrices(false);
+      if (isCurrentDraft()) setIsRefreshingPrices(false);
     }
   };
 
@@ -783,7 +881,7 @@ export const SalesOrderForm = ({
     const attemptOwner = ownerRef.current;
     if (!attemptOwner) return;
     const attemptOwnerKey = JSON.stringify(attemptOwner);
-    if (!storeId) {
+    if (!selectedStore) {
       toast({ variant: "error", description: t("storeRequired") });
       return;
     }
@@ -880,6 +978,7 @@ export const SalesOrderForm = ({
       };
 
       if (postSale) {
+        persistNewOrder();
         const pending: PendingSalesOrderSale = {
           version: 1,
           ...attemptOwner,
@@ -897,7 +996,10 @@ export const SalesOrderForm = ({
         pendingSaleRef.current = pending;
         setPendingSale(pending);
         await saleMutation.mutateAsync(pending.input);
-      } else await createMutation.mutateAsync({ ...payload, idempotencyKey });
+      } else {
+        persistNewOrder();
+        await createMutation.mutateAsync({ ...payload, idempotencyKey });
+      }
     } catch {
       // The mutation shows its translated error. Keep the draft and retry key.
     } finally {
@@ -985,6 +1087,21 @@ export const SalesOrderForm = ({
     await handleCreate(postSale);
   };
 
+  const discardNewOrder = async () => {
+    const discardOwner = ownerKey;
+    if (!(await confirm({
+      description: t("workspace.discardLocalDraftHint"),
+      confirmLabel: t("workspace.discardLocalDraft"),
+      confirmVariant: "danger",
+    }))) return;
+    if (currentOwnerKey() !== discardOwner || submissionRef.current || pendingSaleRef.current) return;
+    forgetNewOrder();
+    draftIdRef.current = crypto.randomUUID();
+    createAttemptRef.current = null;
+    fillNewOrder(null);
+    setDraftRestored(false);
+  };
+
   const orderTotalKgs = useMemo(
     () =>
       draftLines.reduce((cents, line) => cents + Math.round((line.lineTotalKgs ?? 0) * 100), 0) /
@@ -1046,6 +1163,14 @@ export const SalesOrderForm = ({
   if (legacyReturnRedirect) {
     return <SalesOrderReturnRedirect href={legacyReturnRedirect} label={tCommon("loading")} />;
   }
+  if (!recoveryLoaded) {
+    return (
+      <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Spinner className="h-4 w-4" />
+        {tCommon("loading")}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-4">
@@ -1106,6 +1231,29 @@ export const SalesOrderForm = ({
           {t("workspace.storageFailed")}
         </p>
       ) : null}
+      {!isEdit && !pendingSale && (hasLocalDraft || draftStorageFailed) ? (
+        <div className="bazaar-doc-surface flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
+          <p
+            role={draftStorageFailed ? "alert" : "status"}
+            className={`text-sm ${draftStorageFailed ? "text-danger" : "text-muted-foreground"}`}
+          >
+            {t(draftStorageFailed
+              ? "workspace.localDraftStorageFailed"
+              : draftRestored ? "workspace.localDraftRestored" : "workspace.localDraftSaved")}
+          </p>
+          {hasLocalDraft ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={discardNewOrder}
+              disabled={isSaving || isAddingLine || isRefreshingPrices}
+            >
+              {t("workspace.discardLocalDraft")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <section className="bazaar-doc-surface space-y-4 p-4" aria-label={t("detailsTitle")}>
         {storesQuery.error ? (
@@ -1133,6 +1281,9 @@ export const SalesOrderForm = ({
             {isEdit ? (
               <p className="text-xs text-muted-foreground">{t("workspace.storeLockedHint")}</p>
             ) : null}
+            {needsDraftStore ? (
+              <p role="alert" className="text-xs text-danger">{t("workspace.localDraftStoreUnavailable")}</p>
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <Label>{t("customerCard")}</Label>
@@ -1141,7 +1292,7 @@ export const SalesOrderForm = ({
               customerId={selectedCustomer?.id ?? null}
               customerName={selectedCustomer?.name ?? ""}
               onSelect={chooseCustomer}
-              disabled={isSaving}
+              disabled={isSaving || (!isEdit && !selectedStore)}
             />
           </div>
         </FormGrid>
@@ -1233,7 +1384,7 @@ export const SalesOrderForm = ({
                 showDropdown={false}
                 enableProductSearch={false}
                 onResolved={handleLineScanResolved}
-                disabled={!storeId || isSaving}
+                disabled={!storeId || isSaving || (!isEdit && !selectedStore)}
               />
             </div>
             <div className="space-y-1.5">
@@ -1423,7 +1574,9 @@ export const SalesOrderForm = ({
                         aria-label={`${t("unitPrice")} · ${line.productName}`}
                         aria-invalid={line.priceEdited && line.unitPriceKgs === null}
                         className="h-10 w-full"
-                        disabled={!canSetPrice || isRefreshingPrices || isSaving}
+                        disabled={
+                          !canSetPrice || isRefreshingPrices || isSaving || (!isEdit && !selectedStore)
+                        }
                       />
                     </label>
                     <Tooltip>
@@ -1504,7 +1657,7 @@ export const SalesOrderForm = ({
                   isRefreshingPrices ||
                   isAddingLine ||
                   pricingFailed ||
-                  !storeId ||
+                  !selectedStore ||
                   !draftLines.length ||
                   draftLines.some((line) => line.unitPriceKgs === null)
                 }
@@ -1522,7 +1675,10 @@ export const SalesOrderForm = ({
               variant={canPostSale && !isEdit ? "secondary" : "primary"}
               className="min-h-10 flex-1"
               onClick={() => void handleSubmit(false)}
-              disabled={isSaving || isRefreshingPrices || isAddingLine || pricingFailed || !storeId}
+              disabled={
+                isSaving || isRefreshingPrices || isAddingLine || pricingFailed ||
+                (isEdit ? !storeId : !selectedStore)
+              }
               data-testid="sales-order-save"
             >
               {createMutation.isLoading || updateMutation.isLoading ? (
@@ -1548,7 +1704,7 @@ export const SalesOrderForm = ({
               }}
               disabled={isSaving}
             >
-              {tCommon("cancel")}
+              {isEdit ? tCommon("cancel") : tCommon("back")}
             </Button>
           </div>
         </section>
