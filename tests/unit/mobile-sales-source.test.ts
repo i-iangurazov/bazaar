@@ -46,8 +46,10 @@ describe("mobile sales and receipts source", () => {
     expect(source).toContain("renderDesktop={(visibleItems) => (");
     expect(source).toContain("renderMobile={(order) => (");
     expect(source).toContain(
-      '<Table className="min-w-[1055px] table-fixed" data-tour="sales-orders-table">',
+      '<Table className="min-w-[1195px] table-fixed" data-tour="sales-orders-table">',
     );
+    expect(source).toContain('className="sticky right-0 z-10 w-[64px] bg-card');
+    expect(source.match(/\{renderReceivedPayments\(order\)\}/g)).toHaveLength(2);
     expect(source).toContain('{t("customerAddress")}');
   });
 });
