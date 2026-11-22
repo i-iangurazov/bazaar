@@ -21,6 +21,7 @@ import {
 } from "@/server/services/storeAccess";
 import {
   addCustomerOrderLine,
+  appendUnpaidCustomerOrderLine,
   cancelCustomerOrder,
   completeCustomerOrder,
   confirmCustomerOrder,
@@ -495,6 +496,27 @@ export const salesOrdersRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         return await removeDeclinedCustomerOrderLine({
+          ...input, organizationId: ctx.user.organizationId, actorId: ctx.user.id, requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  appendUnpaidLine: salesOrdersManagerProcedure
+    .input(z.object({
+      customerOrderId: z.string().min(1),
+      productId: z.string().min(1),
+      variantId: z.string().min(1).optional().nullable(),
+      qty: z.number().multipleOf(0.001).positive(),
+      unitPriceKgs: optionalUnitPriceSchema,
+      expectedUnitPriceKgs: optionalUnitPriceSchema,
+      expectedUpdatedAt: z.string().datetime({ offset: true }),
+      idempotencyKey: z.string().min(8),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await appendUnpaidCustomerOrderLine({
           ...input, organizationId: ctx.user.organizationId, actorId: ctx.user.id, requestId: ctx.requestId,
         });
       } catch (error) {

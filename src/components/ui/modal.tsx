@@ -14,6 +14,7 @@ export const Modal = ({
   title,
   subtitle,
   children,
+  footer,
   className,
   headerClassName,
   bodyClassName,
@@ -27,6 +28,7 @@ export const Modal = ({
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   className?: string;
   headerClassName?: string;
   bodyClassName?: string;
@@ -117,6 +119,7 @@ export const Modal = ({
         <div className={cn("flex-1 overflow-y-auto bg-card p-4 sm:p-5", bodyClassName)}>
           {children}
         </div>
+        {footer}
       </DialogPrimitive.Content>
     </>
   );

@@ -240,6 +240,142 @@ describeDb("immediate ordinary sales and explicit declined-item corrections", ()
     expect((await prisma.inventorySnapshot.findFirstOrThrow({ where: { storeId: f.store.id, productId: f.product.id, variantId: variant.id } })).onHand).toBe(2.375);
   });
 
+  it("adds a variant to the same unpaid sale and posts its stock only once across retries", async () => {
+    const f = await fixture();
+    const manager = createTestCaller(asUser(f.managerUser));
+    await prisma.unit.update({ where: { id: f.baseUnit.id }, data: { quantityPrecision: 3 } });
+    await prisma.store.update({ where: { id: f.store.id }, data: { currencyCode: "USD", currencyRateKgsPerUnit: 90 } });
+    const variant = await prisma.productVariant.create({
+      data: { productId: f.second.id, name: "New sellable variant", attributes: {} },
+    });
+    await adjustStock({
+      organizationId: f.org.id, actorId: f.adminUser.id, storeId: f.store.id,
+      productId: f.second.id, variantId: variant.id, qtyDelta: 5, reason: "append fixture",
+      idempotencyKey: randomUUID(), requestId: randomUUID(),
+    });
+    const sale = await f.api.salesOrders.createSale({
+      ...orderInput(f), lines: [{ productId: f.product.id, qty: 2, unitPriceKgs: 75 }],
+    });
+    const original = await savedOrder(sale.id);
+    const request = {
+      customerOrderId: sale.id, productId: f.second.id, variantId: variant.id, qty: 1.25,
+      unitPriceKgs: 49.95, expectedUpdatedAt: original.updatedAt.toISOString(), idempotencyKey: randomUUID(),
+    };
+    expect(await manager.salesOrders.paymentInfo({ customerOrderId: sale.id })).toMatchObject({
+      canAppendUnpaidLine: true, hasEvidence: false, remainingKgs: 150,
+    });
+    effects.publish.mockClear();
+    const [added, retried] = await Promise.all([
+      manager.salesOrders.appendUnpaidLine(request),
+      manager.salesOrders.appendUnpaidLine(request),
+    ]);
+    expect(retried).toEqual(added);
+    expect(added).toMatchObject({
+      customerOrderId: original.id, productId: f.second.id, variantId: variant.id,
+      qty: 1.25, unitPriceKgs: 49.95, lineTotalKgs: 62.44, unitCostKgs: 10, lineCostTotalKgs: 12.5,
+    });
+    const updated = await savedOrder(sale.id);
+    expect(updated).toMatchObject({
+      number: original.number, status: original.status, customerId: original.customerId,
+      currencyCode: "USD", completedAt: original.completedAt, completedEventId: original.completedEventId,
+    });
+    expect(updated.lines).toHaveLength(2);
+    expect(updated.lines.find((line) => line.id === original.lines[0]!.id)).toEqual(original.lines[0]);
+    expect(Number(updated.totalKgs)).toBe(212.44);
+    expect(await manager.salesOrders.paymentInfo({ customerOrderId: sale.id })).toMatchObject({
+      canAppendUnpaidLine: true, hasEvidence: false, remainingKgs: 212.44,
+    });
+    const movements = await prisma.stockMovement.findMany({ where: { referenceId: original.id } });
+    expect(movements).toHaveLength(2);
+    expect(movements.find((movement) => movement.productId === f.second.id)).toMatchObject({
+      variantId: variant.id, qtyDelta: -1.25, type: "SALE", referenceType: "CustomerOrder",
+    });
+    expect(await prisma.inventorySnapshot.findFirstOrThrow({
+      where: { storeId: f.store.id, productId: f.second.id, variantId: variant.id },
+    })).toMatchObject({ onHand: 3.75 });
+    expect(await prisma.salePayment.count()).toBe(0);
+    expect(await prisma.saleReturn.count()).toBe(0);
+    expect(await prisma.fiscalReceipt.count()).toBe(0);
+    expect(await prisma.customerOrder.count()).toBe(1);
+    expect(await prisma.auditLog.count({ where: { entityId: sale.id, action: "SALES_ORDER_UNPAID_LINE_APPEND" } })).toBe(1);
+    expect(effects.publish).toHaveBeenCalledExactlyOnceWith({
+      type: "inventory.updated", payload: { storeId: f.store.id, productId: f.second.id, variantId: variant.id },
+    });
+    await expect(manager.salesOrders.appendUnpaidLine({ ...request, qty: 1.5 })).rejects.toMatchObject({ message: "idempotencyKeyPayloadMismatch" });
+    await expect(manager.salesOrders.appendUnpaidLine({
+      ...request, idempotencyKey: randomUUID(),
+    })).rejects.toMatchObject({ message: "salesOrderAmendmentStale" });
+    await expect(manager.salesOrders.appendUnpaidLine({
+      ...request, idempotencyKey: randomUUID(), expectedUpdatedAt: updated.updatedAt.toISOString(),
+    })).rejects.toMatchObject({ message: "duplicateLineItem" });
+  });
+
+  it("denies append for staff, revoked stores, paid sales and closed periods without changing accounting", async () => {
+    const f = await fixture();
+    const { shift } = await openShift(f);
+    const sale = await f.api.salesOrders.createSale({
+      ...orderInput(f), lines: [{ productId: f.product.id, qty: 1 }],
+    });
+    const original = await savedOrder(sale.id);
+    const request = {
+      customerOrderId: sale.id, productId: f.second.id, qty: 1,
+      expectedUpdatedAt: original.updatedAt.toISOString(), idempotencyKey: randomUUID(),
+    };
+    const staff = createTestCaller(asUser(f.staffUser));
+    expect(await staff.salesOrders.paymentInfo({ customerOrderId: sale.id })).toMatchObject({ canAppendUnpaidLine: false });
+    await expect(staff.salesOrders.appendUnpaidLine(request)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const manager = createTestCaller(asUser(f.managerUser));
+    await prisma.userStoreAccess.deleteMany({ where: { userId: f.managerUser.id } });
+    await expect(manager.salesOrders.appendUnpaidLine(request)).rejects.toMatchObject({ message: "storeAccessDenied" });
+
+    await f.api.salesOrders.recordPayment({
+      customerOrderId: sale.id, shiftId: shift.id, amountKgs: 1,
+      method: "CASH", idempotencyKey: randomUUID(),
+    });
+    expect(await f.api.salesOrders.paymentInfo({ customerOrderId: sale.id })).toMatchObject({ canAppendUnpaidLine: false });
+    const paidAccounting = await accounting(f);
+    await expect(f.api.salesOrders.appendUnpaidLine(request)).rejects.toMatchObject({ message: "salesOrderAmendmentRequiresReturn" });
+    expect(await accounting(f)).toEqual(paidAccounting);
+
+    const another = await f.api.salesOrders.createSale({
+      ...orderInput(f), lines: [{ productId: f.product.id, qty: 1 }],
+    });
+    const completed = await savedOrder(another.id);
+    const amendedAt = completed.completedAt!.getTime();
+    await f.api.periodClose.close({
+      storeId: f.store.id, periodStart: new Date(amendedAt - 1000), periodEnd: new Date(amendedAt + 1000),
+    });
+    expect(await f.api.salesOrders.paymentInfo({ customerOrderId: another.id })).toMatchObject({ canAppendUnpaidLine: false });
+    const closedAccounting = await accounting(f);
+    await expect(f.api.salesOrders.appendUnpaidLine({
+      ...request, customerOrderId: another.id, expectedUpdatedAt: completed.updatedAt.toISOString(), idempotencyKey: randomUUID(),
+    })).rejects.toMatchObject({ message: "salesOrderAmendmentPeriodClosed" });
+    expect(await accounting(f)).toEqual(closedAccounting);
+  });
+
+  it("requires review of an updated catalogue price before appending to a posted sale", async () => {
+    const f = await fixture();
+    const sale = await f.api.salesOrders.createSale({
+      ...orderInput(f), lines: [{ productId: f.product.id, qty: 1 }],
+    });
+    const order = await savedOrder(sale.id);
+    const request = {
+      customerOrderId: sale.id, productId: f.second.id, qty: 1, expectedUnitPriceKgs: 50,
+      expectedUpdatedAt: order.updatedAt.toISOString(), idempotencyKey: randomUUID(),
+    };
+    await prisma.product.update({ where: { id: f.second.id }, data: { basePriceKgs: 65 } });
+    const before = await accounting(f);
+    await expect(f.api.salesOrders.appendUnpaidLine(request)).rejects.toMatchObject({ message: "salesOrderPriceChanged" });
+    expect(await accounting(f)).toEqual(before);
+    const reviewed = { ...request, expectedUnitPriceKgs: 65, idempotencyKey: randomUUID() };
+    expect(await f.api.salesOrders.appendUnpaidLine(reviewed)).toMatchObject({
+      unitPriceKgs: 65, lineTotalKgs: 65, manualPrice: false,
+    });
+    await expect(f.api.salesOrders.appendUnpaidLine({
+      ...reviewed, expectedUnitPriceKgs: 50,
+    })).rejects.toMatchObject({ message: "idempotencyKeyPayloadMismatch" });
+  });
+
   it("requires a current manager role and authorized store for all new commands", async () => {
     const f = await fixture();
     const ready = await readyOrder(f);

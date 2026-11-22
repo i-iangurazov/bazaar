@@ -73,7 +73,11 @@ import {
 import { formatDate } from "@/lib/i18nFormat";
 import { scrollChildIntoHorizontalView } from "@/lib/horizontalScrollFocus";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
-import { parseSalesOrderPriceInput, salesOrderPriceInput } from "@/lib/salesOrderPriceInput";
+import {
+  parseSalesOrderPriceInput,
+  salesOrderLineTotal,
+  salesOrderPriceInput,
+} from "@/lib/salesOrderPriceInput";
 import { correctionDifferenceLabelKind } from "@/lib/salesOrderCorrectionDisplay";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -96,6 +100,20 @@ type DeclinedLineTarget = {
   idempotencyKey: string;
   status: CustomerOrderStatus;
   lastLine: boolean;
+};
+type PendingAppendLine = {
+  input: {
+    customerOrderId: string;
+    productId: string;
+    variantId: string | null;
+    qty: number;
+    unitPriceKgs?: number;
+    expectedUnitPriceKgs?: number;
+    expectedUpdatedAt: string;
+    idempotencyKey: string;
+  };
+  previewPriceKgs: number;
+  previewOrderTotalKgs: number;
 };
 
 const createIdempotencyKey = () => {
@@ -203,7 +221,15 @@ const SalesOrderDetailPage = () => {
   const customerSnapshotRef = useRef<string | null>(null);
   const trackingSnapshotRef = useRef<string | null>(null);
 
-  const [lineDialogMode, setLineDialogMode] = useState<"add" | "edit" | null>(null);
+  const [lineDialogMode, setLineDialogMode] = useState<"add" | "edit" | "append" | null>(null);
+  const appendingLine = lineDialogMode === "append";
+  const addingLine = lineDialogMode === "add" || appendingLine;
+  const [appendOrderVersion, setAppendOrderVersion] = useState<string | null>(null);
+  const [pendingAppendLine, setPendingAppendLine] = useState<PendingAppendLine | null>(null);
+  const appendInFlightRef = useRef(false);
+  const appendRequest = pendingAppendLine?.input.customerOrderId === customerOrderId
+    ? pendingAppendLine
+    : null;
   const [lineSearch, setLineSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductSearchResult | null>(null);
@@ -236,13 +262,13 @@ const SalesOrderDetailPage = () => {
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: lineSearch.trim(), storeId: orderStore?.id, limit: 25 },
     {
-      enabled: lineDialogMode === "add" && Boolean(orderStore?.id) && lineSearch.trim().length >= 1,
+      enabled: addingLine && !appendRequest && Boolean(orderStore?.id) && lineSearch.trim().length >= 1,
     },
   );
 
   const selectedProductQuery = trpc.products.getById.useQuery(
     { productId: selectedProduct?.id ?? "" },
-    { enabled: lineDialogMode === "add" && Boolean(selectedProduct?.id) },
+    { enabled: addingLine && !appendRequest && Boolean(selectedProduct?.id) },
   );
 
   const linePriceQuery = trpc.salesOrders.linePrice.useQuery(
@@ -253,7 +279,7 @@ const SalesOrderDetailPage = () => {
       priceMode: order?.priceMode === "WHOLESALE" ? "WHOLESALE" : "RETAIL",
     },
     {
-      enabled: lineDialogMode === "add" && Boolean(selectedProduct?.id) && Boolean(orderStore?.id),
+      enabled: addingLine && !appendRequest && Boolean(selectedProduct?.id) && Boolean(orderStore?.id),
       keepPreviousData: false,
       retry: false,
     },
@@ -262,19 +288,29 @@ const SalesOrderDetailPage = () => {
     ? parseSalesOrderPriceInput(linePriceInput, orderCurrencySource)
     : null;
   const hasManualLinePrice = linePriceEdited && manualLinePrice !== null;
-  const hasAutomaticLinePrice =
-    !linePriceQuery.isFetching && !linePriceQuery.error && !!linePriceQuery.data?.hasConfiguredPrice;
+  const catalogueLinePrice = linePriceQuery.data?.hasConfiguredPrice
+    ? linePriceQuery.data.unitPriceKgs
+    : null;
+  const automaticLinePrice = linePriceQuery.isFetching || linePriceQuery.error
+    ? null
+    : catalogueLinePrice;
+  const hasAutomaticLinePrice = automaticLinePrice !== null;
+  const displayedPriceKgs = appendRequest?.previewPriceKgs ?? catalogueLinePrice;
   const displayedLinePriceInput =
-    lineDialogMode === "add" && !linePriceEdited
-      ? linePriceQuery.data?.hasConfiguredPrice
-        ? salesOrderPriceInput(linePriceQuery.data.unitPriceKgs, orderCurrencySource)
-        : ""
+    addingLine && !linePriceEdited
+      ? displayedPriceKgs === null ? "" : salesOrderPriceInput(displayedPriceKgs, orderCurrencySource)
       : linePriceInput;
 
   const paymentInfoQuery = trpc.salesOrders.paymentInfo.useQuery(
     { customerOrderId },
     { enabled: Boolean(order && canFinalize && order.status === CustomerOrderStatus.COMPLETED) },
   );
+  const canCheckAppendLine = canFinalize && Boolean(
+    order?.status === CustomerOrderStatus.COMPLETED && order.source === "MANUAL" && !order.isPosSale,
+  );
+  const canAppendLine =
+    canCheckAppendLine && !paymentInfoQuery.isError && paymentInfoQuery.data?.canAppendUnpaidLine === true;
+  const canResumeAppendLine = canFinalize && Boolean(appendRequest);
   const loyaltyQuery = trpc.loyalty.orderSummary.useQuery(
     { customerOrderId: String(params.id ?? "") },
     { enabled: Boolean(params.id), retry: false },
@@ -404,6 +440,57 @@ const SalesOrderDetailPage = () => {
     },
   });
 
+  const appendLineMutation = trpc.salesOrders.appendUnpaidLine.useMutation({
+    onSuccess: async () => {
+      setPendingAppendLine(null);
+      setLineDialogMode(null);
+      await Promise.allSettled([
+        refetchAll(),
+        utils.inventory.invalidate(),
+        utils.products.invalidate(),
+        utils.salesOrders.metrics.invalidate(),
+      ]);
+      toast({ variant: "success", description: t("lineAdded") });
+    },
+    onError: (error) => {
+      const status = error.data?.httpStatus;
+      // Replay the exact input if the response was lost or the original request is still running.
+      if (status && status < 500 && status !== 408 && error.message !== "requestInProgress") {
+        setPendingAppendLine(null);
+        void refetchAll();
+        if (error.message === "salesOrderPriceChanged") void linePriceQuery.refetch();
+      }
+    },
+  });
+  const appendNeedsRefresh = appendingLine && !appendRequest && (
+    appendOrderVersion !== order?.updatedAt.toISOString() ||
+    ["salesOrderAmendmentStale", "idempotencyKeyPayloadMismatch"].includes(
+      appendLineMutation.error?.message ?? "",
+    )
+  );
+  const duplicateAppendLine = appendingLine && !appendRequest && lines.some(
+    (line) => line.productId === selectedProduct?.id && line.variantKey === selectedVariant,
+  );
+  const appendPreviewPrice = appendRequest?.previewPriceKgs ??
+    (linePriceEdited ? manualLinePrice : automaticLinePrice);
+  const appendPreviewLineTotal = appendingLine
+    ? salesOrderLineTotal(parseQuantity(lineQtyInput) ?? 0, appendPreviewPrice)
+    : null;
+  let appendErrorMessage: string | null = null;
+  if (appendingLine) {
+    if (appendRequest && appendLineMutation.error) {
+      appendErrorMessage = t("appendUnpaidLine.uncertain");
+    } else if (appendNeedsRefresh) {
+      appendErrorMessage = tErrors("salesOrderAmendmentStale");
+    } else if (appendLineMutation.error) {
+      appendErrorMessage = translateError(tErrors, appendLineMutation.error);
+    } else if (!appendRequest && paymentInfoQuery.error) {
+      appendErrorMessage = translateError(tErrors, paymentInfoQuery.error);
+    } else if (!appendRequest && paymentInfoQuery.isSuccess && !canAppendLine) {
+      appendErrorMessage = tErrors("salesOrderAppendUnavailable");
+    }
+  }
+
   const updateLineMutation = trpc.salesOrders.updateLine.useMutation({
     onSuccess: async () => {
       await refetchAll();
@@ -523,7 +610,9 @@ const SalesOrderDetailPage = () => {
   });
 
   const closeLineDialog = () => {
+    if (appendingLine && appendInFlightRef.current) return;
     setLineDialogMode(null);
+    if (appendingLine && appendRequest) return;
     setLineSearch("");
     setShowResults(false);
     setSelectedProduct(null);
@@ -535,7 +624,14 @@ const SalesOrderDetailPage = () => {
   };
 
   const openAddLineDialog = () => {
-    setLineDialogMode("add");
+    if (canResumeAppendLine) {
+      setLineDialogMode("append");
+      return;
+    }
+    if (!isEditable && !canAppendLine) return;
+    setLineDialogMode(isEditable ? "add" : "append");
+    setAppendOrderVersion(isEditable ? null : order?.updatedAt.toISOString() ?? null);
+    appendLineMutation.reset();
     setLineSearch("");
     setShowResults(false);
     setSelectedProduct(null);
@@ -695,7 +791,11 @@ const SalesOrderDetailPage = () => {
   };
 
   const handleSubmitLine = async () => {
-    if (!order || !isEditable) {
+    if (!order || (appendingLine ? !canFinalize : !isEditable)) {
+      return;
+    }
+    if (appendingLine && appendRequest) {
+      await submitAppendLine(appendRequest);
       return;
     }
     const normalizedQty = parseQuantity(lineQtyInput);
@@ -729,13 +829,54 @@ const SalesOrderDetailPage = () => {
       return;
     }
 
-    await addLineMutation.mutateAsync({
+    const input = {
       customerOrderId: order.id,
       productId: selectedProduct.id,
       variantId: selectedVariant === "BASE" ? null : selectedVariant,
       qty,
       ...priceInput,
-    });
+    };
+    if (appendingLine) {
+      if (
+        !canAppendLine || !appendOrderVersion || appendNeedsRefresh || duplicateAppendLine ||
+        appendPreviewPrice === null || appendPreviewLineTotal === null
+      ) return;
+      await submitAppendLine({
+        input: {
+          ...input,
+          ...(!linePriceEdited ? { expectedUnitPriceKgs: appendPreviewPrice } : {}),
+          expectedUpdatedAt: appendOrderVersion,
+          idempotencyKey: createIdempotencyKey(),
+        },
+        previewPriceKgs: appendPreviewPrice,
+        previewOrderTotalKgs: order.totalKgs + appendPreviewLineTotal,
+      });
+      return;
+    }
+    await addLineMutation.mutateAsync(input);
+  };
+
+  const submitAppendLine = async (request: PendingAppendLine) => {
+    if (appendInFlightRef.current) return;
+    appendInFlightRef.current = true;
+    setPendingAppendLine(request);
+    try {
+      await appendLineMutation.mutateAsync(request.input);
+    } catch {
+      // The form keeps its inputs and reports the server result.
+    } finally {
+      appendInFlightRef.current = false;
+    }
+  };
+
+  const refreshAppendOrder = async () => {
+    const [updatedOrder, payment] = await Promise.all([
+      orderQuery.refetch(), paymentInfoQuery.refetch(),
+    ]);
+    if (updatedOrder.isSuccess && updatedOrder.data && payment.isSuccess && payment.data.canAppendUnpaidLine) {
+      setAppendOrderVersion(updatedOrder.data.updatedAt.toISOString());
+      appendLineMutation.reset();
+    }
   };
 
   const setInlineDraftValue = (lineId: string, field: InlineLineField, value?: string) => {
@@ -980,11 +1121,20 @@ const SalesOrderDetailPage = () => {
 
   const lineActionsDisabled =
     addLineMutation.isLoading ||
+    appendLineMutation.isLoading ||
     updateLineMutation.isLoading ||
     removeLineMutation.isLoading ||
     inlinePending.length > 0 ||
     removeDeclinedLineMutation.isLoading ||
     postSaleMutation.isLoading;
+  const lineDialogEditable = appendingLine ? canAppendLine && !appendRequest : isEditable;
+  const lineDialogCanSubmit = !lineActionsDisabled && (appendingLine && appendRequest
+    ? canResumeAppendLine
+    : lineDialogEditable &&
+      !selectedProductQuery.isFetching &&
+      (!linePriceEdited || hasManualLinePrice) &&
+      (!addingLine || Boolean(selectedProduct && (hasManualLinePrice || hasAutomaticLinePrice))) &&
+      (!appendingLine || (!appendNeedsRefresh && !duplicateAppendLine && appendPreviewLineTotal !== null)));
   const trackingActionsDisabled =
     !canFinalize ||
     saveTrackingMutation.isLoading ||
@@ -1010,7 +1160,9 @@ const SalesOrderDetailPage = () => {
   const selectedProductVariants = selectedProductQuery.data?.variants ?? [];
 
   const applySelectedProduct = (product: ProductSearchResult) => {
+    if (!lineDialogEditable || appendInFlightRef.current) return;
     setSelectedProduct(product);
+    setLineSearch(product.name);
     setSelectedVariant("BASE");
     setLinePriceInput("");
     setLinePriceEdited(false);
@@ -1019,7 +1171,7 @@ const SalesOrderDetailPage = () => {
   };
 
   const handleLineScanResolved = async (result: ScanResolvedResult): Promise<boolean> => {
-    if (lineDialogMode !== "add") {
+    if (!addingLine || !lineDialogEditable) {
       return false;
     }
     if (result.kind === "notFound") {
@@ -1704,7 +1856,7 @@ const SalesOrderDetailPage = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{t("linesTitle")}</CardTitle>
-              {isEditable ? (
+              {isEditable || canAppendLine || canResumeAppendLine ? (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -1712,11 +1864,22 @@ const SalesOrderDetailPage = () => {
                   disabled={lineActionsDisabled}
                 >
                   <AddIcon className="h-4 w-4" aria-hidden />
-                  {t("addLine")}
+                  {canResumeAppendLine ? tCommon("tryAgain") : t("addLine")}
                 </Button>
               ) : null}
             </CardHeader>
             <CardContent className="space-y-3">
+              {canCheckAppendLine && !canResumeAppendLine && paymentInfoQuery.isError ? (
+                <QueryErrorState
+                  error={paymentInfoQuery.error}
+                  onRetry={() => void paymentInfoQuery.refetch()}
+                />
+              ) : null}
+              {canResumeAppendLine && lineDialogMode === null && appendLineMutation.error ? (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {t("appendUnpaidLine.uncertain")}
+                </p>
+              ) : null}
               {isEditable && lines.length ? (
                 <p className="text-xs text-muted-foreground">{t("fastSale.inlineHint")}</p>
               ) : null}
@@ -2114,17 +2277,38 @@ const SalesOrderDetailPage = () => {
           }
         }}
         title={lineDialogMode === "edit" ? t("lineDialogEditTitle") : t("lineDialogAddTitle")}
-        subtitle={t("lineDialogSubtitle")}
+        subtitle={t(appendingLine ? "appendUnpaidLine.hint" : "lineDialogSubtitle")}
+        bodyClassName="min-h-0"
+        footer={
+          <ModalFooter className="shrink-0 bg-card px-4 pb-4 max-sm:grid max-sm:grid-cols-[auto_1fr] sm:px-5 sm:pb-5">
+            <Button
+              variant="secondary"
+              disabled={appendingLine && appendLineMutation.isLoading}
+              onClick={closeLineDialog}
+            >
+              {tCommon(addingLine ? "close" : "cancel")}
+            </Button>
+            <Button
+              onClick={() => void handleSubmitLine()}
+              disabled={!lineDialogCanSubmit}
+            >
+              {lineActionsDisabled ? <Spinner className="h-4 w-4" /> : null}
+              {appendingLine
+                ? appendRequest ? tCommon("tryAgain") : t("appendUnpaidLine.submit")
+                : t("saveLine")}
+            </Button>
+          </ModalFooter>
+        }
       >
         <div className="space-y-4">
-          {lineDialogMode === "add" ? (
+          {addingLine ? (
             <>
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">{t("product")}</p>
                 <ScanInput
                   ref={lineSearchInputRef}
                   context="linePicker"
-                  disabled={lineActionsDisabled}
+                  disabled={!lineDialogEditable || lineActionsDisabled}
                   value={lineSearch}
                   onValueChange={(nextValue) => {
                     setLineSearch(nextValue);
@@ -2161,6 +2345,7 @@ const SalesOrderDetailPage = () => {
                           key={product.id}
                           product={product}
                           currencySource={orderCurrencySource}
+                          disabled={!lineDialogEditable || lineActionsDisabled}
                           onClick={() => {
                             applySelectedProduct({
                               id: product.id,
@@ -2204,7 +2389,7 @@ const SalesOrderDetailPage = () => {
                       setLinePriceInput("");
                       setLinePriceEdited(false);
                     }}
-                    disabled={!isEditable || lineActionsDisabled}
+                    disabled={!lineDialogEditable || lineActionsDisabled}
                   >
                     <SelectTrigger id="sales-order-line-variant">
                       <SelectValue placeholder={t("variantPlaceholder")} />
@@ -2250,7 +2435,7 @@ const SalesOrderDetailPage = () => {
               type="text"
               inputMode="decimal"
               value={lineQtyInput}
-              disabled={!isEditable || lineActionsDisabled}
+              disabled={!lineDialogEditable || lineActionsDisabled}
               onChange={(event) => setLineQtyInput(event.target.value)}
             />
           </div>
@@ -2264,9 +2449,9 @@ const SalesOrderDetailPage = () => {
               value={displayedLinePriceInput}
               placeholder={t("priceNotSet")}
               disabled={
-                !isEditable ||
+                !lineDialogEditable ||
                 lineActionsDisabled ||
-                (lineDialogMode === "add" && !selectedProduct)
+                (addingLine && !selectedProduct)
               }
               aria-invalid={linePriceEdited && manualLinePrice === null}
               aria-describedby="sales-order-line-price-hint"
@@ -2283,7 +2468,7 @@ const SalesOrderDetailPage = () => {
                 {t("unitPriceInvalid")}
               </p>
             ) : null}
-            {lineDialogMode === "add" && selectedProduct ? (
+            {addingLine && selectedProduct && !appendRequest ? (
               linePriceQuery.isFetching ? (
                 <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
                   <Spinner className="h-3 w-3" />
@@ -2300,25 +2485,43 @@ const SalesOrderDetailPage = () => {
             ) : null}
           </div>
 
-          <ModalFooter>
-            <Button variant="secondary" onClick={closeLineDialog}>
-              {tCommon(lineDialogMode === "add" ? "close" : "cancel")}
-            </Button>
+          {appendingLine && order && appendPreviewLineTotal !== null ? (
+            <dl className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <dt>{t("lineTotal")}</dt>
+                <dd className="font-medium tabular-nums">
+                  {formatKgsMoney(appendPreviewLineTotal, locale, orderCurrencySource)}
+                </dd>
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <dt>{t("appendUnpaidLine.amountDue")}</dt>
+                <dd className="font-semibold tabular-nums">
+                  {formatKgsMoney(
+                    appendRequest?.previewOrderTotalKgs ?? order.totalKgs + appendPreviewLineTotal,
+                    locale,
+                    orderCurrencySource,
+                  )}
+                </dd>
+              </div>
+            </dl>
+          ) : null}
+          {duplicateAppendLine && appendLineMutation.error?.message !== "duplicateLineItem" ? (
+            <p className="text-sm text-danger" role="alert">{tErrors("duplicateLineItem")}</p>
+          ) : null}
+          {appendErrorMessage ? (
+            <p className="text-sm text-danger" role="alert">{appendErrorMessage}</p>
+          ) : null}
+          {appendingLine && !appendRequest && (appendNeedsRefresh || !canAppendLine) ? (
             <Button
-              onClick={() => void handleSubmitLine()}
-              disabled={
-                !isEditable ||
-                lineActionsDisabled ||
-                selectedProductQuery.isFetching ||
-                (linePriceEdited && !hasManualLinePrice) ||
-                (lineDialogMode === "add" &&
-                  (!selectedProduct || (!hasManualLinePrice && !hasAutomaticLinePrice)))
-              }
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={orderQuery.isFetching || paymentInfoQuery.isFetching}
+              onClick={() => void refreshAppendOrder()}
             >
-              {lineActionsDisabled ? <Spinner className="h-4 w-4" /> : null}
-              {t("saveLine")}
+              {t("fastSale.reload")}
             </Button>
-          </ModalFooter>
+          ) : null}
         </div>
       </Modal>
     </div>

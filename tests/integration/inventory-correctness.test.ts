@@ -483,6 +483,103 @@ describeDb("stock correctness regression", () => {
     for (const lot of lots) expect(lot.expiryDate).toEqual(expiryDate);
   });
 
+  it("corrects or removes a posted transfer line after a recipient sale", async () => {
+    const f = await fixture();
+    const destination = await prisma.store.create({
+      data: {
+        organizationId: f.org.id,
+        name: "Recipient",
+        code: "EDIT-RECIPIENT",
+        allowNegativeStock: false,
+        trackExpiryLots: true,
+      },
+    });
+    const otherProduct = await prisma.product.create({
+      data: {
+        organizationId: f.org.id,
+        sku: "KEEP-TRANSFER-LINE",
+        name: "Unchanged transfer line",
+        unit: f.baseUnit.code,
+        baseUnitId: f.baseUnit.id,
+      },
+    });
+    const expiryDate = new Date("2030-01-01T00:00:00Z");
+    for (const productId of [f.product.id, otherProduct.id]) {
+      await receiveStock({
+        ...f.input,
+        productId,
+        qtyReceived: 10,
+        unitCost: 12.5,
+        expiryDate,
+        idempotencyKey: randomUUID(),
+      });
+    }
+    const unchangedLine = { productId: otherProduct.id, quantity: 2 };
+    const transfer = await transferStock({
+      ...f.input,
+      fromStoreId: f.store.id,
+      toStoreId: destination.id,
+      lines: [
+        { productId: f.product.id, qty: 5, expiryDate },
+        { productId: otherProduct.id, qty: unchangedLine.quantity, expiryDate },
+      ],
+      idempotencyKey: randomUUID(),
+    });
+    const sale = await prisma.$transaction((tx) =>
+      applyStockMovement(tx, {
+        ...f.input,
+        storeId: destination.id,
+        qtyDelta: -4,
+        type: StockMovementType.SALE,
+        expiryDate,
+      }),
+    );
+    const saleBefore = await prisma.stockMovement.findUniqueOrThrow({ where: { id: sale.movementId } });
+    const readCosts = () =>
+      prisma.productCost.findMany({ where: { organizationId: f.org.id }, orderBy: { id: "asc" } });
+    const costsBefore = await readCosts();
+    expect(costsBefore).toHaveLength(2);
+    await f.check(1, destination.id);
+
+    const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+    const edit = {
+      documentKey: `TRANSFER:TRANSFER:${transfer.transferId}`,
+      lines: [{ productId: f.product.id, quantity: 3 }, unchangedLine],
+      idempotencyKey: randomUUID(),
+    };
+    const countMovements = () =>
+      prisma.stockMovement.count({ where: { referenceType: "TRANSFER", referenceId: transfer.transferId } });
+
+    const corrected = await caller.inventory.editProductMovementDocument(edit);
+    expect(corrected).toMatchObject({ totalQuantity: 5 });
+    await f.check(7);
+    await f.check(-1, destination.id);
+    expect(await countMovements()).toBe(6);
+    expect(await caller.inventory.editProductMovementDocument(edit)).toEqual(corrected);
+    await caller.inventory.editProductMovementDocument({ ...edit, idempotencyKey: randomUUID() });
+    expect(await countMovements()).toBe(6);
+
+    await caller.inventory.editProductMovementDocument({
+      ...edit,
+      lines: [unchangedLine],
+      idempotencyKey: randomUUID(),
+    });
+    await f.check(10);
+    await f.check(-4, destination.id);
+    await f.check(8, f.store.id, otherProduct.id);
+    await f.check(2, destination.id, otherProduct.id);
+    expect(await countMovements()).toBe(8);
+    expect(await readCosts()).toEqual(costsBefore);
+    expect(await prisma.stockMovement.findUnique({ where: { id: sale.movementId } })).toEqual(saleBefore);
+    expect(await prisma.store.findUnique({ where: { id: destination.id } })).toMatchObject({
+      allowNegativeStock: false,
+    });
+    expect(await caller.inventory.productMovementDocument({ documentKey: edit.documentKey })).toMatchObject({
+      positionsCount: 1,
+      totalQuantity: 2,
+    });
+  });
+
   it("refuses to manufacture an opening balance from an incomplete journal", async () => {
     const f = await fixture();
     await f.receive(10);

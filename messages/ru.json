@@ -3775,6 +3775,8 @@
     "transferRemoveLine": "Удалить позицию",
     "transferDuplicateHint": "Товар уже добавлен.",
     "transferQty": "Количество",
+    "transferQtyShort": "Кол-во",
+    "transferUnitCostShort": "Себест. / ед.",
     "transferNote": "Комментарий к перемещению",
     "transferSubmit": "Переместить",
     "stockWriteOff": "Списание товаров",
@@ -5698,7 +5700,13 @@
     "horizontalScrollHint": "Если таблица не помещается, прокрутите её по горизонтали.",
     "correctionRefundCannotCancel": "Заявку нельзя отменить: товар уже принят по возврату. Подтвердите выплату.",
     "orderActions": "Действия заказа {number}",
-    "variantWithExamples": "Вариант товара (размер, цвет)"
+    "variantWithExamples": "Вариант товара (размер, цвет)",
+    "appendUnpaidLine": {
+      "hint": "После сохранения товар спишется со склада, а сумма к оплате изменится.",
+      "amountDue": "Предварительная сумма к оплате",
+      "submit": "Добавить в продажу",
+      "uncertain": "Результат сохранения ещё не подтверждён. Повторите тот же запрос для проверки."
+    }
   },
   "suppliers": {
     "title": "Поставщики",
@@ -6658,7 +6666,8 @@
     "salesOrderCorrectionRefundNotOpen": "Заявка на возврат уже не открыта. Обновите продажу.",
     "salesOrderCorrectionRefundPaymentMismatch": "Платёж заявки не совпадает с её суммой. Проверьте заявку перед выплатой.",
     "salesOrderCorrectionRefundCannotCancel": "Заявку нельзя отменить: товар уже принят по возврату. Подтвердите выплату.",
-    "salesOrderLineNotFound": "Строка заказа не найдена."
+    "salesOrderLineNotFound": "Строка заказа не найдена.",
+    "salesOrderAppendUnavailable": "Добавить товар можно в завершённый заказ, оформленный вручную, без оплат и связанных документов."
   },
   "adminJobs": {
     "title": "Фоновые задачи",

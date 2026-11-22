@@ -3785,6 +3785,8 @@
     "transferRemoveLine": "Remove line",
     "transferDuplicateHint": "Product already added.",
     "transferQty": "Transfer qty",
+    "transferQtyShort": "Qty",
+    "transferUnitCostShort": "Unit cost",
     "transferNote": "Transfer note",
     "transferSubmit": "Transfer submit",
     "stockWriteOff": "Stock write-off",
@@ -5708,7 +5710,13 @@
     "horizontalScrollHint": "If the table does not fit, scroll it horizontally.",
     "correctionRefundCannotCancel": "This request cannot be canceled: the goods have already been accepted for return. Confirm the payout instead.",
     "orderActions": "Order actions {number}",
-    "variantWithExamples": "Product variant (size, color)"
+    "variantWithExamples": "Product variant (size, color)",
+    "appendUnpaidLine": {
+      "hint": "Saving deducts the item from stock and updates the amount due.",
+      "amountDue": "Estimated amount due",
+      "submit": "Add to sale",
+      "uncertain": "The save result is still unconfirmed. Retry the same request to check it."
+    }
   },
   "suppliers": {
     "title": "Suppliers",
@@ -6660,7 +6668,8 @@
     "salesOrderCorrectionRefundNotOpen": "This refund request is no longer open. Reload the sale.",
     "salesOrderCorrectionRefundPaymentMismatch": "The refund request payment does not match its amount. Review the request before paying.",
     "salesOrderCorrectionRefundCannotCancel": "This request cannot be canceled: the goods have already been accepted for return. Confirm the payout instead.",
-    "salesOrderLineNotFound": "Order line not found."
+    "salesOrderLineNotFound": "Order line not found.",
+    "salesOrderAppendUnavailable": "You can add an item to a completed manual order with no payments or linked transaction documents."
   },
   "adminJobs": {
     "title": "Admin jobs",

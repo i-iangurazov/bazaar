@@ -2236,6 +2236,8 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
+                // Reversing a posted receipt must preserve later sales, as in a reroute.
+                allowNegativeStock: inQtyDelta < 0,
               });
               changedItems.set(`${destinationStoreId}:${key}`, {
                 storeId: destinationStoreId,

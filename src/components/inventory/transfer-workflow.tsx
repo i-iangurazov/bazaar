@@ -1,6 +1,6 @@
 "use client";
 
-import { isValidQuantity } from "@/lib/quantity";
+import { isValidQuantity, roundQuantity } from "@/lib/quantity";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -294,7 +294,11 @@ export const InventoryTransfersPage = ({
   );
   const lineContextQuery = useTransferLineContext(
     { fromStoreId, toStoreId, lines: selectedLineIds },
-    !isEditMode && draftReady && canSearch && selectedLineIds.length > 0,
+    draftReady && canSearch && selectedLineIds.length > 0,
+  );
+  const lineContextByKey = useMemo(
+    () => new Map(lineContextQuery.data?.map((item) => [item.key, item]) ?? []),
+    [lineContextQuery.data],
   );
   useEffect(() => {
     if (!lineContextQuery.data || isEditMode) return;
@@ -388,7 +392,7 @@ export const InventoryTransfersPage = ({
         barcode: null,
         imageUrl: null,
         unitLabel: t("unit"),
-        sourceStock: line.quantity,
+        sourceStock: 0,
         destinationStock: 0,
         unitCostKgs: line.unitCostKgs,
         quantityInput: String(line.quantity),
@@ -693,34 +697,68 @@ export const InventoryTransfersPage = ({
     setLines((current) => current.filter((line) => line.key !== key));
   };
 
+  const originalQuantityByKey = useMemo(() => {
+    const quantities = new Map<string, number>();
+    for (const line of editableDocument?.lines ?? []) {
+      const key = lineKey(line.productId, line.variantId);
+      quantities.set(key, (quantities.get(key) ?? 0) + line.quantity);
+    }
+    return quantities;
+  }, [editableDocument]);
+  const originalSource = editableDocument?.sourceStoreId ?? editableDocument?.storeId;
+  const originalDestination = editableDocument?.destinationStoreId;
   const lineMetrics = useMemo(
     () =>
       lines.map((line) => {
         const quantity = parseDecimalInput(line.quantityInput);
+        const context = isEditMode ? lineContextByKey.get(line.key) : undefined;
+        const precision = context?.available ? context.quantityPrecision : line.quantityPrecision;
         const quantityValid =
-          isValidQuantity(quantity, line.quantityPrecision ?? 3) && quantity > 0;
+          isValidQuantity(quantity, precision ?? 3) && quantity > 0;
         const lineTotal =
           quantityValid && typeof line.unitCostKgs === "number"
             ? quantity * line.unitCostKgs
             : null;
+        const originalQuantity = originalQuantityByKey.get(line.key) ?? 0;
+        // Live balances already include the posted transfer. Reverse its effect
+        // at each selected store before applying the edited quantity.
+        const projectStock = (stock: number | null, storeId: string, change: number) =>
+          stock === null || !quantityValid
+            ? stock
+            : roundQuantity(
+                stock + change +
+                (storeId === originalSource ? originalQuantity : 0) -
+                (storeId === originalDestination ? originalQuantity : 0),
+              );
+        const sourceStock = isEditMode
+          ? context?.available ? context.sourceStock : null
+          : line.sourceStock;
+        const destinationStock = isEditMode
+          ? context?.available ? context.destinationStock : null
+          : line.destinationStock;
         return {
           key: line.key,
           quantity,
           quantityValid,
-          sourceAfter: quantityValid ? line.sourceStock - quantity : line.sourceStock,
-          destinationAfter: quantityValid
-            ? line.destinationStock + quantity
-            : line.destinationStock,
+          sourceStock,
+          destinationStock,
+          sourceAfter: projectStock(sourceStock, fromStoreId, -quantity),
+          destinationAfter: projectStock(destinationStock, toStoreId, quantity),
           lineTotal,
         };
       }),
-    [lines],
+    [
+      lines, isEditMode, lineContextByKey, originalQuantityByKey,
+      originalSource, originalDestination, fromStoreId, toStoreId,
+    ],
   );
   const metricByKey = useMemo(
     () => new Map(lineMetrics.map((metric) => [metric.key, metric])),
     [lineMetrics],
   );
   const invalidQuantity = lineMetrics.some((metric) => !metric.quantityValid);
+  const lineUnavailable = (line: TransferLine) =>
+    line.unavailable || lineContextByKey.get(line.key)?.available === false;
   const restrictedProductIds = [
     ...new Set(lines.filter((l) => l.destinationRequiresAssortment).map((l) => l.productId)),
   ];
@@ -761,11 +799,11 @@ export const InventoryTransfersPage = ({
         ? t("transferValidationSameStore")
         : !lines.length
           ? t("transferValidationNoProducts")
-          : !isEditMode && lineContextQuery.isError
+          : lineContextQuery.isError
             ? t("transferCheckFailed")
-            : !isEditMode && (!lineContextQuery.data || lineContextQuery.isFetching)
+            : !lineContextQuery.data || lineContextQuery.isFetching
               ? t("transferCheckingLines")
-              : lines.some((line) => line.unavailable)
+              : lines.some(lineUnavailable)
                 ? t("transferUnavailableLine")
                 : invalidQuantity
                   ? t("transferValidationInvalidQuantity")
@@ -914,6 +952,8 @@ export const InventoryTransfersPage = ({
 
   const formatOptionalMoney = (value: number | null) =>
     typeof value === "number" ? formatMoney(value) : t("transferCostNotSpecified");
+  const formatStock = (value?: number | null) =>
+    typeof value === "number" ? formatNumber(value, locale) : tCommon("notAvailable");
   const pageTitle = isEditMode ? t("transferEditTitle") : t("transferStock");
   const pageSubtitle = isEditMode ? t("transferEditSubtitle") : t("transferStockSubtitle");
   const backHref = isEditMode ? editBackHref : "/inventory";
@@ -1050,7 +1090,7 @@ export const InventoryTransfersPage = ({
           </Button>
         </div>
       ) : null}
-      {!isEditMode && lineContextQuery.isError ? (
+      {lineContextQuery.isError ? (
         <div role="alert" className="mb-4 rounded-md border border-danger/30 p-3 text-sm">
           {t("transferCheckFailed")}
           <Button
@@ -1307,12 +1347,16 @@ export const InventoryTransfersPage = ({
             {lines.length ? (
               <div className="space-y-3 overflow-x-auto">
                 <InventoryLinePresentationNotice isError={presentation.isError} onRetry={presentation.refetch} />
-                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:min-w-[44rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground [overflow-wrap:anywhere] lg:grid lg:min-w-[44rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
                   <span>{tCommon("product")}</span>
-                  <span>{t("transferQty")}</span>
+                  <span>
+                    <abbr title={t("transferQty")} className="no-underline">{t("transferQtyShort")}</abbr>
+                  </span>
                   <span>{t("transferSourceAfter")}</span>
                   <span>{t("transferDestinationAfter")}</span>
-                  <span>{t("unitCost")}</span>
+                  <span>
+                    <abbr title={t("unitCost")} className="no-underline">{t("transferUnitCostShort")}</abbr>
+                  </span>
                   <span>{t("receivingLineTotal")}</span>
                   <span />
                 </div>
@@ -1341,12 +1385,12 @@ export const InventoryTransfersPage = ({
                               .join(" • ") || tCommon("notAvailable")}
                           </p>
                           <p className="whitespace-normal break-words text-xs leading-snug text-muted-foreground lg:hidden">
-                            {t("transferSourceStock")}: {formatNumber(line.sourceStock, locale)}
+                            {t("transferSourceStock")}: {formatStock(metric?.sourceStock)}
                             <span className="px-1 text-muted-foreground/60">·</span>
                             {t("transferDestinationStock")}:{" "}
-                            {formatNumber(line.destinationStock, locale)}
+                            {formatStock(metric?.destinationStock)}
                           </p>
-                          {line.unavailable ? (
+                          {lineUnavailable(line) ? (
                             <p className="text-xs text-danger">{t("transferUnavailableLine")}</p>
                           ) : null}
                           {line.destinationRequiresAssortment ? (
@@ -1396,20 +1440,25 @@ export const InventoryTransfersPage = ({
                         <p
                           className={cn(
                             "flex h-8 items-center text-sm font-semibold",
-                            (metric?.sourceAfter ?? line.sourceStock) < 0
+                            (metric?.sourceAfter ?? 0) < 0
                               ? "text-danger"
                               : "text-foreground",
                           )}
                         >
-                          {formatNumber(metric?.sourceAfter ?? line.sourceStock, locale)}
+                          {formatStock(metric?.sourceAfter)}
                         </p>
                       </div>
                       <div>
                         <p className="text-[11px] leading-4 text-muted-foreground lg:hidden">
                           {t("transferDestinationAfter")}
                         </p>
-                        <p className="flex h-8 items-center text-sm font-semibold text-foreground">
-                          {formatNumber(metric?.destinationAfter ?? line.destinationStock, locale)}
+                        <p
+                          className={cn(
+                            "flex h-8 items-center text-sm font-semibold",
+                            (metric?.destinationAfter ?? 0) < 0 ? "text-danger" : "text-foreground",
+                          )}
+                        >
+                          {formatStock(metric?.destinationAfter)}
                         </p>
                       </div>
                       <div>

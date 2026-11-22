@@ -7,12 +7,31 @@ import { lockLoyaltyOrder, confirmLoyaltyForOrder, reverseLoyaltyForReturn } fro
 import { writeAuditLog } from "./audit";
 import { eventBus } from "@/server/events/eventBus";
 import { toJson } from "./json";
+import { getAppendUnpaidSaleBlocker, unpaidSaleAmendmentSelect } from "./salesOrders";
 
 export async function getOrderPaymentInfo(user: StoreAccessUser, customerOrderId: string) {
-  const order = await prisma.customerOrder.findFirst({ where: { id: customerOrderId, organizationId: user.organizationId, isPosSale: false }, select: { id: true, storeId: true, totalKgs: true, status: true, lines: { select: { id: true, qty: true, lineTotalKgs: true, product: { select: { name: true } }, variant: { select: { name: true } }, saleReturnLines: { where: { saleReturn: { status: "COMPLETED" } }, select: { qty: true, lineTotalKgs: true } } } } } });
+  const order = await prisma.customerOrder.findFirst({
+    where: { id: customerOrderId, organizationId: user.organizationId, isPosSale: false },
+    select: {
+      ...unpaidSaleAmendmentSelect,
+      lines: { select: {
+        id: true,
+        productId: true,
+        variantKey: true,
+        qty: true,
+        lineTotalKgs: true,
+        product: { select: { name: true } },
+        variant: { select: { name: true } },
+        saleReturnLines: {
+          where: { saleReturn: { status: "COMPLETED" } },
+          select: { qty: true, lineTotalKgs: true },
+        },
+      } },
+    },
+  });
   if (!order) throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
   await assertUserCanAccessStore(prisma, user, order.storeId);
-  const [payments, shifts] = await Promise.all([
+  const [payments, shifts, canAppendUnpaidLine] = await Promise.all([
     prisma.salePayment.groupBy({
       by: ["settlementStatus"],
       where: {
@@ -24,6 +43,9 @@ export async function getOrderPaymentInfo(user: StoreAccessUser, customerOrderId
       _count: { _all: true },
     }),
     prisma.registerShift.findMany({ where: { organizationId: user.organizationId, storeId: order.storeId, status: "OPEN", register: { isActive: true } }, select: { id: true, register: { select: { name: true } } }, orderBy: { openedAt: "desc" } }),
+    user.role === "ADMIN" || user.role === "MANAGER"
+      ? getAppendUnpaidSaleBlocker(prisma, order, new Date()).then((blocker) => blocker === null)
+      : false,
   ]);
   const paid = payments.reduce(
     (sum, row) => sum.plus(row._sum.amountKgs ?? new Prisma.Decimal(0)),
@@ -36,7 +58,7 @@ export async function getOrderPaymentInfo(user: StoreAccessUser, customerOrderId
     .filter((row) => row.settlementStatus === SalePaymentSettlement.OFFSET)
     .reduce((sum, row) => sum.plus(row._sum.amountKgs ?? new Prisma.Decimal(0)), new Prisma.Decimal(0));
   const evidenceCount = payments.reduce((sum, row) => sum + row._count._all, 0);
-  return { canReturn: order.status === "COMPLETED" && paid.gte(order.totalKgs), returnLines: order.lines.map(line => ({ id: line.id, name: [line.product.name, line.variant?.name].filter(Boolean).join(" · "), qty: line.qty, lineTotalKgs: Number(line.lineTotalKgs), returnedQty: line.saleReturnLines.reduce((n, row) => n + row.qty, 0), refundedKgs: line.saleReturnLines.reduce((n, row) => n + Number(row.lineTotalKgs), 0) })), paidKgs: paid.toNumber(), actualPaidKgs: actualPaid.toNumber(), offsetKgs: offset.toNumber(), hasEvidence: evidenceCount > 0, remainingKgs: Prisma.Decimal.max(0, order.totalKgs.minus(paid)).toNumber(), canPay: order.status === "COMPLETED", shifts: shifts.map((shift) => ({ id: shift.id, name: shift.register.name })) };
+  return { canAppendUnpaidLine, canReturn: order.status === "COMPLETED" && paid.gte(order.totalKgs), returnLines: order.lines.map(line => ({ id: line.id, name: [line.product.name, line.variant?.name].filter(Boolean).join(" · "), qty: line.qty, lineTotalKgs: Number(line.lineTotalKgs), returnedQty: line.saleReturnLines.reduce((n, row) => n + row.qty, 0), refundedKgs: line.saleReturnLines.reduce((n, row) => n + Number(row.lineTotalKgs), 0) })), paidKgs: paid.toNumber(), actualPaidKgs: actualPaid.toNumber(), offsetKgs: offset.toNumber(), hasEvidence: evidenceCount > 0, remainingKgs: Prisma.Decimal.max(0, order.totalKgs.minus(paid)).toNumber(), canPay: order.status === "COMPLETED", shifts: shifts.map((shift) => ({ id: shift.id, name: shift.register.name })) };
 }
 
 /** Staff records money actually received into an existing open shift. No stock rewrite. */

@@ -3775,6 +3775,8 @@
     "transferRemoveLine": "Позицияны өчүрүү",
     "transferDuplicateHint": "Товар кошулган.",
     "transferQty": "Саны",
+    "transferQtyShort": "Саны",
+    "transferUnitCostShort": "Өздүк нарк",
     "transferNote": "Которуу комментарийи",
     "transferSubmit": "Которуу",
     "stockWriteOff": "Товарларды списание кылуу",
@@ -5697,7 +5699,13 @@
     "horizontalScrollHint": "Таблица батпаса, аны горизонталдуу жылдырыңыз.",
     "correctionRefundCannotCancel": "Өтүнмөнү жокко чыгарууга болбойт: товар кайтарууга кабыл алынган. Төлөмдү ырастаңыз.",
     "orderActions": "Буйрутма аракеттери {number}",
-    "variantWithExamples": "Товардын варианты (өлчөмү, түсү)"
+    "variantWithExamples": "Товардын варианты (өлчөмү, түсү)",
+    "appendUnpaidLine": {
+      "hint": "Сактагандан кийин товар кампадан чыгарылып, төлөнө турган сумма өзгөрөт.",
+      "amountDue": "Төлөнө турган болжолдуу сумма",
+      "submit": "Сатууга кошуу",
+      "uncertain": "Сактоо жыйынтыгы азырынча ырастала элек. Текшерүү үчүн ошол эле сурамды кайталаңыз."
+    }
   },
   "suppliers": {
     "title": "Жеткирүүчүлөр",
@@ -6657,7 +6665,8 @@
     "salesOrderCorrectionRefundNotOpen": "Кайтаруу өтүнмөсү мындан ары ачык эмес. Сатууну жаңыртыңыз.",
     "salesOrderCorrectionRefundPaymentMismatch": "Өтүнмөнүн төлөмү суммасына туура келбейт. Төлөөдөн мурун өтүнмөнү текшериңиз.",
     "salesOrderCorrectionRefundCannotCancel": "Өтүнмөнү жокко чыгарууга болбойт: товар кайтарууга кабыл алынган. Төлөмдү ырастаңыз.",
-    "salesOrderLineNotFound": "Заказдын сабы табылган жок."
+    "salesOrderLineNotFound": "Заказдын сабы табылган жок.",
+    "salesOrderAppendUnavailable": "Товарды кол менен түзүлгөн, аяктаган, төлөмдөрү жана байланышкан документтери жок заказга гана кошсо болот."
   },
   "adminJobs": {
     "title": "Фондук иштер",

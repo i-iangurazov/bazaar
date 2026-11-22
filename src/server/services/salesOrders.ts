@@ -1994,7 +1994,7 @@ export const sendCustomerOrderEmail = async (input: {
   throw new AppError("invalidInput", "BAD_REQUEST", 400);
 };
 
-export const addCustomerOrderLine = async (input: {
+type AddCustomerOrderLineInput = {
   organizationId: string;
   customerOrderId: string;
   productId: string;
@@ -2003,7 +2003,78 @@ export const addCustomerOrderLine = async (input: {
   unitPriceKgs?: number;
   actorId: string;
   requestId: string;
-}) => {
+};
+
+const createCustomerOrderLineTx = async (
+  tx: Prisma.TransactionClient,
+  input: AddCustomerOrderLineInput,
+  order: { id: string; storeId: string; priceMode: string },
+  expectedUnitPriceKgs?: number,
+) => {
+  await assertProductQuantity(tx, input.organizationId, input.productId, input.qty);
+  const resolved = await resolveUnitPrice({
+    tx,
+    organizationId: input.organizationId,
+    storeId: order.storeId,
+    productId: input.productId,
+    variantId: input.variantId,
+    priceMode: normalizeOrderPriceMode(order.priceMode),
+  });
+  const { variantKey, isBundle } = resolved;
+  const unitPrice = input.unitPriceKgs === undefined
+    ? resolved.unitPrice
+    : normalizeOrderUnitPrice(input.unitPriceKgs);
+  if (expectedUnitPriceKgs !== undefined && !new Prisma.Decimal(unitPrice).eq(expectedUnitPriceKgs)) {
+    throw new AppError("salesOrderPriceChanged", "CONFLICT", 409);
+  }
+  const unitCost = await resolveUnitCost({
+    tx,
+    organizationId: input.organizationId,
+    productId: input.productId,
+    variantId: input.variantId,
+    isBundle,
+  });
+
+  const existing = await tx.customerOrderLine.findUnique({
+    where: {
+      customerOrderId_productId_variantKey: {
+        customerOrderId: order.id,
+        productId: input.productId,
+        variantKey,
+      },
+    },
+  });
+  if (existing) {
+    throw new AppError("duplicateLineItem", "CONFLICT", 409);
+  }
+
+  const lineTotal = orderLineTotal(unitPrice, input.qty);
+  const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * input.qty);
+  return tx.customerOrderLine.create({
+    data: {
+      customerOrderId: order.id,
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+      variantKey,
+      qty: input.qty,
+      ...(input.unitPriceKgs === undefined
+        ? {
+            priceSource: resolved.priceSource,
+            baseUnitPriceKgs: resolved.baseUnitPriceKgs,
+            appliedDiscountType: resolved.appliedDiscountType,
+            appliedDiscountPercentage: resolved.appliedDiscountPercentage,
+            appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
+          }
+        : manualOrderPriceData(unitPrice)),
+      unitPriceKgs: unitPrice,
+      lineTotalKgs: lineTotal,
+      unitCostKgs: unitCost,
+      lineCostTotalKgs: lineCostTotal,
+    },
+  });
+};
+
+export const addCustomerOrderLine = async (input: AddCustomerOrderLineInput) => {
   const result = await prisma.$transaction(async (tx) => {
     await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
     await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${input.customerOrderId} FOR UPDATE`;
@@ -2023,65 +2094,7 @@ export const addCustomerOrderLine = async (input: {
     if (await tx.salePayment.findFirst({ where: { customerOrderId: order.id } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
     await releaseLoyaltyForOrder(tx, { customerOrderId: order.id });
 
-    await assertProductQuantity(tx, input.organizationId, input.productId, input.qty);
-    const resolved = await resolveUnitPrice({
-      tx,
-      organizationId: input.organizationId,
-      storeId: order.storeId,
-      productId: input.productId,
-      variantId: input.variantId,
-      priceMode: normalizeOrderPriceMode(order.priceMode),
-    });
-    const { variantKey, isBundle } = resolved;
-    const unitPrice = input.unitPriceKgs === undefined
-      ? resolved.unitPrice
-      : normalizeOrderUnitPrice(input.unitPriceKgs);
-    const unitCost = await resolveUnitCost({
-      tx,
-      organizationId: input.organizationId,
-      productId: input.productId,
-      variantId: input.variantId,
-      isBundle,
-    });
-
-    const existing = await tx.customerOrderLine.findUnique({
-      where: {
-        customerOrderId_productId_variantKey: {
-          customerOrderId: order.id,
-          productId: input.productId,
-          variantKey,
-        },
-      },
-    });
-    if (existing) {
-      throw new AppError("duplicateLineItem", "CONFLICT", 409);
-    }
-
-    const lineTotal = orderLineTotal(unitPrice, input.qty);
-    const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * input.qty);
-    const line = await tx.customerOrderLine.create({
-      data: {
-        customerOrderId: order.id,
-        productId: input.productId,
-        variantId: input.variantId ?? null,
-        variantKey,
-        qty: input.qty,
-        ...(input.unitPriceKgs === undefined
-          ? {
-              priceSource: resolved.priceSource,
-              baseUnitPriceKgs: resolved.baseUnitPriceKgs,
-              appliedDiscountType: resolved.appliedDiscountType,
-              appliedDiscountPercentage: resolved.appliedDiscountPercentage,
-              appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
-            }
-          : manualOrderPriceData(unitPrice)),
-        unitPriceKgs: unitPrice,
-        lineTotalKgs: lineTotal,
-        unitCostKgs: unitCost,
-        lineCostTotalKgs: lineCostTotal,
-      },
-    });
-
+    const line = await createCustomerOrderLineTx(tx, input, order);
     await syncAlreadyDeductedOrderStock(tx, order, input.actorId);
     await recomputeTotals(tx, order.id, input.actorId);
 
@@ -2627,6 +2640,219 @@ type DeclinedLineResult = {
   replacementNumber: string | null;
 };
 
+export const unpaidSaleAmendmentSelect = {
+  id: true,
+  organizationId: true,
+  storeId: true,
+  status: true,
+  source: true,
+  externalOrderId: true,
+  isHeld: true,
+  registerId: true,
+  shiftId: true,
+  archivedAt: true,
+  completedAt: true,
+  canceledAt: true,
+  isDebt: true,
+  debtSettledAt: true,
+  discountKgs: true,
+  kkmStatus: true,
+  kkmReceiptId: true,
+  kkmRawJson: true,
+  totalKgs: true,
+} satisfies Prisma.CustomerOrderSelect;
+
+type UnpaidSaleAmendmentOrder = Prisma.CustomerOrderGetPayload<{ select: typeof unpaidSaleAmendmentSelect }>;
+type SaleMovementLine = { productId: string; variantKey: string; qty: number; lineTotalKgs: Prisma.Decimal };
+
+const unpaidSaleFinancialBlocker = async (
+  tx: Prisma.TransactionClient,
+  order: UnpaidSaleAmendmentOrder,
+) => {
+  const [payment, returned, refund, loyalty, reservation, loyaltyEntry, fiscal] = await Promise.all([
+    tx.salePayment.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+    tx.saleReturn.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
+    tx.refundRequest.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
+    tx.loyaltyOrderApplication.findFirst({ where: { customerOrderId: order.id, status: { not: "RELEASED" } }, select: { id: true } }),
+    tx.loyaltyReservation.findFirst({ where: { customerOrderId: order.id, status: { in: ["ACTIVE", "CONFIRMED"] } }, select: { id: true } }),
+    tx.loyaltyLedgerEntry.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+    tx.fiscalReceipt.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+  ]);
+  if (payment || returned || refund || order.isDebt || order.debtSettledAt) {
+    return "salesOrderAmendmentRequiresReturn";
+  }
+  if (loyalty || reservation || loyaltyEntry || !order.discountKgs.isZero()) {
+    return "salesOrderAmendmentLoyaltyBlocked";
+  }
+  if (fiscal || order.kkmStatus !== "NOT_SENT" || order.kkmReceiptId || order.kkmRawJson) {
+    return "salesOrderAmendmentFiscalBlocked";
+  }
+  return null;
+};
+
+const saleAmendmentStockMatches = async (
+  tx: Prisma.TransactionClient,
+  order: UnpaidSaleAmendmentOrder,
+  lines: SaleMovementLine[],
+) => {
+  const movements = await tx.stockMovement.findMany({
+    where: { referenceType: "CustomerOrder", referenceId: order.id },
+    select: { store: { select: { organizationId: true } }, storeId: true, productId: true, variantId: true, type: true, qtyDelta: true },
+  });
+  if (order.status === CustomerOrderStatus.READY) return movements.length === 0;
+  const net = new Map<string, number>();
+  for (const movement of movements) {
+    if (movement.type !== StockMovementType.SALE || movement.store.organizationId !== order.organizationId || movement.storeId !== order.storeId) {
+      return false;
+    }
+    const key = `${movement.productId}:${movement.variantId ?? "BASE"}`;
+    net.set(key, (net.get(key) ?? 0) + movement.qtyDelta);
+  }
+  return net.size === lines.length && lines.every((line) =>
+    Math.abs((net.get(`${line.productId}:${line.variantKey}`) ?? 0) + line.qty) <= 0.000001,
+  );
+};
+
+const saleAmendmentTotalMatches = (order: UnpaidSaleAmendmentOrder, lines: SaleMovementLine[]) =>
+  lines.reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0)).eq(order.totalKgs);
+
+export const getAppendUnpaidSaleBlocker = async (
+  tx: Prisma.TransactionClient,
+  order: UnpaidSaleAmendmentOrder & { lines: SaleMovementLine[] },
+  movementDate: Date,
+) => {
+  if (order.status !== CustomerOrderStatus.COMPLETED || !order.completedAt || order.archivedAt || order.canceledAt || !order.lines.length) {
+    return "salesOrderAppendUnavailable";
+  }
+  if (order.source !== CustomerOrderSource.MANUAL || order.externalOrderId || order.isHeld || order.registerId || order.shiftId) {
+    return "salesOrderAmendmentUnsupportedSource";
+  }
+  const closed = await tx.periodClose.findFirst({
+    where: {
+      organizationId: order.organizationId,
+      storeId: order.storeId,
+      OR: [order.completedAt, movementDate].map((date) => ({
+        periodStart: { lte: date }, periodEnd: { gte: date },
+      })),
+    },
+    select: { id: true },
+  });
+  if (closed) return "salesOrderAmendmentPeriodClosed";
+  const financialBlocker = await unpaidSaleFinancialBlocker(tx, order);
+  if (financialBlocker) return financialBlocker;
+  const relatedDocument = await tx.customerOrder.findFirst({
+    where: {
+      id: order.id,
+      OR: [
+        { corrections: { some: {} } },
+        { correctionAdditions: { some: {} } },
+        { markingCodeCaptures: { some: {} } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (relatedDocument || !saleAmendmentTotalMatches(order, order.lines)) return "salesOrderAppendUnavailable";
+  if (!(await saleAmendmentStockMatches(tx, order, order.lines))) return "salesOrderAmendmentStockMismatch";
+  return null;
+};
+
+type AppendUnpaidCustomerOrderLineInput = AddCustomerOrderLineInput & {
+  expectedUpdatedAt: string;
+  idempotencyKey: string;
+  expectedUnitPriceKgs?: number;
+};
+
+export const appendUnpaidCustomerOrderLine = async (input: AppendUnpaidCustomerOrderLineInput) => {
+  const expectedUpdatedAt = new Date(input.expectedUpdatedAt);
+  if (!Number.isFinite(expectedUpdatedAt.getTime())) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  const expectedUnitPriceKgs = input.expectedUnitPriceKgs === undefined
+    ? undefined
+    : normalizeOrderUnitPrice(input.expectedUnitPriceKgs);
+  const operation = await prisma.$transaction(async (tx) => {
+    await lockAssortmentForSale(tx, input.organizationId);
+    const identity = await getOrdinaryOrderIdentityTx(tx, input);
+    await assertSalesManagerStoreAccessTx(tx, { ...input, storeId: identity.storeId });
+    return withIdempotency(tx, {
+      key: input.idempotencyKey,
+      route: "salesOrders.appendUnpaidLine.v1",
+      userId: input.actorId,
+      request: {
+        customerOrderId: input.customerOrderId,
+        expectedUpdatedAt: expectedUpdatedAt.toISOString(),
+        productId: input.productId,
+        variantId: input.variantId ?? null,
+        qty: input.qty,
+        unitPriceKgs: input.unitPriceKgs ?? null,
+        expectedUnitPriceKgs: expectedUnitPriceKgs ?? null,
+      },
+    }, async () => {
+      await assertBaamReviewedVersion(tx, "CustomerOrder", identity.id);
+      await tx.$queryRaw`SELECT id FROM "CustomerOrder" WHERE id = ${identity.id} FOR UPDATE`;
+      const order = await tx.customerOrder.findFirstOrThrow({
+        where: { id: identity.id, organizationId: input.organizationId, isPosSale: false },
+        include: { lines: true },
+      });
+      if (order.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+        throw new AppError("salesOrderAmendmentStale", "CONFLICT", 409);
+      }
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`sales-period:${input.organizationId}:${order.storeId}`}, 0))`;
+      const movementDate = new Date();
+      const blocker = await getAppendUnpaidSaleBlocker(tx, order, movementDate);
+      if (blocker) throw new AppError(blocker, "CONFLICT", 409);
+      await assertSaleAssortment(tx, input.organizationId, order.storeId, [input.productId]);
+      const line = await createCustomerOrderLineTx(tx, input, order, expectedUnitPriceKgs);
+      if (line.priceSource === "MISSING") throw new AppError("salesOrderPriceRequired", "BAD_REQUEST", 400);
+      const { movementId } = await applyStockMovement(tx, {
+        storeId: order.storeId,
+        productId: line.productId,
+        variantId: line.variantId,
+        qtyDelta: -line.qty,
+        type: StockMovementType.SALE,
+        referenceType: "CustomerOrder",
+        referenceId: order.id,
+        note: order.number,
+        actorId: input.actorId,
+        organizationId: input.organizationId,
+        movementDate,
+      });
+      const updated = await recomputeTotals(tx, order.id, input.actorId);
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "SALES_ORDER_UNPAID_LINE_APPEND",
+        entity: "CustomerOrder",
+        entityId: order.id,
+        before: toJson({ totalKgs: order.totalKgs, updatedAt: order.updatedAt }),
+        after: toJson({ line, movementId, totalKgs: updated.totalKgs, updatedAt: updated.updatedAt }),
+        requestId: input.requestId,
+      });
+      return {
+        storeId: order.storeId,
+        line: {
+          ...line,
+          unitPriceKgs: Number(line.unitPriceKgs),
+          baseUnitPriceKgs: toMoneyOrNull(line.baseUnitPriceKgs),
+          appliedDiscountPercentage: toMoneyOrNull(line.appliedDiscountPercentage),
+          appliedDiscountAmountKgs: toMoneyOrNull(line.appliedDiscountAmountKgs),
+          lineTotalKgs: Number(line.lineTotalKgs),
+          unitCostKgs: toMoneyOrNull(line.unitCostKgs),
+          lineCostTotalKgs: toMoneyOrNull(line.lineCostTotalKgs),
+        },
+      };
+    });
+  }, FAST_SALE_TRANSACTION_OPTIONS);
+  const { line, storeId } = operation.result;
+  if (!operation.replayed) {
+    eventBus.publish({
+      type: "inventory.updated",
+      payload: { storeId, productId: line.productId, variantId: line.variantId },
+    });
+  }
+  return line;
+};
+
 export const removeDeclinedCustomerOrderLine = async (input: RemoveDeclinedCustomerOrderLineInput) => {
   const reason = input.reason.trim();
   const expectedUpdatedAt = new Date(input.expectedUpdatedAt);
@@ -2679,44 +2905,13 @@ export const removeDeclinedCustomerOrderLine = async (input: RemoveDeclinedCusto
       }
       const declined = order.lines.find((line) => line.id === input.lineId);
       if (!declined) throw new AppError("salesOrderLineNotFound", "NOT_FOUND", 404);
-      const [payment, returned, refund, loyalty, reservation, loyaltyEntry, fiscal] = await Promise.all([
-        tx.salePayment.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
-        tx.saleReturn.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
-        tx.refundRequest.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
-        tx.loyaltyOrderApplication.findFirst({ where: { customerOrderId: order.id, status: { not: "RELEASED" } }, select: { id: true } }),
-        tx.loyaltyReservation.findFirst({ where: { customerOrderId: order.id, status: { in: ["ACTIVE", "CONFIRMED"] } }, select: { id: true } }),
-        tx.loyaltyLedgerEntry.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
-        tx.fiscalReceipt.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
-      ]);
-      if (payment || returned || refund || order.isDebt || order.debtSettledAt) {
-        throw new AppError("salesOrderAmendmentRequiresReturn", "CONFLICT", 409);
+      const financialBlocker = await unpaidSaleFinancialBlocker(tx, order);
+      if (financialBlocker) throw new AppError(financialBlocker, "CONFLICT", 409);
+      if (!(await saleAmendmentStockMatches(tx, order, order.lines))) {
+        throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
       }
-      if (loyalty || reservation || loyaltyEntry || !order.discountKgs.isZero()) {
-        throw new AppError("salesOrderAmendmentLoyaltyBlocked", "CONFLICT", 409);
-      }
-      if (fiscal || order.kkmStatus !== "NOT_SENT" || order.kkmReceiptId || order.kkmRawJson) {
-        throw new AppError("salesOrderAmendmentFiscalBlocked", "CONFLICT", 409);
-      }
-      const movements = await tx.stockMovement.findMany({
-        where: { referenceType: "CustomerOrder", referenceId: order.id },
-        select: { store: { select: { organizationId: true } }, storeId: true, productId: true, variantId: true, type: true, qtyDelta: true },
-      });
-      if (order.status === CustomerOrderStatus.READY) {
-        if (movements.length) throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
-      } else {
-        const net = new Map<string, number>();
-        for (const movement of movements) {
-          if (movement.type !== StockMovementType.SALE || movement.store.organizationId !== order.organizationId || movement.storeId !== order.storeId) {
-            throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
-          }
-          const key = `${movement.productId}:${movement.variantId ?? "BASE"}`;
-          net.set(key, (net.get(key) ?? 0) + movement.qtyDelta);
-        }
-        if (net.size !== order.lines.length || order.lines.some((line) => Math.abs((net.get(`${line.productId}:${line.variantKey}`) ?? 0) + line.qty) > 0.000001)) {
-          throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
-        }
-        const lineTotal = order.lines.reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0));
-        if (!lineTotal.eq(order.totalKgs)) throw new AppError("salesOrderAmendmentUnavailable", "CONFLICT", 409);
+      if (order.status === CustomerOrderStatus.COMPLETED && !saleAmendmentTotalMatches(order, order.lines)) {
+        throw new AppError("salesOrderAmendmentUnavailable", "CONFLICT", 409);
       }
       const remaining = order.lines.filter((line) => line.id !== declined.id);
       if (!remaining.length && !input.confirmCancelLastLine) {
