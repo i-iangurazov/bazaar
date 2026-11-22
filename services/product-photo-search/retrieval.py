@@ -13,6 +13,34 @@ DIMENSION = 512
 MAX_QUERIES = 6
 
 
+def index_matches(matrix, groups, query, offset=0):
+    """Exact Faiss scores, retaining eight distinct products from this block."""
+    import faiss
+    index = faiss.IndexFlatIP(DIMENSION)
+    index.add(matrix)
+    scores, indexes = index.search(query, len(matrix))
+    batches = []
+    for row_scores, row_indexes in zip(scores, indexes):
+        seen, matches = set(), []
+        for score, number in zip(row_scores, row_indexes):
+            number = int(number)
+            group = int(groups[number])
+            if group in seen:
+                continue
+            seen.add(group)
+            matches.append({"index": offset + number, "score": float(score), "group": group})
+            if len(matches) == 8:
+                break
+        batches.append(matches)
+    return batches
+
+
+def validate_vectors(matrix):
+    import numpy as np
+    if not np.isfinite(matrix).all() or not np.allclose(np.linalg.norm(matrix, axis=1), 1, atol=0.01):
+        raise ValueError('invalidMatrix')
+
+
 def receive(connection):
     def exact(size):
         data = bytearray()
@@ -98,27 +126,14 @@ def serve(fd, threads):
             if not isinstance(queries, list) or not 1 <= len(queries) <= MAX_QUERIES:
                 raise ValueError('invalidQueries')
             query = np.ascontiguousarray(queries, dtype=np.float32)
-            if query.shape != (len(queries), DIMENSION) or not np.isfinite(matrix).all() or not np.isfinite(query).all():
+            if query.shape != (len(queries), DIMENSION):
                 raise ValueError("invalidMatrix")
-            if not np.allclose(np.linalg.norm(matrix, axis=1), 1, atol=0.01) or not np.allclose(np.linalg.norm(query, axis=1), 1, atol=0.01):
-                raise ValueError("invalidMatrix")
-            index = faiss.IndexFlatIP(DIMENSION)
-            index.add(matrix)
-            scores, indexes = index.search(query, count)
-            batches = []
-            for row_scores, row_indexes in zip(scores, indexes):
-                seen, matches = set(), []
-                for score, number in zip(row_scores, row_indexes):
-                    group = groups[int(number)]
-                    if group in seen:
-                        continue
-                    seen.add(group)
-                    matches.append({"index": int(number), "score": float(score)})
-                    if len(matches) == 8:
-                        break
-                batches.append(matches)
+            validate_vectors(matrix)
+            validate_vectors(query)
+            batches = [[{"index": hit["index"], "score": hit["score"]} for hit in matches]
+                       for matches in index_matches(matrix, groups, query)]
             send(connection, {"matches": batches})
-            del index, matrix, raw, query
+            del matrix, raw, query
         except (ValueError, TypeError, KeyError):
             send(connection, {"error": "invalidSearch"})
     connection.close()

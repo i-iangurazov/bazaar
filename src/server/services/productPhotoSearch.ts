@@ -1,9 +1,10 @@
 import sharp from "sharp";
 import { prisma } from "@/server/db/prisma";
-import { productPhotoSearchMaxBytes, productPhotoSearchMinScore, type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
+import { productPhotoSearchMaxBytes, productPhotoSearchMinScore, productPhotoSearchModel,
+  type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
 import { prepareProductStudioSource } from "./productImageSourceUpload";
-import { queryProductPhoto } from "./productPhotoSearchEngine";
+import { photoSearchStreamingEnabled, photoSearchVectorPage, queryProductPhoto, queryProductPhotoStream } from "./productPhotoSearchEngine";
 import { matchProductPhotoLabel } from "./productPhotoLabel";
 import { loadPhotoSearchScope } from "./productPhotoSearchScope";
 import type { StoreAccessUser } from "./storeAccess";
@@ -21,23 +22,51 @@ export async function canonicalPhoto(file: File, maxBytes = productPhotoSearchMa
   } catch { throw new AppError("imageInvalidType", "BAD_REQUEST", 400); }
 }
 
-export async function findPhotoCandidates(input: { user: StoreAccessUser; storeId: string; file: File; allowPartial: boolean; signal?: AbortSignal; region?: ProductPhotoRegion; autoRegion?: boolean }) {
+type PhotoQueryInput = { user: StoreAccessUser; storeId: string; file: File; allowPartial: boolean; signal?: AbortSignal; region?: ProductPhotoRegion; autoRegion?: boolean };
+type SourceRef = { id: string; productId: string; sourceKey: string };
+
+async function* readyVectorPages(input: PhotoQueryInput, features: SourceRef[]) {
+  for (let offset = 0; offset < features.length; offset += photoSearchVectorPage) {
+    input.signal?.throwIfAborted();
+    const page = features.slice(offset, offset + photoSearchVectorPage);
+    const rows = await prisma.productPhotoFeature.findMany({ where: {
+      id: { in: page.map(({ id }) => id) }, organizationId: input.user.organizationId,
+      status: "READY", modelVersion: productPhotoSearchModel,
+      product: { organizationId: input.user.organizationId, isDeleted: false,
+        storeProducts: { some: { organizationId: input.user.organizationId, storeId: input.storeId, isActive: true, isHidden: false } } },
+    }, select: { id: true, productId: true, sourceKey: true, embedding: true } });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    yield page.map((feature) => {
+      const row = byId.get(feature.id);
+      if (row?.productId !== feature.productId || row.sourceKey !== feature.sourceKey)
+        throw new AppError("photoSearchPreparing", "CONFLICT", 409);
+      return row;
+    });
+  }
+}
+
+export async function findPhotoCandidates(input: PhotoQueryInput) {
   const scope = await loadPhotoSearchScope(input.user, input.storeId);
   if (scope.progress.pending && !input.allowPartial) throw new AppError("photoSearchPreparing", "CONFLICT", 409);
   if (!scope.progress.ready && scope.progress.failed) throw new AppError("photoSearchImagesFailed", "INTERNAL_SERVER_ERROR", 503);
   const current = new Map(scope.sources.map((source) => [source.sourceKey, source]));
   const features = scope.features.filter((feature) => feature.status === "READY");
-  const rows = features.length ? await prisma.productPhotoFeature.findMany({ where: {
-    organizationId: input.user.organizationId, id: { in: features.map((feature) => feature.id) }, status: "READY",
-  }, select: { productId: true, sourceKey: true, embedding: true } }) : [];
-  const scopedRows = rows.filter((row) => current.get(row.sourceKey)?.productId === row.productId);
   const jpeg = await canonicalPhoto(input.file);
   if (input.region) {
     const { width, height } = await sharp(jpeg).metadata();
     if (!width || !height || input.region.width * width < 4 || input.region.height * height < 4)
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
-  const { matches, analysis } = await queryProductPhoto(jpeg, scopedRows, input.signal, { region: input.region, autoRegion: input.autoRegion });
+  const options = { region: input.region, autoRegion: input.autoRegion };
+  if (photoSearchStreamingEnabled()) {
+    const { matches, analysis } = await queryProductPhotoStream(jpeg, features.length, readyVectorPages(input, features), input.signal, options);
+    return { candidates: matches.filter((match) => match.score >= productPhotoSearchMinScore).map((match) => features[match.index]), analysis };
+  }
+  const rows = features.length ? await prisma.productPhotoFeature.findMany({ where: {
+    organizationId: input.user.organizationId, id: { in: features.map((feature) => feature.id) }, status: "READY",
+  }, select: { productId: true, sourceKey: true, embedding: true } }) : [];
+  const scopedRows = rows.filter((row) => current.get(row.sourceKey)?.productId === row.productId);
+  const { matches, analysis } = await queryProductPhoto(jpeg, scopedRows, input.signal, options);
   // Experimental laboratory calibration. This ranks candidates, never proves SKU identity.
   return { candidates: matches.filter((match) => match.score >= productPhotoSearchMinScore).map((match) => scopedRows[match.index]), analysis };
 }

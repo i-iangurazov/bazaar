@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { checkPhotoSearchEngine, embedProductPhoto, matchProductPhoto, queryProductPhoto, validPhotoEmbedding } from "@/server/services/productPhotoSearchEngine";
-import { productPhotoSearchModel as modelVersion, productPhotoSearchMinScore } from "@/lib/productPhotoSearch";
+import { checkPhotoSearchEngine, embedProductPhoto, matchProductPhoto, queryProductPhoto, queryProductPhotoStream,
+  validPhotoEmbedding } from "@/server/services/productPhotoSearchEngine";
+import { productPhotoSearchModel as modelVersion, productPhotoSearchMinScore, productPhotoSearchStreamMaxImages } from "@/lib/productPhotoSearch";
 const v = [1, ...Array<number>(511).fill(0)];
 beforeEach(() => { vi.stubEnv("PRODUCT_PHOTO_SEARCH_URL", "http://127.0.0.1:3160"); vi.stubEnv("PRODUCT_PHOTO_SEARCH_TOKEN", "private-service-test-token-with-32-characters"); });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
@@ -49,5 +50,33 @@ describe("private PP-ShiTu contract", () => {
     }
     transport.mockResolvedValueOnce(Response.json({ modelVersion, matches: [] }));
     await expect(queryProductPhoto(Buffer.from("jpeg"), [{ productId: "private", embedding: v }], undefined, { region })).rejects.toMatchObject({ status: 503 });
+  });
+  it("negotiates the packed protocol and sends paged records under a fixed request length", async () => {
+    vi.stubEnv("PRODUCT_PHOTO_SEARCH_STREAMING", "1");
+    const health = { modelVersion, ready: true, dimension: 512, vision: true, maxImages: productPhotoSearchStreamMaxImages };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json(health))
+      .mockResolvedValueOnce(Response.json({ ...health, galleryProtocol: "packed-f32-v1" })));
+    await expect(checkPhotoSearchEngine()).rejects.toMatchObject({ status: 503 });
+    await checkPhotoSearchEngine();
+    const analysis = { regionSource: "full", region: null, ocrStatus: "ready", lines: [] };
+    vi.mocked(fetch).mockImplementationOnce(async (url, init) => {
+      expect(String(url)).toMatch(/\/search-stream$/);
+      expect(init?.headers).toMatchObject({ "Content-Type": "application/octet-stream" });
+      const data = Buffer.from(await new Response(init!.body).arrayBuffer());
+      expect(init?.headers).toMatchObject({ "Content-Length": String(data.length) });
+      const headerSize = data.readUInt32LE();
+      expect(JSON.parse(data.subarray(4, 4 + headerSize).toString())).toMatchObject({ count: 3 });
+      expect(data.includes("tenant-secret")).toBe(false);
+      const rows = data.subarray(4 + headerSize);
+      expect([0, 1, 2].map((row) => rows.readUInt32LE(row * 2052))).toEqual([0, 1, 0]);
+      expect(rows.readFloatLE(4)).toBe(1);
+      return Response.json({ modelVersion, matches: [{ index: 2, score: 0.9 }], analysis });
+    });
+    async function* pages() {
+      yield [{ productId: "tenant-secret-1", embedding: v }];
+      yield [{ productId: "tenant-secret-2", embedding: v }, { productId: "tenant-secret-1", embedding: v }];
+    }
+    await expect(queryProductPhotoStream(Buffer.from("jpeg"), 3, pages()))
+      .resolves.toMatchObject({ matches: [{ index: 2, score: 0.9 }], analysis });
   });
 });

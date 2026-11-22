@@ -34,12 +34,12 @@ function Photo({ src, alt, className, onDimensions }: { src: string | null; alt:
     <div className={`${className} flex items-center justify-center bg-secondary`} role="img" aria-label={alt}><ImageOff className="h-6 w-6 text-muted-foreground" aria-hidden /></div>;
 }
 
-async function requestJson(url: string, init: RequestInit, signal: AbortSignal) {
+async function requestJson(url: string, init: RequestInit, signal: AbortSignal, timeoutMs = 30_000) {
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener("abort", abort, { once: true });
   let timedOut = false;
-  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 30_000);
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
   try {
     if (signal.aborted) controller.abort();
     const response = await fetch(url, { ...init, cache: "no-store", signal: controller.signal });
@@ -175,7 +175,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
         if (!automaticRegion) form.append("autoRegion", "0");
         let body: ProductPhotoSearchResult | undefined;
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          try { body = await requestJson("/api/products/photo-search", { method: "POST", body: form }, active.signal); break; }
+          try { body = await requestJson("/api/products/photo-search", { method: "POST", body: form }, active.signal, 56_000); break; }
           catch (cause) {
             if (cause instanceof Error && cause.message === "photoSearchBusy" && attempt < 2) { await pause(active.signal); continue; }
             if (cause instanceof Error && cause.message === "photoSearchPreparing") break;

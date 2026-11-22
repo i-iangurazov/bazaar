@@ -3,7 +3,7 @@ import { AppError } from "@/server/services/errors";
 import { findPhotoCandidates, presentPhotoCandidates } from "@/server/services/productPhotoSearch";
 import { photoSearchConfigured, checkPhotoSearchEngine } from "@/server/services/productPhotoSearchEngine";
 import { assertPhotoOrigin, consumePhotoRate, photoFailure, photoJson, photoSearchUser, readPhotoBody } from "@/server/services/productPhotoSearchHttp";
-import { loadPhotoSearchScope } from "@/server/services/productPhotoSearchScope";
+import { assertPhotoStore, loadPhotoSearchScope } from "@/server/services/productPhotoSearchScope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const user = await photoSearchUser(request);
     await consumePhotoRate(user, "status");
     const storeId = new URL(request.url).searchParams.get("storeId") ?? "";
-    await loadPhotoSearchScope(user, storeId);
+    await assertPhotoStore(user, storeId);
     const configured = photoSearchConfigured();
     if (configured) await checkPhotoSearchEngine(request.signal);
     const current = await photoSearchUser(request);
