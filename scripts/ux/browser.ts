@@ -735,7 +735,7 @@ try {
     ["/sales/orders", "salesOrders.list", 'input[type="search"]'],
   ]) {
     await dashboard.goto(base + path);
-    const search = dashboard.locator(selector);
+    const search = dashboard.locator("main").locator(selector).filter({ visible: true });
     await search.waitFor();
     const query = "no-matches-router-regression";
     const filtered = dashboard.waitForResponse((response) => {

@@ -921,9 +921,10 @@ export const InventoryTransfersPage = ({
   });
 
   const submitTransfer = (confirmCancellation: boolean) => {
+    // A new transfer keeps its fields locked after a lost response so it can replay the same request.
     if (
       validationMessage ||
-      postingInFlightRef.current ||
+      (isEditMode && postingInFlightRef.current) ||
       transferMutation.isLoading ||
       editMutation.isLoading ||
       isCancelingTransfer !== confirmCancellation

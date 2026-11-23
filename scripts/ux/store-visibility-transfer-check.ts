@@ -178,6 +178,7 @@ export async function verifyStoreVisibilityAndTransfer(
     await page.goto(
       `${base}/products?storeId=${target.id}&q=${encodeURIComponent(bulkName)}&view=table&pageSize=25&archived=false`,
     );
+    await expect(page.getByRole("row").filter({ hasText: bulkName }).first()).toBeVisible();
     await page
       .getByRole("checkbox", { name: "Выбрать записи на этой странице", exact: true })
       .check();
