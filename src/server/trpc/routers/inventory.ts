@@ -29,6 +29,7 @@ import {
   archiveStockMovementDocument,
   bulkSetOnHand,
   editStockMovementDocument,
+  getTransferDocumentRevision,
   postStockReceiving,
   postStockWriteOff,
   receiveStock,
@@ -1062,9 +1063,23 @@ export const inventoryRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
       }
 
-      const document = await getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey);
+      const { document, revision } = decoded.documentType === "TRANSFER"
+        ? await ctx.prisma.$transaction(async (tx) => {
+            const document = await getProductMovementDocument(tx, ctx.user, input.documentKey);
+            const revision = document && document.status !== "CANCELED"
+              ? await getTransferDocumentRevision(tx, ctx.user.organizationId, decoded.documentReferenceId)
+              : null;
+            return { document, revision };
+          }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+        : {
+            document: await getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey),
+            revision: null,
+          };
       if (!document) {
         throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
+      }
+      if (decoded.documentType === "TRANSFER" && document.status === "CANCELED") {
+        throw new TRPCError({ code: "CONFLICT", message: "productMovementDocumentAlreadyCanceled" });
       }
 
       const aggregates = new Map<
@@ -1128,6 +1143,7 @@ export const inventoryRouter = router({
         storeId: sourceStoreId,
         sourceStoreId,
         destinationStoreId,
+        revision,
         customerName: null as string | null,
         customerEmail: null as string | null,
         customerPhone: null as string | null,
@@ -1165,7 +1181,9 @@ export const inventoryRouter = router({
     .input(
       z.object({
         documentKey: z.string().min(1).max(300),
-        lines: z.array(productMovementEditLineSchema).min(1).max(500),
+        lines: z.array(productMovementEditLineSchema).max(500),
+        cancelTransfer: z.boolean().optional(),
+        expectedRevision: z.string().regex(/^[0-9a-f]{64}$/).optional(),
         customerName: z.string().max(160).optional().nullable(),
         customerEmail: z.string().max(254).optional().nullable(),
         customerPhone: z.string().max(64).optional().nullable(),
@@ -1182,6 +1200,18 @@ export const inventoryRouter = router({
         const decoded = decodeProductMovementDocumentKey(input.documentKey);
         if (!decoded) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
+        }
+        if (input.cancelTransfer) {
+          if (
+            decoded.documentType !== "TRANSFER" ||
+            decoded.documentReferenceType !== "TRANSFER" ||
+            input.lines.length !== 0 ||
+            !input.expectedRevision
+          ) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
+          }
+        } else if (input.lines.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "documentLinesRequired" });
         }
 
         if (decoded.documentType === "SALE" && decoded.documentReferenceType === "CustomerOrder") {
@@ -1240,6 +1270,8 @@ export const inventoryRouter = router({
             referenceId: decoded.documentReferenceId,
             sourceStoreId: input.sourceStoreId,
             destinationStoreId: input.destinationStoreId,
+            cancelTransfer: input.cancelTransfer,
+            expectedRevision: input.expectedRevision,
             reason: input.reason,
             lines: input.lines.map((line) => ({
               productId: line.productId,

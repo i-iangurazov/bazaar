@@ -395,6 +395,7 @@ const ProductMovementsPage = () => {
   ) => t(`editUnavailable.${reason}`);
 
   const renderActions = (movement: MovementRow, layout: "desktop" | "mobile" = "desktop") => {
+    const isCanceledTransfer = movement.documentType === "TRANSFER" && movement.status === "CANCELED";
     const isStockDocument =
       movement.documentType === "STOCK_RECEIVING" ||
       movement.documentType === "TRANSFER" ||
@@ -509,7 +510,7 @@ const ProductMovementsPage = () => {
         }
       >
         {viewButton ?? <span className="text-muted-foreground">{tCommon("notAvailable")}</span>}
-        {editButton}
+        {!isCanceledTransfer && editButton}
         {printButton}
         {archiveButton}
       </div>

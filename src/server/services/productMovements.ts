@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { parseWriteOffMovementNote } from "@/lib/inventory/writeOff";
+import { transferCancellationLinePosition } from "@/lib/inventory/transferCancellation";
 import { resolveProductMovementDocumentViewTarget } from "@/lib/productMovementDocumentTarget";
 import {
   resolveAccessibleStoreIds,
@@ -125,6 +126,7 @@ export type ProductMovementDocumentDetail = ProductMovementJournalRow & {
   sourceStoreId: string | null;
   destinationStoreId: string | null;
   lines: ProductMovementDocumentLine[];
+  movementHistory?: ProductMovementDocumentLine[];
 };
 
 export type ProductMovementJournalResult = {
@@ -387,17 +389,14 @@ const buildProductMovementJournalCte = (input: {
   ),
   archive_references AS MATERIALIZED (
     SELECT
-      archive_m."referenceType",
-      archive_m."referenceId"
-    FROM "StockMovement" archive_m
-    INNER JOIN "Store" archive_s ON archive_s."id" = archive_m."storeId"
-    WHERE archive_s."organizationId" = ${input.organizationId}
-      AND archive_m."referenceType" IN (
-        ${stockDocumentArchiveReferenceType},
-        ${stockReceivingArchiveReferenceType}
-      )
-      AND archive_m."referenceId" IS NOT NULL
-    GROUP BY archive_m."referenceType", archive_m."referenceId"
+      m."referenceType",
+      m."referenceId"
+    FROM "StockMovement" m
+    INNER JOIN "Store" s ON s."id" = m."storeId"
+    WHERE s."organizationId" = ${input.organizationId}
+      AND m."referenceId" IS NOT NULL
+      AND m."referenceType" IN (${stockDocumentArchiveReferenceType}, ${stockReceivingArchiveReferenceType})
+    GROUP BY m."referenceType", m."referenceId"
   ),
   document_index_base AS (
     SELECT
@@ -414,7 +413,21 @@ const buildProductMovementJournalCte = (input: {
       (
         archived_document."referenceId" IS NOT NULL
         OR archived_receiving."referenceId" IS NOT NULL
-      ) AS "isArchived"
+      ) AS "isArchived",
+      CASE
+        WHEN d."documentType" = 'TRANSFER' AND d."documentReferenceType" = 'TRANSFER'
+        THEN EXISTS (
+          SELECT 1
+          FROM "StockMovement" canceled_m
+          INNER JOIN "Store" canceled_s ON canceled_s."id" = canceled_m."storeId"
+          WHERE canceled_m."referenceType" = 'TRANSFER'
+            AND canceled_m."referenceId" = d."documentReferenceId"
+            AND canceled_m."linePosition" = ${transferCancellationLinePosition}
+            AND canceled_m."type" IN ('TRANSFER_OUT', 'TRANSFER_IN')
+            AND canceled_s."organizationId" = ${input.organizationId}
+        )
+        ELSE FALSE
+      END AS "isCanceled"
     FROM document_index_base d
     LEFT JOIN archive_references archived_document
       ON archived_document."referenceType" = ${stockDocumentArchiveReferenceType}
@@ -441,6 +454,7 @@ const buildProductMovementJournalCte = (input: {
     SELECT
       b.*,
       d."isArchived",
+      d."isCanceled",
       d."groupedTotalCount"
     FROM movement_base b
     INNER JOIN document_page d
@@ -562,6 +576,14 @@ const buildProductMovementJournalCte = (input: {
       (ARRAY_AGG(b."organizationName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."organizationName" IS NOT NULL AND BTRIM(b."organizationName") <> ''))[1] AS "organizationName",
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ') AS "sourceStoreName",
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ') AS "destinationStoreName",
+      STRING_AGG(DISTINCT b."storeName", ', ') FILTER (
+        WHERE b."isCanceled" AND b."linePosition" = ${transferCancellationLinePosition}
+          AND b."movementType" = 'TRANSFER_OUT'
+      ) AS "canceledSourceStoreName",
+      STRING_AGG(DISTINCT b."storeName", ', ') FILTER (
+        WHERE b."isCanceled" AND b."linePosition" = ${transferCancellationLinePosition}
+          AND b."movementType" = 'TRANSFER_IN'
+      ) AS "canceledDestinationStoreName",
       STRING_AGG(DISTINCT b."productName", ', ') AS "productPreview",
       SUM(b."lineTotalKgs") AS "movementLineTotalAmount",
       BOOL_OR(b."lineTotalKgs" IS NOT NULL) AS "hasMovementLineTotal",
@@ -570,6 +592,7 @@ const buildProductMovementJournalCte = (input: {
       (ARRAY_AGG(b."authorName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."authorName" IS NOT NULL AND BTRIM(b."authorName") <> ''))[1] AS "authorName",
       (ARRAY_AGG(b."authorEmail" ORDER BY b."createdAt" DESC) FILTER (WHERE b."authorEmail" IS NOT NULL AND BTRIM(b."authorEmail") <> ''))[1] AS "authorEmail",
       BOOL_OR(b."isArchived") AS "isArchived",
+      BOOL_OR(b."isCanceled") AS "isCanceled",
       (ARRAY_AGG(b."groupedTotalCount") FILTER (WHERE b."groupedTotalCount" IS NOT NULL))[1] AS "groupedTotalCount"
     FROM movement_scope b
     GROUP BY b."documentType", b."documentReferenceType", b."documentReferenceId"
@@ -581,16 +604,22 @@ const buildProductMovementJournalCte = (input: {
       g."documentReferenceId",
       g."documentDate",
       g."firstMovementAt",
-      COALESCE(lt."positionsCount", 0)::int AS "positionsCount",
-      COALESCE(lt."totalQuantity", 0)::double precision AS "totalQuantity",
+      CASE WHEN g."isCanceled" THEN 0 ELSE COALESCE(lt."positionsCount", 0) END::int AS "positionsCount",
+      CASE WHEN g."isCanceled" THEN 0 ELSE COALESCE(lt."totalQuantity", 0) END::double precision AS "totalQuantity",
       CASE
         WHEN g."documentType" IN ('STOCK_RECEIVING', 'WRITE_OFF')
         THEN COALESCE(sd."effectiveStoreName", g."storeName")
         ELSE g."storeName"
       END AS "storeName",
       g."organizationName",
-      COALESCE(td."sourceStoreName", g."sourceStoreName") AS "sourceStoreName",
-      COALESCE(td."destinationStoreName", g."destinationStoreName") AS "destinationStoreName",
+      CASE
+        WHEN g."isCanceled" THEN COALESCE(g."canceledSourceStoreName", g."sourceStoreName")
+        ELSE COALESCE(td."sourceStoreName", g."sourceStoreName")
+      END AS "sourceStoreName",
+      CASE
+        WHEN g."isCanceled" THEN COALESCE(g."canceledDestinationStoreName", g."destinationStoreName")
+        ELSE COALESCE(td."destinationStoreName", g."destinationStoreName")
+      END AS "destinationStoreName",
       g."productPreview",
       g."movementLineTotalAmount",
       g."hasMovementLineTotal",
@@ -599,6 +628,7 @@ const buildProductMovementJournalCte = (input: {
       g."authorName",
       g."authorEmail",
       g."isArchived",
+      g."isCanceled",
       g."groupedTotalCount"
     FROM movement_grouped_base g
     LEFT JOIN movement_line_totals lt
@@ -635,7 +665,10 @@ const buildProductMovementJournalCte = (input: {
       g."organizationName" AS "organizationName",
       g."documentDate" AS "createdAt",
       COALESCE(co."completedAt", sr."completedAt", po."receivedAt", sc."appliedAt", g."documentDate") AS "postedAt",
-      COALESCE(co."status"::text, sr."status"::text, po."status"::text, sc."status"::text, 'POSTED') AS "status",
+      CASE
+        WHEN g."isCanceled" THEN 'CANCELED'
+        ELSE COALESCE(co."status"::text, sr."status"::text, po."status"::text, sc."status"::text, 'POSTED')
+      END AS "status",
       co."status"::text AS "orderStatus",
       CASE
         WHEN co."id" IS NOT NULL THEN
@@ -669,6 +702,7 @@ const buildProductMovementJournalCte = (input: {
       g."positionsCount" AS "positionsCount",
       g."totalQuantity" AS "totalQuantity",
       CASE
+        WHEN g."isCanceled" THEN 0
         WHEN co."id" IS NOT NULL THEN co."totalKgs"
         WHEN sr."id" IS NOT NULL THEN sr."totalKgs"
         WHEN po."id" IS NOT NULL AND po_totals."hasCost" THEN po_totals."totalAmount"
@@ -1007,7 +1041,7 @@ const getNetStoreIdForMovementType = (
 };
 
 const buildBaseConditions = async (
-  prisma: PrismaClient,
+  prisma: Prisma.TransactionClient,
   user: StoreAccessUser,
   input: Pick<ProductMovementJournalInput, "storeId" | "authorId" | "dateFrom" | "dateTo">,
 ) => {
@@ -1181,7 +1215,7 @@ export const listProductMovementJournal = async (
 };
 
 export const getProductMovementDocument = async (
-  prisma: PrismaClient,
+  prisma: Prisma.TransactionClient,
   user: StoreAccessUser,
   documentKey: string,
 ): Promise<ProductMovementDocumentDetail | null> => {
@@ -1270,6 +1304,19 @@ export const getProductMovementDocument = async (
       ORDER BY COALESCE(m."linePosition", 2147483647) ASC, m."createdAt" ASC, m."id" ASC
     `,
   );
+  const canceledTransfer = decoded.documentType === "TRANSFER" && row.status === "CANCELED";
+  if (canceledTransfer) {
+    const corrections = lines.filter((line) => line.linePosition === transferCancellationLinePosition);
+    return {
+      ...normalizeProductMovementJournalRow(row),
+      sourceStoreId: corrections.find((line) => line.movementType === "TRANSFER_OUT")?.storeId ?? null,
+      destinationStoreId: corrections.find((line) => line.movementType === "TRANSFER_IN")?.storeId ?? null,
+      lines: [],
+      movementHistory: lines.map(normalizeProductMovementDocumentLine)
+        .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime()),
+    };
+  }
+
   const effectiveStockLines = isEditableStockDocumentType(decoded.documentType)
     ? buildEffectiveStockDocumentLines(lines, decoded.documentType)
     : null;

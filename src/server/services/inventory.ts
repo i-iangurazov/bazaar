@@ -1,6 +1,6 @@
 import { isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { inventoryProductAccessWhere } from "./storeAccess";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { InventorySnapshot, Prisma } from "@prisma/client";
 import {
   OperationRequestPrincipalType,
@@ -20,6 +20,7 @@ import { classifyDatabaseOperationFailure } from "@/server/services/databaseOper
 import { runOperationRequest } from "@/server/services/operationRequests";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
+import { transferCancellationLinePosition } from "@/lib/inventory/transferCancellation";
 import { lockStockSnapshot } from "@/server/services/inventoryLock";
 import { lockAssortmentForSale } from "@/server/services/assortmentPolicy";
 import {
@@ -105,6 +106,10 @@ export const applyStockMovement = async (
   tx: Prisma.TransactionClient,
   input: ApplyStockMovementInput,
 ): Promise<{ snapshot: InventorySnapshot; movementId: string }> => {
+  const isTransferCancellation =
+    input.referenceType === "TRANSFER" &&
+    input.linePosition === transferCancellationLinePosition &&
+    (input.type === StockMovementType.TRANSFER_OUT || input.type === StockMovementType.TRANSFER_IN);
   if (!isValidQuantity(input.qtyDelta)) {
     throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
   }
@@ -123,7 +128,7 @@ export const applyStockMovement = async (
     FOR SHARE
   `;
   const product = await tx.product.findUnique({ where: { id: input.productId }, include: { baseUnit: true } });
-  if (!product || product.isDeleted) {
+  if (!product || (product.isDeleted && !isTransferCancellation)) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
   if (product.organizationId !== store.organizationId ||
@@ -137,19 +142,25 @@ export const applyStockMovement = async (
   if (!isValidQuantity(absoluteCorrection ? input.correctionTargetOnHand! : input.qtyDelta,
     product.baseUnit.quantityPrecision))
     throw new AppError("wholeQuantityRequired", "BAD_REQUEST", 400);
-  await assignProductToStore(tx, {
-    organizationId: input.organizationId ?? store.organizationId,
-    storeId: input.storeId,
-    productId: input.productId,
-    actorId: input.actorId,
-  });
+  if (!isTransferCancellation) {
+    await assignProductToStore(tx, {
+      organizationId: input.organizationId ?? store.organizationId,
+      storeId: input.storeId,
+      productId: input.productId,
+      actorId: input.actorId,
+    });
+  }
 
   if (input.variantId) {
     const variant = await tx.productVariant.findUnique({
       where: { id: input.variantId },
       select: { productId: true, isActive: true },
     });
-    if (!variant || variant.productId !== input.productId || !variant.isActive) {
+    if (
+      !variant ||
+      variant.productId !== input.productId ||
+      (!variant.isActive && !isTransferCancellation)
+    ) {
       throw new AppError("variantNotFound", "NOT_FOUND", 404);
     }
   }
@@ -1511,6 +1522,8 @@ export type EditStockMovementDocumentInput = {
   sourceStoreId?: string | null;
   destinationStoreId?: string | null;
   lines: EditStockMovementDocumentLineInput[];
+  cancelTransfer?: boolean;
+  expectedRevision?: string;
   reason?: string | null;
   actorId: string;
   organizationId: string;
@@ -1693,6 +1706,26 @@ const normalizeStockDocumentEditLines = (
   return normalized;
 };
 
+export const getTransferDocumentRevision = async (
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  referenceId: string,
+) => {
+  const revisions = await tx.auditLog.findMany({
+    where: {
+      organizationId,
+      entity: "StockMovementDocument",
+      entityId: `TRANSFER:${referenceId}`,
+      action: { in: ["INVENTORY_DOCUMENT_EDIT", "INVENTORY_DOCUMENT_CANCEL"] },
+    },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  return createHash("sha256")
+    .update(JSON.stringify([organizationId, referenceId, revisions.map((revision) => revision.id)]))
+    .digest("hex");
+};
+
 export const editStockMovementDocument = async (input: EditStockMovementDocumentInput) => {
   if (
     (input.documentType === "STOCK_RECEIVING" && input.referenceType !== "STOCK_RECEIVING") ||
@@ -1700,6 +1733,13 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
     (input.documentType === "WRITE_OFF" && input.referenceType !== "WRITE_OFF")
   ) {
     throw new AppError("productMovementDocumentUnsupported", "BAD_REQUEST", 400);
+  }
+  const cancelTransfer = input.cancelTransfer === true;
+  if (
+    cancelTransfer &&
+    (input.documentType !== "TRANSFER" || input.lines.length !== 0 || !input.expectedRevision)
+  ) {
+    throw new AppError("productMovementDocumentInvalid", "BAD_REQUEST", 400);
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -1713,9 +1753,16 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           documentType: input.documentType,
           referenceType: input.referenceType,
           referenceId: input.referenceId,
-          sourceStoreId: input.sourceStoreId?.trim() || null,
-          destinationStoreId: input.destinationStoreId?.trim() || null,
+          sourceStoreId: cancelTransfer ? null : input.sourceStoreId?.trim() || null,
+          destinationStoreId: cancelTransfer ? null : input.destinationStoreId?.trim() || null,
           reason: input.reason?.trim() || null,
+          ...(cancelTransfer
+            ? {
+                cancelTransfer,
+                organizationId: input.organizationId,
+                expectedRevision: input.expectedRevision ?? null,
+              }
+            : {}),
           lines: input.lines.map((line) => ({
             productId: line.productId,
             variantId: line.variantId ?? null,
@@ -1772,6 +1819,18 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             storeIds.map((storeId) => assertUserCanAccessStore(tx, input.user!, storeId)),
           );
         }
+        if (
+          input.documentType === "TRANSFER" &&
+          movements.some((movement) => movement.linePosition === transferCancellationLinePosition)
+        ) {
+          throw new AppError("productMovementDocumentAlreadyCanceled", "CONFLICT", 409);
+        }
+        if (cancelTransfer) {
+          const revision = await getTransferDocumentRevision(tx, input.organizationId, input.referenceId);
+          if (revision !== input.expectedRevision) {
+            throw new AppError("productMovementDocumentChanged", "CONFLICT", 409);
+          }
+        }
 
         const sourceStoreIds = getNetStockMovementStoreIds(
           movements,
@@ -1800,11 +1859,11 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
         }
 
         const oldSourceStoreId = sourceStoreIds[0]!;
-        const sourceStoreId = input.sourceStoreId?.trim() || oldSourceStoreId;
+        const sourceStoreId = (cancelTransfer ? null : input.sourceStoreId?.trim()) || oldSourceStoreId;
         const oldDestinationStoreId = destinationStoreIds[0] ?? null;
         const destinationStoreId =
           input.documentType === "TRANSFER"
-            ? input.destinationStoreId?.trim() || oldDestinationStoreId
+            ? (cancelTransfer ? null : input.destinationStoreId?.trim()) || oldDestinationStoreId
             : null;
         if (input.documentType === "TRANSFER") {
           if (!destinationStoreId || !oldDestinationStoreId) {
@@ -1896,8 +1955,11 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             unitCostMap.set(key, line.unitCostKgs);
           }
         });
-        const desiredLines = normalizeStockDocumentEditLines(input.lines, unitCostMap);
-        const reason = input.reason?.trim() || "Редактирование документа";
+        const desiredLines = cancelTransfer
+          ? new Map<string, StockDocumentAggregateLine>()
+          : normalizeStockDocumentEditLines(input.lines, unitCostMap);
+        const reason = input.reason?.trim() ||
+          (cancelTransfer ? "Отмена перемещения" : "Редактирование документа");
         const changedItems = new Map<
           string,
           { storeId: string; productId: string; variantId: string | null; onHand: number | null }
@@ -2194,6 +2256,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             }
             continue;
           }
+          const transferLinePosition = cancelTransfer ? transferCancellationLinePosition : linePosition;
           const outQtyDelta = roundQuantity(oldQuantity - newQuantity);
           if (outQtyDelta !== 0 || lineTotalDelta !== 0) {
             const outMovement = await applyStockMovement(tx, {
@@ -2205,7 +2268,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
               type: StockMovementType.TRANSFER_OUT,
               referenceType: input.referenceType,
               referenceId: input.referenceId,
-              linePosition,
+              linePosition: transferLinePosition,
               unitCostKgs,
               lineTotalKgs: lineTotalDelta,
               note: reason,
@@ -2232,7 +2295,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 type: StockMovementType.TRANSFER_IN,
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
-                linePosition,
+                linePosition: transferLinePosition,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2298,7 +2361,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
         await writeAuditLog(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
-          action: "INVENTORY_DOCUMENT_EDIT",
+          action: cancelTransfer ? "INVENTORY_DOCUMENT_CANCEL" : "INVENTORY_DOCUMENT_EDIT",
           entity: "StockMovementDocument",
           entityId: `${input.referenceType}:${input.referenceId}`,
           before: toJson({
@@ -2316,6 +2379,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             sourceStoreId,
             destinationStoreId,
             reason,
+            ...(cancelTransfer ? { status: "CANCELED" } : {}),
             lines: Array.from(desiredLines.values()),
           }),
           requestId: input.requestId,
@@ -2325,6 +2389,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           documentType: input.documentType,
           referenceType: input.referenceType,
           referenceId: input.referenceId,
+          ...(cancelTransfer ? { status: "CANCELED" as const } : {}),
           lineCount: desiredLines.size,
           totalQuantity: Array.from(desiredLines.values()).reduce(
             (sum, line) => roundQuantity(sum + line.quantity),

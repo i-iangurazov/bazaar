@@ -6,6 +6,7 @@ import {
   type StoreStockValuationIncoming,
   type StoreStockValuationMovement,
 } from "@/lib/inventory/storeStockValuation";
+import { transferCancellationLinePosition } from "@/lib/inventory/transferCancellation";
 import { AppError } from "@/server/services/errors";
 
 export const STORE_VALUATION_ROW_LIMIT = 50_000;
@@ -75,6 +76,7 @@ export async function readStoreStockValuation(
         variantId: true,
         type: true,
         qtyDelta: true,
+        linePosition: true,
         unitCostKgs: true,
         lineTotalKgs: true,
         referenceType: true,
@@ -94,13 +96,14 @@ export async function readStoreStockValuation(
   const counts = new Map<string, number>();
   const movements: StoreStockValuationMovement[] = rows
     .slice(0, STORE_VALUATION_ROW_LIMIT)
-    .map((row) => {
+    .map(({ linePosition, ...row }) => {
       const key = storeStockValuationKey(row.productId, row.variantId);
       const count = (counts.get(key) ?? 0) + 1;
       counts.set(key, count);
       if (count > STORE_VALUATION_PRODUCT_ROW_LIMIT) truncated.add(key);
       return {
         ...row,
+        ...(linePosition === transferCancellationLinePosition ? { linePosition } : {}),
         unitCostKgs: row.unitCostKgs?.toString() ?? null,
         lineTotalKgs: row.lineTotalKgs?.toString() ?? null,
         createdAt: row.createdAt.toISOString(),

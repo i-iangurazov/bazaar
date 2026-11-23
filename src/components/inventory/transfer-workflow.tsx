@@ -1,6 +1,6 @@
 "use client";
 
-import { isValidQuantity, roundQuantity } from "@/lib/quantity";
+import { isValidQuantity, parseQuantity, roundQuantity } from "@/lib/quantity";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,7 +9,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { useSse } from "@/lib/useSse";
-import { Modal } from "@/components/ui/modal";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
   readTransferDraft,
   writeTransferDraft,
@@ -139,6 +139,7 @@ export const InventoryTransfersPage = ({
     { enabled: Boolean(editDocumentKey && canManageStock), staleTime: 0 },
   );
   const editableDocument = editableDocumentQuery.data ?? null;
+  const [originalTransfer, setOriginalTransfer] = useState<typeof editableDocument>(null);
   const initialFromStoreId =
     searchParams?.get("fromStoreId")?.trim() || searchParams?.get("storeId")?.trim() || "";
   const initialToStoreId = searchParams?.get("toStoreId")?.trim() || "";
@@ -173,6 +174,7 @@ export const InventoryTransfersPage = ({
   const [draftNotice, setDraftNotice] = useState("");
   const [storageWarning, setStorageWarning] = useState(false);
   const [clearRequested, setClearRequested] = useState(false);
+  const [cancelTransferRequested, setCancelTransferRequested] = useState(false);
   const draftIdentity = useMemo(
     () =>
       session?.user?.id && session.user.organizationId
@@ -377,6 +379,7 @@ export const InventoryTransfersPage = ({
       return;
     }
     loadedEditDocumentRef.current = editDocumentKey;
+    setOriginalTransfer(editableDocument);
     setFromStoreId(editableDocument.sourceStoreId ?? editableDocument.storeId);
     setToStoreId(editableDocument.destinationStoreId ?? "");
     setNote(editableDocument.notes ?? "");
@@ -699,22 +702,23 @@ export const InventoryTransfersPage = ({
 
   const originalQuantityByKey = useMemo(() => {
     const quantities = new Map<string, number>();
-    for (const line of editableDocument?.lines ?? []) {
+    for (const line of originalTransfer?.lines ?? []) {
       const key = lineKey(line.productId, line.variantId);
       quantities.set(key, (quantities.get(key) ?? 0) + line.quantity);
     }
     return quantities;
-  }, [editableDocument]);
-  const originalSource = editableDocument?.sourceStoreId ?? editableDocument?.storeId;
-  const originalDestination = editableDocument?.destinationStoreId;
+  }, [originalTransfer]);
+  const originalSource = originalTransfer?.sourceStoreId ?? originalTransfer?.storeId;
+  const originalDestination = originalTransfer?.destinationStoreId;
   const lineMetrics = useMemo(
     () =>
       lines.map((line) => {
         const quantity = parseDecimalInput(line.quantityInput);
         const context = isEditMode ? lineContextByKey.get(line.key) : undefined;
         const precision = context?.available ? context.quantityPrecision : line.quantityPrecision;
+        const removing = isEditMode && quantity === 0 && parseQuantity(line.quantityInput) === 0;
         const quantityValid =
-          isValidQuantity(quantity, precision ?? 3) && quantity > 0;
+          isValidQuantity(quantity, precision ?? 3) && (quantity > 0 || removing);
         const lineTotal =
           quantityValid && typeof line.unitCostKgs === "number"
             ? quantity * line.unitCostKgs
@@ -740,6 +744,7 @@ export const InventoryTransfersPage = ({
           key: line.key,
           quantity,
           quantityValid,
+          removing,
           sourceStock,
           destinationStock,
           sourceAfter: projectStock(sourceStock, fromStoreId, -quantity),
@@ -757,6 +762,24 @@ export const InventoryTransfersPage = ({
     [lineMetrics],
   );
   const invalidQuantity = lineMetrics.some((metric) => !metric.quantityValid);
+  const retainedLines = lines.filter((line) => !metricByKey.get(line.key)?.removing);
+  const cancellationRevision =
+    loadedEditDocumentRef.current === editDocumentKey &&
+    originalTransfer &&
+    "revision" in originalTransfer &&
+    originalQuantityByKey.size > 0 &&
+    retainedLines.length === 0
+      ? originalTransfer.revision
+      : undefined;
+  const isCancelingTransfer = Boolean(cancellationRevision);
+  const showStockProjection =
+    !isCancelingTransfer || (fromStoreId === originalSource && toStoreId === originalDestination);
+  const summarySourceStore = isCancelingTransfer
+    ? stores.find((store) => store.id === originalSource)
+    : fromStore;
+  const summaryDestinationStore = isCancelingTransfer
+    ? stores.find((store) => store.id === originalDestination)
+    : toStore;
   const lineUnavailable = (line: TransferLine) =>
     line.unavailable || lineContextByKey.get(line.key)?.available === false;
   const restrictedProductIds = [
@@ -777,10 +800,11 @@ export const InventoryTransfersPage = ({
   const canConfigureAssortment = Boolean(
     session?.user?.role === "ADMIN" || session?.user?.isOrgOwner,
   );
-  const hasTotalCost = lines.some((line) => typeof line.unitCostKgs === "number");
+  const hasTotalCost =
+    isCancelingTransfer || retainedLines.some((line) => typeof line.unitCostKgs === "number");
   const summary = useMemo(
     () => ({
-      products: lines.length,
+      products: retainedLines.length,
       totalQuantity: lineMetrics.reduce(
         (sum, metric) => sum + (metric.quantityValid ? metric.quantity : 0),
         0,
@@ -789,27 +813,33 @@ export const InventoryTransfersPage = ({
         ? lineMetrics.reduce((sum, metric) => sum + (metric.lineTotal ?? 0), 0)
         : null,
     }),
-    [hasTotalCost, lineMetrics, lines.length],
+    [hasTotalCost, lineMetrics, retainedLines.length],
   );
-  const validationMessage = !fromStoreId
-    ? t("transferValidationNoSourceStore")
-    : !toStoreId
-      ? t("transferValidationNoDestinationStore")
-      : storesAreSame
-        ? t("transferValidationSameStore")
-        : !lines.length
-          ? t("transferValidationNoProducts")
-          : lineContextQuery.isError
-            ? t("transferCheckFailed")
-            : !lineContextQuery.data || lineContextQuery.isFetching
-              ? t("transferCheckingLines")
-              : lines.some(lineUnavailable)
-                ? t("transferUnavailableLine")
-                : invalidQuantity
-                  ? t("transferValidationInvalidQuantity")
-                  : !isEditMode && restrictedProductIds.length > 0 && !inventoryOnlyApproved
-                    ? tSafety("approvalRequired")
-                    : "";
+  const validationMessage = isCancelingTransfer
+    ? ""
+    : !fromStoreId
+      ? t("transferValidationNoSourceStore")
+      : !toStoreId
+        ? t("transferValidationNoDestinationStore")
+        : storesAreSame
+          ? t("transferValidationSameStore")
+          : !retainedLines.length
+            ? t("transferValidationNoProducts")
+            : lineContextQuery.isError
+              ? t("transferCheckFailed")
+              : !lineContextQuery.data || lineContextQuery.isFetching
+                ? t("transferCheckingLines")
+                : retainedLines.some(lineUnavailable)
+                  ? t("transferUnavailableLine")
+                  : invalidQuantity
+                    ? t(isEditMode ? "transferEditInvalidQuantity" : "transferValidationInvalidQuantity")
+                    : !isEditMode && restrictedProductIds.length > 0 && !inventoryOnlyApproved
+                      ? tSafety("approvalRequired")
+                      : "";
+  const transferStatusMessage =
+    validationMessage ||
+    t(isCancelingTransfer ? "transferCancelPostedHint" : "transferValidationReady");
+  const transferStatusNeedsAttention = Boolean(validationMessage || isCancelingTransfer);
 
   const finishPostedTransfer = async (transferId: string) => {
     postingInFlightRef.current = false;
@@ -861,14 +891,20 @@ export const InventoryTransfersPage = ({
     },
   });
   const editMutation = trpc.inventory.editProductMovementDocument.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (_result, input) => {
       setPostingError(null);
       await trpcUtils.inventory.list.invalidate();
       await trpcUtils.inventory.searchProducts.invalidate();
       await trpcUtils.inventory.productMovements.invalidate();
       await trpcUtils.inventory.productMovementDocument.invalidate();
-      await trpcUtils.inventory.editableProductMovementDocument.invalidate();
-      toast({ variant: "success", description: t("transferEditSuccess") });
+      await trpcUtils.inventory.editableProductMovementDocument.invalidate(
+        undefined,
+        input.cancelTransfer ? { refetchType: "none" } : undefined,
+      );
+      toast({
+        variant: "success",
+        description: t(input.cancelTransfer ? "transferCancelPostedSuccess" : "transferEditSuccess"),
+      });
       const params = new URLSearchParams({ from: "movements", returnTo: editBackHref });
       router.push(
         `/inventory/movements/${encodeURIComponent(editDocumentKey ?? "")}?${params.toString()}`,
@@ -884,14 +920,20 @@ export const InventoryTransfersPage = ({
     },
   });
 
-  const handlePost = () => {
-    if (validationMessage || transferMutation.isLoading || editMutation.isLoading) {
+  const submitTransfer = (confirmCancellation: boolean) => {
+    if (
+      validationMessage ||
+      postingInFlightRef.current ||
+      transferMutation.isLoading ||
+      editMutation.isLoading ||
+      isCancelingTransfer !== confirmCancellation
+    ) {
       if (validationMessage) {
         toast({ variant: "error", description: validationMessage });
       }
       return;
     }
-    const normalizedLines = lines.map((line) => ({
+    const normalizedLines = retainedLines.map((line) => ({
       productId: line.productId,
       variantId: line.variantId,
       quantity: metricByKey.get(line.key)?.quantity ?? 0,
@@ -901,9 +943,12 @@ export const InventoryTransfersPage = ({
     // A lost response must replay the same operation, even after the button is enabled again.
     const signature = JSON.stringify({
       editDocumentKey: editDocumentKey ?? null,
-      fromStoreId,
-      toStoreId,
+      fromStoreId: isCancelingTransfer ? originalSource : fromStoreId,
+      toStoreId: isCancelingTransfer ? originalDestination : toStoreId,
       note: note.trim() || null,
+      ...(cancellationRevision
+        ? { cancelTransfer: true, expectedRevision: cancellationRevision }
+        : {}),
       ...(!isEditMode
         ? { destinationAssortment: inventoryOnlyApproved ? "INVENTORY_ONLY" : "REQUIRE_SALE" }
         : {}),
@@ -926,10 +971,13 @@ export const InventoryTransfersPage = ({
     if (isEditMode && editDocumentKey) {
       editMutation.mutate({
         documentKey: editDocumentKey,
-        sourceStoreId: fromStoreId,
-        destinationStoreId: toStoreId,
+        ...(cancellationRevision
+          ? { cancelTransfer: true, expectedRevision: cancellationRevision }
+          : { sourceStoreId: fromStoreId, destinationStoreId: toStoreId }),
         notes: note.trim() || undefined,
-        reason: note.trim() || t("transferEditReason"),
+        reason: isCancelingTransfer
+          ? t("transferCancelPostedReason")
+          : note.trim() || t("transferEditReason"),
         lines: normalizedLines,
         idempotencyKey,
       });
@@ -948,6 +996,13 @@ export const InventoryTransfersPage = ({
       })),
       idempotencyKey,
     });
+  };
+  const handlePost = () => {
+    if (isCancelingTransfer) {
+      if (!postingInFlightRef.current) setCancelTransferRequested(true);
+      return;
+    }
+    submitTransfer(false);
   };
 
   const formatOptionalMoney = (value: number | null) =>
@@ -1090,7 +1145,7 @@ export const InventoryTransfersPage = ({
           </Button>
         </div>
       ) : null}
-      {lineContextQuery.isError ? (
+      {!isCancelingTransfer && lineContextQuery.isError ? (
         <div role="alert" className="mb-4 rounded-md border border-danger/30 p-3 text-sm">
           {t("transferCheckFailed")}
           <Button
@@ -1193,6 +1248,47 @@ export const InventoryTransfersPage = ({
             {t("transferClearDraft")}
           </Button>
         </div>
+      </Modal>
+      <Modal
+        open={cancelTransferRequested}
+        onOpenChange={setCancelTransferRequested}
+        title={t("transferCancelPostedTitle")}
+        subtitle={t("transferCancelPostedDescription")}
+      >
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div className="min-w-0">
+            <dt className="text-muted-foreground">{t("transferSourceStore")}</dt>
+            <dd className="break-words font-medium">
+              {summarySourceStore?.name ?? tCommon("notAvailable")}
+            </dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-muted-foreground">{t("transferDestinationStore")}</dt>
+            <dd className="break-words font-medium">
+              {summaryDestinationStore?.name ?? tCommon("notAvailable")}
+            </dd>
+          </div>
+        </dl>
+        <ModalFooter className="mt-4">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setCancelTransferRequested(false)}
+          >
+            {tCommon("back")}
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={!isCancelingTransfer || saving}
+            onClick={() => {
+              setCancelTransferRequested(false);
+              submitTransfer(true);
+            }}
+          >
+            {t("transferCancelPostedSubmit")}
+          </Button>
+        </ModalFooter>
       </Modal>
       <div className="space-y-6">
         <section className="bazaar-doc-surface min-w-0 p-4">
@@ -1337,17 +1433,17 @@ export const InventoryTransfersPage = ({
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">{t("transferTableTitle")}</h3>
               <Badge
-                variant={validationMessage ? "warning" : "success"}
+                variant={transferStatusNeedsAttention ? "warning" : "success"}
                 className="h-auto max-w-full whitespace-normal break-words py-1 text-left leading-4"
               >
-                {validationMessage || t("transferValidationReady")}
+                {transferStatusMessage}
               </Badge>
             </div>
 
             {lines.length ? (
               <div className="space-y-3 overflow-x-auto">
                 <InventoryLinePresentationNotice isError={presentation.isError} onRetry={presentation.refetch} />
-                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground [overflow-wrap:anywhere] lg:grid lg:min-w-[44rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground [overflow-wrap:anywhere] lg:grid lg:min-w-[40rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
                   <span>{tCommon("product")}</span>
                   <span>
                     <abbr title={t("transferQty")} className="no-underline">{t("transferQtyShort")}</abbr>
@@ -1363,12 +1459,13 @@ export const InventoryTransfersPage = ({
                 {lines.map((line, index) => {
                   const details = presentation.getPresentation(line);
                   const metric = metricByKey.get(line.key);
+                  const stockMetric = showStockProjection ? metric : undefined;
                   const lineNumber = index + 1;
                   return (
                     <div
                       key={line.key}
                       data-transfer-line-row
-                      className="bazaar-doc-line-row grid gap-3 lg:min-w-[44rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
+                      className="bazaar-doc-line-row grid gap-3 lg:min-w-[40rem] lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">{lineNumber}</span>
@@ -1385,20 +1482,23 @@ export const InventoryTransfersPage = ({
                               .join(" • ") || tCommon("notAvailable")}
                           </p>
                           <p className="whitespace-normal break-words text-xs leading-snug text-muted-foreground lg:hidden">
-                            {t("transferSourceStock")}: {formatStock(metric?.sourceStock)}
+                            {t("transferSourceStock")}: {formatStock(stockMetric?.sourceStock)}
                             <span className="px-1 text-muted-foreground/60">·</span>
                             {t("transferDestinationStock")}:{" "}
-                            {formatStock(metric?.destinationStock)}
+                            {formatStock(stockMetric?.destinationStock)}
                           </p>
-                          {lineUnavailable(line) ? (
+                          {metric?.removing && !isCancelingTransfer ? (
+                            <p className="text-xs text-muted-foreground">{t("transferEditRemoveAtZero")}</p>
+                          ) : null}
+                          {!metric?.removing && lineUnavailable(line) ? (
                             <p className="text-xs text-danger">{t("transferUnavailableLine")}</p>
                           ) : null}
-                          {line.destinationRequiresAssortment ? (
+                          {!metric?.removing && line.destinationRequiresAssortment ? (
                             <p className="text-xs text-warning">
                               {tSafety(line.destinationHidden ? "hiddenHint" : "unavailableHint")}
                             </p>
                           ) : null}
-                          {line.destinationCandidates?.length ? (
+                          {!metric?.removing && line.destinationCandidates?.length ? (
                             <ProductStockCandidates
                               storeId={toStoreId}
                               candidates={line.destinationCandidates}
@@ -1426,8 +1526,10 @@ export const InventoryTransfersPage = ({
                           onKeyDown={(event) => handleQuantityKeyDown(event, line.key, "desktop")}
                           type="number"
                           inputMode="decimal"
-                          min={1}
+                          min={isEditMode ? 0 : 1}
                           step={0.001}
+                          aria-label={t("transferQty")}
+                          aria-invalid={metric?.quantityValid === false}
                           data-transfer-input="quantity"
                           disabled={fieldsLocked}
                           className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
@@ -1440,12 +1542,12 @@ export const InventoryTransfersPage = ({
                         <p
                           className={cn(
                             "flex h-8 items-center text-sm font-semibold",
-                            (metric?.sourceAfter ?? 0) < 0
+                            (stockMetric?.sourceAfter ?? 0) < 0
                               ? "text-danger"
                               : "text-foreground",
                           )}
                         >
-                          {formatStock(metric?.sourceAfter)}
+                          {formatStock(stockMetric?.sourceAfter)}
                         </p>
                       </div>
                       <div>
@@ -1455,10 +1557,12 @@ export const InventoryTransfersPage = ({
                         <p
                           className={cn(
                             "flex h-8 items-center text-sm font-semibold",
-                            (metric?.destinationAfter ?? 0) < 0 ? "text-danger" : "text-foreground",
+                            (stockMetric?.destinationAfter ?? 0) < 0
+                              ? "text-danger"
+                              : "text-foreground",
                           )}
                         >
-                          {formatStock(metric?.destinationAfter)}
+                          {formatStock(stockMetric?.destinationAfter)}
                         </p>
                       </div>
                       <div>
@@ -1477,7 +1581,7 @@ export const InventoryTransfersPage = ({
                           {formatOptionalMoney(metric?.lineTotal ?? null)}
                         </p>
                       </div>
-                      <div className="flex gap-1 lg:flex-col lg:items-end">
+                      <div className="flex gap-1 lg:sticky lg:right-0 lg:z-10 lg:flex-col lg:items-end lg:rounded-md lg:bg-card">
                         <IconButton
                           type="button"
                           variant="ghost"
@@ -1507,7 +1611,7 @@ export const InventoryTransfersPage = ({
             ) : (
               <div className="bazaar-doc-empty">
                 <EmptyIcon className="mx-auto mb-3 h-8 w-8" aria-hidden />
-                {t("transferEmptyState")}
+                {t(isCancelingTransfer ? "transferCancelPostedEmpty" : "transferEmptyState")}
               </div>
             )}
           </section>
@@ -1550,13 +1654,13 @@ export const InventoryTransfersPage = ({
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">{t("transferSourceStore")}</dt>
                 <dd className="text-right font-medium text-foreground">
-                  {fromStore?.name ?? tCommon("notAvailable")}
+                  {summarySourceStore?.name ?? tCommon("notAvailable")}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">{t("transferDestinationStore")}</dt>
                 <dd className="text-right font-medium text-foreground">
-                  {toStore?.name ?? tCommon("notAvailable")}
+                  {summaryDestinationStore?.name ?? tCommon("notAvailable")}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
@@ -1575,17 +1679,17 @@ export const InventoryTransfersPage = ({
             <div
               className={cn(
                 "bazaar-doc-validation",
-                validationMessage
+                transferStatusNeedsAttention
                   ? "border-warning/30 bg-warning/10 text-warning"
                   : "border-success/30 bg-success/10 text-success",
               )}
             >
-              {validationMessage ? (
+              {transferStatusNeedsAttention ? (
                 <StatusDangerIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               ) : (
                 <StatusSuccessIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               )}
-              <span>{validationMessage || t("transferValidationReady")}</span>
+              <span>{transferStatusMessage}</span>
             </div>
           </div>
         </section>

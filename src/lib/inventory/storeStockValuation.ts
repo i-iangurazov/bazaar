@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { isValidQuantity, roundQuantity } from "@/lib/quantity";
 import type { ReceivingCostState } from "@/lib/stockReceivingCommerce";
+import { transferCancellationLinePosition } from "./transferCancellation";
 
 export type StoreStockValuationReason =
   | "NO_STOCK"
@@ -36,6 +37,7 @@ export type StoreStockValuationMovement = {
   variantId: string | null;
   type: "RECEIVE" | "SALE" | "RETURN" | "ADJUSTMENT" | "TRANSFER_IN" | "TRANSFER_OUT" | "WRITE_OFF";
   qtyDelta: number;
+  linePosition?: number;
   unitCostKgs: string | number | null;
   lineTotalKgs: string | number | null;
   referenceType: string | null;
@@ -170,6 +172,82 @@ function receiptValue(row: StoreStockValuationMovement): Prisma.Decimal | null {
   return cost ? cost.mul(row.qtyDelta) : total;
 }
 
+function adjacentStoreMovements(rows: StoreStockValuationMovement[]) {
+  const timelines = new Map<string, Array<{ row: StoreStockValuationMovement; at: number }>>();
+  for (const row of rows) {
+    const timeline = timelines.get(row.storeId) ?? [];
+    timeline.push({ row, at: Date.parse(row.createdAt) });
+    timelines.set(row.storeId, timeline);
+  }
+  const intervals = new Map<StoreStockValuationMovement, {
+    next: StoreStockValuationMovement;
+    startAt: number;
+    endAt: number;
+    precedingAt: number;
+    followingAt: number;
+  }>();
+  for (const timeline of timelines.values()) {
+    if (timeline.some(({ at }) => !Number.isFinite(at))) continue;
+    timeline.sort((left, right) => left.at - right.at);
+    for (let index = 1; index < timeline.length; index += 1) {
+      const previous = timeline[index - 1]!;
+      const current = timeline[index]!;
+      intervals.set(previous.row, {
+        next: current.row,
+        startAt: previous.at,
+        endAt: current.at,
+        precedingAt: timeline[index - 2]?.at ?? Number.NEGATIVE_INFINITY,
+        followingAt: timeline[index + 1]?.at ?? Number.POSITIVE_INFINITY,
+      });
+    }
+  }
+  return intervals;
+}
+
+function isIsolatedTransferCancellation(
+  group: StoreStockValuationMovement[],
+  intervals: ReturnType<typeof adjacentStoreMovements>,
+) {
+  const corrections = group.filter((row) => row.linePosition === transferCancellationLinePosition);
+  if (corrections.length !== 2) return false;
+  const source = group.find((row) => row.type === "TRANSFER_OUT" && row.qtyDelta < 0);
+  const target = group.find((row) => row.type === "TRANSFER_IN" && row.qtyDelta > 0);
+  const restored = corrections.find((row) => row.type === "TRANSFER_OUT");
+  const removed = corrections.find((row) => row.type === "TRANSFER_IN");
+  if (
+    !source || !target || !restored || !removed ||
+    source.storeId === target.storeId ||
+    !isValidQuantity(source.qtyDelta) ||
+    source.qtyDelta !== -target.qtyDelta ||
+    source.qtyDelta !== -restored.qtyDelta ||
+    target.qtyDelta !== -removed.qtyDelta
+  ) return false;
+
+  const sourceInterval = intervals.get(source);
+  const targetInterval = intervals.get(target);
+  if (sourceInterval?.next !== restored || targetInterval?.next !== removed) return false;
+  // Each store's posting and inverse can have different timestamps. Both
+  // stores must be free of other movements across the entire inclusive window.
+  const firstPosting = Math.min(sourceInterval.startAt, targetInterval.startAt);
+  const lastPosting = Math.max(sourceInterval.startAt, targetInterval.startAt);
+  const firstReversal = Math.min(sourceInterval.endAt, targetInterval.endAt);
+  const lastReversal = Math.max(sourceInterval.endAt, targetInterval.endAt);
+  if (
+    lastPosting >= firstReversal ||
+    Math.max(sourceInterval.precedingAt, targetInterval.precedingAt) >= firstPosting ||
+    Math.min(sourceInterval.followingAt, targetInterval.followingAt) <= lastReversal
+  ) return false;
+
+  let amount = new Prisma.Decimal(0);
+  for (const row of group) {
+    if (row.lineTotalKgs === null) continue;
+    const lineTotal = signedDecimal(row.lineTotalKgs);
+    if (!lineTotal) return false;
+    amount = amount.plus(lineTotal);
+  }
+  return amount.equals(0);
+}
+
 function eventsFor(rows: StoreStockValuationMovement[]): ReplayEvent[] {
   const events: ReplayEvent[] = [];
   const transfers = new Map<string, StoreStockValuationMovement[]>();
@@ -184,7 +262,19 @@ function eventsFor(rows: StoreStockValuationMovement[]): ReplayEvent[] {
       transfers.set(key, group);
     } else events.push({ at: row.createdAt, id: row.id, rows: [row] });
   }
+  let storeMovementIntervals: ReturnType<typeof adjacentStoreMovements> | undefined;
   for (const group of transfers.values()) {
+    if (
+      group.length === 4 &&
+      group.some((row) =>
+        row.referenceType === "TRANSFER" && row.linePosition === transferCancellationLinePosition
+      ) &&
+      isIsolatedTransferCancellation(group, storeMovementIntervals ??= adjacentStoreMovements(rows))
+    ) {
+      // The four rows net to zero with no observed movement or timestamp tie
+      // at either store between them. Replay can retain both pre-transfer costs.
+      continue;
+    }
     const source = group.find((row) => row.type === "TRANSFER_OUT" && row.qtyDelta < 0);
     const target = group.find((row) => row.type === "TRANSFER_IN" && row.qtyDelta > 0);
     const ordinary =

@@ -5,6 +5,7 @@ import {
   type StoreStockValuationMovement,
   type StoreStockValuationSnapshot,
 } from "@/lib/inventory/storeStockValuation";
+import { transferCancellationLinePosition } from "@/lib/inventory/transferCancellation";
 
 const row = (
   index: number,
@@ -32,6 +33,7 @@ function run(
     movementDate?: Date;
     truncated?: boolean;
     variantId?: string | null;
+    storeId?: string;
   } = {},
 ) {
   const variantId = options.variantId ?? null;
@@ -47,7 +49,7 @@ function run(
       return { storeId, productId, variantId, onHand };
     });
   return replayStoreStockValuation({
-    storeId: "a",
+    storeId: options.storeId ?? "a",
     lines: [
       {
         productId: "p",
@@ -407,6 +409,138 @@ describe("evidenced store-stock reference valuation", () => {
       quantity: 8,
       status: "UNKNOWN",
       reason: "AMBIGUOUS_CORRECTION",
+    });
+  });
+  describe("full transfer cancellation", () => {
+    const issue = row(3, {
+      storeId: "b",
+      type: "TRANSFER_OUT",
+      qtyDelta: -5,
+      unitCostKgs: "400",
+      lineTotalKgs: "2000",
+      referenceType: "TRANSFER",
+      referenceId: "canceled",
+    });
+    const receipt = row(4, {
+      type: "TRANSFER_IN",
+      qtyDelta: 5,
+      unitCostKgs: null,
+      referenceType: issue.referenceType,
+      referenceId: issue.referenceId,
+      createdAt: new Date(Date.parse(issue.createdAt) + 2).toISOString(),
+    });
+    const restore = row(7, {
+      storeId: issue.storeId,
+      type: issue.type,
+      qtyDelta: 5,
+      linePosition: transferCancellationLinePosition,
+      unitCostKgs: issue.unitCostKgs,
+      lineTotalKgs: "-2000",
+      referenceType: issue.referenceType,
+      referenceId: issue.referenceId,
+    });
+    const remove = row(8, {
+      type: receipt.type,
+      qtyDelta: -5,
+      linePosition: transferCancellationLinePosition,
+      unitCostKgs: null,
+      referenceType: issue.referenceType,
+      referenceId: issue.referenceId,
+      createdAt: new Date(Date.parse(restore.createdAt) + 3).toISOString(),
+    });
+    const transfers = [issue, receipt, restore, remove];
+    const balances = [row(1), row(2, { storeId: "b", unitCostKgs: "400" })];
+
+    it("keeps both store costs when the transfer fully cancels without intervening stock movements", () => {
+      const movements = [...balances, ...transfers, row(5, { storeId: "unrelated" })];
+      expect(run(movements).current).toMatchObject({ quantity: 10, unitCostKgs: 100, status: "KNOWN" });
+      expect(run(movements).projected).toMatchObject({ quantity: 20, unitCostKgs: 150, status: "KNOWN" });
+      expect(run(movements, { storeId: "b" }).current).toMatchObject({
+        quantity: 10,
+        unitCostKgs: 400,
+        status: "KNOWN",
+      });
+    });
+
+    it("preserves the unknown-cost fallback when the destination sold items in between", () => {
+      const sale = row(5, {
+        type: "SALE",
+        qtyDelta: -1,
+        unitCostKgs: null,
+        referenceType: "CustomerOrder",
+      });
+      expect(run([...balances, ...transfers, sale]).current).toMatchObject({
+        quantity: 9,
+        status: "UNKNOWN",
+        reason: "AMBIGUOUS_CORRECTION",
+      });
+    });
+
+    it.each([
+      ["the earliest posting", "a", issue.createdAt],
+      ["the second posting", "b", receipt.createdAt],
+      ["the first reversal", "a", restore.createdAt],
+      ["the latest reversal", "b", remove.createdAt],
+    ])(
+      "preserves uncertainty when another movement shares the time of %s",
+      (_label, storeId, createdAt) => {
+        const otherReceipt = row(9, { storeId, qtyDelta: 1, createdAt });
+        expect(run([...balances, ...transfers, otherReceipt], { storeId: storeId === "a" ? "b" : "a" }).current).toMatchObject({
+          quantity: 10,
+          status: "UNKNOWN",
+          reason: "AMBIGUOUS_CORRECTION",
+        });
+      },
+    );
+
+    it("preserves uncertainty when the reversals begin before both postings are recorded", () => {
+      expect(run([
+        ...balances,
+        issue,
+        { ...receipt, createdAt: row(8).createdAt },
+        restore,
+        { ...remove, createdAt: row(9).createdAt },
+      ]).current).toMatchObject({ quantity: 10, status: "UNKNOWN", reason: "AMBIGUOUS_CORRECTION" });
+    });
+
+    it("does not elide a previously amended transfer", () => {
+      const smallerRestore = { ...restore, qtyDelta: 4, lineTotalKgs: "-1600" };
+      const smallerRemove = { ...remove, qtyDelta: -4 };
+      const partialTime = row(5).createdAt;
+      const partialRestore = {
+        ...restore,
+        id: "edit-out",
+        createdAt: partialTime,
+        qtyDelta: 1,
+        linePosition: 1,
+        lineTotalKgs: "-400",
+      };
+      const partialRemove = {
+        ...remove,
+        id: "edit-in",
+        createdAt: partialTime,
+        qtyDelta: -1,
+        linePosition: 1,
+      };
+      expect(run([
+        ...balances,
+        issue,
+        receipt,
+        partialRestore,
+        partialRemove,
+        smallerRestore,
+        smallerRemove,
+      ]).current).toMatchObject({ quantity: 10, status: "UNKNOWN", reason: "AMBIGUOUS_CORRECTION" });
+    });
+
+    it("does not elide a quantity reversal when the recorded amounts do not cancel", () => {
+      expect(run([
+        ...balances,
+        issue,
+        receipt,
+        { ...restore, lineTotalKgs: "-1999" },
+        remove,
+      ]).current).toMatchObject({ quantity: 10, status: "UNKNOWN", reason: "AMBIGUOUS_CORRECTION" });
     });
   });
   it("restores original issued cost on a positive SALE correction", () => {

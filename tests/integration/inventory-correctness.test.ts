@@ -93,6 +93,16 @@ describeDb("stock correctness regression", () => {
     };
     return { ...base, input, snapshot, move, receive, check };
   };
+  const readTransferRevision = async (
+    caller: ReturnType<typeof createTestCaller>,
+    documentKey: string,
+  ) => {
+    const editable = await caller.inventory.editableProductMovementDocument({ documentKey });
+    if (!("revision" in editable) || !editable.revision) {
+      throw new Error("Expected an editable transfer revision");
+    }
+    return editable.revision;
+  };
 
   it("rejects stale absolute edits, including quantity restored after intervening movements", async () => {
     const f = await fixture();
@@ -578,6 +588,263 @@ describeDb("stock correctness regression", () => {
       positionsCount: 1,
       totalQuantity: 2,
     });
+  });
+
+  it("cancels a one-line posted transfer once and preserves a later recipient sale", async () => {
+    const f = await fixture();
+    const destination = await prisma.store.create({
+      data: {
+        organizationId: f.org.id,
+        name: "Recipient",
+        code: "CANCEL-RECIPIENT",
+        allowNegativeStock: false,
+        trackExpiryLots: true,
+      },
+    });
+    const expiryDate = new Date("2030-01-01T00:00:00Z");
+    await receiveStock({
+      ...f.input,
+      qtyReceived: 230,
+      unitCost: 12.5,
+      expiryDate,
+      idempotencyKey: randomUUID(),
+    });
+    const transfer = await transferStock({
+      ...f.input,
+      fromStoreId: f.store.id,
+      toStoreId: destination.id,
+      qty: 90,
+      expiryDate,
+      idempotencyKey: randomUUID(),
+    });
+    const sale = await prisma.$transaction((tx) =>
+      applyStockMovement(tx, {
+        ...f.input,
+        storeId: destination.id,
+        qtyDelta: -4,
+        type: StockMovementType.SALE,
+        expiryDate,
+      }),
+    );
+    const saleBefore = await prisma.stockMovement.findUniqueOrThrow({ where: { id: sale.movementId } });
+    const reference = { referenceType: "TRANSFER", referenceId: transfer.transferId };
+    const readMovements = () =>
+      prisma.stockMovement.findMany({
+        where: reference,
+        include: { stockLot: { select: { expiryDate: true } } },
+      });
+    const originals = await readMovements();
+    const costBefore = await prisma.productCost.findFirstOrThrow({ where: { productId: f.product.id } });
+    await f.check(140);
+    await f.check(86, destination.id);
+    await prisma.storeProduct.update({
+      where: { storeId_productId: { storeId: destination.id, productId: f.product.id } },
+      data: { isActive: false },
+    });
+
+    const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+    const documentKey = ["TRANSFER", reference.referenceType, reference.referenceId].join(":");
+    const cancellation = {
+      documentKey,
+      lines: [],
+      cancelTransfer: true,
+      expectedRevision: await readTransferRevision(caller, documentKey),
+      reason: "Товар не отправлен",
+      idempotencyKey: randomUUID(),
+    };
+    const edit = { documentKey, idempotencyKey: randomUUID() };
+    await expect(
+      caller.inventory.editProductMovementDocument({ ...edit, lines: [] }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        ...edit,
+        lines: [{ productId: f.product.id, quantity: 0 }],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const staff = createTestCaller({ ...f.staffUser, organizationId: f.org.id });
+    const manager = createTestCaller({ ...f.managerUser, organizationId: f.org.id });
+    await expect(staff.inventory.editProductMovementDocument(cancellation)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(manager.inventory.editProductMovementDocument(cancellation)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "storeAccessDenied",
+    });
+
+    const competing = { ...cancellation, idempotencyKey: randomUUID() };
+    const results = await Promise.allSettled([
+      caller.inventory.editProductMovementDocument(cancellation),
+      caller.inventory.editProductMovementDocument(competing),
+    ]);
+    const alreadyCanceled = { code: "CONFLICT", message: "productMovementDocumentAlreadyCanceled" };
+    expect(results.filter((result) => result.status === "rejected")).toMatchObject([
+      { reason: alreadyCanceled },
+    ]);
+    const completed = results.find((result) => result.status === "fulfilled");
+    expect(completed?.value).toMatchObject({ lineCount: 0, totalQuantity: 0, totalAmountKgs: 0 });
+    const winningRequest = results[0]?.status === "fulfilled" ? cancellation : competing;
+    await expect(caller.inventory.editProductMovementDocument(winningRequest)).resolves.toEqual(
+      completed?.value,
+    );
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        ...edit,
+        lines: [{ productId: f.product.id, quantity: 1 }],
+      }),
+    ).rejects.toMatchObject(alreadyCanceled);
+    await expect(
+      caller.inventory.editableProductMovementDocument({ documentKey }),
+    ).rejects.toMatchObject(alreadyCanceled);
+
+    await f.check(230);
+    await f.check(-4, destination.id);
+    expect(
+      await prisma.storeProduct.findUniqueOrThrow({
+        where: { storeId_productId: { storeId: destination.id, productId: f.product.id } },
+      }),
+    ).toMatchObject({ isActive: false });
+    expect(await prisma.stockMovement.findUnique({ where: { id: sale.movementId } })).toEqual(saleBefore);
+    expect(await prisma.productCost.findUnique({ where: { id: costBefore.id } })).toEqual(costBefore);
+    const movements = await readMovements();
+    expect(movements).toEqual(expect.arrayContaining(originals));
+    expect(movements).toHaveLength(4);
+    const reversals = movements.filter(
+      (movement) => !originals.some((original) => original.id === movement.id),
+    );
+    const sourceReversal = reversals.find((movement) => movement.storeId === f.store.id);
+    const destinationReversal = reversals.find((movement) => movement.storeId === destination.id);
+    expect(sourceReversal).toMatchObject({ qtyDelta: 90, stockLot: { expiryDate } });
+    expect(Number(sourceReversal?.lineTotalKgs)).toBe(-1125);
+    expect(destinationReversal).toMatchObject({ qtyDelta: -90, stockLot: { expiryDate } });
+
+    const audit = await prisma.auditLog.findMany({
+      where: {
+        action: "INVENTORY_DOCUMENT_CANCEL",
+        entity: "StockMovementDocument",
+        entityId: ["TRANSFER", transfer.transferId].join(":"),
+      },
+    });
+    expect(audit).toMatchObject([
+      {
+        actorId: f.adminUser.id,
+        before: { lines: [{ productId: f.product.id, quantity: 90 }] },
+        after: { status: "CANCELED", reason: cancellation.reason, lines: [] },
+      },
+    ]);
+    const document = await caller.inventory.productMovementDocument({ documentKey });
+    expect(document).toMatchObject({
+      id: documentKey,
+      status: "CANCELED",
+      sourceStoreId: f.store.id,
+      destinationStoreId: destination.id,
+      positionsCount: 0,
+      totalQuantity: 0,
+      totalAmount: 0,
+      lines: [],
+    });
+    expect(document?.movementHistory?.map((movement) => movement.id).sort()).toEqual(
+      movements.map((movement) => movement.id).sort(),
+    );
+    const journal = await caller.inventory.productMovements({ type: "TRANSFER", status: "CANCELED" });
+    expect(journal.items).toMatchObject([{ id: documentKey, status: "CANCELED", totalQuantity: 0 }]);
+  });
+
+  it("restricts cancellation to an existing posted transfer", async () => {
+    const f = await fixture();
+    const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+    const destination = await prisma.store.create({
+      data: { organizationId: f.org.id, name: "Recipient", code: "CANCEL-NEW-RECIPIENT" },
+    });
+    const receipt = await postStockReceiving({
+      ...f.input,
+      lines: [{ productId: f.product.id, quantity: 10, unitCost: 0 }],
+      idempotencyKey: randomUUID(),
+    });
+    const cancellation = {
+      lines: [],
+      cancelTransfer: true,
+      expectedRevision: "a".repeat(64),
+      idempotencyKey: randomUUID(),
+    };
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        ...cancellation,
+        documentKey: ["STOCK_RECEIVING", "STOCK_RECEIVING", receipt.receivingId].join(":"),
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        ...cancellation,
+        documentKey: ["TRANSFER", "TRANSFER", randomUUID()].join(":"),
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      caller.inventory.transfer({
+        fromStoreId: f.store.id,
+        toStoreId: destination.id,
+        lines: [],
+        idempotencyKey: randomUUID(),
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(await prisma.stockMovement.count()).toBe(1);
+    await f.check(10);
+  });
+
+  it("requires a fresh cancellation confirmation after a metadata-only transfer edit", async () => {
+    const f = await fixture();
+    await f.receive(10);
+    const destination = await prisma.store.create({
+      data: {
+        organizationId: f.org.id,
+        name: "Recipient",
+        code: "CANCEL-REVISION-RECIPIENT",
+        trackExpiryLots: true,
+      },
+    });
+    await prisma.userStoreAccess.create({
+      data: { organizationId: f.org.id, userId: f.managerUser.id, storeId: destination.id },
+    });
+    const transfer = await transferStock({
+      ...f.input,
+      fromStoreId: f.store.id,
+      toStoreId: destination.id,
+      qty: 4,
+      idempotencyKey: randomUUID(),
+    });
+    const documentKey = ["TRANSFER", "TRANSFER", transfer.transferId].join(":");
+    const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+    const manager = createTestCaller({ ...f.managerUser, organizationId: f.org.id });
+    const expectedRevision = await readTransferRevision(caller, documentKey);
+    await manager.inventory.editProductMovementDocument({
+      documentKey,
+      reason: "Уточнили комментарий",
+      lines: [{ productId: f.product.id, quantity: 4 }],
+      idempotencyKey: randomUUID(),
+    });
+    const cancellation = { documentKey, lines: [], cancelTransfer: true };
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        ...cancellation,
+        expectedRevision,
+        idempotencyKey: randomUUID(),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "productMovementDocumentChanged" });
+    await f.check(6);
+    await f.check(4, destination.id);
+
+    const refreshedRevision = await readTransferRevision(caller, documentKey);
+    expect(refreshedRevision).not.toBe(expectedRevision);
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        ...cancellation,
+        expectedRevision: refreshedRevision,
+        idempotencyKey: randomUUID(),
+      }),
+    ).resolves.toMatchObject({ status: "CANCELED" });
+    await f.check(10);
+    await f.check(0, destination.id);
   });
 
   it("refuses to manufacture an opening balance from an incomplete journal", async () => {

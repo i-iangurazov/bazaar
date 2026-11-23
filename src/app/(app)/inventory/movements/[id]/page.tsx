@@ -32,6 +32,7 @@ import {
 import { BackIcon, ChevronDownIcon, EmptyIcon, PrintIcon, ViewIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { transferCancellationLinePosition } from "@/lib/inventory/transferCancellation";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { getStockMovementLabel } from "@/lib/i18n/status";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
@@ -52,6 +53,17 @@ const ProductMovementDocumentPage = () => {
     { enabled: Boolean(documentKey) },
   );
   const document = documentQuery.data ?? null;
+  const isCanceledTransfer = document?.documentType === "TRANSFER" && document.status === "CANCELED";
+  const renderMovementBadge = (line: { linePosition: number | null; movementType: string }) => {
+    const isCancellationEntry = isCanceledTransfer && line.linePosition === transferCancellationLinePosition;
+    return (
+      <Badge variant={isCancellationEntry ? "warning" : "default"}>
+        {isCancellationEntry
+          ? t("transferCancellationMovement")
+          : getStockMovementLabel(tInventory, line.movementType)}
+      </Badge>
+    );
+  };
 
   const documentTypeLabel = (value: string) => t(`type.${value}`);
   const shortDocumentReference = (documentId: string) =>
@@ -215,7 +227,11 @@ const ProductMovementDocumentPage = () => {
                 <div>
                   <dt className="text-muted-foreground">{t("statusLabel")}</dt>
                   <dd className="font-medium text-foreground">
-                    {document.status ? t(`status.${document.status}`) : tCommon("notAvailable")}
+                    {isCanceledTransfer ? (
+                      <Badge variant="danger">{t("status.CANCELED")}</Badge>
+                    ) : (
+                      document.status ? t(`status.${document.status}`) : tCommon("notAvailable")
+                    )}
                   </dd>
                 </div>
                 {document.reason ? (
@@ -270,7 +286,8 @@ const ProductMovementDocumentPage = () => {
             </CardContent>
           </Card>
 
-          {document.documentType === "TRANSFER" &&
+          {!isCanceledTransfer &&
+          document.documentType === "TRANSFER" &&
           document.sourceStoreId &&
           document.destinationStoreId ? (
             <TransferOutcome
@@ -282,11 +299,11 @@ const ProductMovementDocumentPage = () => {
           ) : null}
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>{t("documentLines")}</CardTitle>
+              <CardTitle>{t(isCanceledTransfer ? "canceledTransferHistory" : "documentLines")}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveDataList
-                items={document.lines}
+                items={isCanceledTransfer ? document.movementHistory ?? [] : document.lines}
                 getKey={(line) => line.id}
                 paginationKey="product-movement-document-lines"
                 renderDesktop={(visibleItems) => (
@@ -323,9 +340,7 @@ const ProductMovementDocumentPage = () => {
                             </TableCell>
                             <TableCell>{line.storeName}</TableCell>
                             <TableCell>
-                              <Badge variant="default">
-                                {getStockMovementLabel(tInventory, line.movementType)}
-                              </Badge>
+                              {renderMovementBadge(line)}
                             </TableCell>
                             <TableCell className="text-right">
                               {formatNumber(line.qtyDelta, locale)}
@@ -357,9 +372,7 @@ const ProductMovementDocumentPage = () => {
                           <p className="text-xs text-muted-foreground">{line.variantName}</p>
                         ) : null}
                       </div>
-                      <Badge variant="default">
-                        {getStockMovementLabel(tInventory, line.movementType)}
-                      </Badge>
+                      {renderMovementBadge(line)}
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                       <div>
