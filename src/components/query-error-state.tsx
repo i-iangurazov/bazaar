@@ -14,10 +14,12 @@ export const QueryErrorState = ({
   onRetry,
   className,
   error,
+  description,
 }: {
   onRetry: () => void;
   className?: string;
   error?: Parameters<typeof translateError>[1];
+  description?: string;
 }) => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -32,7 +34,7 @@ export const QueryErrorState = ({
       <div>
         <AlertTitle>{tErrors("genericTitle")}</AlertTitle>
         <AlertDescription>
-          {error ? translateError(tErrors, error) : tErrors("genericMessage")}
+          {description ?? (error ? translateError(tErrors, error) : tErrors("genericMessage"))}
         </AlertDescription>
       </div>
       <Button type="button" variant="secondary" size="sm" onClick={onRetry}>

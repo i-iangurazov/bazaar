@@ -27,6 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
+import { QueryErrorState } from "@/components/query-error-state";
 import {
   BackIcon,
   CopyIcon,
@@ -136,7 +137,12 @@ export const InventoryTransfersPage = ({
   const stores: StoreRow[] = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const editableDocumentQuery = trpc.inventory.editableProductMovementDocument.useQuery(
     { documentKey: editDocumentKey ?? "" },
-    { enabled: Boolean(editDocumentKey && canManageStock), staleTime: 0 },
+    {
+      enabled: Boolean(editDocumentKey && canManageStock),
+      staleTime: 0,
+      retry: false,
+      trpc: { abortOnUnmount: true },
+    },
   );
   const editableDocument = editableDocumentQuery.data ?? null;
   const [originalTransfer, setOriginalTransfer] = useState<typeof editableDocument>(null);
@@ -1048,7 +1054,19 @@ export const InventoryTransfersPage = ({
     );
   }
 
-  if (isEditMode && editableDocumentQuery.isLoading) {
+  const needsDocument = !originalTransfer || loadedEditDocumentRef.current !== editDocumentKey;
+  const needsStores = !storesQuery.data;
+  const loadError = editableDocumentQuery.error ?? (needsStores ? storesQuery.error : null);
+  const loadPaused =
+    (needsDocument && editableDocumentQuery.isPaused) || (needsStores && storesQuery.isPaused);
+  if (isEditMode && (needsDocument || needsStores || loadError)) {
+    const errorCode = loadError?.data?.code;
+    const terminalError =
+      errorCode === "BAD_REQUEST" ||
+      errorCode === "UNAUTHORIZED" ||
+      errorCode === "FORBIDDEN" ||
+      errorCode === "NOT_FOUND" ||
+      errorCode === "CONFLICT";
     return (
       <div>
         <PageHeader
@@ -1063,29 +1081,27 @@ export const InventoryTransfersPage = ({
             </Button>
           }
         />
-        <PageLoading />
-      </div>
-    );
-  }
-
-  if (isEditMode && editableDocumentQuery.error) {
-    return (
-      <div>
-        <PageHeader
-          title={pageTitle}
-          subtitle={pageSubtitle}
-          action={
-            <Button asChild variant="secondary">
-              <Link href={backHref}>
-                <BackIcon className="h-4 w-4" aria-hidden />
-                {t("backToMovements")}
-              </Link>
-            </Button>
-          }
-        />
-        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-          {translateError(tErrors, editableDocumentQuery.error)}
-        </div>
+        {terminalError ? (
+          <div
+            role="alert"
+            className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger"
+          >
+            {translateError(tErrors, loadError)}
+          </div>
+        ) : loadError || loadPaused ? (
+          <QueryErrorState
+            error={loadError}
+            description={loadPaused && !loadError ? tErrors("nativeOffline") : undefined}
+            onRetry={() => {
+              if (needsDocument || editableDocumentQuery.isError) {
+                void editableDocumentQuery.refetch({ cancelRefetch: false });
+              }
+              if (needsStores) void storesQuery.refetch({ cancelRefetch: false });
+            }}
+          />
+        ) : (
+          <PageLoading />
+        )}
       </div>
     );
   }

@@ -11,7 +11,6 @@ import {
   previewSelectedCatalogProducts,
 } from "@/server/services/catalogSources";
 import { LegalEntityType, PrinterPrintMode } from "@prisma/client";
-import { TRPCError } from "@trpc/server";
 
 import {
   adminOrOrgOwnerProcedure,
@@ -300,20 +299,10 @@ export const storesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const customProductSettingsRequested =
-          input.enableSku !== undefined ||
-          input.enableBarcode !== undefined ||
-          input.enableSimilarProductCheck !== undefined ||
-          Boolean(input.productCatalogId);
-        if (customProductSettingsRequested && ctx.user.role !== "ADMIN" && !ctx.user.isOrgOwner) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "forbidden" });
-        }
-        if ((input.copyInventory || input.stockQuantityDelta) && ctx.user.role !== "ADMIN") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
-        }
         return await createStore({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
+          impersonating: Boolean(ctx.impersonator),
           requestId: ctx.requestId,
           name: input.name,
           code: input.code,

@@ -58,6 +58,128 @@ describeDb("inventory service", () => {
     await resetDatabase();
   });
 
+  it("reads the exact posted transfer and only the stores available to the viewer", async () => {
+    const { org, store, product, adminUser, managerUser } = await seedBase();
+    const destination = await prisma.store.create({
+      data: { organizationId: org.id, name: "Transfer destination", code: "TARGET" },
+    });
+    const otherOrganization = await prisma.organization.create({ data: { name: "Other organization" } });
+    const outsider = await prisma.user.create({
+      data: {
+        organizationId: otherOrganization.id,
+        email: "outsider@test.local",
+        name: "Outsider",
+        passwordHash: "hash",
+        role: "ADMIN",
+      },
+    });
+    const referenceId = "exact:transfer";
+    const documentKey = `TRANSFER:TRANSFER:${referenceId}`;
+    const from = {
+      productId: product.id,
+      storeId: store.id,
+      type: StockMovementType.TRANSFER_OUT,
+      qtyDelta: -3,
+      linePosition: 1,
+      referenceType: "TRANSFER",
+      referenceId,
+    };
+    await prisma.stockMovement.createMany({
+      data: [
+        from,
+        { ...from, storeId: destination.id, type: StockMovementType.TRANSFER_IN, qtyDelta: 3 },
+        { ...from, referenceId: "exact:unrelated", qtyDelta: -29 },
+        { ...from, referenceType: "WRITE_OFF", type: StockMovementType.WRITE_OFF, qtyDelta: -31 },
+      ],
+    });
+
+    const admin = createTestCaller({ ...adminUser, organizationId: org.id });
+    await expect(admin.inventory.editableProductMovementDocument({ documentKey })).resolves.toMatchObject({
+      sourceStoreId: store.id,
+      destinationStoreId: destination.id,
+      revision: expect.any(String),
+      lines: [{ productId: product.id, quantity: 3 }],
+    });
+
+    const manager = createTestCaller({ ...managerUser, organizationId: org.id });
+    await expect(manager.inventory.productMovementDocument({ documentKey })).resolves.toMatchObject({
+      sourceStoreId: store.id,
+      destinationStoreId: null,
+      recipientName: null,
+      totalQuantity: 3,
+      lines: [{ storeId: store.id, qtyDelta: -3 }],
+    });
+    await prisma.userStoreAccess.create({
+      data: { organizationId: org.id, userId: managerUser.id, storeId: destination.id },
+    });
+    await expect(manager.inventory.productMovementDocument({ documentKey })).resolves.toMatchObject({
+      sourceStoreId: store.id,
+      destinationStoreId: destination.id,
+      recipientName: destination.name,
+    });
+    await expect(
+      createTestCaller({ ...outsider, organizationId: otherOrganization.id })
+        .inventory.productMovementDocument({ documentKey }),
+    ).resolves.toBeNull();
+  });
+
+  it("keeps legacy movement keys when either stored reference field was missing", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const rows = [
+      { id: "no-reference", referenceType: null, referenceId: null, qtyDelta: 1 },
+      { id: "no-reference-id", referenceType: "LEGACY", referenceId: null, qtyDelta: 2 },
+      { id: "no-reference-type", referenceType: null, referenceId: "legacy:id", qtyDelta: 3 },
+      { id: "literal-fallback-type", referenceType: "StockMovement", referenceId: "legacy:explicit", qtyDelta: 4 },
+    ];
+    await prisma.stockMovement.createMany({
+      data: rows.map((row) => ({
+        storeId: store.id,
+        productId: product.id,
+        type: StockMovementType.ADJUSTMENT,
+        ...row,
+      })),
+    });
+    const caller = createTestCaller({ ...adminUser, organizationId: org.id });
+    for (const row of rows) {
+      const referenceType = row.referenceType ?? "StockMovement";
+      const referenceId = row.referenceId ?? row.id;
+      const documentKey = `ADJUSTMENT:${referenceType}:${referenceId}`;
+      await expect(caller.inventory.productMovementDocument({ documentKey })).resolves.toMatchObject({
+        id: documentKey,
+        totalQuantity: row.qtyDelta,
+        lines: [{ id: row.id, qtyDelta: row.qtyDelta }],
+      });
+    }
+  });
+
+  it("keeps archived receiving details readable with legacy archive markers", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const referenceId = "legacy:receiving";
+    const documentKey = `STOCK_RECEIVING:STOCK_RECEIVING:${referenceId}`;
+    const receiving = {
+      storeId: store.id,
+      productId: product.id,
+      type: StockMovementType.RECEIVE,
+      qtyDelta: 7,
+      referenceType: "STOCK_RECEIVING",
+      referenceId,
+    };
+    await prisma.stockMovement.createMany({
+      data: [
+        receiving,
+        { ...receiving, type: StockMovementType.ADJUSTMENT, qtyDelta: 0, referenceType: "STOCK_RECEIVING_ARCHIVE" },
+        { ...receiving, referenceId: "legacy:unrelated", qtyDelta: 17 },
+      ],
+    });
+    const caller = createTestCaller({ ...adminUser, organizationId: org.id });
+    await expect(caller.inventory.productMovementDocument({ documentKey })).resolves.toMatchObject({
+      id: documentKey,
+      totalQuantity: 7,
+      lines: [{ productId: product.id, qtyDelta: 7 }],
+    });
+    const archived = await caller.inventory.productMovements({ archiveMode: "ARCHIVED" });
+    expect(archived.items.map((item) => item.id)).toEqual([documentKey]);
+  });
 
   it.each([
     { type: "STOCK_RECEIVING" as const, quantity: 5.5, amount: 441.1, delta: 5.5 },

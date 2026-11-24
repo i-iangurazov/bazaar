@@ -12,6 +12,7 @@ it("isolates critical reads without timing out writes", () => {
   expect(isInteractivePosRead("query", "products.bootstrap")).toBe(true);
   expect(isInteractivePosRead("mutation", "products.bootstrap")).toBe(false);
   expect(isInteractivePosRead("query", "products.listContext")).toBe(false);
+  expect(isInteractivePosRead("query", "inventory.editableProductMovementDocument")).toBe(true);
 });
 it("aborts a stalled read and clears the timer after success", async () => {
   vi.useFakeTimers();

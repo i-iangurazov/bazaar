@@ -2,11 +2,13 @@ import { lockAssortment } from "@/server/services/assortmentPolicy";
 import { StockMovementType, type InventorySnapshot, type LegalEntityType } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
+import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { assertWithinLimits, assertFeatureCanBeConfigured } from "@/server/services/planLimits";
+import { assertUserCanAccessStore, userHasAllStoreAccess } from "@/server/services/storeAccess";
 import {
   createDefaultProductCatalog,
   resolveProductCatalog,
@@ -25,6 +27,7 @@ export type UpdateStorePolicyInput = {
 export type CreateStoreInput = {
   organizationId: string;
   actorId: string;
+  impersonating?: boolean;
   requestId: string;
   name: string;
   code: string;
@@ -81,7 +84,40 @@ const resolveAdjustedPrice = ({
 
 export const createStore = async (input: CreateStoreInput) =>
   prisma.$transaction(async (tx) => {
-    await assertWithinLimits({ organizationId: input.organizationId, kind: "stores" });
+    // Role and shop assignments are edited under the same organization lock.
+    // Keep it compatible with the foreign keys of independent operations.
+    await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR NO KEY UPDATE`;
+    const creator = await tx.user.findFirst({
+      where: {
+        id: input.actorId,
+        organizationId: input.organizationId,
+        isActive: true,
+        deletedAt: null,
+        role: { in: ["ADMIN", "MANAGER"] },
+      },
+      select: { id: true, email: true, role: true, isOrgOwner: true },
+    });
+    if (!creator) throw new AppError("forbidden", "FORBIDDEN", 403);
+
+    const actor = {
+      ...creator,
+      organizationId: input.organizationId,
+      isPlatformOwner: !input.impersonating && isPlatformOwnerEmail(creator.email),
+    };
+    const creatorHasAllStores = userHasAllStoreAccess(actor);
+    const customProductSettingsRequested =
+      input.enableSku !== undefined ||
+      input.enableBarcode !== undefined ||
+      input.enableSimilarProductCheck !== undefined ||
+      Boolean(input.productCatalogId);
+    if (customProductSettingsRequested && creator.role !== "ADMIN" && !creator.isOrgOwner) {
+      throw new AppError("forbidden", "FORBIDDEN", 403);
+    }
+    if ((input.copyInventory || input.stockQuantityDelta) && creator.role !== "ADMIN") {
+      throw new AppError("inventoryAdminRequired", "FORBIDDEN", 403);
+    }
+
+    await assertWithinLimits({ organizationId: input.organizationId, kind: "stores", db: tx });
     if (input.trackExpiryLots)
       await assertFeatureCanBeConfigured(input.organizationId, "expiryLots", tx);
     const inn = normalizeOptional(input.inn);
@@ -129,13 +165,14 @@ export const createStore = async (input: CreateStoreInput) =>
 
     const cloneFromStoreId = normalizeOptional(input.cloneFromStoreId);
     if (cloneFromStoreId) {
-      const sourceStore = await tx.store.findUnique({
-        where: { id: cloneFromStoreId },
-        select: { id: true, organizationId: true, name: true },
+      const sourceStore = await tx.store.findFirst({
+        where: { id: cloneFromStoreId, organizationId: input.organizationId },
+        select: { id: true, name: true },
       });
-      if (!sourceStore || sourceStore.organizationId !== input.organizationId) {
+      if (!sourceStore) {
         throw new AppError("storeNotFound", "NOT_FOUND", 404);
       }
+      if (!creatorHasAllStores) await assertUserCanAccessStore(tx, actor, sourceStore.id);
 
       const copyInventory = input.copyInventory ?? false;
       const stockQuantityDelta = Math.trunc(input.stockQuantityDelta ?? 0);
@@ -331,6 +368,12 @@ export const createStore = async (input: CreateStoreInput) =>
         })
       : null;
 
+    if (!creatorHasAllStores) {
+      await tx.userStoreAccess.create({
+        data: { organizationId: input.organizationId, userId: creator.id, storeId: store.id },
+      });
+    }
+
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -343,6 +386,7 @@ export const createStore = async (input: CreateStoreInput) =>
         cloneSummary,
         productCatalogId: productCatalog.id,
         catalogSyncSummary,
+        creatorStoreAccessGranted: !creatorHasAllStores,
       }),
       requestId: input.requestId,
     });

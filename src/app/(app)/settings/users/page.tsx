@@ -95,7 +95,11 @@ const UsersPage = () => {
     },
   });
   const usersQuery = trpc.users.list.useQuery(undefined, { enabled: isAdmin });
-  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: isAdmin });
+  const storesQuery = trpc.stores.list.useQuery(undefined, {
+    enabled: isAdmin,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+  });
   const inlineEditingEnabled = isInlineEditingEnabled();
 
   type UserRow = NonNullable<typeof usersQuery.data>[number];

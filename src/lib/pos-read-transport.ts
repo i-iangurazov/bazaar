@@ -1,7 +1,8 @@
-// These reads must not wait for unrelated dashboard/catalog work in a tRPC batch.
+// These interactive reads must not wait for unrelated work in a tRPC batch.
 export const isInteractivePosRead = (type: string, path: string) =>
   type === "query" &&
   (path.startsWith("pos.") ||
+    path === "inventory.editableProductMovementDocument" ||
     path === "products.list" ||
     path === "products.bootstrap" ||
     path === "products.lookupScan" ||

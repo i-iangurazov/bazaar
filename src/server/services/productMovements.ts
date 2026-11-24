@@ -352,6 +352,7 @@ const buildProductMovementJournalCte = (input: {
   baseWhereSql: Prisma.Sql;
   organizationId: string;
   documentPageSql?: Prisma.Sql;
+  archiveReferenceScopeSql?: Prisma.Sql;
 }) => Prisma.sql`
   WITH movement_base AS (
     SELECT
@@ -396,6 +397,7 @@ const buildProductMovementJournalCte = (input: {
     WHERE s."organizationId" = ${input.organizationId}
       AND m."referenceId" IS NOT NULL
       AND m."referenceType" IN (${stockDocumentArchiveReferenceType}, ${stockReceivingArchiveReferenceType})
+      ${input.archiveReferenceScopeSql ?? Prisma.empty}
     GROUP BY m."referenceType", m."referenceId"
   ),
   document_index_base AS (
@@ -1229,18 +1231,36 @@ export const getProductMovementDocument = async (
     return null;
   }
 
+  const movementTypeSql = buildMovementDocumentTypeSql(
+    Prisma.sql`m."referenceType"`,
+    Prisma.sql`m."type"::text`,
+  );
+  const referenceType = Prisma.sql`m."referenceType" = ${decoded.documentReferenceType}`;
+  const matchingReferenceType = decoded.documentReferenceType === "StockMovement"
+    ? Prisma.sql`(${referenceType} OR m."referenceType" IS NULL)`
+    : referenceType;
+  // Filter the ledger before the CTE is materialized, using the reference
+  // index for posted documents and the movement ID for rows without a reference ID.
+  const documentConditions = [
+    ...baseConditions,
+    Prisma.sql`${movementTypeSql} = ${decoded.documentType}`,
+    Prisma.sql`(
+      (${matchingReferenceType} AND m."referenceId" = ${decoded.documentReferenceId})
+      OR (${matchingReferenceType} AND m."referenceId" IS NULL AND m."id" = ${decoded.documentReferenceId})
+    )`,
+  ];
+  const archiveReferences = [
+    Prisma.sql`(m."referenceType" = ${stockDocumentArchiveReferenceType} AND m."referenceId" = ${documentKey})`,
+  ];
+  if (decoded.documentType === "STOCK_RECEIVING") {
+    archiveReferences.push(
+      Prisma.sql`(m."referenceType" = ${stockReceivingArchiveReferenceType} AND m."referenceId" = ${decoded.documentReferenceId})`,
+    );
+  }
   const cte = buildProductMovementJournalCte({
-    baseWhereSql: buildWhereSql(baseConditions),
+    baseWhereSql: buildWhereSql(documentConditions),
     organizationId: user.organizationId,
-    documentPageSql: Prisma.sql`
-      SELECT
-        d.*,
-        NULL::int AS "groupedTotalCount"
-      FROM document_index d
-      WHERE d."documentType" = ${decoded.documentType}
-        AND d."documentReferenceType" = ${decoded.documentReferenceType}
-        AND d."documentReferenceId" = ${decoded.documentReferenceId}
-    `,
+    archiveReferenceScopeSql: Prisma.sql`AND (${Prisma.join(archiveReferences, " OR ")})`,
   });
   const [row] = await prisma.$queryRaw<ProductMovementJournalSqlRow[]>(
     Prisma.sql`
@@ -1256,16 +1276,6 @@ export const getProductMovementDocument = async (
     return null;
   }
 
-  const movementTypeSql = buildMovementDocumentTypeSql(
-    Prisma.sql`m."referenceType"`,
-    Prisma.sql`m."type"::text`,
-  );
-  const lineConditions = [
-    ...baseConditions,
-    Prisma.sql`${movementTypeSql} = ${decoded.documentType}`,
-    Prisma.sql`COALESCE(m."referenceType", 'StockMovement') = ${decoded.documentReferenceType}`,
-    Prisma.sql`COALESCE(m."referenceId", m."id") = ${decoded.documentReferenceId}`,
-  ];
   const lines = await prisma.$queryRaw<ProductMovementDocumentLineSqlRow[]>(
     Prisma.sql`
       SELECT
@@ -1300,7 +1310,7 @@ export const getProductMovementDocument = async (
         ORDER BY b."createdAt" ASC, b."id" ASC
         LIMIT 1
       ) pb ON true
-      ${buildWhereSql(lineConditions)}
+      ${buildWhereSql(documentConditions)}
       ORDER BY COALESCE(m."linePosition", 2147483647) ASC, m."createdAt" ASC, m."id" ASC
     `,
   );

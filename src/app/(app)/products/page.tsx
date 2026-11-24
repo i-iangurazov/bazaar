@@ -703,7 +703,13 @@ const ProductsPage = () => {
   );
   const productsContextQuery = trpc.products.listContext.useQuery(
     { storeId: rawStoreId || undefined },
-    { enabled: productsTableStateReady, staleTime: 60_000, trpc: { abortOnUnmount: true } },
+    {
+      enabled: productsTableStateReady,
+      staleTime: 60_000,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: "always",
+      trpc: { abortOnUnmount: true },
+    },
   );
   const resolvedStoreId = productsContextQuery.data?.selectedStoreId;
   const productsBootstrapInput = useMemo(
@@ -751,6 +757,17 @@ const ProductsPage = () => {
     () => productsContextQuery.data?.stores ?? [],
     [productsContextQuery.data?.stores],
   );
+  const lastStoreScope = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!productsContextQuery.data) return;
+    const scope = JSON.stringify(stores.map((store) => store.id).sort());
+    const previousScope = lastStoreScope.current;
+    lastStoreScope.current = scope;
+    if (previousScope !== undefined && scope !== previousScope) {
+      void productsBootstrapUtils.invalidate(undefined, undefined, liveQueryRefreshOptions);
+      void trpcUtils.stores.list.invalidate();
+    }
+  }, [productsBootstrapUtils, productsContextQuery.data, stores, trpcUtils]);
   const selectedStore = useMemo(
     () => stores.find((store) => store.id === storeId) ?? null,
     [storeId, stores],
@@ -3927,7 +3944,13 @@ const ProductsPage = () => {
         <ProductPhotoSearchButton identityKey={`${session?.user?.organizationId ?? ""}:${session?.user?.id ?? ""}`}
           storeId={storeId} stores={stores} disabled={!productsTableStateReady || !session?.user} />
         <FilterField id="products-store" label={tCommon("store")}>
-          <Select value={storeId || "all"} onValueChange={setStoreId}>
+          <Select
+            value={storeId || "all"}
+            onValueChange={setStoreId}
+            onOpenChange={(open) => {
+              if (open) void productsContextQuery.refetch({ cancelRefetch: false });
+            }}
+          >
             <SelectTrigger id="products-store">
               <SelectValue placeholder={tCommon("selectStore")} />
             </SelectTrigger>

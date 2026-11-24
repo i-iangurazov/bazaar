@@ -67,6 +67,7 @@ import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import { trpc } from "@/lib/trpc";
+import { appRoutes } from "@/lib/appRoutes";
 import { translateError } from "@/lib/translateError";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
@@ -201,7 +202,9 @@ const StoresPage = () => {
 
   const createMutation = trpc.stores.create.useMutation({
     onSuccess: (result) => {
-      storesQuery.refetch();
+      void trpcUtils.stores.list.invalidate();
+      void trpcUtils.products.listContext.invalidate();
+      void trpcUtils.products.bootstrap.invalidate();
       toast({
         variant: "success",
         description: result.cloneSummary
@@ -210,6 +213,7 @@ const StoresPage = () => {
               prices: result.cloneSummary.storePrices,
             })
           : t("createSuccess"),
+        ...(isAdmin ? { actionLabel: t("assignStaffAccess"), actionHref: appRoutes.users } : {}),
       });
       storeForm.reset();
       setStoreDialogOpen(false);
