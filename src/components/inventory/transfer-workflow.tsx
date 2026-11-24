@@ -1311,10 +1311,10 @@ export const InventoryTransfersPage = ({
         <section className="bazaar-doc-surface min-w-0 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-foreground">{t("transferDetailsTitle")}</h3>
-            <Button asChild variant="ghost" size="sm" className="md:hidden">
-              <Link href={backHref}>
+            <Button asChild variant="ghost" size="sm" className="shrink-0 md:hidden">
+              <Link href={backHref} title={isEditMode ? t("backToMovements") : undefined}>
                 <BackIcon className="h-4 w-4" aria-hidden />
-                {isEditMode ? t("backToMovements") : tCommon("back")}
+                {tCommon("back")}
               </Link>
             </Button>
           </div>
