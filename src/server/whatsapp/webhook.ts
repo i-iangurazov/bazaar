@@ -80,7 +80,7 @@ export async function receiveWhatsAppWebhook(request: Request, connectionId: str
       if (event.kind === "STATUS") return null;
       if (event.kind === "ACCOUNT") {
         const accountLocked = event.status === WHATSAPP_ACCOUNT_LOCKED;
-        if (!accountLocked && !/DISABLED|BANNED|DELETED|REVOKED/.test(event.status ?? "")) {
+        if (!accountLocked && !/DISABLE|BANNED|DELETED|REVOKED/.test(event.status ?? "")) {
           return null;
         }
         const issue = accountLocked ? "whatsappMetaAccountLocked" : "whatsappReconnectRequired";

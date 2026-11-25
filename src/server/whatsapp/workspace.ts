@@ -35,7 +35,8 @@ import { settleWhatsAppUnit, whatsappQuota } from "./quota";
 export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
   const access = await whatsappConnection(actor, storeId);
   const c = access.connection;
-  const [quota, worker, store, callback] = await Promise.all([
+  const providerCheckedAt = c?.lastProviderCheckAt ?? c?.createdAt;
+  const [quota, worker, store, callback, inbound] = await Promise.all([
     whatsappQuota(actor.organizationId),
     prisma.whatsAppWorkerState.findUnique({ where: { id: "worker" } }),
     prisma.store.findFirstOrThrow({
@@ -45,6 +46,20 @@ export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
     c
       ? prisma.whatsAppEvent.findFirst({
           where: { connectionId: c.id, organizationId: actor.organizationId, eventType: "CALLBACK" },
+          select: { id: true },
+        })
+      : null,
+    c && providerCheckedAt
+      ? prisma.whatsAppEvent.findFirst({
+          where: {
+            connectionId: c.id,
+            organizationId: actor.organizationId,
+            eventType: "MESSAGE",
+            processedAt: { not: null },
+            createdAt: { gte: providerCheckedAt },
+            // WhatsApp may report message timestamps only to the second.
+            providerAt: { gte: new Date(Math.floor(providerCheckedAt.getTime() / 1000) * 1000) },
+          },
           select: { id: true },
         })
       : null,
@@ -76,6 +91,7 @@ export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
           lastWebhookAt: c.lastWebhookAt,
           lastProviderCheckAt: c.lastProviderCheckAt,
           callbackReceived: Boolean(callback),
+          inboundVerified: Boolean(inbound),
         }
       : null,
     profile: whatsappProfileSchema.parse(c?.profile ?? {}),
@@ -281,15 +297,27 @@ export async function setWhatsAppEnabled(
       !workspace.readiness.workerReady ||
       c.state !== "CONNECTED" ||
       !c.knowledgePublished ||
-      !c.lastWebhookAt
+      !workspace.connection?.inboundVerified
     )
       throw new AppError("whatsappNotReady", "CONFLICT", 409);
     if (!workspace.quota.remaining) throw new AppError("whatsappQuotaExhausted", "CONFLICT", 409);
   }
-  await prisma.whatsAppConnection.update({
-    where: { id: c.id },
+  // A reconnect or account pause invalidates the snapshot used to enable AI.
+  const updated = await prisma.whatsAppConnection.updateMany({
+    where: {
+      id: c.id,
+      ...(enabled
+        ? {
+            configVersion: c.configVersion,
+            state: "CONNECTED",
+            knowledgePublished: true,
+            lastProviderCheckAt: c.lastProviderCheckAt,
+          }
+        : {}),
+    },
     data: { aiEnabled: enabled, configVersion: { increment: 1 } },
   });
+  if (!updated.count) throw new AppError("whatsappChanged", "CONFLICT", 409);
   if (!enabled)
     await cancelWhatsAppPrepared({ conversation: { connectionId: c.id }, actorId: null });
   await writeAuditLog(prisma, {

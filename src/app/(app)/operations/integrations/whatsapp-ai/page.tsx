@@ -231,7 +231,7 @@ function Editor({
                             !data.readiness.workerReady ||
                             data.connection?.state !== "CONNECTED" ||
                             !data.connection.knowledgePublished ||
-                            !data.connection.lastWebhookAt))
+                            !data.connection.inboundVerified))
                       }
                       onCheckedChange={async (enabled) => {
                         try {
@@ -262,7 +262,11 @@ function Editor({
                         <p className="rounded-md bg-secondary p-3">{t("platformPreparing")}</p>
                       )}
                   {data.connection?.callbackReceived && <p>{t("callbackReceived")}</p>}
-                  {data.readiness.ready && data.readiness.workerReady && <p>{t("pilotReady")}</p>}
+                  {data.readiness.ready &&
+                    data.readiness.workerReady &&
+                    (!data.connection?.knowledgePublished || !data.connection.inboundVerified) && (
+                      <p>{t("pilotReady")}</p>
+                    )}
                   <p className="text-muted-foreground">{t("scope")}</p>
                 </CardContent>
               </Card>

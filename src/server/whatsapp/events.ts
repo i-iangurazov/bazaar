@@ -68,7 +68,12 @@ export function normalizeWhatsAppEvents(
         field = str(change.field);
       if (["history", "smb_app_state_sync", "contacts", "history_sync"].includes(field)) continue;
       if (field === "account-event" || field === "account_update") {
-        const status = str(object(value.payload).status || value.event || value.status, 80);
+        const update = str(object(value.payload).status || value.event || value.status, 80);
+        const banState = str(object(value.ban_info).waba_ban_state, 80);
+        const status = update === "DISABLED_UPDATE" &&
+          ["SCHEDULE_FOR_DISABLE", "DISABLE", "REINSTATE"].includes(banState)
+          ? banState
+          : update;
         if (status)
           result.push({
             key: hash([appId, "account", status, entry.time]),

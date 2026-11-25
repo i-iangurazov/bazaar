@@ -8,28 +8,28 @@ or paid packs until the external prerequisites and the pilot below are complete.
 No customer stock, financial documents, existing subscription contracts or
 lifetime grants are rewritten by this module.
 
-Readiness recorded on 2026-11-22
+Readiness verified on 2026-11-25
 --------------------------------
 Gupshup approved Bazaar's partnership and joint solution 1094314000275005.
 The operator observed the Bazaar USD wallet with zero balance, no live apps
 and Meta business verification approved. The test sender returned 131031.
-Meta Direct Support case 29487850467491689 was opened for the test sender.
-On 2026-11-25 Direct Support showed Closed without a visible resolution.
-A successful send or a cleared restriction still needs verification.
-The Gupshup approvals, Meta test account, and a store's actual live WhatsApp
-number are separate milestones. Recheck the current case and app status
-before making a new provider call or funding the wallet:
+Meta Direct Support case 29487850467491689 recorded that restrictions were
+removed from the Meta test sender. A single repeat test to the approved +996
+recipient on 2026-11-25 produced a `delivered` receipt at 20:32 Bishkek time.
+The Gupshup portal still showed no live apps and a zero USD wallet balance.
+The remaining provider check is a manual exchange through Bazaar on an
+approved live Gupshup number, with a verified delivered receipt.
 https://business.facebook.com/direct-support/case-detail/29487850467491689/
 https://partner-docs.gupshup.io/docs/onboarding-apis
 https://developers.facebook.com/docs/graph-api/reference/whats-app-business-account
 
-An authenticated Gupshup set-callback event confirms webhook reachability
-and is shown separately from the real incoming-message check. An authenticated
-failed receipt with Meta code 131031 pauses that store connection, cancels
-unsent work and records the provider issue. A known failure follows existing
-credit release and reconciliation rules. After Meta restores the account,
-verify the same connection and repeat the live-number checks before enabling
-automatic replies.
+An authenticated Gupshup set-callback event confirms webhook reachability.
+Automation requires an authenticated customer message on the current
+connection. An authenticated failed receipt with Meta code 131031 pauses that
+connection, cancels unsent work and records the provider issue. Failed delivery
+of the current reply returns the conversation to staff. A later confirmed
+delivery is reconciled once. After Meta restores the account, verify the same
+connection and repeat the live-number checks before enabling automatic replies.
 
 Commercial behavior
 -------------------

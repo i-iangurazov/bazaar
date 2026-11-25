@@ -32,7 +32,7 @@ services:
       - key: WHATSAPP_ENCRYPTION_KEY
         sync: false
       - key: WHATSAPP_PUBLIC_URL
-        value: https://bazaar.kg
+        value: https://www.bazaar.kg
       - key: WHATSAPP_DAILY_BUDGET_USD_MICROS
         value: "1000000"
       # Literal flags below are managed by this file. Any later activation must

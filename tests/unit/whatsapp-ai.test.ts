@@ -96,6 +96,16 @@ describe("WhatsApp commercial boundaries", () => {
       transportReady: true,
     });
   });
+  it.each([
+    ["https://bazaar.kg", "https://www.bazaar.kg"],
+    ["https://www.bazaar.kg/", "https://www.bazaar.kg"],
+    ["https://staging.bazaar.kg/", "https://staging.bazaar.kg"],
+    ["http://bazaar.kg", ""],
+    ["https://bazaar.kg/callback", ""],
+    ["https://bazaar.kg:444", ""],
+  ])("resolves the callback origin from %s", (publicUrl, expectedOrigin) => {
+    expect(whatsappConfig({ ...ready, WHATSAPP_PUBLIC_URL: publicUrl }).origin).toBe(expectedOrigin);
+  });
   it.each(Object.keys(ready))("fails closed without %s", (key) => {
     const config = whatsappConfig({ ...ready, [key]: undefined });
     expect(key.startsWith("GUPSHUP_") ? config.onboardingReady : config.ready).toBe(false);
@@ -145,6 +155,24 @@ describe("WhatsApp ingress and provider transport", () => {
     input.entry[0].changes[0].field = "history";
     expect(normalizeWhatsAppEvents(input, "app-own")).toEqual([]);
   });
+  it.each(["SCHEDULE_FOR_DISABLE", "DISABLE", "REINSTATE"])(
+    "uses the documented ban state %s for account updates",
+    (banState) => {
+      const update = {
+        gs_app_id: "app-own",
+        object: "whatsapp_business_account",
+        entry: [{
+          changes: [{
+            field: "account_update",
+            value: { event: "DISABLED_UPDATE", ban_info: { waba_ban_state: banState } },
+          }],
+        }],
+      };
+      expect(normalizeWhatsAppEvents(update, "app-own")).toMatchObject([
+        { kind: "ACCOUNT", status: banState },
+      ]);
+    },
+  );
   it("binds contact profiles to each sender, including BSUID-only customers", () => {
     const input = {
       gs_app_id: "app-own",
@@ -207,6 +235,9 @@ describe("WhatsApp ingress and provider transport", () => {
       "https://partner.gupshup.io/partner/app/app-own/subscription/42",
     );
     expect(fetcher.mock.calls[1][1].method).toBe("PUT");
+    expect(fetcher.mock.calls[1][1].body.get("url")).toBe(
+      "https://www.bazaar.kg/api/integrations/whatsapp/connection-own",
+    );
     expect(fetcher.mock.calls[1][1].body.get("meta")).toBe(
       JSON.stringify({ "X-Gupshup-Webhook-Secret": "a".repeat(64) }),
     );

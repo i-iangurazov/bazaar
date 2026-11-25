@@ -29,8 +29,10 @@ export function whatsappConfig(env: Record<string, string | undefined> = process
       url.pathname === "/" &&
       !url.search &&
       !url.hash
-    )
-      origin = url.origin;
+    ) {
+      // Register the final production host so Gupshup calls the webhook directly.
+      origin = url.hostname === "bazaar.kg" ? "https://www.bazaar.kg" : url.origin;
+    }
   } catch {
     /* A disabled integration never prevents Bazaar from starting. */
   }

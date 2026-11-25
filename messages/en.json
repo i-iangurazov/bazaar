@@ -6645,6 +6645,7 @@
     "whatsappMediaUnavailable": "The image is unavailable or has expired.",
     "whatsappSendCancelled": "Sending was cancelled because the conversation conditions changed.",
     "whatsappDeliveryUnknown": "Delivery is unconfirmed. Do not resend the same message.",
+    "whatsappDeliveryFailed": "The message could not be delivered. An employee reply is needed.",
     "whatsappHumanRequired": "An employee reply is needed.",
     "billingSelfServeRequired": "Arrange your subscription on the plans page. If online payments are unavailable, contact support.",
     "featureNames": {

@@ -417,29 +417,59 @@ export async function reconcileWhatsAppStatuses(limit = 100) {
           await tx.whatsAppEvent.update({ where: { id: e.id }, data: { processedAt: new Date() } });
         return null;
       }
-      const delivered = ["DELIVERED", "READ"].includes(event.providerStatus ?? ""),
-        terminal = ["DELIVERED", "READ"].includes(message.state);
-      if (!terminal || event.providerStatus === "READ")
+      const status = event.providerStatus;
+      const delivered = status === "DELIVERED" || status === "READ";
+      const failed = status === "FAILED";
+      const alreadyDelivered = message.state === "DELIVERED" || message.state === "READ";
+      const shouldUpdate = alreadyDelivered
+        ? message.state === "DELIVERED" && status === "READ"
+        : message.state !== "FAILED" || delivered;
+      if (shouldUpdate) {
         await tx.whatsAppMessage.update({
           where: { id: message.id },
           data: {
             providerMessageId: message.providerMessageId ?? event.providerMessageId,
-            state: delivered
-              ? event.providerStatus!
-              : event.providerStatus === "FAILED"
-                ? "FAILED"
-                : "SENT",
+            state: delivered ? status : failed ? "FAILED" : "SENT",
             ...(delivered
               ? {
                   deliveredAt: message.deliveredAt ?? event.providerAt ?? event.createdAt,
                   lastIssue: null,
                 }
-              : {}),
+              : failed
+                ? { lastIssue: "whatsappDeliveryFailed" }
+                : {}),
           },
         });
+        if (failed && message.generationVersion !== null) {
+          await tx.whatsAppConversation.updateMany({
+            where: {
+              id: message.conversationId,
+              generationVersion: message.generationVersion,
+              archived: false,
+              redactedAt: null,
+              messages: {
+                none: {
+                  direction: "OUTBOUND",
+                  state: { notIn: ["FAILED", "CANCELLED"] },
+                  OR: [
+                    { createdAt: { gt: message.createdAt } },
+                    { createdAt: message.createdAt, id: { gt: message.id } },
+                  ],
+                },
+              },
+            },
+            data: {
+              mode: "HUMAN",
+              needsHuman: true,
+              lastIssue: "whatsappDeliveryFailed",
+              generationVersion: { increment: 1 },
+            },
+          });
+        }
+      }
       await tx.whatsAppEvent.update({ where: { id: e.id }, data: { processedAt: new Date() } });
-      return delivered || terminal || event.providerStatus === "FAILED"
-        ? { messageId: message.id, delivered: delivered || terminal }
+      return delivered || alreadyDelivered || failed
+        ? { messageId: message.id, delivered: delivered || alreadyDelivered }
         : null;
     });
     if (settlement)

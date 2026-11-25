@@ -53,7 +53,9 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     connection: WhatsAppConnection,
     conversation: WhatsAppConversation;
   const actor = () => ({ id: f.adminUser.id, organizationId: f.org.id });
-  const webhook = async (value: object, field = "messages", key = webhookKey, appId = "app-own") =>
+  const webhook = async (
+    value: object, field = "messages", key = webhookKey, appId = "app-own", eventTime?: number,
+  ) =>
     receiveWhatsAppWebhook(
       new Request("http://localhost/api/integrations/whatsapp/test", {
         method: "POST",
@@ -61,7 +63,7 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
         body: JSON.stringify({
           gs_app_id: appId,
           object: "whatsapp_business_account",
-          entry: [{ changes: [{ field, value }] }],
+          entry: [{ time: eventTime, changes: [{ field, value }] }],
         }),
       }),
       connection.id,
@@ -346,9 +348,75 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     expect(await prisma.whatsAppEvent.count({ where: { eventType: "CALLBACK" } })).toBe(1);
     expect((await whatsAppWorkspace(actor(), f.store.id)).connection).toMatchObject({
       callbackReceived: true,
+      inboundVerified: false,
       lastWebhookAt: null,
     });
     expect(await prisma.whatsAppMessage.count()).toBe(0);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("requires a processed inbound message for the current connection before enabling AI", async () => {
+    await prisma.whatsAppWorkerState.create({
+      data: { id: "worker", state: "READY", dailyPeriod: whatsappPeriod().key },
+    });
+    const workspace = () => whatsAppWorkspace(actor(), f.store.id);
+    expect((await incoming("before-reconnect")).status).toBe(200);
+    expect((await workspace()).connection?.inboundVerified).toBe(true);
+
+    // Place the previous event just before verification in the same provider second.
+    const checkedAt = new Date(Math.floor(Date.now() / 1000) * 1000 - 500);
+    const checkedSecond = Math.floor(checkedAt.getTime() / 1000);
+    await prisma.whatsAppEvent.updateMany({
+      where: { connectionId: connection.id, eventType: "MESSAGE" },
+      data: {
+        createdAt: new Date(checkedAt.getTime() - 1),
+        providerAt: new Date(checkedSecond * 1000),
+      },
+    });
+    await prisma.whatsAppConnection.update({
+      where: { id: connection.id },
+      data: { lastProviderCheckAt: checkedAt, aiEnabled: false, configVersion: { increment: 1 } },
+    });
+    expect((await workspace()).connection?.inboundVerified).toBe(false);
+
+    const textMessage = (id: string, second: number) => ({
+      id,
+      from: "996700000001",
+      type: "text",
+      timestamp: String(second),
+      text: { body: "Проверка подключения" },
+    });
+    expect((await webhook({ statuses: [{ type: "set-callback" }] })).status).toBe(200);
+    expect(
+      (await webhook({ statuses: [{ gs_id: "unmatched", status: "delivered" }] })).status,
+    ).toBe(200);
+    const echo = { ...textMessage("staff-echo", checkedSecond), to: "996700000001" };
+    expect((await webhook({ message_echoes: [echo] }, "smb_message_echoes")).status).toBe(200);
+    const delayed = textMessage("delayed-before-reconnect", checkedSecond - 1);
+    expect((await webhook({ messages: [delayed] })).status).toBe(200);
+    await prisma.whatsAppEvent.create({
+      data: {
+        organizationId: f.org.id,
+        storeId: f.store.id,
+        connectionId: connection.id,
+        eventKey: "unprocessed-inbound",
+        eventType: "MESSAGE",
+        providerAt: new Date(checkedSecond * 1000),
+      },
+    });
+    expect((await workspace()).connection).toMatchObject({
+      callbackReceived: true,
+      inboundVerified: false,
+      lastWebhookAt: expect.any(Date),
+    });
+    const enable = () => setWhatsAppEnabled(actor(), f.store.id, true, "test");
+    await expect(enable()).rejects.toThrow("whatsappNotReady");
+
+    const current = textMessage("after-reconnect", checkedSecond);
+    expect((await webhook({ messages: [current] })).status).toBe(200);
+    expect((await workspace()).connection?.inboundVerified).toBe(true);
+    await expect(enable()).resolves.toEqual({ enabled: true });
+    expect((await workspace()).connection?.aiEnabled).toBe(true);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
@@ -392,6 +460,62 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
       where: { messageId: { in: [inFlight.id, pending.id] }, state: "RELEASED" },
     })).toBe(2);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("records Meta reinstatement without pausing a healthy connection or resuming AI", async () => {
+    const accountUpdate = (banState: string, at: number) => webhook({
+      event: "DISABLED_UPDATE",
+      ban_info: { waba_ban_state: banState },
+    }, "account_update", webhookKey, "app-own", at);
+    const providerTime = Math.floor(Date.now() / 1000);
+    expect((await accountUpdate("REINSTATE", providerTime - 2)).status).toBe(200);
+    expect(await prisma.whatsAppConnection.findUnique({ where: { id: connection.id } })).toMatchObject({
+      state: "CONNECTED",
+      aiEnabled: true,
+      configVersion: connection.configVersion,
+    });
+    expect((await accountUpdate("DISABLE", providerTime - 1)).status).toBe(200);
+    expect((await accountUpdate("REINSTATE", providerTime)).status).toBe(200);
+    expect(await prisma.whatsAppConnection.findUnique({ where: { id: connection.id } })).toMatchObject({
+      state: "ATTENTION",
+      aiEnabled: false,
+      configVersion: connection.configVersion + 1,
+    });
+  });
+
+  it("reopens a failed reply for staff and settles late confirmed delivery once", async () => {
+    const message = await outgoing();
+    await reserveWhatsAppUnit(f.org.id, message.id);
+    await prisma.whatsAppMessage.update({
+      where: { id: message.id },
+      data: { state: "SENT", providerMessageId: "delivery-order-id", sendStartedAt: new Date() },
+    });
+    const receipt = async (status: string) => {
+      expect((await webhook({ statuses: [{ gs_id: "delivery-order-id", status }] })).status).toBe(200);
+      await reconcileWhatsAppStatuses();
+    };
+    const savedMessage = () => prisma.whatsAppMessage.findUniqueOrThrow({ where: { id: message.id } });
+    await receipt("failed");
+    await receipt("sent");
+    await receipt("failed");
+    expect(await savedMessage()).toMatchObject({ state: "FAILED", lastIssue: "whatsappDeliveryFailed" });
+    expect(await prisma.whatsAppConversation.findUnique({ where: { id: conversation.id } })).toMatchObject({
+      mode: "HUMAN",
+      needsHuman: true,
+      lastIssue: "whatsappDeliveryFailed",
+      generationVersion: conversation.generationVersion + 1,
+    });
+    expect(await prisma.whatsAppCreditUse.findUnique({ where: { messageId: message.id } })).toMatchObject({
+      state: "RELEASED",
+    });
+    await receipt("delivered");
+    await receipt("read");
+    await receipt("enqueued");
+    expect(await savedMessage()).toMatchObject({ state: "READ", lastIssue: null });
+    expect((await whatsappQuota(f.org.id)).remaining).toBe(999);
+    expect(await prisma.whatsAppMonth.findUnique({
+      where: { organizationId_period: { organizationId: f.org.id, period: whatsappPeriod().key } },
+    })).toMatchObject({ deliveredCount: 1, includedUsed: 1 });
   });
 
   it("deduplicates incoming messages and keeps unread state independent of Meta", async () => {
