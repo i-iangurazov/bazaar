@@ -11,6 +11,7 @@ import {
 } from "@/server/billing/subscriptionUsage";
 import { reserveProviderExpense, settleProviderExpense, imageExpenseMinor } from "@/server/billing/providerExpense";
 import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
+import { beginAiProviderAttempt, isDefiniteAiProviderRejection } from "./aiProviderTelemetry";
 import { extname, resolve, sep } from "node:path";
 
 import sharp from "sharp";
@@ -568,6 +569,7 @@ export const prepareStudioPhotoAnalysis = async (sourceImage: ProductImageStudio
         },
       },
       AbortSignal.timeout(10_000),
+      { feature: "studio_analysis" },
     );
     if (!response.ok) throw new Error("photo analysis unavailable");
     const body: unknown = await response.json();
@@ -752,10 +754,14 @@ export const callOpenAiImageEnhancement = async (input: {
     let response: Response;
     let responseBody: OpenAiImageResponseBody | null = null;
     let outboundStarted = false;
+    let completeAttempt: ReturnType<typeof beginAiProviderAttempt> | undefined;
     try {
       const requestBodyJson = JSON.stringify(requestBody);
       await assertAiConsent();
       assertExternalProviderCallAllowed("openai");
+      completeAttempt = beginAiProviderAttempt({
+        provider: "openai", model: config.imageModel, feature: "studio_image", attempt,
+      });
       outboundStarted = true;
       response = await fetch(OPENAI_IMAGE_EDITS_URL, {
         method: "POST",
@@ -766,6 +772,7 @@ export const callOpenAiImageEnhancement = async (input: {
       });
       responseBody = (await response.json().catch(() => null)) as OpenAiImageResponseBody | null;
     } catch (error) {
+      completeAttempt?.();
       if (outboundStarted) await settleProviderExpense(expense);
       else {
         await settleProviderExpense(expense, 0);
@@ -780,9 +787,15 @@ export const callOpenAiImageEnhancement = async (input: {
         status: normalized.status,
       });
     }
+    const result = responseBody?.data?.[0]?.b64_json;
+    const actualMinor = response.ok
+      ? imageExpenseMinor(responseBody?.usage, Boolean(input.presets.highQuality), config.imageModel)
+      : isDefiniteAiProviderRejection(response.status) ? 0 : undefined;
+    completeAttempt?.({ response, body: responseBody,
+      internalEstimatedCostKgsMinor: actualMinor,
+      outcome: response.ok && (typeof result !== "string" || !result.trim()) ? "invalid_output" : undefined });
     if (!response.ok) {
-      await settleProviderExpense(expense,
-        response.status >= 400 && response.status < 500 && response.status !== 408 ? 0 : undefined);
+      await settleProviderExpense(expense, actualMinor);
       const normalized = normalizeProviderError({ status: response.status, body: responseBody });
       // Only an explicit rate-limit response is safe to repeat. A server 5xx
       // can follow a paid generation, just like a network timeout.
@@ -802,9 +815,7 @@ export const callOpenAiImageEnhancement = async (input: {
         requestId: response.headers.get("x-request-id")?.slice(0, 120) ?? null,
       });
     }
-    await settleProviderExpense(expense,
-      imageExpenseMinor(responseBody?.usage, Boolean(input.presets.highQuality), config.imageModel));
-    const result = responseBody?.data?.[0]?.b64_json;
+    await settleProviderExpense(expense, actualMinor);
     if (typeof result !== "string" || !result.trim()) {
       throw new AppError("productImageStudioProviderOutputMissing", "INTERNAL_SERVER_ERROR", 502);
     }

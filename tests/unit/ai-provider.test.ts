@@ -10,6 +10,9 @@ vi.mock("@/server/billing/providerExpense", () => ({
 }));
 import { resolveTextAiConfig, fetchAiResponse, aiOutputText } from "@/server/services/aiProvider";
 import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
+import { OPENAI_TEXT_PILOT_MODEL } from "@/server/billing/openAiTextPilot";
+import { assertAiConsent } from "@/server/services/aiPrivacy";
+import { withAiProviderFeature, type AiProviderFeature } from "@/server/services/aiProviderTelemetry";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -21,9 +24,71 @@ beforeEach(() => {
     "DEEPSEEK_VISION_MODEL",
     "OPENAI_API_KEY",
     "OPENAI_MODEL",
+    "OPENAI_TEXT_PILOT_ENABLED",
   ])
     vi.stubEnv(key, "");
   vi.stubGlobal("fetch", mocks.fetch);
+});
+
+function configureTextPilot() {
+  for (const [key, value] of Object.entries({
+    DEEPSEEK_API_KEY: "deepseek-synthetic",
+    OPENAI_TEXT_PILOT_ENABLED: "1",
+    OPENAI_TEXT_PILOT_API_KEY: "sk-proj-synthetic",
+    OPENAI_TEXT_PILOT_PROJECT_ID: "proj_synthetic",
+    OPENAI_TEXT_PILOT_ORGANIZATION_ID: "pilot-org",
+    OPENAI_TEXT_PILOT_FEATURE: "baam_text",
+    OPENAI_TEXT_PILOT_EXPIRES_AT: new Date(Date.now() + 600000).toISOString(),
+    OPENAI_TEXT_PILOT_DAILY_LIMIT_USD_CENTS: "75",
+  })) vi.stubEnv(key, value);
+  vi.mocked(assertAiConsent).mockResolvedValue({ userId: "synthetic", organizationId: "pilot-org" });
+  mocks.expense.mockResolvedValue({ lease: null, reserved: 100 });
+}
+
+const pilotAttempt = (body: Record<string, unknown>, organizationId = "pilot-org", feature: AiProviderFeature = "baam_text") =>
+  withAiProviderFeature(feature, () => withAiOperationBudget({ organizationId, enabled: true }, () =>
+    fetchAiResponse(resolveTextAiConfig()!, body, new AbortController().signal)));
+
+describe("experimental OpenAI text routing", () => {
+  it("reserves the approved project's standard-tier expense before one dispatch", async () => {
+    configureTextPilot();
+    mocks.fetch.mockImplementation(async () => {
+      expect(mocks.expense).toHaveBeenCalledWith(expect.objectContaining({
+        organizationId: "pilot-org", pilot: { dailyLimitCents: 75, estimatedCents: expect.any(Number) },
+      }));
+      return Response.json({ service_tier: "default", usage: { input_tokens: 1000, output_tokens: 1000 } });
+    });
+    const response = await pilotAttempt({ input: "Synthetic", service_tier: "priority", store: true });
+    const [url, init] = mocks.fetch.mock.calls[0];
+    expect(url).toBe("https://api.openai.com/v1/responses");
+    expect(init.headers).toMatchObject({ Authorization: "Bearer sk-proj-synthetic", "OpenAI-Project": "proj_synthetic" });
+    expect(JSON.parse(init.body)).toMatchObject({ model: OPENAI_TEXT_PILOT_MODEL, store: false, service_tier: "default" });
+    expect(await response.json()).toMatchObject({ usage: { output_tokens: 1000 } });
+    expect(mocks.settle).toHaveBeenCalledWith(expect.any(Object), 53, 1);
+  });
+
+  it("keeps other organizations, scopes, media and provider tools on the previous route", async () => {
+    configureTextPilot();
+    mocks.fetch.mockImplementation(async () => Response.json({ output: [] }));
+    await pilotAttempt({ input: "Synthetic" }, "different-org");
+    await pilotAttempt({ input: "Synthetic" }, "pilot-org", "marketplace_catalog");
+    await pilotAttempt({ input: [{ role: "user", content: [{ type: "input_image", image_url: "synthetic" }] }] });
+    await pilotAttempt({ input: "Synthetic", tools: [{ type: "web_search" }] });
+    vi.stubEnv("OPENAI_TEXT_PILOT_ENABLED", "0");
+    await pilotAttempt({ input: "Synthetic" });
+    expect(mocks.fetch.mock.calls.map(([url]) => url)).toEqual(Array(5).fill("https://api.deepseek.com/responses"));
+  });
+
+  it("does not dispatch without a budget reservation and never falls back after a transport failure", async () => {
+    configureTextPilot();
+    mocks.expense.mockRejectedValueOnce(new Error("billingAiProviderBudgetReached"));
+    await expect(pilotAttempt({ input: "Synthetic" })).rejects.toThrow("billingAiProviderBudgetReached");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    mocks.fetch.mockRejectedValueOnce(new Error("Synthetic network failure"));
+    await expect(pilotAttempt({ input: "Synthetic" })).rejects.toThrow("Synthetic network failure");
+    expect(mocks.fetch).toHaveBeenCalledOnce();
+    expect(mocks.settle).toHaveBeenLastCalledWith(expect.any(Object));
+  });
 });
 afterEach(() => {
   vi.unstubAllEnvs();

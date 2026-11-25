@@ -8,6 +8,7 @@ import type { Context } from "@/server/trpc/trpc";
 import { baamJson, ownBaamConversation } from "./baamConversations";
 import { AppError } from "./errors";
 import { assertAiConsent } from "./aiPrivacy";
+import { beginAiProviderAttempt, isDefiniteAiProviderRejection } from "./aiProviderTelemetry";
 import {
   reserveSubscriptionUsage,
   startSubscriptionUsage,
@@ -167,6 +168,9 @@ export async function transcribeBaamAudio(
   let usageLease: UsageLease = null;
   let expense: ProviderExpense | null = null;
   let outboundStarted = false;
+  let completeAttempt: ReturnType<typeof beginAiProviderAttempt> | undefined;
+  let providerResponse: Response | undefined;
+  const estimatedMinor = Math.ceil((duration * 45) / 60);
   try {
     usageLease = await reserveSubscriptionUsage({
       organizationId: scope.organizationId,
@@ -179,7 +183,7 @@ export async function transcribeBaamAudio(
         organizationId: scope.organizationId,
         kind: "text",
         operationKey: `voice-provider:${transcription.id}:${leaseUntil.getTime()}`,
-        estimatedMinor: Math.ceil((duration * 45) / 60),
+        estimatedMinor,
       });
     const form = new FormData();
     const extension = mime.includes("mp4")
@@ -192,7 +196,8 @@ export async function transcribeBaamAudio(
             ? "mp3"
             : "webm";
     form.append("file", new Blob([new Uint8Array(buffer)], { type: mime }), `voice.${extension}`);
-    form.append("model", process.env.BAAM_TRANSCRIPTION_MODEL || "gpt-transcribe");
+    const model = process.env.BAAM_TRANSCRIPTION_MODEL || "gpt-transcribe";
+    form.append("model", model);
     form.append("response_format", "json");
     const products = await prisma.product.findMany({
       where: {
@@ -229,6 +234,7 @@ export async function transcribeBaamAudio(
     await assertAiConsent({ userId: scope.actorId, organizationId: scope.organizationId,
       impersonating: Boolean(ctx.impersonator) });
     assertExternalProviderCallAllowed("openai");
+    completeAttempt = beginAiProviderAttempt({ provider: "openai", model, feature: "baam_voice" });
     outboundStarted = true;
     const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
@@ -237,18 +243,26 @@ export async function transcribeBaamAudio(
       body: form,
       signal: AbortSignal.timeout(75_000),
     });
+    providerResponse = response;
     if (!response.ok) {
-      if (response.status >= 400 && response.status < 500 && response.status !== 408)
+      completeAttempt({ response, audioSeconds: duration,
+        internalEstimatedCostKgsMinor: isDefiniteAiProviderRejection(response.status) ? 0 : undefined });
+      completeAttempt = undefined;
+      if (isDefiniteAiProviderRejection(response.status))
         await settleProviderExpense(expense, 0);
       ctx.logger.warn({ status: response.status }, "BAAM transcription provider failed");
       throw new AppError("baamVoiceUnavailable", "BAD_REQUEST", 400);
     }
+    const body: unknown = await response.json();
     const parsed = z
       .object({
         text: z.string().max(12000),
         languages: z.array(z.object({ code: z.string() })).optional(),
       })
-      .parse(await response.json());
+      .parse(body);
+    completeAttempt({ response, body, audioSeconds: duration, internalEstimatedCostKgsMinor: estimatedMinor,
+      outcome: parsed.text.trim() ? undefined : "invalid_output" });
+    completeAttempt = undefined;
     await ownBaamConversation(ctx, conversationId);
     if (!parsed.text.trim()) throw new AppError("baamAudioEmpty", "BAD_REQUEST", 400);
     await settleProviderExpense(expense);
@@ -271,6 +285,8 @@ export async function transcribeBaamAudio(
     });
     return await prisma.baamTranscription.findUniqueOrThrow({ where: { id: transcription.id } });
   } catch (error) {
+    completeAttempt?.({ response: providerResponse, audioSeconds: duration,
+      outcome: providerResponse?.ok ? "invalid_output" : undefined });
     if (outboundStarted) await settleProviderExpense(expense);
     else await settleProviderExpense(expense, 0);
     await settleSubscriptionUsage(usageLease, false);

@@ -1,8 +1,14 @@
 import { AppError } from "@/server/services/errors";
+import { prisma } from "@/server/db/prisma";
+import { OPENAI_TEXT_PILOT_BUDGET } from "./openAiTextPilot";
 import { reserveSubscriptionUsage, startSubscriptionUsage, settleSubscriptionExpense,
   type UsageLease } from "./subscriptionUsage";
 
-export type ProviderExpense = { lease: UsageLease; reserved: number };
+export type ProviderExpense = {
+  lease: UsageLease;
+  reserved: number;
+  pilot?: { lease: UsageLease; reservedCents: number };
+};
 
 // Internal conservative budget at 100 KGS/USD and peak token prices. These are
 // expenditure controls, not the customer's price, an FX quote or vendor invoice.
@@ -30,12 +36,32 @@ export function imageExpenseMinor(usage: unknown, highQuality: boolean, model: s
 
 export async function reserveProviderExpense(input: {
   organizationId: string; kind: "text" | "image"; operationKey: string; estimatedMinor: number;
+  pilot?: { estimatedCents: number; dailyLimitCents: number };
 }): Promise<ProviderExpense> {
   const reserved = Math.max(1, Math.ceil(input.estimatedMinor));
   try {
-    const lease = await reserveSubscriptionUsage({ organizationId: input.organizationId,
+    const reservation = { organizationId: input.organizationId,
       resource: input.kind === "image" ? "imageVendorBudgetMinor" : "aiVendorBudgetMinor",
-      operationKey: input.operationKey, units: reserved });
+      operationKey: input.operationKey, units: reserved } as const;
+    const pilot = input.pilot;
+    if (pilot) {
+      if (input.kind !== "text") throw new AppError("billingAiProviderUnavailable", "CONFLICT", 409);
+      const reservedCents = Math.max(1, Math.ceil(pilot.estimatedCents));
+      return await prisma.$transaction(async (tx) => {
+        const now = new Date();
+        const pilotLease = await reserveSubscriptionUsage({
+          ...reservation,
+          resource: OPENAI_TEXT_PILOT_BUDGET,
+          units: reservedCents,
+          limitCents: pilot.dailyLimitCents,
+        }, now, tx);
+        const lease = await reserveSubscriptionUsage(reservation, now, tx);
+        await startSubscriptionUsage(lease, tx);
+        await startSubscriptionUsage(pilotLease, tx);
+        return { lease, reserved, pilot: { lease: pilotLease, reservedCents } };
+      });
+    }
+    const lease = await reserveSubscriptionUsage(reservation);
     await startSubscriptionUsage(lease);
     return { lease, reserved };
   } catch (error) {
@@ -45,5 +71,12 @@ export async function reserveProviderExpense(input: {
   }
 }
 
-export const settleProviderExpense = (expense: ProviderExpense | null, actualMinor?: number) =>
-  expense ? settleSubscriptionExpense(expense.lease, actualMinor ?? expense.reserved) : Promise.resolve();
+export async function settleProviderExpense(expense: ProviderExpense | null, actualMinor?: number, actualPilotCents?: number) {
+  if (!expense) return;
+  const pilot = expense.pilot;
+  if (!pilot) return settleSubscriptionExpense(expense.lease, actualMinor ?? expense.reserved);
+  return prisma.$transaction(async (tx) => {
+    await settleSubscriptionExpense(expense.lease, actualMinor ?? expense.reserved, tx);
+    await settleSubscriptionExpense(pilot.lease, actualPilotCents ?? (actualMinor === 0 ? 0 : pilot.reservedCents), tx);
+  });
+}

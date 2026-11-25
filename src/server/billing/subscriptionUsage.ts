@@ -4,11 +4,13 @@ import { prisma } from "@/server/db/prisma";
 import { getOrganizationPlan, resolveOrganizationAccessState } from "@/server/services/planLimits";
 import { AppError } from "@/server/services/errors";
 import { withAiOperationBudget } from "./aiOperationBudget";
+import { OPENAI_TEXT_PILOT_BUDGET } from "./openAiTextPilot";
 
 export const USAGE_RESOURCES = ["ai", "voice", "images", "marketingEmails", "externalApi",
   "marketplaceRunsDaily", "marketplaceFullRunsDaily", "initialImport",
   "aiVendorBudgetMinor", "imageVendorBudgetMinor"] as const;
 export type UsageResource = typeof USAGE_RESOURCES[number];
+type LedgerResource = UsageResource | typeof OPENAI_TEXT_PILOT_BUDGET;
 type Organization = Awaited<ReturnType<typeof getOrganizationPlan>>;
 export type UsageLease = { id: string; token: string; organizationId: string } | null;
 
@@ -23,7 +25,7 @@ const resourceLimit = (org: Organization, resource: UsageResource) => {
 };
 
 export const usageWindow = (input: {
-  resource: UsageResource; now: Date; origin: Date; anchorDay?: number; paidEnd?: Date | null;
+  resource: LedgerResource; now: Date; origin: Date; anchorDay?: number; paidEnd?: Date | null;
   trialOrigin?: Date;
 }) => {
   const { resource, now } = input;
@@ -67,7 +69,7 @@ export const subscriptionUsageContext = (org: Organization) => {
     paidEnd: org.activePurchase ? new Date(org.activePurchase.cycleEndsAt) : org.trialOffer ? org.trialEndsAt : null,
     trialOrigin: org.createdAt };
 };
-const windowFor = (org: Organization, resource: UsageResource, now: Date) => usageWindow({ resource, now, ...subscriptionUsageContext(org) });
+const windowFor = (org: Organization, resource: LedgerResource, now: Date) => usageWindow({ resource, now, ...subscriptionUsageContext(org) });
 const keyDigest = (key: string) => createHash("sha256").update(key).digest("hex");
 export const lockSubscriptionUsageOrganization = (tx: Prisma.TransactionClient, organizationId: string) =>
   tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR NO KEY UPDATE`;
@@ -87,7 +89,8 @@ const releaseExpired = async (tx: Prisma.TransactionClient, organizationId: stri
     where: { organizationId, state: "RESERVED", expiresAt: { lte: now } },
     select: { id: true, bucketId: true, units: true, resource: true, startedAt: true },
   });
-  const uncertain = rows.filter(row => row.resource.endsWith("VendorBudgetMinor") && row.startedAt);
+  const uncertain = rows.filter(row =>
+    (row.resource.endsWith("VendorBudgetMinor") || row.resource === OPENAI_TEXT_PILOT_BUDGET) && row.startedAt);
   const uncertainIds = new Set(uncertain.map(row => row.id));
   if (uncertain.length) {
     await tx.subscriptionUsageReservation.updateMany({ where: { id: { in: [...uncertainIds] } },
@@ -100,16 +103,30 @@ const releaseExpired = async (tx: Prisma.TransactionClient, organizationId: stri
   await releaseRows(tx, rows.filter(row => !uncertainIds.has(row.id)));
 };
 
-export async function reserveSubscriptionUsage(input: {
-  organizationId: string; resource: UsageResource; operationKey: string; units?: number;
-}, now = new Date(), db?: Prisma.TransactionClient): Promise<UsageLease> {
+type ReserveSubscriptionUsage = {
+  organizationId: string; operationKey: string; units?: number;
+} & ({ resource: UsageResource } | { resource: typeof OPENAI_TEXT_PILOT_BUDGET; limitCents: number });
+
+export async function reserveSubscriptionUsage(input: ReserveSubscriptionUsage,
+  now = new Date(), db?: Prisma.TransactionClient): Promise<UsageLease> {
   const units = input.units ?? 1;
   if (!Number.isSafeInteger(units) || units < 1 || units > 10000 || !input.operationKey)
     throw new AppError("validationError", "BAD_REQUEST", 400);
   const reserve = async (tx: Prisma.TransactionClient) => {
     await lockSubscriptionUsageOrganization(tx, input.organizationId);
     const org = await getOrganizationPlan(input.organizationId, tx);
-    const limit = resourceLimit(org, input.resource);
+    let limit: number | null;
+    if (input.resource === OPENAI_TEXT_PILOT_BUDGET) {
+      const access = resolveOrganizationAccessState(org, now);
+      if (
+        org.lifetimeAccess || org.billingCatalogVersion !== "2026-11" ||
+        !access.subscriptionActive || access.trialActive ||
+        !Number.isSafeInteger(input.limitCents) || input.limitCents < 1 || input.limitCents > 1_000_000
+      ) throw new AppError("billingAiProviderUnavailable", "CONFLICT", 409);
+      limit = input.limitCents;
+    } else {
+      limit = resourceLimit(org, input.resource);
+    }
     if (limit === null) return null;
     if (!resolveOrganizationAccessState(org).hasAccess) throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
     await releaseExpired(tx, org.id, now);
@@ -202,9 +219,9 @@ export async function resumeSubscriptionUsage(input: {
   });
 }
 
-export async function startSubscriptionUsage(lease: UsageLease) {
+export async function startSubscriptionUsage(lease: UsageLease, db?: Prisma.TransactionClient) {
   if (!lease) return;
-  await prisma.$transaction(async (tx) => {
+  const start = async (tx: Prisma.TransactionClient) => {
     await lockSubscriptionUsageOrganization(tx, lease.organizationId);
     const row = await tx.subscriptionUsageReservation.updateMany({
       where: { id: lease.id, organizationId: lease.organizationId, leaseToken: lease.token,
@@ -212,7 +229,8 @@ export async function startSubscriptionUsage(lease: UsageLease) {
       data: { startedAt: new Date(), expiresAt: new Date(Date.now() + 15 * 60_000) },
     });
     if (row.count !== 1) throw new AppError("billingUsageInProgress", "CONFLICT", 409);
-  });
+  };
+  return db ? start(db) : prisma.$transaction(start);
 }
 
 export async function settleSubscriptionUsage(lease: UsageLease, success: boolean, db?: Prisma.TransactionClient) {
@@ -233,11 +251,11 @@ export async function settleSubscriptionUsage(lease: UsageLease, success: boolea
   return db ? settle(db) : prisma.$transaction(settle);
 }
 
-export async function settleSubscriptionExpense(lease: UsageLease, actualUnits: number) {
+export async function settleSubscriptionExpense(lease: UsageLease, actualUnits: number, db?: Prisma.TransactionClient) {
   if (!lease) return;
   if (!Number.isSafeInteger(actualUnits) || actualUnits < 0 || actualUnits > 1000000)
     throw new AppError("validationError", "BAD_REQUEST", 400);
-  await prisma.$transaction(async (tx) => {
+  const settle = async (tx: Prisma.TransactionClient) => {
     await lockSubscriptionUsageOrganization(tx, lease.organizationId);
     const row = await tx.subscriptionUsageReservation.findFirst({ where: {
       id: lease.id, organizationId: lease.organizationId, leaseToken: lease.token,
@@ -256,7 +274,8 @@ export async function settleSubscriptionExpense(lease: UsageLease, actualUnits: 
       data: { state: "COMMITTED", actualUnits } });
     await tx.subscriptionUsageBucket.update({ where: { id: row.bucketId },
       data: { reserved: { decrement: row.units }, used: { increment: actualUnits } } });
-  });
+  };
+  return db ? settle(db) : prisma.$transaction(settle);
 }
 
 export async function withSubscriptionUsage<T>(input: {

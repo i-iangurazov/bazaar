@@ -6,6 +6,11 @@ type Budget = { id: string; kind: "text" | "image"; organizationId: string; call
   pendingInput: number; pendingOutput: number; maxCalls: number; maxInput: number; maxOutput: number };
 const budgets = new AsyncLocalStorage<Budget>();
 
+export function getTextAiOperationOrganizationId() {
+  const scope = budgets.getStore();
+  return scope?.kind === "text" ? scope.organizationId : null;
+}
+
 export async function withAiOperationBudget<T>(input: {
   organizationId: string; operationKey?: string; units?: number; enabled?: boolean;
   kind?: "text" | "image";

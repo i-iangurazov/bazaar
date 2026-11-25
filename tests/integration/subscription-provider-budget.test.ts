@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/server/db/prisma";
+import { OPENAI_TEXT_PILOT_BUDGET } from "@/server/billing/openAiTextPilot";
 import { reserveProviderExpense, settleProviderExpense } from "@/server/billing/providerExpense";
 import { getSubscriptionUsage, reserveSubscriptionUsage, settleSubscriptionExpense,
   startSubscriptionUsage } from "@/server/billing/subscriptionUsage";
@@ -76,5 +77,39 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
     expect(oldExpense.lease).toBeNull();
     await settleProviderExpense(oldExpense, 12);
     expect(await prisma.subscriptionUsageReservation.count({ where: { organizationId: other.id } })).toBe(0);
+  });
+
+  it("reserves the last experimental dollar allowance atomically with the contract allowance", async () => {
+    const f = await modern();
+    const results = await Promise.allSettled(["openai-one", "openai-two"].map(operationKey =>
+      reserveProviderExpense({ organizationId: f.org.id, kind: "text", operationKey, estimatedMinor: 100,
+        pilot: { estimatedCents: 3, dailyLimitCents: 3 } })));
+    const fulfilled = results.filter(r => r.status === "fulfilled");
+    expect(fulfilled).toHaveLength(1);
+    expect(await budget(f.org.id)).toMatchObject({ used: 0, reserved: 100 });
+    const daily = () => prisma.subscriptionUsageBucket.findFirst({
+      where: { organizationId: f.org.id, resource: OPENAI_TEXT_PILOT_BUDGET },
+    });
+    expect(await daily()).toMatchObject({ used: 0, reserved: 3 });
+    await settleProviderExpense(fulfilled[0].value, 30, 1);
+    await settleProviderExpense(fulfilled[0].value, 0, 0);
+    expect(await daily()).toMatchObject({ used: 1, reserved: 0 });
+    expect(await budget(f.org.id)).toMatchObject({ used: 30, reserved: 0 });
+  });
+
+  it("counts expired started OpenAI reservations as spent while the result is unknown", async () => {
+    const f = await modern();
+    const expense = await reserveProviderExpense({ organizationId: f.org.id, kind: "text",
+      operationKey: "lost-openai", estimatedMinor: 70, pilot: { estimatedCents: 3, dailyLimitCents: 3 } });
+    await prisma.subscriptionUsageReservation.updateMany({
+      where: { organizationId: f.org.id }, data: { expiresAt: new Date(Date.now() - 10) },
+    });
+    await expect(reserveProviderExpense({ organizationId: f.org.id, kind: "text", operationKey: "openai-next",
+      estimatedMinor: 100, pilot: { estimatedCents: 1, dailyLimitCents: 3 } })).rejects.toThrow("billingAiProviderBudgetReached");
+    expect(await budget(f.org.id)).toMatchObject({ used: 70, reserved: 0 });
+    await settleProviderExpense(expense, 30, 1);
+    expect(await prisma.subscriptionUsageBucket.findFirst({
+      where: { organizationId: f.org.id, resource: OPENAI_TEXT_PILOT_BUDGET },
+    })).toMatchObject({ used: 1, reserved: 0 });
   });
 });

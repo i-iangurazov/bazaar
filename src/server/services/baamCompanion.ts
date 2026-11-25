@@ -1,6 +1,7 @@
 import { baamReportPeriod } from "./baamPeriods";
 export { baamReportPeriod } from "./baamPeriods";
 import { resolveTextAiConfig } from "./aiProvider";
+import { withAiProviderFeature } from "./aiProviderTelemetry";
 import { readBaamImages } from "./baamVision";
 import { answerBaamAnalytics, latestBaamAnalysis } from "./baamAnalytics";
 import { answerBaamRecords } from "./baamRecordAnswers";
@@ -81,7 +82,7 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
   await assertAiConsent(identity);
   return withAiPrivacyIdentity(identity, () => withAiOperationBudget(
     { organizationId: identity.organizationId, operationKey: input.clientRequestId },
-    () => sendBudgetedBaamMessage(ctx, input),
+    () => withAiProviderFeature("baam_text", () => sendBudgetedBaamMessage(ctx, input)),
   ));
 }
 async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
