@@ -1,4 +1,5 @@
 import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
+import { withAiProviderFeature } from "./aiProviderTelemetry";
 import { prepareProductAiImages, type ProductAiImagePreparer } from "./productAiImages";
 import { AppError } from "@/server/services/errors";
 
@@ -60,6 +61,8 @@ type RequestedSpecSuggestion = {
   labelRu: string;
   options?: string[];
 };
+
+export type KeyedProductSpecSuggestion = RequestedSpecSuggestion & { key: string };
 
 const invalidSuggestionPatterns = [
   /не (?:видно|понятно|ясно|определ)/i,
@@ -150,7 +153,9 @@ const callOpenAiResponses = async (input: {
     try {
       const config = resolveTextAiConfig("vision", resolveOpenAiModel());
       if (!config) throw new AppError("aiSpecsNotConfigured", "BAD_REQUEST", 400);
-      response = await fetchAiResponse(config, JSON.parse(input.body), controller.signal);
+      response = await withAiProviderFeature("catalog_specs", () =>
+        fetchAiResponse(config, JSON.parse(input.body), controller.signal),
+      );
       responseBody = (await response.json().catch(() => null)) as OpenAiResponseBody | null;
     } catch (error) {
       if (isAbortLikeError(error)) {
@@ -262,6 +267,15 @@ export const matchProductSpecOption = (value: string, options: string[] = []) =>
   return looseMatches.length === 1 ? looseMatches[0] ?? null : null;
 };
 
+export const validateProductSpecSuggestion = (value: unknown, options?: string[]) => {
+  if (typeof value !== "string") return null;
+  const cleaned = cleanSuggestionValue(value);
+  if (!cleaned || cleaned.length > 120 || invalidSuggestionPatterns.some((pattern) => pattern.test(cleaned))) {
+    return null;
+  }
+  return matchProductSpecOption(cleaned, options);
+};
+
 const findMulticolorOption = (options: string[]) =>
   options.find((option) => {
     const normalized = normalizeComparable(option);
@@ -302,23 +316,27 @@ const extractJsonObject = (value: string) => {
   return null;
 };
 
+export const productSpecImageInstructions = [
+  "Используй только то, что уверенно видно на самом товаре, прозрачной упаковке или ясно читается на упаковке как описание товара.",
+  "Не придумывай бренд, производителя, модель, состав, материал, размер и другие внешние данные.",
+  "Если значение нельзя определить надежно, верни null.",
+  "Для поля type возвращай краткий тип продаваемого товара в форме короткого названия.",
+  "Для поля color возвращай основной цвет самого товара. Игнорируй фон, реквизит, тени и случайные акценты.",
+  "Для material возвращай материал только если он явно виден или надежно указан на упаковке.",
+  "Для compatibility не придумывай точную модель. Если точная модель не подтверждена, используй общий класс устройства, например: смартфон.",
+  "Для design возвращай краткое описание видимого дизайна, принта или стиля.",
+  "Для features возвращай 1-2 краткие особенности, которые видны или надежно следуют из категории товара.",
+  "Для purpose возвращай практическое назначение товара.",
+  "Если сам товар не виден, а видна только коробка, тип можно определить по надписям и оформлению коробки, но цвет возвращай только если цвет варианта товара действительно подтверждается изображением; иначе null.",
+  "Если у товара явно несколько основных цветов, используй разноцветный вариант только когда это действительно лучший ответ.",
+].join(" ");
+
 const buildSystemPrompt = () =>
   [
     "Ты заполняешь характеристики товара для маркетплейса по изображениям.",
     "Определи характеристики продаваемого товара, а не просто опиши фотографию.",
     "Верни строго один JSON-объект без markdown, пояснений и лишнего текста.",
-    "Используй только то, что уверенно видно на самом товаре, прозрачной упаковке или ясно читается на упаковке как описание товара.",
-    "Не придумывай бренд, производителя, модель, состав, материал, размер и другие внешние данные.",
-    "Если значение нельзя определить надежно, верни null.",
-    "Для поля type возвращай краткий тип продаваемого товара в форме короткого названия.",
-    "Для поля color возвращай основной цвет самого товара. Игнорируй фон, реквизит, тени и случайные акценты.",
-    "Для material возвращай материал только если он явно виден или надежно указан на упаковке.",
-    "Для compatibility не придумывай точную модель. Если точная модель не подтверждена, используй общий класс устройства, например: смартфон.",
-    "Для design возвращай краткое описание видимого дизайна, принта или стиля.",
-    "Для features возвращай 1-2 краткие особенности, которые видны или надежно следуют из категории товара.",
-    "Для purpose возвращай практическое назначение товара.",
-    "Если сам товар не виден, а видна только коробка, тип можно определить по надписям и оформлению коробки, но цвет возвращай только если цвет варианта товара действительно подтверждается изображением; иначе null.",
-    "Если у товара явно несколько основных цветов, используй разноцветный вариант только когда это действительно лучший ответ.",
+    productSpecImageInstructions,
   ].join(" ");
 
 const buildUserPrompt = (requestedSpecs: RequestedSpecSuggestion[]) => {
@@ -530,19 +548,7 @@ export const suggestProductSpecsFromImages = async (input: {
 
   const suggestions: Partial<Record<ProductSpecSuggestionKind, string>> = {};
   for (const spec of normalizedRequestedSpecs) {
-    const rawValue = parsed[spec.kind];
-    if (typeof rawValue !== "string") {
-      continue;
-    }
-    const cleanedValue = cleanSuggestionValue(rawValue);
-    if (
-      !cleanedValue ||
-      cleanedValue.length > 120 ||
-      invalidSuggestionPatterns.some((pattern) => pattern.test(cleanedValue))
-    ) {
-      continue;
-    }
-    const matchingValue = matchProductSpecOption(cleanedValue, spec.options);
+    const matchingValue = validateProductSpecSuggestion(parsed[spec.kind], spec.options);
     if (matchingValue) suggestions[spec.kind] = matchingValue;
   }
 

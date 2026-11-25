@@ -1,5 +1,11 @@
 import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
+import { withAiProviderFeature } from "./aiProviderTelemetry";
 import { prepareProductAiImages, type ProductAiImagePreparer } from "./productAiImages";
+import {
+  productSpecImageInstructions,
+  validateProductSpecSuggestion,
+  type KeyedProductSpecSuggestion,
+} from "./productSpecSuggestions";
 
 export { prepareProductAiImage } from "./productAiImages";
 import { AppError } from "@/server/services/errors";
@@ -193,7 +199,9 @@ const callOpenAiResponses = async (input: {
     try {
       const config = resolveProviderConfig();
       if (!config) throw new AppError("aiDescriptionNotConfigured", "BAD_REQUEST", 400);
-      response = await fetchAiResponse(config, JSON.parse(input.body), controller.signal);
+      response = await withAiProviderFeature("catalog_description", () =>
+        fetchAiResponse(config, JSON.parse(input.body), controller.signal),
+      );
       responseBody = (await response.json().catch(() => null)) as OpenAiResponseBody | null;
     } catch (error) {
       if (isAbortLikeError(error)) {
@@ -264,17 +272,19 @@ const callOpenAiResponses = async (input: {
   };
 };
 
-const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
+const buildSystemPrompt = (locale: ProductDescriptionLocale, structured = false) => {
   if (locale === "en") {
     return [
       "You write accurate, concise product descriptions for product cards.",
-      "Write only in English.",
+      structured ? "Write the description field in English." : "Write only in English.",
       "Describe only what is clearly visible in the images.",
       "Use provided product metadata only as secondary context when it is useful and does not conflict with the images.",
       "Describe the product for a shopper, not the photo, package, or image-review process.",
       "If the packaging or visible text makes the product type or purpose clear, mention it naturally.",
       "Do not invent composition, sizes, materials, flavor, volume, specifications, or certifications if they are not obvious.",
-      "Return plain text only, with no markdown or lists.",
+      structured
+        ? "Put plain text in the description field, with no markdown or lists."
+        : "Return plain text only, with no markdown or lists.",
       "Write a natural marketplace description in 2-4 sentences.",
       `The response must be at least ${MIN_DESCRIPTION_LENGTH} characters.`,
     ].join(" ");
@@ -283,13 +293,15 @@ const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
   if (locale === "kg") {
     return [
       "Сен товар карточкалары үчүн так жана кыска сүрөттөмө жазасың.",
-      "Текстти кыргыз тилинде жаз.",
+      structured ? "Сүрөттөмө талаасын кыргыз тилинде жаз." : "Текстти кыргыз тилинде жаз.",
       "Сүрөттөрдө так көрүнгөн нерселерди гана сүрөттө.",
       "Берилген товар метадайындарын сүрөттөргө каршы келбегенде гана кошумча контекст катары колдон.",
       "Сүрөттү же кутуну сүрөттөп жаткандай эмес, сатылып жаткан товарды кардар үчүн сүрөттө.",
       "Эгер таңгактагы жазуу жана көрүнүш боюнча товардын түрү же колдонуу максаты түшүнүктүү болсо, аны табигый түрдө айт.",
       "Курамы, өлчөмү, материалы, даамы, көлөмү же сертификаттары так көрүнбөсө, ойлоп таппа.",
-      "Жооп бир гана жөнөкөй текст болсун, markdown же тизме колдонбо.",
+      structured
+        ? "Сүрөттөмө талаасына жөнөкөй текст жаз, markdown же тизме колдонбо."
+        : "Жооп бир гана жөнөкөй текст болсун, markdown же тизме колдонбо.",
       "2-4 сүйлөмдөн турган, маркетплейс карточкасына ылайык табигый сүрөттөмө бер.",
       `Жооптун узундугу сөзсүз кеминде ${MIN_DESCRIPTION_LENGTH} белги болсун.`,
     ].join(" ");
@@ -297,13 +309,15 @@ const buildSystemPrompt = (locale: ProductDescriptionLocale) => {
 
   return [
     "Ты пишешь точные и краткие описания для карточек товаров.",
-    "Пиши только на русском языке.",
+    structured ? "Пиши описание на русском языке." : "Пиши только на русском языке.",
     "Описывай только то, что явно видно на изображениях.",
     "Используй переданные метаданные товара только как вторичный контекст, если они полезны и не противоречат изображениям.",
     "Описывай сам товар для покупателя, а не фотографию, коробку или процесс просмотра изображения.",
     "Если по оформлению и надписям очевиден тип товара или его назначение, назови это естественным языком.",
     "Не выдумывай состав, размеры, материалы, вкус, объем, характеристики или сертификаты, если это не очевидно.",
-    "Верни только обычный текст без markdown и списков.",
+    structured
+      ? "В поле description используй обычный текст без markdown и списков."
+      : "Верни только обычный текст без markdown и списков.",
     "Сформируй естественное описание для маркетплейса на 2-4 предложения.",
     `Длина ответа должна быть не меньше ${MIN_DESCRIPTION_LENGTH} символов.`,
   ].join(" ");
@@ -612,6 +626,133 @@ const buildDescriptionFromFacts = (input: {
     description = `${description} В итоге карточка получает содержательный текст, который передает внешний вид товара без лишних домыслов.`;
   }
   return description;
+};
+
+export const generateProductDescriptionAndSpecsFromImages = async (
+  input: GenerateProductDescriptionInput & { requestedSpecs: KeyedProductSpecSuggestion[] },
+) => {
+  const config = resolveProviderConfig();
+  if (!config) throw new AppError("aiDescriptionNotConfigured", "BAD_REQUEST", 400);
+
+  const locale = normalizeLocale(input.locale);
+  const images = await prepareProductAiImages(input.imageUrls, input.prepareImage);
+  if (!images.imageDataUrls.length) {
+    throw new AppError("aiDescriptionNoUsableImages", "BAD_REQUEST", 400);
+  }
+
+  const nullableString = { type: ["string", "null"] };
+  const specKeys = input.requestedSpecs.map((spec) => spec.key);
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["description", "specs"],
+    properties: {
+      description: nullableString,
+      specs: {
+        type: "object",
+        additionalProperties: false,
+        required: specKeys,
+        properties: Object.fromEntries(specKeys.map((key) => [key, nullableString])),
+      },
+    },
+  };
+
+  const providerStartedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_REQUEST_TIMEOUT_MS);
+  timeout.unref?.();
+  let response: Response;
+  let body: OpenAiResponseBody | null;
+  try {
+    // A charged or uncertain result must not trigger another image request.
+    response = await fetchAiResponse(config, {
+      reasoning: { effort: "minimal" },
+      max_output_tokens: Math.min(2048, MAX_OUTPUT_TOKENS + 96 + specKeys.length * 45),
+      text: {
+        format: {
+          type: "json_schema",
+          name: "marketplace_product_content",
+          schema,
+          ...(config.provider === "openai" ? { strict: true } : {}),
+        },
+      },
+      input: [
+        {
+          role: "system",
+          content: [{
+            type: "input_text",
+            text: [
+              buildSystemPrompt(locale, true),
+              "Return one JSON object with description and specs. Use null for any field that cannot be supported reliably.",
+              "Заполни specs по ключам из списка. Тип (kind) задаёт смысл характеристики, labelRu уточняет его. Если даны options, верни в точности один вариант из списка. Остальные значения пиши кратко на русском языке.",
+              productSpecImageInstructions,
+            ].join("\n"),
+          }],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `${buildUserPrompt({ ...input, locale })}\nRequested specifications: ${JSON.stringify(input.requestedSpecs)}`,
+            },
+            ...images.imageDataUrls.map((photo) => ({ type: "input_image", image_url: photo })),
+          ],
+        },
+      ],
+    }, controller.signal);
+    body = await response.json().catch(() => null) as OpenAiResponseBody | null;
+  } catch (error) {
+    if (isAbortLikeError(error)) {
+      throw new AppError("aiDescriptionTimedOut", "INTERNAL_SERVER_ERROR", 504);
+    }
+    if (error instanceof AppError) throw error;
+    throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", 502);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  input.logger?.info({
+    provider: config.provider,
+    model: config.model,
+    phase: "description-and-specs",
+    status: response.status,
+    providerDurationMs: Date.now() - providerStartedAt,
+    imageLoadDurationMs: images.imageLoadDurationMs,
+    loadedImageCount: images.imageDataUrls.length,
+    requestedSpecCount: specKeys.length,
+  }, "product description and spec generation timing");
+
+  if (response.status === 429) throw new AppError("rateLimited", "TOO_MANY_REQUESTS", 429);
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403 || /model/i.test(body?.error?.message ?? "")) {
+      throw new AppError("aiDescriptionNotConfigured", "BAD_REQUEST", response.status);
+    }
+    throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", response.status);
+  }
+
+  let parsed: unknown;
+  try {
+    if (!body?.status || body.status === "completed") parsed = JSON.parse(extractResponseText(body));
+  } catch {
+    // Report an invalid response without exposing model output in an error.
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", 502);
+  }
+
+  const result = parsed as { description?: unknown; specs?: unknown };
+  const description = typeof result.description === "string" ? cleanGeneratedDescription(result.description) : "";
+  const suggestions = new Map<string, string>();
+  if (result.specs && typeof result.specs === "object" && !Array.isArray(result.specs)) {
+    const values = result.specs as Record<string, unknown>;
+    for (const spec of input.requestedSpecs) {
+      if (!Object.hasOwn(values, spec.key)) continue;
+      const value = validateProductSpecSuggestion(values[spec.key], spec.options);
+      if (value) suggestions.set(spec.key, value);
+    }
+  }
+  return { description: isAcceptableDescription(description) ? description : null, suggestions };
 };
 
 export const generateProductDescriptionFromImages = async (

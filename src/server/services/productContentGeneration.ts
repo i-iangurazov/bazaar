@@ -1,7 +1,10 @@
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { AppError } from "@/server/services/errors";
 import { createProductAiImagePreparer, type ProductAiImagePreparer } from "./productAiImages";
-import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
+import {
+  generateProductDescriptionAndSpecsFromImages,
+  generateProductDescriptionFromImages,
+} from "@/server/services/productDescriptions";
 import { matchProductSpecOption, suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 
 export type ProductContentSpecKind =
@@ -365,6 +368,18 @@ export const generateProductContent = async (input: GenerateProductContentInput)
   const prepareImage = input.prepareImage ?? createProductAiImagePreparer();
   const locale = normalizeLocale(input.locale) ?? defaultLocale;
   const previousDescription = input.product.description?.trim() ?? "";
+  const requestedSpecs = (input.requestedSpecs ?? []).filter(
+    (spec) => spec.kind && !isDescriptionLikeSpec({ labelRu: spec.labelRu, attributeKey: spec.key }),
+  );
+  const imageSpecs = input.generateSpecs === false ? [] : requestedSpecs.flatMap((spec) => {
+    if (spec.kind === "manufacturer" || spec.kind === "model" ||
+      (spec.existingValue?.trim() && !overwriteSpecs)) return [];
+    return [{ key: spec.key, kind: spec.kind, labelRu: spec.labelRu, options: spec.options }];
+  });
+  const useCombinedRequest = input.generateDescription !== false &&
+    (!previousDescription || overwriteDescription) && imageUrls.length > 0 && imageSpecs.length > 0;
+  let combinedSuggestions: ReadonlyMap<string, string> | undefined;
+  let specsError: string | null = null;
 
   let description:
     | { status: "generated" | "overwritten"; value: string; reason: null }
@@ -381,7 +396,7 @@ export const generateProductContent = async (input: GenerateProductContentInput)
       description = { status: "skipped", value: null, reason: "aiDescriptionImageRequired" };
     } else {
       try {
-        const result = await generateProductDescriptionFromImages({
+        const descriptionInput = {
           name: input.product.name,
           category: input.category,
           isBundle: input.product.isBundle,
@@ -389,8 +404,22 @@ export const generateProductContent = async (input: GenerateProductContentInput)
           imageUrls,
           prepareImage,
           logger: input.logger,
-        });
-        const nextDescription = result.description.trim();
+        };
+        let nextDescription: string;
+        if (useCombinedRequest) {
+          const result = await generateProductDescriptionAndSpecsFromImages({
+            ...descriptionInput,
+            requestedSpecs: imageSpecs,
+          });
+          combinedSuggestions = result.suggestions;
+          if (!result.description) {
+            throw new AppError("aiDescriptionGenerationFailed", "INTERNAL_SERVER_ERROR", 502);
+          }
+          nextDescription = result.description;
+        } else {
+          const result = await generateProductDescriptionFromImages(descriptionInput);
+          nextDescription = result.description.trim();
+        }
         description =
           nextDescription && nextDescription !== previousDescription
             ? {
@@ -400,37 +429,32 @@ export const generateProductContent = async (input: GenerateProductContentInput)
               }
             : { status: "skipped", value: null, reason: "aiDescriptionGenerationSkipped" };
       } catch (error) {
-        description = { status: "failed", value: null, reason: toErrorMessage(error) };
+        const reason = toErrorMessage(error);
+        description = { status: "failed", value: null, reason };
+        if (useCombinedRequest && !combinedSuggestions) {
+          const specReasons: Record<string, string> = {
+            aiDescriptionNoUsableImages: "aiSpecNoUsableImages",
+            aiDescriptionNotConfigured: "aiSpecsNotConfigured",
+            aiDescriptionTimedOut: "aiSpecsTimedOut",
+            aiDescriptionGenerationFailed: "aiSpecsGenerationFailed",
+          };
+          specsError = specReasons[reason] ?? reason;
+        }
       }
     }
   }
 
-  const requestedSpecs = (input.requestedSpecs ?? []).filter(
-    (spec) => spec.kind && !isDescriptionLikeSpec({ labelRu: spec.labelRu, attributeKey: spec.key }),
-  );
   const generatedSpecs: GeneratedProductContentSpec[] = [];
-  let specsError: string | null = null;
   let skippedExistingSpecs = 0;
 
   if (input.generateSpecs !== false && requestedSpecs.length) {
-    const specsNeedingImage = requestedSpecs.filter(
-      (spec) =>
-        !spec.existingValue?.trim() || overwriteSpecs,
-    );
-    const aiRequestedSpecs = specsNeedingImage.filter(
-      (spec) => spec.kind !== "manufacturer" && spec.kind !== "model",
-    );
     let imageSuggestions: Partial<Record<ProductContentSpecKind, string>> = {};
-    if (aiRequestedSpecs.length && imageUrls.length) {
+    if (!useCombinedRequest && imageSpecs.length && imageUrls.length) {
       try {
         const result = await suggestProductSpecsFromImages({
           imageUrls,
           prepareImage,
-          requestedSpecs: aiRequestedSpecs.map((spec) => ({
-            kind: spec.kind as Exclude<ProductContentSpecKind, "manufacturer" | "model">,
-            labelRu: spec.labelRu,
-            options: spec.options,
-          })),
+          requestedSpecs: imageSpecs,
           logger: input.logger,
         });
         imageSuggestions = result.suggestions;
@@ -445,7 +469,7 @@ export const generateProductContent = async (input: GenerateProductContentInput)
         continue;
       }
 
-      const imageValue = imageSuggestions[spec.kind];
+      const imageValue = combinedSuggestions?.get(spec.key) ?? imageSuggestions[spec.kind];
       const metadataValue = inferProductSpecValueFromMetadata({
         kind: spec.kind,
         product: input.product,
@@ -455,7 +479,7 @@ export const generateProductContent = async (input: GenerateProductContentInput)
       const value = imageValue
         ? matchProductSpecOption(imageValue, spec.options)
         : metadataValue;
-      const cleaned = value ? cleanSpecValue(value) : "";
+      const cleaned = value && !spec.options?.length ? cleanSpecValue(value) : value;
       if (!cleaned || isDescriptionLikeSpec({ labelRu: cleaned })) {
         continue;
       }

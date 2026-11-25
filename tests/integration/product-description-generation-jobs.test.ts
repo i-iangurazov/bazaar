@@ -272,7 +272,7 @@ describeDb("product description generation jobs", () => {
           })
         ).used,
       ).toBe(0);
-      expect(f.generated).toHaveBeenCalledTimes(2);
+      expect(f.generated).toHaveBeenCalledTimes(1);
       expect(f.network).not.toHaveBeenCalled();
     } finally {
       await prisma.$executeRawUnsafe(
@@ -320,7 +320,7 @@ describeDb("product description generation jobs", () => {
         ).used,
       ).toBe(1);
       await runProductDescriptionGenerationJob({ jobId: f.job.id });
-      expect(f.generated).toHaveBeenCalledTimes(2);
+      expect(f.generated).toHaveBeenCalledTimes(1);
       expect(f.network).not.toHaveBeenCalled();
     } finally {
       await prisma.$executeRawUnsafe(
@@ -464,8 +464,13 @@ describeDb("product description generation jobs", () => {
     ).rejects.toMatchObject({ message: "productNotFound" });
   });
 
-  it("overwrites existing descriptions and characteristics when overwrite is enabled", async () => {
-    const { org, product, adminUser } = await seedBase();
+  it.each([
+    ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+    ProductDescriptionGenerationSource.M_MARKET,
+    ProductDescriptionGenerationSource.BAKAI_STORE,
+    ProductDescriptionGenerationSource.O_MARKET,
+  ])("overwrites the description and characteristics with one request for %s", async (source) => {
+    const { org, store, product, adminUser } = await seedBase();
     const category = "Аксессуары";
     await seedPhoneCaseSpecTemplate(org.id, category);
     const variant = await seedProductForAiJob({
@@ -479,18 +484,15 @@ describeDb("product description generation jobs", () => {
         material: "Силикон",
       },
     });
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(openAiTextResponse(generatedDescriptionText))
-      .mockResolvedValueOnce(
-        openAiTextResponse(
-          JSON.stringify({
-            type: "Чехол",
-            color: "Черный",
-            material: "Поликарбонат",
-          }),
-        ),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(openAiTextResponse(JSON.stringify({
+      description: generatedDescriptionText,
+      specs: {
+        type: "Чехол",
+        color: "Черный",
+        material: "Поликарбонат",
+      },
+    })));
+    vi.stubEnv("AI_PROVIDER", "openai");
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     vi.stubGlobal("fetch", fetchMock);
 
@@ -498,7 +500,8 @@ describeDb("product description generation jobs", () => {
       organizationId: org.id,
       actorId: adminUser.id,
       requestId: "req-description-job-overwrite",
-      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      source,
+      storeId: source === ProductDescriptionGenerationSource.PRODUCTS_PAGE ? undefined : store.id,
       productIds: [product.id],
       locale: "ru",
       overwriteExisting: true,
@@ -533,8 +536,108 @@ describeDb("product description generation jobs", () => {
     expect(job.skippedCount).toBe(0);
     expect(job.items[0]?.status).toBe(ProductDescriptionGenerationItemStatus.SUCCESS);
     expect(job.items[0]?.previousDescription).toBe("Старое описание");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mockDownloadRemoteImage).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.text.format).toMatchObject({
+      type: "json_schema",
+      strict: true,
+      schema: { properties: { specs: { required: ["type", "color", "material"] } } },
+    });
+    expect(body.input[1].content.filter((part: { type: string }) => part.type === "input_image")).toHaveLength(1);
+  });
+
+  it("saves valid characteristics from a partial response and keeps existing and unsupported fields intact", async () => {
+    const { org, store, product, adminUser } = await seedMeteredFixture();
+    const category = "Аксессуары";
+    await seedPhoneCaseSpecTemplate(org.id, category);
+    await prisma.attributeDefinition.update({
+      where: { organizationId_key: { organizationId: org.id, key: "color" } },
+      data: { type: AttributeType.SELECT, optionsRu: ["Серебристый.", "Красный"] },
+    });
+    await prisma.attributeDefinition.update({
+      where: { organizationId_key: { organizationId: org.id, key: "material" } },
+      data: { type: AttributeType.SELECT, optionsRu: ["Силикон"] },
+    });
+    const variant = await seedProductForAiJob({
+      organizationId: org.id,
+      productId: product.id,
+      category,
+      attributes: { type: "Значение магазина", store_field: "Не менять" },
+    });
+    vi.stubEnv("AI_PROVIDER", "deepseek");
+    vi.stubEnv("DEEPSEEK_API_KEY", "test-deepseek");
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      status: "completed",
+      output_text: JSON.stringify({
+        description: "На изображении виден чехол.",
+        specs: { type: "Подмена", color: "серебристый", material: "Стекло", unrequested: "Лишнее" },
+      }),
+      usage: { input_tokens: 200, output_tokens: 100 },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await startProductDescriptionGenerationJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-content-partial",
+      source: ProductDescriptionGenerationSource.O_MARKET,
+      storeId: store.id,
+      productIds: [product.id],
+      locale: "kg",
+      overwriteExisting: false,
+      runImmediately: false,
+    });
+    await runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: created.id });
+
+    const [savedProduct, savedVariant, job, allowances] = await Promise.all([
+      prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+      prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } }),
+      getProductDescriptionGenerationJob(org.id, created.id),
+      prisma.subscriptionUsageReservation.findMany({ where: { organizationId: org.id, resource: "ai" } }),
+    ]);
+    expect(savedProduct.description).toBeNull();
+    expect(savedVariant.attributes).toEqual({ type: "Значение магазина", store_field: "Не менять", color: "Серебристый." });
+    expect(job.successCount).toBe(1);
+    expect(job.items[0]?.generatedDescription).toBeNull();
+    expect(allowances).toEqual([expect.objectContaining({ state: "COMMITTED", units: 1 })]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.deepseek.com/responses");
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.text.format).not.toHaveProperty("strict");
+    expect(body.text.format.schema.properties.specs.required).toEqual(["color", "material"]);
+    expect(body.input[0].content[0].text).toContain("Сүрөттөмө талаасын кыргыз тилинде жаз.");
+  });
+
+  it("does not retry a combined request after a response was lost", async () => {
+    const { org, product, adminUser } = await seedBase();
+    const category = "Аксессуары";
+    await seedPhoneCaseSpecTemplate(org.id, category);
+    await seedProductForAiJob({
+      organizationId: org.id,
+      productId: product.id,
+      category,
+      attributes: { type: "Чехол" },
+    });
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("Response was lost"));
+    vi.stubEnv("AI_PROVIDER", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    vi.stubGlobal("fetch", fetchMock);
+    const created = await startProductDescriptionGenerationJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-content-ambiguous-response",
+      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      productIds: [product.id],
+      overwriteExisting: false,
+      runImmediately: false,
+    });
+    await runJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, { jobId: created.id });
+
+    const job = await getProductDescriptionGenerationJob(org.id, created.id);
+    expect(job.failedCount).toBe(1);
+    expect(job.items[0]?.errorMessage).toBe("aiDescriptionGenerationFailed");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -718,7 +821,10 @@ describeDb("product description generation jobs", () => {
   });
 
   it.each([
-    ["success", openAiTextResponse(generatedDescriptionText)],
+    ["success", openAiTextResponse(JSON.stringify({
+      description: generatedDescriptionText,
+      specs: { type: "Чехол", color: "Черный", material: "Поликарбонат" },
+    }))],
     ["failure", new Response("provider failed", { status: 503 })],
   ])(
     "fences a stale AI item after timeout when its held provider call returns %s",
@@ -793,6 +899,7 @@ describeDb("product description generation jobs", () => {
       expect(unchangedProduct.description).toBe("Стабильное описание");
       expect(unchangedVariant.attributes).toEqual({});
       expect(auditCount).toBe(baselineAudits);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     },
   );
 });

@@ -20,9 +20,10 @@ import {
   AI_GENERATED_SPEC_DEFINITIONS,
   generateProductContent,
   resolveProductContentSpecKind,
+  type ProductContentRequestedSpec,
   type ProductContentSpecKind,
 } from "@/server/services/productContentGeneration";
-import { createProductAiImagePreparer, type ProductAiImagePreparer } from "./productAiImages";
+import { createProductAiImagePreparer } from "./productAiImages";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
@@ -36,6 +37,7 @@ import {
   type UsageLease,
 } from "@/server/billing/subscriptionUsage";
 import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
+import { withAiProviderFeature } from "./aiProviderTelemetry";
 import { assertAiConsent, withAiPrivacyIdentity } from "./aiPrivacy";
 
 export const PRODUCT_DESCRIPTION_GENERATION_JOB_NAME = "product-description-generation";
@@ -613,7 +615,29 @@ const addCurrentSpecValue = (values: Map<string, string[]>, key: string, rawValu
   }
 };
 
-const prepareProductSpecs = async (input: {
+const planProductSpecs = (product: JobProduct, preparedTemplates: JobSpecPlan) => {
+  const category = product.category?.trim() ?? "";
+  const currentValues = productSpecCurrentValues(product);
+  const templates = new Map<string, ProductSpecTemplate>();
+  const requestedSpecs: ProductContentRequestedSpec[] = [];
+  if (category) {
+    for (const template of preparedTemplates.templateSpecs) {
+      if (!template.autofillKind) continue;
+      templates.set(template.attributeKey, template);
+      requestedSpecs.push({
+        key: template.attributeKey,
+        labelRu: template.labelRu,
+        labelKg: template.labelKg,
+        kind: template.autofillKind,
+        options: template.optionsRu,
+        existingValue: currentValues.get(template.attributeKey)?.[0] ?? null,
+      });
+    }
+  }
+  return { category, generatedTemplateMode: preparedTemplates.generatedTemplateMode, templates, requestedSpecs };
+};
+
+const prepareProductSpecs = (input: {
   organizationId: string;
   actorId: string;
   requestId: string;
@@ -621,88 +645,23 @@ const prepareProductSpecs = async (input: {
   leaseToken: string;
   itemId: string;
   itemLeaseToken: string;
-  product: {
-    id: string;
-    sku: string;
-    name: string;
-    category: string | null;
-    supplier: { name: string } | null;
-    photoUrl: string | null;
-    images: Array<{ url: string }>;
-    variants: Array<{
-      id: string;
-      attributes: Prisma.JsonValue;
-      attributeValues: Array<{ key: string; value: Prisma.JsonValue }>;
-    }>;
-  };
-  preparedTemplates: JobSpecPlan;
-  imageUrls: string[];
-  prepareImage: ProductAiImagePreparer;
+  product: JobProduct;
+  plan: ReturnType<typeof planProductSpecs>;
+  specs: Awaited<ReturnType<typeof generateProductContent>>["specs"];
   overwriteExisting: boolean;
-  logger: ProductDescriptionGenerationLogger;
-}): Promise<ProductSpecGenerationResult> => {
-  const category = input.product.category?.trim() ?? "";
+}): ProductSpecGenerationResult => {
+  const { category, generatedTemplateMode, templates, requestedSpecs } = input.plan;
   if (!category) {
     return { status: "skipped", reason: "missingCategory", filledValueCount: 0 };
   }
-
-  let { templateSpecs } = input.preparedTemplates;
-  const { generatedTemplateMode } = input.preparedTemplates;
-
-  const currentValues = productSpecCurrentValues(input.product);
-
-  const nextValues = new Map<string, unknown>();
-  const previousValues: Record<string, string | null> = {};
-  let supportedFieldCount = 0;
-  const supportedTemplateSpecs: ProductSpecTemplate[] = [];
-
-  for (const templateSpec of templateSpecs) {
-    if (!templateSpec.autofillKind) {
-      continue;
-    }
-    supportedFieldCount += 1;
-    supportedTemplateSpecs.push(templateSpec);
-    const existing = currentValues.get(templateSpec.attributeKey) ?? [];
-    previousValues[templateSpec.attributeKey] = existing[0] ?? null;
-  }
-
-  if (!supportedFieldCount) {
+  if (!requestedSpecs.length) {
     return { status: "skipped", reason: "noSupportedSpecFields", filledValueCount: 0 };
   }
 
-  const contentResult = await generateProductContent({
-    product: {
-      id: input.product.id,
-      sku: input.product.sku,
-      name: input.product.name,
-      supplier: input.product.supplier,
-    },
-    category,
-    imageUrls: input.imageUrls,
-    prepareImage: input.prepareImage,
-    locale: "ru",
-    mode: input.overwriteExisting ? "overwrite" : "missing-only",
-    generateDescription: false,
-    generateSpecs: true,
-    overwriteSpecs: input.overwriteExisting,
-    requestedSpecs: supportedTemplateSpecs.map((templateSpec) => ({
-      key: templateSpec.attributeKey,
-      labelRu: templateSpec.labelRu,
-      labelKg: templateSpec.labelKg,
-      kind: templateSpec.autofillKind as ProductSpecAutofillKind,
-      options: templateSpec.optionsRu,
-      existingValue: currentValues.get(templateSpec.attributeKey)?.[0] ?? null,
-    })),
-    integrationContext: {
-      source: "product-description-generation-job",
-    },
-    logger: input.logger,
-  });
-
-  for (const generatedSpec of contentResult.specs.values) {
-    const templateSpec = supportedTemplateSpecs.find(
-      (candidate) => candidate.attributeKey === generatedSpec.key,
-    );
+  const previousValues = Object.fromEntries(requestedSpecs.map((spec) => [spec.key, spec.existingValue ?? null]));
+  const nextValues = new Map<string, unknown>();
+  for (const generatedSpec of input.specs.values) {
+    const templateSpec = templates.get(generatedSpec.key);
     if (!templateSpec) {
       continue;
     }
@@ -712,18 +671,8 @@ const prepareProductSpecs = async (input: {
     );
   }
 
-  if (generatedTemplateMode && nextValues.size) {
-    templateSpecs = supportedTemplateSpecs.filter((templateSpec) =>
-      nextValues.has(templateSpec.attributeKey),
-    );
-  }
-
   if (!nextValues.size) {
-    const allSupportedFieldsAlreadyFilled =
-      supportedFieldCount > 0 &&
-      templateSpecs
-        .filter((templateSpec) => Boolean(templateSpec.autofillKind))
-        .every((templateSpec) => (currentValues.get(templateSpec.attributeKey) ?? []).length > 0);
+    const allSupportedFieldsAlreadyFilled = requestedSpecs.every((spec) => Boolean(spec.existingValue));
     if (allSupportedFieldsAlreadyFilled && !input.overwriteExisting) {
       return {
         status: "skipped",
@@ -733,12 +682,12 @@ const prepareProductSpecs = async (input: {
       };
     }
     if (
-      contentResult.specs.status === "failed" &&
-      contentResult.specs.reason !== "aiSpecNoUsableImages"
+      input.specs.status === "failed" &&
+      input.specs.reason !== "aiSpecNoUsableImages"
     ) {
       return {
         status: "failed",
-        reason: contentResult.specs.reason,
+        reason: input.specs.reason,
         filledValueCount: 0,
         previousValues,
       };
@@ -746,9 +695,9 @@ const prepareProductSpecs = async (input: {
     return {
       status: "skipped",
       reason:
-        generatedTemplateMode && contentResult.specs.reason === "noResolvedSpecValues"
+        generatedTemplateMode && input.specs.reason === "noResolvedSpecValues"
           ? "missingSpecTemplate"
-          : contentResult.specs.reason === "aiSpecNoUsableImages"
+          : input.specs.reason === "aiSpecNoUsableImages"
             ? "aiSpecNoUsableImages"
             : "noResolvedSpecValues",
       filledValueCount: 0,
@@ -764,6 +713,7 @@ const prepareProductSpecs = async (input: {
       leaseToken: input.itemLeaseToken,
     });
     if (generatedTemplateMode) {
+      const templateSpecs = [...templates.values()].filter((template) => nextValues.has(template.attributeKey));
       const existingTemplateCount = await tx.categoryAttributeTemplate.count({
         where: {
           organizationId: input.organizationId,
@@ -1296,39 +1246,36 @@ const processJobItem = async (input: {
       const previousDescription = product.description?.trim() ?? "";
       const imageUrls = collectProductImageUrls(product);
       const prepareImage = createProductAiImagePreparer();
+      const specPlan = planProductSpecs(product, preparedTemplates);
       let generatedDescription: string | null = null;
       let descriptionSkipReason: string | null = null;
       let descriptionFailureReason: string | null = null;
 
-      const descriptionResult = await generateProductContent({
-        product: {
-          id: product.id,
-          sku: product.sku,
-          name: product.name,
-          description: product.description,
-          isBundle: product.isBundle,
-          supplier: product.supplier,
-        },
-        category: product.category,
-        imageUrls,
-        prepareImage,
-        locale: input.job.locale,
-        mode: input.job.overwriteExisting ? "overwrite" : "missing-only",
-        generateDescription: true,
-        generateSpecs: false,
-        overwriteDescription: input.job.overwriteExisting,
-        integrationContext: {
-          source: "product-description-generation-job",
-        },
-        logger: input.logger,
-      }).then(
-        (result) => result.description,
-        (error) => ({
-          status: "failed" as const,
-          value: null,
-          reason: toErrorMessage(error),
+      const content = await withAiProviderFeature("marketplace_catalog", () =>
+        generateProductContent({
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            description: product.description,
+            isBundle: product.isBundle,
+            supplier: product.supplier,
+          },
+          category: product.category,
+          imageUrls,
+          prepareImage,
+          locale: input.job.locale,
+          mode: input.job.overwriteExisting ? "overwrite" : "missing-only",
+          generateDescription: true,
+          generateSpecs: specPlan.requestedSpecs.length > 0,
+          requestedSpecs: specPlan.requestedSpecs,
+          integrationContext: {
+            source: "product-description-generation-job",
+          },
+          logger: input.logger,
         }),
       );
+      const descriptionResult = content.description;
 
       if (descriptionResult.status === "generated" || descriptionResult.status === "overwritten") {
         generatedDescription = descriptionResult.value;
@@ -1351,7 +1298,7 @@ const processJobItem = async (input: {
         descriptionSkipReason = descriptionResult.reason;
       }
 
-      const specResult = await prepareProductSpecs({
+      const specResult = prepareProductSpecs({
         organizationId: input.job.organizationId,
         actorId: input.job.createdById,
         requestId: randomUUID(),
@@ -1360,11 +1307,9 @@ const processJobItem = async (input: {
         itemId: input.item.id,
         itemLeaseToken,
         product,
-        preparedTemplates,
-        imageUrls,
-        prepareImage,
+        plan: specPlan,
+        specs: content.specs,
         overwriteExisting: input.job.overwriteExisting,
-        logger: input.logger,
       });
 
       const specsUpdated = specResult.status === "generated" || specResult.status === "overwritten";
