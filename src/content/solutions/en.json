@@ -2,8 +2,8 @@
   "ui": {
     "home": "Home",
     "solutions": "Solutions",
-    "indexTitle": "Inventory and store management",
-    "indexDescription": "Find a practical approach to inventory, POS, stock movements, groceries, and clothing. Explore BAZAAR workflows and step-by-step guides for daily store operations.",
+    "indexTitle": "Product management and POS",
+    "indexDescription": "Product management, POS, and stock control for grocery and clothing shops. Step-by-step guides for daily store operations in Bazaar.",
     "indexIntro": "Software is useful when it solves a clearly defined task. These pages explain everyday store workflows, from the first product record to reconciling stock and closing a shift.",
     "primaryCta": "Start free",
     "pricingLink": "Compare plans",

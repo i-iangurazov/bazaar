@@ -263,8 +263,7 @@
     }
   },
   "auth": {
-    "loginTitle": "Inventory platform",
-    "loginSubtitle": "Sign in to manage stock, orders, and store performance.",
+    "loginTitle": "Sign in to Bazaar",
     "email": "Email",
     "emailPlaceholder": "you@company.com",
     "emailRequired": "Email is required.",
@@ -290,7 +289,7 @@
   },
   "meta": {
     "title": "BAZAAR",
-    "description": "Reliable inventory management for daily work."
+    "description": "Product management, point of sale, and stock control for stores."
   },
   "landing": {
     "meta": {

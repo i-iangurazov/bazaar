@@ -263,8 +263,7 @@
     }
   },
   "auth": {
-    "loginTitle": "Платформа запасов",
-    "loginSubtitle": "Войдите, чтобы управлять запасами, заказами и эффективностью магазинов.",
+    "loginTitle": "Вход в Bazaar",
     "email": "Email",
     "emailPlaceholder": "you@company.com",
     "emailRequired": "Email обязателен.",
@@ -290,7 +289,7 @@
   },
   "meta": {
     "title": "BAZAAR",
-    "description": "Надежное управление запасами для ежедневной работы."
+    "description": "Система учёта товаров, касса и контроль остатков для магазинов."
   },
   "landing": {
     "meta": {

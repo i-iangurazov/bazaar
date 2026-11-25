@@ -1,10 +1,10 @@
 {
   "meta": {
-    "title": "BAZAAR — inventory management and POS for shops in Kyrgyzstan",
-    "description": "BAZAAR (Базар) is inventory software for shops in Kyrgyzstan. POS, stock, receiving, transfers and stock counts. Try it free for 7 days, without a card.",
+    "title": "BAZAAR — product management and POS for shops in Kyrgyzstan",
+    "description": "BAZAAR (Базар) is product management and POS software for shops in Kyrgyzstan, with stock control, receiving, transfers and stock counts. Try it free for 7 days, without a card.",
     "socialTitle": "BAZAAR — your entire store in one system",
     "imageAlt": "BAZAAR business dashboard",
-    "structuredDescription": "BAZAAR (Базар) is inventory management software for shops in Kyrgyzstan, with POS, stock, receiving, stock counts, customers and analytics."
+    "structuredDescription": "BAZAAR (Базар) is product management and POS software for shops in Kyrgyzstan, with stock control, receiving, stock counts, customers and analytics."
   },
   "nav": {
     "home": "Bazaar home",
@@ -21,9 +21,9 @@
     "start": "Start for free"
   },
   "hero": {
-    "kicker": "POS and inventory for your shop",
+    "kicker": "Product management and POS for your shop",
     "title": "Your entire store. In one system.",
-    "lead": "BAZAAR is inventory management software for shops in Kyrgyzstan. Receive products, record sales and track stock together in your browser.",
+    "lead": "BAZAAR is product management and POS software for shops in Kyrgyzstan. Manage products, record sales and track stock in your browser.",
     "view": "See Bazaar in action",
     "note": "In your browser, on desktop, tablet and phone",
     "desktopAlt": "The actual Bazaar desktop POS with a product catalog and current receipt",

@@ -1,6 +1,6 @@
-# BAZAAR Inventory Platform
+# BAZAAR
 
-A production-minded Retail Inventory Management Platform built for a single-country rollout. The system prioritizes inventory correctness, auditability, and straightforward operations for non-technical retail staff.
+BAZAAR provides product management, point of sale, and stock control for retail teams in Kyrgyzstan. It tracks stock movements and keeps an audit trail of store operations.
 
 ## Tech Stack
 - **TypeScript-only**

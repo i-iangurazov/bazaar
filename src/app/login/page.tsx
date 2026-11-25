@@ -7,13 +7,16 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export const generateMetadata = async (): Promise<Metadata> => ({
-  title: (await getTranslations("auth"))("loginTitle"),
-  robots: { index: false, follow: true },
-});
+export const generateMetadata = async (): Promise<Metadata> => {
+  const t = await getTranslations("auth");
+  return {
+    title: { absolute: t("loginTitle") },
+    robots: { index: false, follow: true },
+  };
+};
 
 const LoginPage = async () => {
-  const t = await getTranslations("auth");
+  const [t, tMeta] = await Promise.all([getTranslations("auth"), getTranslations("meta")]);
   const mode = process.env.SIGNUP_MODE ?? "invite_only";
   const isOpenMode = mode === "open";
 
@@ -28,7 +31,7 @@ const LoginPage = async () => {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>{t("loginTitle")}</CardTitle>
-          <p className="text-sm text-muted-foreground">{t("loginSubtitle")}</p>
+          <p className="text-sm text-muted-foreground">{tMeta("description")}</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <LoginForm />

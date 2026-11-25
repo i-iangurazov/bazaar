@@ -1,7 +1,7 @@
 {
   "name": "Bazaar",
   "short_name": "Bazaar",
-  "description": "Retail inventory, POS, and operations platform.",
+  "description": "Система учёта товаров, касса и контроль остатков для магазинов.",
   "id": "/dashboard",
   "start_url": "/dashboard",
   "scope": "/",
