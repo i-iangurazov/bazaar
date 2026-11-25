@@ -131,7 +131,8 @@ export async function verifyStoreVisibilityAndTransfer(
       assert.equal(hidden.isDeleted, false);
       assert.equal(hidden.hiddenInStore, true);
       assert.equal(hidden.onHandQty, 3);
-      await current.getByRole("button", { name: /Ещё фильтры/ }).click();
+      const filterLabel = width < 768 ? "Фильтры" : "Ещё фильтры";
+      await current.getByRole("button", { name: filterLabel, exact: true }).click();
       await current
         .getByRole("switch", { name: "Показывать архив и скрытые", exact: true })
         .click();
