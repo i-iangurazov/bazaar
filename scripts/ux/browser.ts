@@ -480,9 +480,9 @@ try {
     "Product form retains values on network failure; retry creates one product and restores list context",
   );
   await dashboard.goto(`${base}/pos?store=${f.otherStoreId}`);
-  await dashboard.locator("#pos-entry-store").waitFor();
+  const posStore = dashboard.getByRole("combobox").and(dashboard.locator("#pos-entry-store"));
   await until(
-    async () => (await dashboard.locator("#pos-entry-store").innerText()).includes("Ош"),
+    () => posStore.evaluateAll((fields) => fields.length === 1 && Boolean(fields[0].textContent?.includes("Ош"))),
     "POS store context did not load",
   );
   assert.equal(
