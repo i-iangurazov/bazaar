@@ -1383,6 +1383,8 @@ export const saveGeneratedImageToProduct = async (input: {
   const setAsPrimary = Boolean(input.setAsPrimary);
 
   const result = await prisma.$transaction(async (tx) => {
+    // Match catalog content writers before taking the product and album locks.
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
     await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [targetProductId], {
       allowShared: true,
     });

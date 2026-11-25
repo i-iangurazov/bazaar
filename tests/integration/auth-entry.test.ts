@@ -150,6 +150,43 @@ describeDb("persisted credentials and login destinations", () => {
     }
   });
 
+  it("waits for an organization account change before locking the phone owner", async () => {
+    const user = users.STAFF;
+    const organizationId = user.organizationId!;
+    const caller = createTestCaller({ ...user, organizationId });
+    let aliasResult: Promise<Array<PromiseSettledResult<{ userId: string; phone: string | null }>>> | undefined;
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+        const [backend] = await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`;
+        aliasResult = Promise.allSettled([
+          caller.userSettings.updateMyLoginPhone({ phone: "+996555123456", password }),
+        ]);
+
+        await vi.waitFor(async () => {
+          const [state] = await tx.$queryRaw<Array<{ waiting: boolean }>>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_locks
+              WHERE NOT granted AND ${backend!.pid} = ANY(pg_blocking_pids(pid))
+            ) AS waiting
+          `;
+          expect(state?.waiting).toBe(true);
+        }, { timeout: 2_000 });
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE NOWAIT`;
+        await tx.user.update({
+          where: { id: user.id },
+          data: { isActive: false, sessionVersion: { increment: 1 } },
+        });
+      });
+    } finally {
+      await aliasResult;
+    }
+
+    expect(await aliasResult).toMatchObject([{ status: "rejected", reason: { message: "userNotFound" } }]);
+    expect(await prisma.userLoginPhone.findUnique({ where: { userId: user.id } })).toBeNull();
+  });
+
   it("rejects a previously signed session after its database version is revoked", async () => {
     const { token } = await signedSession(users.STAFF);
     await prisma.user.update({ where: { id: users.STAFF.id }, data: { sessionVersion: { increment: 1 } } });

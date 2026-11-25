@@ -73,7 +73,8 @@ export const updateMyLoginPhone = async (input: UserSettingsScope & { phone: str
 
   try {
     return await prisma.$transaction(async (tx) => {
-      // Lock the owner before writing the alias, then check for a concurrent reset or deletion.
+      // Match the organization-first lock order of staff-account writers.
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${input.organizationId} FOR NO KEY UPDATE`;
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${input.userId} FOR UPDATE`;
       const user = await tx.user.findFirst({
         where,
