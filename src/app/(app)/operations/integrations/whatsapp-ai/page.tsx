@@ -218,7 +218,7 @@ function Editor({
                     )}
                   </div>
                   <div className="flex items-center justify-between gap-4 rounded-md bg-secondary p-3">
-                    <Label htmlFor="wa-enabled">{t("enabled")}</Label>
+                    <Label htmlFor="wa-enabled">{t(data.profile.replyMode === "REVIEW" ? "reviewEnabled" : "enabled")}</Label>
                     <Switch
                       id="wa-enabled"
                       checked={data.connection?.aiEnabled ?? false}
@@ -282,6 +282,16 @@ function Editor({
                   {tab === "assistant" ? (
                     <>
                       <div className="grid gap-4 sm:grid-cols-2">
+                        <Choice
+                          label={t("replyMode")}
+                          value={profile.replyMode}
+                          onChange={(v) => updateProfile("replyMode", v as typeof profile.replyMode)}
+                          options={[
+                            { value: "REVIEW", label: t("reviewReplies") },
+                            { value: "AUTO", label: t("automaticReplies") },
+                          ]}
+                          disabled={!editable}
+                        />
                         <Choice
                           label={t("style")}
                           value={profile.style}

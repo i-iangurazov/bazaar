@@ -12,11 +12,12 @@ import {
   whatsappProfileSchema,
   whatsappWindowOpen,
 } from "@/lib/whatsapp-ai";
-import { whatsappOrganizationLock } from "./access";
+import { whatsappAccess, whatsappOrganizationLock } from "./access";
 import { generateWhatsAppAnswer, whatsAppHeartbeat } from "./assistant";
 import { renderWhatsAppAnswer, whatsappAnswerSchema } from "./answer";
 import { refreshWhatsAppOffers } from "./catalog";
-import { decryptWhatsAppSecret, whatsappConfig } from "./config";
+import { decryptWhatsAppSecret, whatsappConfig, whatsappPilotStoreAllowed } from "./config";
+import { WHATSAPP_DRAFT_STATE, WHATSAPP_DRAFT_STATES } from "./drafts";
 import { sendGupshupText, WhatsAppUnknownSend } from "./gupshup";
 import { whatsappImage } from "./media";
 import {
@@ -71,6 +72,7 @@ async function processIncoming(id: string) {
     if (busy) return null;
     if (
       c.mode !== "AI" ||
+      !whatsappPilotStoreAllowed(message.storeId) ||
       !connection.aiEnabled ||
       connection.state !== "CONNECTED" ||
       !connection.knowledgePublished ||
@@ -134,7 +136,7 @@ async function processIncoming(id: string) {
         where: {
           conversationId: seed.conversationId,
           direction: "OUTBOUND",
-          actorId: null,
+          OR: [{ actorId: null }, { responseToId: { not: null } }],
           state: { in: ["SENT", "DELIVERED", "READ"] },
         },
       })) === 0;
@@ -158,9 +160,13 @@ async function processIncoming(id: string) {
       const c = current.conversation;
       if (
         c.mode !== "AI" ||
+        !whatsappPilotStoreAllowed(current.storeId) ||
         c.generationVersion !== claimed.conversation.generationVersion ||
         c.inboundSequence !== seed.inboundSequence ||
         !c.connection.aiEnabled ||
+        c.connection.state !== "CONNECTED" ||
+        !c.connection.knowledgePublished ||
+        !whatsappWindowOpen(c.lastInboundAt) ||
         c.connection.configVersion !== claimed.connection.configVersion
       ) {
         await tx.whatsAppMessage.update({
@@ -169,6 +175,7 @@ async function processIncoming(id: string) {
         });
         return;
       }
+      const review = whatsappProfileSchema.parse(c.connection.profile).replyMode === "REVIEW";
       const version = c.generationVersion + (result.needsHuman ? 1 : 0);
       if (result.needsHuman)
         await tx.whatsAppConversation.update({
@@ -178,7 +185,7 @@ async function processIncoming(id: string) {
       else
         await tx.whatsAppConversation.update({
           where: { id: c.id },
-          data: { needsHuman: false, lastIssue: null },
+          data: { needsHuman: review, lastIssue: null },
         });
       await tx.whatsAppMessage.upsert({
         where: { responseToId: current.id },
@@ -192,7 +199,7 @@ async function processIncoming(id: string) {
           providerEventKey: `ai:${current.id}`,
           inboundSequence: c.inboundSequence,
           body: result.body,
-          state: "PREPARED",
+          state: review ? WHATSAPP_DRAFT_STATE : "PREPARED",
           generationVersion: version,
           configVersion: c.connection.configVersion,
           facts: { answer: result.answer, firstReply, handoff: result.needsHuman },
@@ -224,18 +231,21 @@ async function processOutbound(id: string) {
   try {
     const c = seed.conversation,
       connection = c.connection;
+    const approvedDraft = seed.actorId !== null && seed.responseToId !== null;
+    const needsCurrentReply = seed.actorId === null || approvedDraft;
     const facts = seed.actorId ? null : factsSchema.parse(seed.facts);
     const allowedMode = seed.actorId
-      ? c.mode === "HUMAN"
+      ? c.mode === "HUMAN" || (approvedDraft && c.mode === "AI")
       : c.mode === "AI" || (facts?.handoff && c.mode === "HUMAN");
     if (
       !(seed.actorId ? whatsappConfig().transportReady : whatsappConfig().ready) ||
+      !whatsappPilotStoreAllowed(seed.storeId) ||
       !allowedMode ||
       connection.state !== "CONNECTED" ||
-      (!seed.actorId && !connection.aiEnabled) ||
+      (needsCurrentReply && !connection.aiEnabled) ||
       c.generationVersion !== seed.generationVersion ||
-      (!seed.actorId && c.inboundSequence !== seed.inboundSequence) ||
-      (!seed.actorId && connection.configVersion !== seed.configVersion) ||
+      (needsCurrentReply && c.inboundSequence !== seed.inboundSequence) ||
+      (needsCurrentReply && connection.configVersion !== seed.configVersion) ||
       c.buyerCountry !== "KG" ||
       !whatsappWindowOpen(c.lastInboundAt)
     )
@@ -290,17 +300,26 @@ async function processOutbound(id: string) {
       });
       if (
         !current ||
+        !whatsappPilotStoreAllowed(seed.storeId) ||
         current.conversation.generationVersion !== seed.generationVersion ||
-        (!seed.actorId && current.conversation.connection.configVersion !== seed.configVersion) ||
-        (!seed.actorId && !current.conversation.connection.aiEnabled) ||
+        (needsCurrentReply && current.conversation.connection.configVersion !== seed.configVersion) ||
+        (needsCurrentReply && !current.conversation.connection.aiEnabled) ||
         current.conversation.connection.state !== "CONNECTED" ||
         current.conversation.buyerCountry !== "KG" ||
-        (!seed.actorId && current.conversation.inboundSequence !== seed.inboundSequence) ||
+        (needsCurrentReply && current.conversation.inboundSequence !== seed.inboundSequence) ||
         !whatsappWindowOpen(current.conversation.lastInboundAt) ||
         current.conversation.archived ||
         current.conversation.redactedAt
       )
         return "STALE";
+      if (approvedDraft && seed.actorId) {
+        await whatsappAccess(
+          { id: seed.actorId, organizationId: seed.organizationId },
+          seed.storeId,
+          { active: true },
+          tx,
+        );
+      }
       const older = await tx.whatsAppMessage.count({
         where: {
           conversationId: c.id,
@@ -450,7 +469,7 @@ export async function reconcileWhatsAppStatuses(limit = 100) {
               messages: {
                 none: {
                   direction: "OUTBOUND",
-                  state: { notIn: ["FAILED", "CANCELLED"] },
+                  state: { notIn: ["FAILED", "CANCELLED", ...WHATSAPP_DRAFT_STATES] },
                   OR: [
                     { createdAt: { gt: message.createdAt } },
                     { createdAt: message.createdAt, id: { gt: message.id } },

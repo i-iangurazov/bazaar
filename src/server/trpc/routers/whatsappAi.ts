@@ -131,6 +131,16 @@ export const whatsappAiRouter = router({
     .mutation(({ ctx, input }) =>
       safe(() => workspace.queueWhatsAppManual(ctx.user, input, ctx.requestId)),
     ),
+  approveDraft: mutation
+    .input(conversation.extend({ messageId: id, body: z.string().trim().min(1).max(4096) }))
+    .mutation(({ ctx, input }) =>
+      safe(() => workspace.approveWhatsAppDraft(ctx.user, input, ctx.requestId)),
+    ),
+  discardDraft: mutation
+    .input(conversation.extend({ messageId: id }))
+    .mutation(({ ctx, input }) =>
+      safe(() => workspace.discardWhatsAppDraft(ctx.user, input, ctx.requestId)),
+    ),
   payments: whatsappProcedure.query(({ ctx }) =>
     safe(() => payments.whatsAppPaymentState(ctx.user)),
   ),

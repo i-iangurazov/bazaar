@@ -13,6 +13,8 @@ import { whatsappAccess } from "@/server/whatsapp/access";
 import { reserveWhatsAppUnit, settleWhatsAppUnit, whatsappQuota } from "@/server/whatsapp/quota";
 import { receiveWhatsAppWebhook } from "@/server/whatsapp/webhook";
 import {
+  approveWhatsAppDraft,
+  readWhatsAppConversation,
   queueWhatsAppManual,
   setWhatsAppConversationMode,
   setWhatsAppEnabled,
@@ -96,6 +98,26 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
         configVersion: connection.configVersion,
       },
     });
+  const prepareReview = async () => {
+    await prisma.whatsAppConnection.update({
+      where: { id: connection.id },
+      data: { profile: whatsappProfileSchema.parse({ replyMode: "REVIEW" }) },
+    });
+    await prisma.whatsAppConversation.update({ where: { id: conversation.id }, data: { mode: "AI" } });
+    vi.spyOn(assistant, "generateWhatsAppAnswer").mockResolvedValue({
+      body: "Синтетический черновик ответа",
+      needsHuman: false,
+      answer: {
+        language: "ru", intent: "greeting", offerRefs: [], knowledgeTopics: [], faqIndices: [],
+        question: "", socialText: "",
+      },
+      offerRefs: [], language: "ru", inputTokens: 10, outputTokens: 10,
+    });
+    await incoming();
+    await prisma.whatsAppMessage.updateMany({ where: { state: "RECEIVED" }, data: { nextAttemptAt: new Date(0) } });
+    await runWhatsAppWorkerBatch();
+    return prisma.whatsAppMessage.findFirstOrThrow({ where: { conversationId: conversation.id, state: "REVIEW" } });
+  };
   // Persisted historical pack invoices exercise legacy capture/refund and
   // reservation accounting; new purchases below use only GoPay's wire protocol.
   const historicalInvoice = () =>
@@ -900,6 +922,76 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     });
     await runWhatsAppWorkerBatch();
     expect(await prisma.whatsAppMessage.count({ where: { direction: "OUTBOUND" } })).toBe(0);
+  });
+  it("holds the assistant suggestion for review and sends the edited approval once", async () => {
+    const send = vi.spyOn(transport, "sendGupshupText").mockResolvedValue("provider-approved-review");
+    const draft = await prepareReview();
+    await runWhatsAppWorkerBatch();
+    expect(send).not.toHaveBeenCalled();
+    expect(await prisma.whatsAppCreditUse.findUnique({ where: { messageId: draft.id } })).toBeNull();
+    const thread = await readWhatsAppConversation(actor(), conversation.id);
+    expect(thread.draft).toEqual({ id: draft.id, body: draft.body });
+    expect(thread.messages.some((message) => message.id === draft.id)).toBe(false);
+    expect(thread.needsHuman).toBe(true);
+    const input = { conversationId: conversation.id, messageId: draft.id, body: "Ответ после проверки" };
+    const approvals = await Promise.all([approveWhatsAppDraft(actor(), input, "approve"), approveWhatsAppDraft(actor(), input, "retry")]);
+    expect(approvals).toEqual([{ id: draft.id, state: "PREPARED" }, { id: draft.id, state: "PREPARED" }]);
+    await expect(approveWhatsAppDraft(actor(), { ...input, body: "Другой текст" }, "conflict")).rejects.toThrow("whatsappDraftChanged");
+    expect(await prisma.whatsAppCreditUse.findUnique({ where: { messageId: draft.id } })).toBeNull();
+    await Promise.all([runWhatsAppWorkerBatch(), runWhatsAppWorkerBatch()]);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ body: input.body, messageId: draft.id }));
+    expect(await whatsappQuota(f.org.id)).toMatchObject({ reserved: 1, includedUsed: 0 });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await webhook({ statuses: [{ id: "provider-approved-review", status: "delivered", timestamp: Math.floor(Date.now() / 1000) }] });
+      await reconcileWhatsAppStatuses();
+    }
+    expect(await whatsappQuota(f.org.id)).toMatchObject({ reserved: 0, includedUsed: 1 });
+    expect(await readWhatsAppConversation(actor(), conversation.id)).toMatchObject({ draft: null, mode: "AI" });
+  });
+  it("clears outdated drafts on a new customer question and on staff takeover", async () => {
+    const draft = await prepareReview();
+    const input = { conversationId: conversation.id, messageId: draft.id, body: draft.body };
+    await incoming();
+    await expect(approveWhatsAppDraft(actor(), input, "stale")).rejects.toThrow("whatsappDraftChanged");
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: draft.id } })).toMatchObject({
+      state: "REVIEW_DISCARDED", body: "",
+    });
+    await prisma.whatsAppMessage.updateMany({ where: { state: "RECEIVED" }, data: { nextAttemptAt: new Date(0) } });
+    await runWhatsAppWorkerBatch();
+    const thread = await readWhatsAppConversation(actor(), conversation.id);
+    expect(thread.draft?.id).toBeTruthy();
+    await setWhatsAppConversationMode(actor(), conversation.id, "HUMAN", thread.version, "takeover");
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: thread.draft!.id } })).toMatchObject({
+      state: "REVIEW_DISCARDED", body: "",
+    });
+  });
+  it("stops an already-approved reply if the customer sends a new message before dispatch", async () => {
+    const send = vi.spyOn(transport, "sendGupshupText").mockResolvedValue("unexpected-stale-send");
+    const draft = await prepareReview();
+    await approveWhatsAppDraft(actor(), { conversationId: conversation.id, messageId: draft.id, body: draft.body }, "approve");
+    await incoming();
+    await runWhatsAppWorkerBatch();
+    expect(send).not.toHaveBeenCalled();
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: draft.id } })).toMatchObject({ state: "CANCELLED" });
+    expect(await prisma.whatsAppCreditUse.findUnique({ where: { messageId: draft.id } })).toBeNull();
+  });
+  it("keeps history and stop available outside the configured pilot, without dispatching queued replies", async () => {
+    const draft = await prepareReview();
+    const pending = await approveWhatsAppDraft(actor(), { conversationId: conversation.id, messageId: draft.id, body: draft.body }, "approve");
+    vi.stubEnv("WHATSAPP_PILOT_STORE_IDS", "another-pilot-store");
+    expect(await whatsAppWorkspace(actor(), f.store.id)).toMatchObject({
+      entitled: true, active: true, readiness: { ready: false, transportReady: false, onboardingReady: false, previewReady: false },
+    });
+    expect((await readWhatsAppConversation(actor(), conversation.id)).messages.length).toBeGreaterThan(0);
+    await expect(queueWhatsAppManual(actor(), {
+      conversationId: conversation.id, body: "Blocked", idempotencyKey: randomUUID(),
+    }, "not-pilot")).rejects.toThrow("whatsappPilotStoreNotAllowed");
+    const send = vi.spyOn(transport, "sendGupshupText").mockResolvedValue("unexpected-outside-pilot");
+    await runWhatsAppWorkerBatch();
+    expect(send).not.toHaveBeenCalled();
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: pending.id } })).toMatchObject({ state: "CANCELLED" });
+    await expect(setWhatsAppEnabled(actor(), f.store.id, false, "stop")).resolves.toEqual({ enabled: false });
   });
   it("expires stale sending leases into UNKNOWN without repeating the message", async () => {
     const m = await outgoing();

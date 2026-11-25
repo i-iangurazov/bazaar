@@ -160,6 +160,10 @@ an additional WHATSAPP_PACK_PAYMENTS_APPROVED gate. HARDENING_EXTERNAL_PROVIDER_
 =disabled blocks provider calls in isolated verification environments.
 WHATSAPP_DAILY_BUDGET_USD_MICROS bounds estimated global AI expense; it does not
 replace the contractual BSP/Meta cap or represent audited accounting.
+For a limited rollout, set WHATSAPP_PILOT_STORE_IDS to the same comma-separated
+store IDs on the web app and the message worker. A supplied empty or malformed
+list blocks new pilot activity. An omitted setting keeps the existing scope.
+Deploy the review-capable web app and worker before enabling the pilot.
 
 Merchant UI
 -----------
@@ -167,7 +171,12 @@ Operations -> Integrations -> WhatsApp AI.
 Connection: choose store, open official provider onboarding, complete Meta's
 business/number verification, then press Verify connection in Bazaar. No client
 API keys are entered. A consumed/expired onboarding nonce cannot be reused.
-Assistant: select one of six styles, language, address form and length.
+Assistant: choose employee review or automatic replies, then set the style,
+language, address form and length. New connections start in employee review.
+In review mode the assistant saves a draft in the conversation. An employee
+can edit, discard or approve it for sending. The worker reserves a reply after
+approval and settles it on delivery. A new inbound message, takeover, or
+reconnection invalidates the previous draft.
 Knowledge: publish reviewed address/hours/delivery/payment/return rules and FAQ.
 Do not manually copy product prices/stock into free text. Preview uses genuine
 DeepSeek once its data-processing gate is approved, sends no WhatsApp message,
@@ -187,6 +196,9 @@ Real-number pilot (required; not substituted by automated tests)
   Check staff mobile echoes stop AI; merely reading does not send read/typing.
 - Actual delivered, read, failed and delayed receipts; preserve opaque callback
   data. Simulate a connection timeout and worker restart; no automatic resend.
+- Review a draft with the provider send log and quota open. Edit and approve it
+  once, then retry the same approval. Check delivery, a single debit, and
+  invalidation on a new inbound message. Verify another store cannot send.
 - Quota exhaustion, staff reply accounting, monthly boundary, purchased lots,
   provider wallet depletion and the provider-enforced incoming spend cap.
 - A real GoPay Test payment, rejected payment, duplicate callback and delayed

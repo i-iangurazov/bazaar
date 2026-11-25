@@ -10,6 +10,7 @@ import {
 } from "@/lib/whatsapp-ai";
 import {
   whatsappConfig,
+  whatsappPilotStoreAllowed,
   encryptWhatsAppSecret,
   decryptWhatsAppSecret,
   validWhatsAppWebhookSecret,
@@ -95,6 +96,14 @@ describe("WhatsApp commercial boundaries", () => {
       ready: false,
       transportReady: true,
     });
+  });
+  it("confines a configured pilot to exact store IDs and fails closed on malformed values", () => {
+    const storeId = "pilot-store-01";
+    expect(whatsappPilotStoreAllowed(storeId, {})).toBe(true);
+    expect(whatsappPilotStoreAllowed(storeId, { WHATSAPP_PILOT_STORE_IDS: "pilot-store-02, pilot-store-01" })).toBe(true);
+    expect(whatsappPilotStoreAllowed(storeId, { WHATSAPP_PILOT_STORE_IDS: "pilot-store-011" })).toBe(false);
+    expect(whatsappPilotStoreAllowed(storeId, { WHATSAPP_PILOT_STORE_IDS: "pilot-store-01,*" })).toBe(false);
+    expect(whatsappPilotStoreAllowed(storeId, { WHATSAPP_PILOT_STORE_IDS: "" })).toBe(false);
   });
   it.each([
     ["https://bazaar.kg", "https://www.bazaar.kg"],

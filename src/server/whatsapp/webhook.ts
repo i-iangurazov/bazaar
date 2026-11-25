@@ -1,10 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { whatsappPeriod, whatsappRecipientCountry } from "@/lib/whatsapp-ai";
-import { decryptWhatsAppSecret, validWhatsAppWebhookSecret, whatsappConfig } from "./config";
+import { decryptWhatsAppSecret, validWhatsAppWebhookSecret, whatsappConfig, whatsappPilotStoreAllowed } from "./config";
 import { normalizeWhatsAppEvents, WHATSAPP_ACCOUNT_LOCKED, type WhatsAppNormalizedEvent } from "./events";
 import { cancelWhatsAppPrepared } from "./workspace";
 import { whatsappOrganizationLock } from "./access";
+import { discardWhatsAppDrafts } from "./drafts";
 
 export async function receiveWhatsAppWebhook(request: Request, connectionId: string) {
   const reply = (status: number) =>
@@ -159,6 +160,7 @@ export async function receiveWhatsAppWebhook(request: Request, connectionId: str
       const needsHuman =
         !supported ||
         buyerCountry !== "KG" ||
+        !whatsappPilotStoreAllowed(c.storeId) ||
         existing.mode === "HUMAN" ||
         currentConnection.state !== "CONNECTED" ||
         !currentConnection.aiEnabled ||
@@ -176,6 +178,7 @@ export async function receiveWhatsAppWebhook(request: Request, connectionId: str
           ...(needsHuman ? { mode: "HUMAN", needsHuman: true } : {}),
         },
       });
+      await discardWhatsAppDrafts(tx, { conversationId: conversation.id });
       await tx.whatsAppMessage.create({
         data: {
           organizationId: c.organizationId,

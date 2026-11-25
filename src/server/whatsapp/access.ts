@@ -8,6 +8,7 @@ import {
 } from "@/server/services/planLimits";
 import type { AuthUser } from "@/server/trpc/trpc";
 import { whatsappKnowledgeSchema, whatsappProfileSchema } from "@/lib/whatsapp-ai";
+import { whatsappPilotStoreAllowed } from "./config";
 
 export type WhatsAppDb = PrismaClient | Prisma.TransactionClient;
 export type WhatsAppActor = Pick<AuthUser, "id" | "organizationId">;
@@ -39,6 +40,8 @@ export async function whatsappAccess(
   const active = hasActivePaidOrApprovedSubscription(org);
   if (options.active && (!entitled || !active))
     throw new AppError("whatsappPlanRequired", "FORBIDDEN", 403);
+  if (options.active && !whatsappPilotStoreAllowed(storeId))
+    throw new AppError("whatsappPilotStoreNotAllowed", "FORBIDDEN", 403);
   return { user, org, entitled, active };
 }
 
@@ -71,7 +74,7 @@ export async function ensureWhatsAppDraft(actor: WhatsAppActor, storeId: string)
     create: {
       organizationId: actor.organizationId,
       storeId,
-      profile: whatsappProfileSchema.parse({}),
+      profile: whatsappProfileSchema.parse({ replyMode: "REVIEW" }),
       knowledge: whatsappKnowledgeSchema.parse({ storeName: store.name }),
     },
     update: {},
@@ -96,11 +99,12 @@ export async function whatsappConversationAccess(
   actor: WhatsAppActor,
   conversationId: string,
   options: { active?: boolean } = {},
+  db: WhatsAppDb = prisma,
 ) {
-  const conversation = await prisma.whatsAppConversation.findFirst({
+  const conversation = await db.whatsAppConversation.findFirst({
     where: { id: conversationId, organizationId: actor.organizationId },
   });
   if (!conversation) throw new AppError("recordNotFound", "NOT_FOUND", 404);
-  await whatsappAccess(actor, conversation.storeId, options);
+  await whatsappAccess(actor, conversation.storeId, options, db);
   return conversation;
 }

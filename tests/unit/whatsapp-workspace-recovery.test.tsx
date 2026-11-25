@@ -13,6 +13,8 @@ const state = vi.hoisted(() => ({
   workspaceError: null as null | { message: string; data?: { code: string } },
   retries: [] as string[],
   mutation: vi.fn(),
+  approveDraft: vi.fn(),
+  conversationDraft: null as null | { id: string; body: string },
   queries: [] as Array<{ path: string; enabled: boolean }>,
   payments: {
     ready: false,
@@ -69,6 +71,7 @@ vi.mock("@/lib/trpc", () => {
       "seen",
       "erase",
       "send",
+      "discardDraft",
       "checkout",
       "checkPayment",
     ].map((key) => [
@@ -99,6 +102,7 @@ vi.mock("@/lib/trpc", () => {
     trpc: {
       whatsappAi: {
         ...procedures,
+        approveDraft: { useMutation: () => ({ mutateAsync: state.approveDraft, isLoading: false }) },
         payments: { useQuery: () => result("payments", state.payments) },
         stores: {
           useQuery: (_input: unknown, options?: { enabled?: boolean }) => {
@@ -124,7 +128,7 @@ vi.mock("@/lib/trpc", () => {
         },
         conversation: {
           useQuery: ({ conversationId }: { conversationId: string }) =>
-            result("conversation", conversationId ? conversation : undefined),
+            result("conversation", conversationId ? { ...conversation, draft: state.conversationDraft } : undefined),
         },
       },
       useUtils: () => ({
@@ -203,6 +207,7 @@ beforeEach(() => {
   state.storesError = null;
   state.workspace = workspace();
   state.workspaceError = null;
+  state.conversationDraft = null;
   state.retries = [];
   state.queries = [];
   Object.assign(state.payments, {
@@ -218,6 +223,31 @@ const openConversation = () => {
 };
 
 describe("WhatsApp workspace recovery", () => {
+  it("keeps a separately labeled draft editable and retries approval of the same message", async () => {
+    const connected = workspace();
+    connected.profile.replyMode = "REVIEW";
+    connected.connection = { state: "CONNECTED", aiEnabled: true } as Workspace["connection"];
+    connected.readiness.transportReady = true;
+    connected.readiness.manualWorkerReady = true;
+    state.workspace = connected;
+    state.conversationDraft = { id: "review-message", body: "Suggested text" };
+    state.approveDraft.mockRejectedValueOnce(new Error("network")).mockResolvedValue({ state: "PREPARED" });
+    render(<TestWorkspace />);
+    openConversation();
+    const edit = screen.getByRole("textbox", { name: "whatsappAi.reviewDraft" }) as HTMLTextAreaElement;
+    expect(edit.value).toBe("Suggested text");
+    expect(screen.queryByRole("textbox", { name: "whatsappAi.reply" })).toBeNull();
+    expect(state.approveDraft).not.toHaveBeenCalled();
+    fireEvent.change(edit, { target: { value: "Ready to send" } });
+    const approve = screen.getByRole("button", { name: "whatsappAi.approveDraft" });
+    fireEvent.click(approve);
+    await waitFor(() => expect(state.approveDraft).toHaveBeenCalledTimes(1));
+    expect(edit.value).toBe("Ready to send");
+    fireEvent.click(approve);
+    await waitFor(() => expect(state.approveDraft).toHaveBeenCalledTimes(2));
+    const input = { conversationId: "conversation", messageId: "review-message", body: "Ready to send" };
+    expect(state.approveDraft.mock.calls).toEqual([[input], [input]]);
+  });
   it("shows GoPay test status and historical FreedomPay pack invoices independently", () => {
     Object.assign(state.payments, {
       ready: true, mode: "sandbox", invoices: [

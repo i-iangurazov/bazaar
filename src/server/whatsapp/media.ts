@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { allowedWhatsAppMediaUrl } from "./events";
-import { decryptWhatsAppSecret, encryptWhatsAppSecret } from "./config";
+import { decryptWhatsAppSecret, encryptWhatsAppSecret, whatsappPilotStoreAllowed } from "./config";
 import { whatsappAccess, type WhatsAppActor } from "./access";
 
 const mediaSchema = z.object({
@@ -29,6 +29,7 @@ export async function whatsappImage(messageId: string) {
   if (media.cached && media.expiresAt && new Date(media.expiresAt) > new Date())
     return Buffer.from(decryptWhatsAppSecret(media.cached, message.id), "base64");
   if (
+    !whatsappPilotStoreAllowed(message.storeId) ||
     process.env.HARDENING_EXTERNAL_PROVIDER_MODE === "disabled" ||
     process.env.WHATSAPP_PRIVACY_APPROVED !== "1"
   )

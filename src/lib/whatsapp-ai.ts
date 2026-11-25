@@ -19,6 +19,7 @@ export const WHATSAPP_STYLES = [
   "custom",
 ] as const;
 export const whatsappProfileSchema = z.object({
+  replyMode: z.enum(["AUTO", "REVIEW"]).default("AUTO"),
   style: z.enum(WHATSAPP_STYLES).default("professional"),
   language: z.enum(["auto", "ru", "kg", "en"]).default("auto"),
   addressForm: z.enum(["formal", "informal"]).default("formal"),

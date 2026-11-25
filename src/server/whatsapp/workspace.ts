@@ -21,7 +21,13 @@ import {
   whatsappStores,
   type WhatsAppActor,
 } from "./access";
-import { decryptWhatsAppSecret, encryptWhatsAppSecret, whatsappConfig } from "./config";
+import { decryptWhatsAppSecret, encryptWhatsAppSecret, whatsappConfig, whatsappPilotStoreAllowed } from "./config";
+import {
+  discardWhatsAppDrafts,
+  WHATSAPP_DISCARDED_DRAFT_STATE,
+  WHATSAPP_DRAFT_STATE,
+  WHATSAPP_DRAFT_STATES,
+} from "./drafts";
 import {
   configureGupshupWebhook,
   createGupshupApp,
@@ -65,6 +71,7 @@ export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
       : null,
   ]);
   const config = whatsappConfig();
+  const pilotAllowed = whatsappPilotStoreAllowed(storeId);
   const workerReady = Boolean(
     worker?.state === "READY" && Date.now() - worker.heartbeatAt.getTime() < 90000,
   );
@@ -94,18 +101,18 @@ export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
           inboundVerified: Boolean(inbound),
         }
       : null,
-    profile: whatsappProfileSchema.parse(c?.profile ?? {}),
+    profile: whatsappProfileSchema.parse(c?.profile ?? { replyMode: "REVIEW" }),
     knowledge: whatsappKnowledgeSchema.parse(c?.knowledge ?? { storeName: store.name }),
     readiness: {
-      ready: config.ready,
-      transportReady: config.transportReady,
-      onboardingReady: config.onboardingReady,
+      ready: pilotAllowed && config.ready,
+      transportReady: pilotAllowed && config.transportReady,
+      onboardingReady: pilotAllowed && config.onboardingReady,
       previewReady: Boolean(
-        config.deepseekKey &&
+        pilotAllowed && config.deepseekKey &&
         process.env.WHATSAPP_PRIVACY_APPROVED === "1" &&
         process.env.HARDENING_EXTERNAL_PROVIDER_MODE !== "disabled",
       ),
-      reasons: config.reasons,
+      reasons: pilotAllowed ? config.reasons : [...config.reasons, "pilotStore"],
       workerReady,
       manualWorkerReady,
     },
@@ -114,7 +121,7 @@ export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
       priceMinor: WHATSAPP_PACK_PRICE_MINOR,
       messages: WHATSAPP_PACK_MESSAGES,
       offerVersion: WHATSAPP_OFFER_VERSION,
-      paymentsApproved: config.paymentsApproved && config.salesReady,
+      paymentsApproved: pilotAllowed && config.paymentsApproved && config.salesReady,
     },
   };
 }
@@ -150,6 +157,7 @@ export async function saveWhatsAppProfile(
       },
     });
     if (!updated.count) throw new AppError("whatsappChanged", "CONFLICT", 409);
+    await discardWhatsAppDrafts(tx, { conversation: { connectionId: draft.id } });
     await writeAuditLog(tx, {
       organizationId: actor.organizationId,
       actorId: actor.id,
@@ -254,30 +262,33 @@ export async function finishWhatsAppOnboarding(
     data: { encryptedWebhookKey: encryptWhatsAppSecret(key, c.id) },
   });
   await configureGupshupWebhook(c.providerAppId, appToken, c.id, key);
-  const update = await prisma.whatsAppConnection.updateMany({
-    where: { id: c.id, onboardingStateHash: c.onboardingStateHash },
-    data: {
-      encryptedAppToken: encryptWhatsAppSecret(appToken, c.id),
-      phoneNumber: phone,
-      phoneNumberId: details.phoneNumberId ?? null,
-      messagingAccountId: details.wabaId ?? null,
-      state: "CONNECTED",
-      aiEnabled: false,
-      onboardingStateHash: null,
-      onboardingExpiresAt: null,
-      lastProviderCheckAt: new Date(),
-      lastIssue: null,
-      configVersion: { increment: 1 },
-    },
-  });
-  if (!update.count) throw new AppError("whatsappChanged", "CONFLICT", 409);
-  await writeAuditLog(prisma, {
-    organizationId: actor.organizationId,
-    actorId: actor.id,
-    action: "WHATSAPP_CONNECTED",
-    entity: "WhatsAppConnection",
-    entityId: c.id,
-    requestId,
+  await whatsappOrganizationLock(actor.organizationId, async (tx) => {
+    const update = await tx.whatsAppConnection.updateMany({
+      where: { id: c.id, onboardingStateHash: c.onboardingStateHash },
+      data: {
+        encryptedAppToken: encryptWhatsAppSecret(appToken, c.id),
+        phoneNumber: phone,
+        phoneNumberId: details.phoneNumberId ?? null,
+        messagingAccountId: details.wabaId ?? null,
+        state: "CONNECTED",
+        aiEnabled: false,
+        onboardingStateHash: null,
+        onboardingExpiresAt: null,
+        lastProviderCheckAt: new Date(),
+        lastIssue: null,
+        configVersion: { increment: 1 },
+      },
+    });
+    if (!update.count) throw new AppError("whatsappChanged", "CONFLICT", 409);
+    await discardWhatsAppDrafts(tx, { conversation: { connectionId: c.id } });
+    await writeAuditLog(tx, {
+      organizationId: actor.organizationId,
+      actorId: actor.id,
+      action: "WHATSAPP_CONNECTED",
+      entity: "WhatsAppConnection",
+      entityId: c.id,
+      requestId,
+    });
   });
   return { connected: true };
 }
@@ -332,6 +343,7 @@ export async function setWhatsAppEnabled(
 }
 
 export async function cancelWhatsAppPrepared(where: Prisma.WhatsAppMessageWhereInput) {
+  await discardWhatsAppDrafts(prisma, where);
   const messages = await prisma.whatsAppMessage.findMany({
     where: { ...where, direction: "OUTBOUND", state: { in: ["PREPARED", "QUEUED"] } },
     select: { id: true, organizationId: true },
@@ -404,7 +416,12 @@ export async function listWhatsAppConversations(
     take: 51,
     include: {
       readCursors: { where: { userId: actor.id } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { body: true, kind: true } },
+      messages: {
+        where: { state: { notIn: WHATSAPP_DRAFT_STATES } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { body: true, kind: true },
+      },
     },
   });
   const items = rows
@@ -426,22 +443,50 @@ export async function listWhatsAppConversations(
 
 export async function readWhatsAppConversation(actor: WhatsAppActor, conversationId: string) {
   const conversation = await whatsappConversationAccess(actor, conversationId);
-  const messages = await prisma.whatsAppMessage.findMany({
-    where: { conversationId, organizationId: actor.organizationId },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: 100,
-    select: {
-      id: true,
-      direction: true,
-      kind: true,
-      body: true,
-      state: true,
-      inboundSequence: true,
-      actorId: true,
-      createdAt: true,
-      lastIssue: true,
-    },
-  });
+  const windowOpen = whatsappWindowOpen(conversation.lastInboundAt);
+  const connection = !conversation.archived && !conversation.redactedAt && windowOpen && whatsappPilotStoreAllowed(conversation.storeId)
+    ? await prisma.whatsAppConnection.findFirst({
+        where: { id: conversation.connectionId, state: "CONNECTED", aiEnabled: true, knowledgePublished: true },
+        select: { configVersion: true },
+      })
+    : null;
+  const [messages, draft] = await Promise.all([
+    prisma.whatsAppMessage.findMany({
+      where: {
+        conversationId,
+        organizationId: actor.organizationId,
+        state: { notIn: WHATSAPP_DRAFT_STATES },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 100,
+      select: {
+        id: true,
+        direction: true,
+        kind: true,
+        body: true,
+        state: true,
+        inboundSequence: true,
+        actorId: true,
+        createdAt: true,
+        lastIssue: true,
+      },
+    }),
+    connection
+      ? prisma.whatsAppMessage.findFirst({
+          where: {
+            conversationId,
+            organizationId: actor.organizationId,
+            direction: "OUTBOUND",
+            state: WHATSAPP_DRAFT_STATE,
+            generationVersion: conversation.generationVersion,
+            inboundSequence: conversation.inboundSequence,
+            configVersion: connection.configVersion,
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: { id: true, body: true },
+        })
+      : null,
+  ]);
   return {
     id: conversation.id,
     name: conversation.customerName,
@@ -452,9 +497,10 @@ export async function readWhatsAppConversation(actor: WhatsAppActor, conversatio
     archived: conversation.archived,
     version: conversation.generationVersion,
     inboundSequence: conversation.inboundSequence,
-    windowOpen: whatsappWindowOpen(conversation.lastInboundAt),
+    windowOpen,
     countrySupported: conversation.buyerCountry === "KG",
     messages: messages.reverse(),
+    draft,
   };
 }
 
@@ -604,6 +650,101 @@ export async function queueWhatsAppManual(
   });
   await cancelWhatsAppPrepared({ conversationId: c.id, actorId: null, id: { not: message.id } });
   return { id: message.id, state: message.state };
+}
+
+export async function approveWhatsAppDraft(
+  actor: WhatsAppActor,
+  input: { conversationId: string; messageId: string; body: string },
+  requestId: string,
+) {
+  const body = input.body.trim();
+  if (!body || body.length > 4096) throw new AppError("whatsappInvalidMessage", "BAD_REQUEST", 400);
+  return whatsappOrganizationLock(actor.organizationId, async (tx) => {
+    const conversation = await whatsappConversationAccess(actor, input.conversationId, { active: true }, tx);
+    const draft = await tx.whatsAppMessage.findFirst({
+      where: {
+        id: input.messageId,
+        conversationId: conversation.id,
+        organizationId: actor.organizationId,
+        direction: "OUTBOUND",
+        responseToId: { not: null },
+      },
+      include: { conversation: { include: { connection: true } } },
+    });
+    if (!draft) throw new AppError("recordNotFound", "NOT_FOUND", 404);
+    // An approval consumes this specific draft. A retry must never create a new send.
+    if (draft.actorId === actor.id && draft.body === body) return { id: draft.id, state: draft.state };
+    if (draft.state !== WHATSAPP_DRAFT_STATE)
+      throw new AppError("whatsappDraftChanged", "CONFLICT", 409);
+    const c = draft.conversation;
+    const connection = c.connection;
+    if (!whatsappConfig().transportReady) throw new AppError("whatsappNotReady", "CONFLICT", 409);
+    if (!whatsappWindowOpen(c.lastInboundAt))
+      throw new AppError("whatsappWindowClosed", "CONFLICT", 409);
+    if (c.buyerCountry !== "KG") throw new AppError("whatsappCountryUnsupported", "CONFLICT", 409);
+    if (
+      c.archived || c.redactedAt ||
+      c.generationVersion !== draft.generationVersion || c.inboundSequence !== draft.inboundSequence ||
+      connection.state !== "CONNECTED" || !connection.aiEnabled || !connection.knowledgePublished ||
+      connection.configVersion !== draft.configVersion
+    ) throw new AppError("whatsappDraftChanged", "CONFLICT", 409);
+    if (!(await whatsappQuota(actor.organizationId, new Date(), tx)).remaining)
+      throw new AppError("whatsappQuotaExhausted", "CONFLICT", 409);
+    const queued = await tx.whatsAppMessage.updateMany({
+      where: { id: draft.id, state: WHATSAPP_DRAFT_STATE },
+      data: {
+        actorId: actor.id,
+        state: "PREPARED",
+        body,
+        nextAttemptAt: new Date(),
+        ...(body !== draft.body ? { facts: Prisma.DbNull } : {}),
+      },
+    });
+    if (!queued.count) throw new AppError("whatsappDraftChanged", "CONFLICT", 409);
+    const changed = await tx.whatsAppConversation.updateMany({
+      where: { id: c.id, generationVersion: c.generationVersion, inboundSequence: c.inboundSequence },
+      data: { needsHuman: c.mode === "HUMAN", lastIssue: null, lastMessageAt: new Date() },
+    });
+    if (!changed.count) throw new AppError("whatsappDraftChanged", "CONFLICT", 409);
+    await writeAuditLog(tx, {
+      organizationId: actor.organizationId,
+      actorId: actor.id,
+      action: "WHATSAPP_DRAFT_APPROVE",
+      entity: "WhatsAppMessage",
+      entityId: draft.id,
+      requestId,
+    });
+    return { id: draft.id, state: "PREPARED" };
+  });
+}
+
+export async function discardWhatsAppDraft(
+  actor: WhatsAppActor,
+  input: { conversationId: string; messageId: string },
+  requestId: string,
+) {
+  return whatsappOrganizationLock(actor.organizationId, async (tx) => {
+    const c = await whatsappConversationAccess(actor, input.conversationId, {}, tx);
+    const where = { id: input.messageId, conversationId: c.id };
+    const discarded = await discardWhatsAppDrafts(tx, where);
+    if (!discarded.count) {
+      const alreadyDiscarded = await tx.whatsAppMessage.findFirst({
+        where: { ...where, state: WHATSAPP_DISCARDED_DRAFT_STATE },
+        select: { id: true },
+      });
+      if (alreadyDiscarded) return { discarded: true };
+      throw new AppError("whatsappDraftChanged", "CONFLICT", 409);
+    }
+    await writeAuditLog(tx, {
+      organizationId: actor.organizationId,
+      actorId: actor.id,
+      action: "WHATSAPP_DRAFT_DISCARD",
+      entity: "WhatsAppMessage",
+      entityId: input.messageId,
+      requestId,
+    });
+    return { discarded: true };
+  });
 }
 
 export async function eraseWhatsAppConversation(

@@ -46,6 +46,7 @@ export function Conversations({
   const [selected, setSelected] = useState(""),
     [body, setBody] = useState(""),
     [confirmErase, setConfirmErase] = useState(false);
+  const [editedDraft, setEditedDraft] = useState<{ id: string; conversationId: string; body: string } | null>(null);
   const [photoId, setPhotoId] = useState(""),
     [photoLoading, setPhotoLoading] = useState(false),
     [photoError, setPhotoError] = useState(false);
@@ -54,7 +55,7 @@ export function Conversations({
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (
-        body.trim() ||
+        body.trim() || editedDraft?.body.trim() ||
         [...drafts.current.entries()].some(([id, draft]) => id !== selected && draft.body.trim())
       ) {
         event.preventDefault();
@@ -63,7 +64,7 @@ export function Conversations({
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [body, selected]);
+  }, [body, editedDraft, selected]);
   const list = trpc.whatsappAi.conversations.useInfiniteQuery(
     { storeId, filter, search },
     {
@@ -95,14 +96,29 @@ export function Conversations({
       drafts.current.delete(selected);
       setSelected("");
       setBody("");
+      setEditedDraft(null);
       key.current = null;
       setConfirmErase(false);
       await refresh();
     },
   });
   const send = trpc.whatsappAi.send.useMutation({ onError: feedback.error });
+  const approveDraft = trpc.whatsappAi.approveDraft.useMutation({ onError: feedback.error });
+  const discardDraft = trpc.whatsappAi.discardDraft.useMutation({ onError: feedback.error });
   const c = conversation.data;
-  const busy = mode.isLoading || archive.isLoading || send.isLoading || erase.isLoading;
+  const draft = c?.draft;
+  useEffect(() => {
+    if (c && editedDraft?.conversationId === c.id && editedDraft.id !== draft?.id)
+      setEditedDraft(null);
+  }, [c, draft, editedDraft]);
+  const draftBody = draft && (editedDraft?.id === draft.id ? editedDraft.body : draft.body);
+  const busy = mode.isLoading || archive.isLoading || send.isLoading || erase.isLoading ||
+    approveDraft.isLoading || discardDraft.isLoading;
+  const canSend = Boolean(
+    c?.windowOpen && c.countrySupported && !c.archived && data.entitled && data.active &&
+    data.quota.remaining && data.readiness.transportReady && data.readiness.manualWorkerReady &&
+    data.connection?.state === "CONNECTED",
+  );
   return (
     <div className="grid min-w-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
       <Card className={selected ? "hidden lg:block" : ""}>
@@ -321,51 +337,90 @@ export function Conversations({
               {(!data.readiness.transportReady || data.connection?.state !== "CONNECTED") && (
                 <p className="rounded-md bg-secondary p-3 text-sm">{t("connectionNeeded")}</p>
               )}
-              <Field label={t("reply")}>
-                <Textarea
-                  value={body}
-                  maxLength={4096}
-                  disabled={busy || !c.windowOpen || !c.countrySupported || c.archived}
-                  onChange={(e) => {
-                    setBody(e.target.value);
-                    key.current = null;
-                  }}
-                />
-              </Field>
-              <Button
-                disabled={
-                  busy ||
-                  !body.trim() ||
-                  !c.windowOpen ||
-                  !c.countrySupported ||
-                  c.archived ||
-                  !data.active ||
-                  !data.quota.remaining ||
-                  !data.readiness.transportReady ||
-                  !data.readiness.manualWorkerReady ||
-                  data.connection?.state !== "CONNECTED"
-                }
-                onClick={async () => {
-                  key.current ??= crypto.randomUUID();
-                  try {
-                    await send.mutateAsync({
-                      conversationId: c.id,
-                      body,
-                      idempotencyKey: key.current,
-                    });
-                    drafts.current.delete(c.id);
-                    setBody("");
-                    key.current = null;
-                    await refresh();
-                  } catch {
-                    /* Preserve text and request key for a safe retry. */
-                  }
-                }}
-              >
-                <SendIcon className="mr-2 h-4 w-4" aria-hidden />
-                {t("send")}
-              </Button>
-              <p className="text-xs text-muted-foreground">{t("manualHelp")}</p>
+              {draft ? (
+                <section className="min-w-0 space-y-3 rounded-md border p-3 sm:p-4">
+                  <Field label={t("reviewDraft")}>
+                    <Textarea
+                      value={draftBody ?? ""}
+                      maxLength={4096}
+                      aria-describedby="wa-draft-help"
+                      disabled={busy}
+                      onChange={(event) => setEditedDraft({ id: draft.id, conversationId: c.id, body: event.target.value })}
+                    />
+                  </Field>
+                  <p id="wa-draft-help" className="text-xs text-muted-foreground">{t("reviewHint")}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      disabled={busy || !canSend || !draftBody?.trim()}
+                      onClick={async () => {
+                        if (!draftBody?.trim()) return;
+                        try {
+                          await approveDraft.mutateAsync({ conversationId: c.id, messageId: draft.id, body: draftBody });
+                          setEditedDraft(null);
+                          await refresh();
+                        } catch {
+                          /* Preserve edits for a safe retry of the same draft. */
+                        }
+                      }}
+                    >
+                      <SendIcon className="mr-2 h-4 w-4" aria-hidden />
+                      {t("approveDraft")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={async () => {
+                        try {
+                          await discardDraft.mutateAsync({ conversationId: c.id, messageId: draft.id });
+                          setEditedDraft(null);
+                          await refresh();
+                        } catch {
+                          /* Keep the draft visible until the server confirms. */
+                        }
+                      }}
+                    >
+                      {t("discardDraft")}
+                    </Button>
+                  </div>
+                </section>
+              ) : (
+                <>
+                  <Field label={t("reply")}>
+                    <Textarea
+                      value={body}
+                      maxLength={4096}
+                      disabled={busy || !c.windowOpen || !c.countrySupported || c.archived}
+                      onChange={(e) => {
+                        setBody(e.target.value);
+                        key.current = null;
+                      }}
+                    />
+                  </Field>
+                  <Button
+                    disabled={busy || !body.trim() || !canSend}
+                    onClick={async () => {
+                      key.current ??= crypto.randomUUID();
+                      try {
+                        await send.mutateAsync({
+                          conversationId: c.id,
+                          body,
+                          idempotencyKey: key.current,
+                        });
+                        drafts.current.delete(c.id);
+                        setBody("");
+                        key.current = null;
+                        await refresh();
+                      } catch {
+                        /* Preserve text and request key for a safe retry. */
+                      }
+                    }}
+                  >
+                    <SendIcon className="mr-2 h-4 w-4" aria-hidden />
+                    {t("send")}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">{t("manualHelp")}</p>
+                </>
+              )}
             </>
           )}
         </CardContent>

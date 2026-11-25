@@ -2,6 +2,14 @@ import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from "
 import { AppError } from "@/server/services/errors";
 
 const yes = (value?: string) => value === "1";
+
+export function whatsappPilotStoreAllowed(storeId: string, env: Record<string, string | undefined> = process.env) {
+  const scope = env.WHATSAPP_PILOT_STORE_IDS;
+  if (scope === undefined) return true;
+  const ids = scope.split(",").map((id) => id.trim());
+  return ids.every((id) => /^[a-zA-Z0-9_-]{10,80}$/.test(id)) && ids.includes(storeId);
+}
+
 export function whatsappConfig(env: Record<string, string | undefined> = process.env) {
   const reasons: string[] = [];
   if (!yes(env.WHATSAPP_AI_ENABLED)) reasons.push("moduleDisabled");
