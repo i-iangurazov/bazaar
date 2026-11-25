@@ -20,6 +20,7 @@ import { verifyStoreVisibilityAndTransfer } from "./store-visibility-transfer-ch
 import { verifyPosPhotoAndWholesale } from "./pos-photo-wholesale-check";
 import { verifyStockCountSearch } from "./stock-count-search-check";
 import { dashboardFixtureExpectation } from "./dashboard-fixture";
+import { openMobileBaam, returnFromMobileBaam } from "../baam/mobile-workspace-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
@@ -691,11 +692,10 @@ try {
     async () => more.evaluate((element) => element === document.activeElement),
     "Mobile menu lost trigger focus",
   );
-  await dashboard.locator("[data-baam-launcher]").click();
-  await dashboard.locator("[data-baam-chat]").waitFor();
+  const mobileBaam = await openMobileBaam(dashboard);
   await dashboard.screenshot({ path: `${directory}/mobile-baam.png` });
-  await dashboard.keyboard.press("Escape");
-  record("Mobile list options, modal menu focus/Escape and BAAM remain usable");
+  await returnFromMobileBaam(dashboard, mobileBaam.returnTo, "Назад");
+  record("Mobile list options, modal menu focus/Escape and full-page BAAM return remain usable");
   await dashboard.setViewportSize({ width: 1440, height: 1000 });
   let dashboardFailures = 0;
   const dashboardEndpoint = "**/api/trpc/*dashboard.bootstrap*";

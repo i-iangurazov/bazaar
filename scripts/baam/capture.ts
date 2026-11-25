@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { openMobileBaam, returnFromMobileBaam } from "./mobile-workspace-check";
 const base =
   process.env.BAAM_TEST_HTTPS === "1" ? "https://localhost:3121" : "http://localhost:3121";
 const directory = "artifacts/baam-companion/after";
@@ -135,65 +136,64 @@ try {
       report.push({ role, checkoutClientNavigation: "passed" });
     }
     if (role === "admin") {
+      const backLabel = async (locale: string) =>
+        JSON.parse(await readFile(`messages/${locale}.json`, "utf8")).common.back as string;
+      const russianBack = await backLabel("ru");
       for (const width of [360, 390, 768]) {
         await page.setViewportSize({ width, height: 844 });
         await page.goto(base + "/inventory");
-        await page.locator("[data-baam-launcher]").click();
-        console.log({
-          width,
-          expanded: await page.locator("[data-baam-launcher]").getAttribute("aria-expanded"),
-          dialogs: await page.getByRole("dialog").count(),
-        });
-        await page
-          .locator("[data-baam-chat]")
-          .waitFor({ timeout: 10000 })
-          .catch(async (e) => {
-            await page.screenshot({ path: directory + "/failure.png" });
-            await writeFile(
-              directory + "/failure.json",
-              JSON.stringify({
-                width,
-                errors,
-                html: await page.locator("body").innerText(),
-                expanded: await page.locator("[data-baam-launcher]").getAttribute("aria-expanded"),
-              }),
+        const launcher = page.locator("[data-baam-launcher]");
+        const drawer = page.locator("[data-baam-drawer]");
+        try {
+          const mobile = width < 768 ? await openMobileBaam(page) : null;
+          if (!mobile) {
+            await launcher.click();
+            await drawer.locator("[data-baam-input]").waitFor({ timeout: 10_000 });
+            await page.waitForFunction(
+              () => document.activeElement?.matches("[data-baam-drawer] [data-baam-input]") === true,
             );
-            throw e;
-          });
-        await page.waitForTimeout(500);
-        await page.screenshot({ path: `${directory}/mobile-${width}-chat.png` });
-        assert.equal(
-          await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
-          false,
-        );
-        assert.equal(
-          await page.locator("[data-baam-input]").evaluate((el) => document.activeElement === el),
-          true,
-        );
-        report.push({
-          width,
-          focus: await page
-            .locator("[data-baam-input]")
-            .evaluate((el) => document.activeElement === el),
-          overflow: await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
-        });
-        await page.keyboard.press("Escape");
+            assert.equal(new URL(page.url()).pathname, "/inventory");
+          }
+          await page.screenshot({ path: `${directory}/mobile-${width}-chat.png` });
+          assert.equal(
+            await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+            false,
+          );
+          if (mobile) {
+            await returnFromMobileBaam(page, mobile.returnTo, russianBack);
+          } else {
+            await page.keyboard.press("Escape");
+            await drawer.waitFor({ state: "hidden" });
+          }
+          report.push({ width, mode: mobile ? "workspace" : "drawer", focus: true, overflow: false });
+        } catch (error) {
+          await page.screenshot({ path: directory + "/failure.png" });
+          await writeFile(
+            directory + "/failure.json",
+            JSON.stringify({
+              width,
+              errors,
+              url: page.url(),
+              html: await page.locator("body").innerText(),
+              expanded: await launcher.getAttribute("aria-expanded"),
+            }),
+          );
+          throw error;
+        }
       }
-    }
-    if (role === "admin")
       for (const locale of ["en", "kg"]) {
         await context.addCookies([{ name: "NEXT_LOCALE", value: locale, url: base }]);
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto(base + "/inventory");
-        await page.locator("[data-baam-launcher]").click();
-        await page.locator("[data-baam-chat]").waitFor();
+        const mobile = await openMobileBaam(page);
         assert.equal(
           await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
           false,
         );
         await page.screenshot({ path: `${directory}/mobile-${locale}-chat.png` });
-        await page.keyboard.press("Escape");
+        await returnFromMobileBaam(page, mobile.returnTo, await backLabel(locale));
       }
+    }
     assert.deepEqual(errors, []);
     await context.close();
   }

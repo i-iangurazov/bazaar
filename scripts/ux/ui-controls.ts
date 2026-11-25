@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium, type Page, type BrowserContext } from "playwright";
+import { openMobileBaam, returnFromMobileBaam } from "../baam/mobile-workspace-check";
 
 const base =
   process.env.UI_CONTROLS_BASE ??
@@ -365,18 +366,19 @@ try {
     await closeChat(p);
     await p.setViewportSize({ width: 390, height: 844 });
     await noOverflow(p);
-    await openChat(p);
+    const mobile = await openMobileBaam(p);
+    assert.equal(await mobile.question.inputValue(), `UI controls draft ${role}`);
     await p.getByRole("button", { name: "Переименовать", exact: true }).waitFor();
     await p.screenshot({ path: `${output}/baam-${role}-mobile.png` });
     await p.getByRole("button", { name: "Диалоги", exact: true }).click();
     await p.getByRole("button", { name: new RegExp(conversationTitle) }).waitFor();
     await p.screenshot({ path: `${output}/baam-${role}-history-mobile.png` });
     await p.getByRole("button", { name: new RegExp(conversationTitle) }).click();
-    await closeChat(p);
+    await returnFromMobileBaam(p, mobile.returnTo, messages.ru.common.back);
     await p.reload();
-    await openChat(p);
-    assert.equal(await question.inputValue(), `UI controls draft ${role}`);
-    await closeChat(p);
+    const reloadedMobile = await openMobileBaam(p);
+    assert.equal(await reloadedMobile.question.inputValue(), `UI controls draft ${role}`);
+    await returnFromMobileBaam(p, reloadedMobile.returnTo, messages.ru.common.back);
     await p.goto(base + "/ru/pos/sell/?registerId=invalid");
     await p.locator("main").first().waitFor();
     assert.equal(await p.locator("[data-baam-launcher], [data-baam-drawer]").count(), 0);
@@ -389,7 +391,7 @@ try {
     if (role !== "admin") await c.close();
   }
   record(
-    "ADMIN/MANAGER: single header BAAM, POS/inventory/products, client checkout round trip preserves draft, focus return, mobile chat, localized checkout hidden",
+    "ADMIN/MANAGER: single header BAAM, POS/inventory/products, draft and focus preserved across desktop and mobile navigation, localized checkout hidden",
   );
   for (const role of ["staff", "cashier"]) {
     const c = await login(role),
