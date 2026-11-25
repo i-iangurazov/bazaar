@@ -15,6 +15,7 @@ import { baamToolSchema } from "./baamToolContract";
 import { baamActions } from "./baamBusiness";
 import { workflowFieldAt, workflowFields } from "./baamWorkflowCatalog";
 import { AppError } from "./errors";
+import { asksBaamAboutPersonalHealth, asksForBaamInstructions } from "./baamOperationalHelp";
 
 export type BaamIntent = {
   kind:
@@ -325,6 +326,8 @@ export async function understandBaamIntent(input: {
       "gpt-5-mini",
   );
   if (!config) return command("choice", { confidence: "low" });
+  const personalHealth = asksBaamAboutPersonalHealth(input.text);
+  const instructionRequest = asksForBaamInstructions(input.text);
   const model = config.model;
   const describeField = (field: WorkflowField): string =>
     `${field.key}:${field.kind}(${field.label})${field.lookup ? `<${field.lookup}>` : ""}${field.options ? "=" + field.options.map((option) => option.value).join("|") : ""}${field.item ? "[" + describeField(field.item) + "]" : ""}${field.fields ? "{" + field.fields.map(describeField).join(",") + "}" : ""}`;
@@ -353,7 +356,13 @@ export async function understandBaamIntent(input: {
           readCapabilities: Object.keys(baamReadOperations),
           readRoutingRule:
             "Questions about actual catalog products, prices, SKUs, units, stock, stock receipts/оприходования, movements, transfers, write-offs, customers, suppliers, sales, orders or counts MUST use analytics or records/search, never a general answer. 'Tell me about this product' on its record page asks to READ its actual fields; it is not a how-to. The unified reader can combine datasets and choose latest/new/current filters. Only questions about HOW to operate the interface use answer/help. For a previous business answer, explain/reformat/shorten/table/list follow-ups also MUST use analytics so facts are read again.",
-          currentPageRecord: /^\/products\/([A-Za-z0-9_-]+)$/.test(input.page ?? "")
+          conversationRule:
+            "For an ordinary person-to-person question or greeting, give a natural, useful answer in the person's language. Do not redirect an unrelated question into business tools, actions, or menus. Speak plainly and reply to the actual question. If asked to prepare instructions, write steps ready to share and ask only for details needed for a correct guide. Never claim to have sent, purchased, or modified anything.",
+          personalHealthRule:
+            "For personal or medical questions, use answer and give cautious educational information, never diagnose or prescribe treatment, dosage, or a change in medication. Ask only necessary questions. Recommend professional care when individual assessment is needed, and prompt emergency care for apparent immediate danger. Do not use business data, claim current external knowledge, or invent medical facts.",
+          personalHealth,
+          instructionRequest,
+          currentPageRecord: !personalHealth && /^\/products\/([A-Za-z0-9_-]+)$/.test(input.page ?? "")
             ? {
                 entity: "product",
                 id: input.page!.split("/")[2],
@@ -367,15 +376,15 @@ export async function understandBaamIntent(input: {
             month: "2-digit",
             day: "2-digit",
           }).format(new Date()),
-          active: input.active,
-          previousAnalysis: input.previousAnalysis,
+          active: personalHealth ? undefined : input.active,
+          previousAnalysis: personalHealth ? undefined : input.previousAnalysis,
           followUpRule:
             "If previousAnalysis exists, a request to explain those figures, shorten/reformat that answer, show it as a table/list, or add links is analytics, never answer/help. Its facts must be re-read before answering. A new topic uses its own dataset and does not repeat the previous ranking.",
-          page: input.page,
-          recentRecords: input.recentRecords,
-          guides: baamGuideContext(input.text, input.locale, input.page),
-          relatedText: input.history,
-          dialogue: input.dialogue,
+          page: personalHealth ? undefined : input.page,
+          recentRecords: personalHealth ? undefined : input.recentRecords,
+          guides: personalHealth ? [] : baamGuideContext(input.text, input.locale, input.page),
+          relatedText: personalHealth ? [] : input.history,
+          dialogue: personalHealth ? [] : input.dialogue,
         }),
       },
       {
@@ -474,6 +483,26 @@ export async function understandBaamIntent(input: {
     }
   }
   if (!result) throw new AppError("baamProviderInvalidResponse", "BAD_REQUEST", 400);
+  if (personalHealth && result.kind !== "answer") {
+    return command("answer", {
+      source: "model",
+      reply: baamText(input.locale,
+        "Могу помочь с общей информацией о самочувствии. Если симптомы беспокоят или состояние ухудшается, обратитесь к врачу. Какой именно вопрос вы хотите обсудить?",
+        "I can help with general health information. If symptoms are worrying or worsening, contact a healthcare professional. What would you like to understand?",
+        "Ден соолук боюнча жалпы маалымат бере алам. Белгилер тынчсыздандырса же абал начарласа, дарыгерге кайрылыңыз. Эмнени тактагыңыз келет?",
+      ),
+    });
+  }
+  if (instructionRequest && ["action", "correction", "cancel", "confirm"].includes(result.kind)) {
+    return command("answer", {
+      source: "model",
+      reply: baamText(input.locale,
+        "Уточните, для кого нужна инструкция и какой результат должен получиться. Я опишу последовательность шагов.",
+        "Tell me who the guide is for and what they should achieve. I can lay out the steps.",
+        "Нускама ким үчүн жана кандай жыйынтык керек экенин жазыңыз. Кадамдарын ирети менен түшүндүрөм.",
+      ),
+    });
+  }
   console.info("baam.intent.resolved", {
     kind: result.kind,
     action: result.action,

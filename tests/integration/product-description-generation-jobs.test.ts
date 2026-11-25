@@ -141,7 +141,7 @@ describeDb("product description generation jobs", () => {
     await resetDatabase();
   });
 
-  const atomicFixture = async () => {
+  const seedMeteredFixture = async () => {
     const base = await seedBase({ plan: "ENTERPRISE" });
     await prisma.subscriptionContract.create({
       data: { organizationId: base.org.id, catalogVersion: "2026-11" },
@@ -155,6 +155,11 @@ describeDb("product description generation jobs", () => {
         currentPeriodEndsAt: trialEnd,
       },
     });
+    return base;
+  };
+
+  const atomicFixture = async () => {
+    const base = await seedMeteredFixture();
     await seedPhoneCaseSpecTemplate(base.org.id, "Аксессуары");
     const variant = await seedProductForAiJob({
       organizationId: base.org.id,
@@ -529,10 +534,16 @@ describeDb("product description generation jobs", () => {
     expect(job.items[0]?.status).toBe(ProductDescriptionGenerationItemStatus.SUCCESS);
     expect(job.items[0]?.previousDescription).toBe("Старое описание");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockDownloadRemoteImage).toHaveBeenCalledTimes(1);
   });
 
-  it("skips existing descriptions in missing-only mode but still fills missing characteristics", async () => {
-    const { org, product, adminUser } = await seedBase();
+  it.each([
+    ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+    ProductDescriptionGenerationSource.M_MARKET,
+    ProductDescriptionGenerationSource.BAKAI_STORE,
+    ProductDescriptionGenerationSource.O_MARKET,
+  ])("keeps existing descriptions and fills missing characteristics for %s", async (source) => {
+    const { org, store, product, adminUser } = await seedBase();
     const category = "Аксессуары";
     await seedPhoneCaseSpecTemplate(org.id, category);
     const variant = await seedProductForAiJob({
@@ -558,7 +569,8 @@ describeDb("product description generation jobs", () => {
       organizationId: org.id,
       actorId: adminUser.id,
       requestId: "req-description-job-missing-specs",
-      source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+      source,
+      storeId: source === ProductDescriptionGenerationSource.PRODUCTS_PAGE ? undefined : store.id,
       productIds: [product.id],
       locale: "ru",
       overwriteExisting: false,
@@ -581,6 +593,38 @@ describeDb("product description generation jobs", () => {
     expect(job.skippedCount).toBe(0);
     expect(job.items[0]?.generatedDescription).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses an active O!Market job while a catalog job reserves quota independently", async () => {
+    const { org, store, product, adminUser } = await seedMeteredFixture();
+    await seedProductForAiJob({ organizationId: org.id, productId: product.id, category: "Аксессуары" });
+    const input = {
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "req-description-job-o-market",
+      source: ProductDescriptionGenerationSource.O_MARKET,
+      productIds: [product.id],
+      runImmediately: false,
+    };
+    const [first, second, catalog] = await Promise.all([
+      startProductDescriptionGenerationJob(input),
+      startProductDescriptionGenerationJob(input),
+      startProductDescriptionGenerationJob({
+        ...input,
+        source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+        storeId: undefined,
+      }),
+    ]);
+    expect(first.id).toBe(second.id);
+    expect(first.id).not.toBe(catalog.id);
+    expect(first.source).toBe(ProductDescriptionGenerationSource.O_MARKET);
+    expect(await prisma.productDescriptionGenerationJob.count({
+      where: { organizationId: org.id, storeId: store.id },
+    })).toBe(1);
+    expect(await prisma.subscriptionUsageReservation.count({
+      where: { organizationId: org.id, resource: "ai", state: "RESERVED" },
+    })).toBe(2);
   });
 
   it("skips existing descriptions and specs in missing-only mode with a clear reason", async () => {

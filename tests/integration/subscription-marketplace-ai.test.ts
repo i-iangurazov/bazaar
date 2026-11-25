@@ -11,7 +11,8 @@ import { bulkAutofillMMarketSpecs, updateMMarketProductSelection } from "@/serve
 import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
-vi.mock("@/server/services/productSpecSuggestions", () => ({
+vi.mock(import("@/server/services/productSpecSuggestions"), async (importOriginal) => ({
+  ...await importOriginal(),
   suggestProductSpecsFromImages: vi.fn(),
 }));
 

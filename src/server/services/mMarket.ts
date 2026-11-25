@@ -36,9 +36,8 @@ import {
 } from "@/server/services/products";
 import {
   inferProductSpecValueFromMetadata,
-  matchProductSpecOption,
 } from "@/server/services/productContentGeneration";
-import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
+import { matchProductSpecOption, suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 import { setCategoryTemplate } from "@/server/services/categoryTemplates";
 
 export const MMARKET_IMPORT_ENDPOINTS: Record<MMarketEnvironment, string> = {
@@ -2766,7 +2765,10 @@ export const bulkAutofillMMarketSpecs = async (input: {
         supportedFieldCount += 1;
 
         if (templateSpec.autofillKind === "manufacturer") {
-          const manufacturerValue = product.supplier?.name?.trim() || MMARKET_DEFAULT_MANUFACTURER;
+          const manufacturerValue = matchProductSpecOption(
+            product.supplier?.name?.trim() || MMARKET_DEFAULT_MANUFACTURER,
+            templateSpec.optionsRu,
+          );
           if (manufacturerValue) {
             nextValues.set(
               templateSpec.attributeKey,
@@ -2777,7 +2779,10 @@ export const bulkAutofillMMarketSpecs = async (input: {
         }
 
         if (templateSpec.autofillKind === "model") {
-          const modelValue = MMARKET_DEFAULT_MODEL || product.sku.trim();
+          const modelValue = matchProductSpecOption(
+            MMARKET_DEFAULT_MODEL || product.sku.trim(),
+            templateSpec.optionsRu,
+          );
           if (modelValue) {
             nextValues.set(
               templateSpec.attributeKey,
@@ -2890,10 +2895,7 @@ export const bulkAutofillMMarketSpecs = async (input: {
           }
           nextValues.set(
             request.attributeKey,
-            toStoredAttributeValue(
-              request.type,
-              matchProductSpecOption(inferredValue, request.options),
-            ),
+            toStoredAttributeValue(request.type, inferredValue),
           );
         }
       }

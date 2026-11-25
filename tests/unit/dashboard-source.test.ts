@@ -31,7 +31,10 @@ describe("dashboard source layout", () => {
     expect(dashboardSource).not.toContain("const analyticsBars");
     expect(dashboardSource).not.toContain('className="h-2 w-8 rounded-full bg-current opacity-80"');
     expect(dashboardSource).toContain("data-dashboard-kpi={kpi.key}");
-    expect(dashboardSource).toContain("workspace-kpi-grid grid grid-cols-2 gap-3");
+    expect(dashboardSource).toContain("workspace-kpi-grid grid grid-cols-2");
+    expect(dashboardSource.indexOf("onNavigate={saleStart.onNavigate}")).toBeLessThan(
+      dashboardSource.indexOf('aria-labelledby="dashboard-summary"'),
+    );
     expect(dashboardSource).toContain(
       "height: maxSales > 0 ? `${(day.salesKgs / maxSales) * 75}%` : 0",
     );

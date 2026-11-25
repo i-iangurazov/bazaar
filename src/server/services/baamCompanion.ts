@@ -12,7 +12,7 @@ import { bindBaamRecentRecord, type BaamRecentRecord } from "./baamRecentRecords
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/server/db/prisma";
 import type { Context } from "@/server/trpc/trpc";
-import { baamText, type BaamPart, type BaamSend } from "@/lib/baam/companion";
+import { baamText, type BaamPart, type BaamPrinterDetails, type BaamSend } from "@/lib/baam/companion";
 import { workflowTitle, mergeWorkflowCorrection, type WorkflowValues } from "@/lib/baam/workflows";
 import {
   appendBaamMessage,
@@ -46,10 +46,17 @@ import {
 } from "@/server/billing/subscriptionUsage";
 import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 import { assertAiConsent, withAiPrivacyIdentity } from "./aiPrivacy";
+import {
+  answerBaamOperationalHelp,
+  asksBaamAboutPersonalHealth,
+  asksForBaamInstructions,
+  baamGuideLink,
+  baamOperationalTopic,
+  readBaamPrinterDetails,
+} from "./baamOperationalHelp";
 export { baamToolSchema, baamOptionalValues } from "./baamToolContract";
 const controllers = new Map<string, AbortController>();
-export const abortBaamGeneration = (conversationId: string) =>
-  controllers.get(conversationId)?.abort();
+export const abortBaamGeneration = (turnId: string) => controllers.get(turnId)?.abort();
 export async function baamCompanionCapabilities(ctx: Context) {
   const { scope } = await baamAccess(ctx);
   return {
@@ -91,7 +98,7 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
       data: await readBaamConversation(ctx, conversation.id),
     };
   const controller = new AbortController();
-  controllers.set(conversation.id, controller);
+  controllers.set(turn.id, controller);
   const timeout = setTimeout(() => controller.abort(), 45000);
   let usageLease: UsageLease = null;
   try {
@@ -113,26 +120,88 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
         ? { kind: active.kind, parameters: active.parameters as WorkflowValues }
         : undefined;
     let intent = parseBaamFastIntent(input.text, input.command, current);
+    const healthQuestion = !input.command && asksBaamAboutPersonalHealth(input.text);
     if (!intent && active?.status === "COMPLETED" && isBaamExecutionConfirmation(input.text))
       intent = { kind: "confirm", parameters: {}, confidence: "high", source: "grammar" };
+    let guidance: ReturnType<typeof answerBaamOperationalHelp> | undefined;
+    if ((!intent || intent.kind === "help") && !input.attachmentIds.length && !healthQuestion) {
+      let topic = baamOperationalTopic(input);
+      let previousPrinter: BaamPrinterDetails | undefined;
+      const looksLikePrinterDetails = Object.keys(readBaamPrinterDetails(input.text)).some((key) => key !== "media");
+      if (looksLikePrinterDetails && (!topic || topic === "printer") &&
+        !/(?:продай|создай|оприходуй|спиши|\b(?:sell|create|write off)\b)/iu.test(input.text)) {
+        const previous = await prisma.baamMessage.findFirst({
+          where: {
+            conversationId: conversation.id,
+            turn: { scopeRevision: turn.scopeRevision },
+            role: "assistant",
+          },
+          orderBy: { sequence: "desc" },
+          select: { parts: true },
+        });
+        const parts = Array.isArray(previous?.parts) ? previous.parts as unknown as BaamPart[] : [];
+        previousPrinter = parts.find((part) => part.type === "printerHelpContext")?.details;
+        if (previousPrinter) topic = "printer";
+      }
+      if (topic) {
+        const { scope } = await baamAccess(ctx);
+        guidance = answerBaamOperationalHelp({
+          topic, text: input.text, locale: input.locale, storeId: conversation.storeId ?? undefined,
+          access: {
+            access: { role: scope.role, isOrgOwner: scope.isOrgOwner },
+            planFeatures: scope.planFeatures, locale: input.locale, stores: scope.availableStores,
+          },
+          previousPrinter,
+        });
+        intent = { kind: "answer", reply: guidance.text, parameters: {}, confidence: "high", source: "grammar" };
+      }
+    }
     let recentRecords: BaamRecentRecord[] = [];
     if (intent?.kind === "help" && !input.command && resolveTextAiConfig()) intent = null;
     // Reuse the existing read planner for obvious product analytics, including
     // top-N. Keep action/correction parsing ahead of this read-only shortcut.
-    if (!intent && (parseLocalBaamProductPlan(input.text) || diagnosticBaamPlan(input.text))) {
+    if (!intent && !healthQuestion && (parseLocalBaamProductPlan(input.text) || diagnosticBaamPlan(input.text))) {
       intent = { kind: "analytics", parameters: {}, confidence: "high", source: "grammar" };
     }
+    if (!intent && !resolveTextAiConfig(input.attachmentIds.length ? "vision" : "baam")) {
+      intent = {
+        kind: "answer",
+        parameters: {},
+        confidence: "high",
+        source: "grammar",
+        reply: baamText(input.locale,
+          "Общие ответы станут доступны после подключения ИИ. Сейчас могу помочь с кассой, настройкой печати, подпиской и инструкциями по Bazaar.",
+          "General answers are available after AI is connected. For now, I can help with checkout, printing, subscriptions and Bazaar guides.",
+          "Жалпы суроолорго жооп берүү үчүн ИИ туташуусу керек. Азыр касса, басып чыгаруу, жазылуу жана Bazaar нускамалары боюнча жардам бере алам.",
+        ),
+      };
+    }
     if (!intent) {
-      const history = await prisma.baamMessage.findMany({
-        where: {
-          conversationId: conversation.id,
-          turn: { scopeRevision: turn.scopeRevision },
-          role: { in: ["user", "assistant"] },
-          turnId: { not: turn.id },
-        },
-        orderBy: { sequence: "desc" },
-        take: 12,
-      });
+      const [history, images, recentWorkflows] = await Promise.all([
+        prisma.baamMessage.findMany({
+          where: {
+            conversationId: conversation.id,
+            turn: { scopeRevision: turn.scopeRevision },
+            role: { in: ["user", "assistant"] },
+            turnId: { not: turn.id },
+          },
+          orderBy: { sequence: "desc" },
+          take: 12,
+        }),
+        readBaamImages(ctx, conversation.id, input.attachmentIds),
+        prisma.baamWorkflow.findMany({
+          where: {
+            conversationId: conversation.id,
+            scopeRevision: conversation.revision,
+            status: { in: ["COMPLETED", "RECEIPT"] },
+            resourceId: { not: null },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          select: { kind: true, resourceId: true, parameters: true },
+        }),
+      ]);
+      controller.signal.throwIfAborted();
       const dialogue = history.reverse().map((m) => ({
         role: m.role,
         // The model gets explanations and task context, never authoritative
@@ -154,19 +223,7 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
         )
         .filter((p) => p.type === "readContext")
         .at(-1)?.plan;
-      const images = await readBaamImages(ctx, conversation.id, input.attachmentIds);
       analyzedAttachment = images.length > 0;
-      const recentWorkflows = await prisma.baamWorkflow.findMany({
-        where: {
-          conversationId: conversation.id,
-          scopeRevision: conversation.revision,
-          status: { in: ["COMPLETED", "RECEIPT"] },
-          resourceId: { not: null },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 6,
-        select: { kind: true, resourceId: true, parameters: true },
-      });
       recentRecords = recentWorkflows.map((w) => ({
         kind: w.kind,
         resourceId: w.resourceId!,
@@ -303,12 +360,20 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
       parts = answer.parts;
     } else if ((intent.kind === "answer" || intent.kind === "help") && intent.reply?.trim()) {
       text = intent.reply.trim();
-      parts = (
-        analyzedAttachment ? [] : baamGuideContext(input.text, input.locale, input.page?.path)
-      )
-        .filter((guide) => guide.relevant)
-        .slice(0, 2)
-        .map((guide) => ({ type: "link", label: guide.title, href: guide.page }));
+      parts = guidance?.parts ?? [];
+      if (!guidance && intent.source === "model" && !analyzedAttachment &&
+        !asksBaamAboutPersonalHealth(input.text) &&
+        (intent.kind === "help" || asksForBaamInstructions(input.text) || /\bbazaar\b|базаре|в приложении|in the app/iu.test(input.text))) {
+        const guides = baamGuideContext(input.text, input.locale, input.page?.path);
+        if (guides.length) {
+          const { scope } = await baamAccess(ctx);
+          parts = guides.slice(0, 2).flatMap(({ guideId }) => baamGuideLink(guideId, input.locale, {
+            access: { role: scope.role, isOrgOwner: scope.isOrgOwner },
+            planFeatures: scope.planFeatures,
+            locale: input.locale,
+          }));
+        }
+      }
     } else if (
       intent.kind === "choice" ||
       (intent.confidence === "low" && !["action", "correction"].includes(intent.kind))
@@ -673,7 +738,7 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
     });
   } finally {
     clearTimeout(timeout);
-    if (controllers.get(conversation.id) === controller) controllers.delete(conversation.id);
+    controllers.delete(turn.id);
     if (usageLease) {
       const completed = await prisma.baamTurn.findUnique({
         where: { id: turn.id },

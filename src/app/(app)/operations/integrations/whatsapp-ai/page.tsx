@@ -39,6 +39,7 @@ function Editor({
   reload: () => Promise<unknown>;
 }) {
   const t = useTranslations("whatsappAi"),
+    tErrors = useTranslations("errors"),
     locale = useLocale(),
     feedback = useFeedback();
   const platformOwner = useSession().data?.user?.isPlatformOwner === true;
@@ -157,6 +158,11 @@ function Editor({
                     <p className="font-medium">+{data.connection.phone}</p>
                   )}
                   <p className="text-sm text-muted-foreground">{t("connectHelp")}</p>
+                  {data.connection?.lastIssue && tErrors.has(data.connection.lastIssue) && (
+                    <p role="status" className="rounded-md bg-secondary p-3 text-sm">
+                      {tErrors(data.connection.lastIssue)}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       disabled={
@@ -223,7 +229,8 @@ function Editor({
                           (!editable ||
                             !data.readiness.ready ||
                             !data.readiness.workerReady ||
-                            !data.connection?.knowledgePublished ||
+                            data.connection?.state !== "CONNECTED" ||
+                            !data.connection.knowledgePublished ||
                             !data.connection.lastWebhookAt))
                       }
                       onCheckedChange={async (enabled) => {
@@ -254,7 +261,8 @@ function Editor({
                     : !data.readiness.ready && (
                         <p className="rounded-md bg-secondary p-3">{t("platformPreparing")}</p>
                       )}
-                  {data.readiness.ready && <p>{t("pilotReady")}</p>}
+                  {data.connection?.callbackReceived && <p>{t("callbackReceived")}</p>}
+                  {data.readiness.ready && data.readiness.workerReady && <p>{t("pilotReady")}</p>}
                   <p className="text-muted-foreground">{t("scope")}</p>
                 </CardContent>
               </Card>

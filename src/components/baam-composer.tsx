@@ -43,7 +43,7 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
       {c.error ? (
         <div className="mb-2 text-xs leading-5 text-destructive" role="alert">
           {c.error}
-          {c.pendingRequest && !c.busy ? (
+          {c.pendingRequest && c.available && !c.busy ? (
             <button
               type="button"
               className="ml-2 min-h-8 underline"
@@ -51,11 +51,17 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
             >
               {c.t("retry")}
             </button>
+          ) : c.loadError ? (
+            <button
+              type="button"
+              className="ml-2 min-h-8 underline"
+              disabled={c.fetching}
+              onClick={() => void c.retryLoad()}
+            >
+              {c.t("retry")}
+            </button>
           ) : null}
         </div>
-      ) : null}
-      {c.allowed && !c.available ? (
-        <p className="mb-2 text-xs leading-5 text-muted-foreground">{c.t("unavailable")}</p>
       ) : null}
       {c.voiceId ? (
         <p className="mb-2 text-xs leading-5 text-muted-foreground" role="status">
@@ -210,14 +216,15 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
                 </span>
               ) : null}
             </span>
-            {c.busy && !c.executing && c.data?.activeTurn ? (
+            {c.data?.activeTurn && !c.executing ? (
               <button
                 type="button"
                 aria-label={c.t("stop")}
-                className="flex h-11 w-11 items-center justify-center rounded-lg bg-secondary focus-visible:outline focus-visible:outline-2"
+                disabled={c.stopping}
+                className="flex h-11 w-11 items-center justify-center rounded-lg bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
                 onClick={() => void c.stopResponse()}
               >
-                <Stop size={18} fill="currentColor" />
+                {c.stopping ? <Spinner /> : <Stop size={18} fill="currentColor" />}
               </button>
             ) : (
               <button

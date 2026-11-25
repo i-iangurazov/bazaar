@@ -10,6 +10,12 @@ export const loginRateLimiter = createRateLimiter({
   prefix: "login",
 });
 
+const phoneLookupRateLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 120,
+  prefix: "login-phone-lookup",
+});
+
 const LOGIN_FAILURE_WINDOW_MS = 15 * 60_000;
 const LOGIN_LOCKOUT_WINDOW_MS = 15 * 60_000;
 const LOGIN_BACKOFF_BASE_MS = 1_000;
@@ -18,6 +24,10 @@ const LOGIN_BACKOFF_START_ATTEMPT = 5;
 const LOGIN_LOCKOUT_ATTEMPT = 10;
 
 const hashValue = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 20);
+
+export const consumePhoneLoginLookup = (ip: string) => phoneLookupRateLimiter.consume(ip);
+
+export const unknownPhoneLoginIdentity = (phone: string) => `phone:${hashValue(phone)}`;
 
 const keyParts = (email: string, ip: string) => {
   const normalizedEmail = email.trim().toLowerCase();

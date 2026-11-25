@@ -119,6 +119,7 @@ export const deleteOwnAccount = async (input: AccountScope & {
     });
     const invites = await tx.inviteToken.findMany({ where: { email: user.email }, select: { id: true } });
     await tx.authToken.deleteMany({ where: { OR: [{ userId: user.id }, { email: user.email }] } });
+    await tx.userLoginPhone.deleteMany({ where: { userId: user.id } });
     await tx.inviteToken.deleteMany({ where: { OR: [{ email: user.email }, { createdById: user.id, acceptedAt: null }] } });
     await tx.accessRequest.deleteMany({ where: { email: user.email } });
     await tx.mobileDevice.deleteMany({ where: { userId: user.id } });

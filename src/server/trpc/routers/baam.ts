@@ -92,12 +92,12 @@ export const baamRouter = router({
     .input(baamSendSchema)
     .mutation(({ ctx, input }) => handle(() => sendBaamMessage(ctx, input))),
   stop: companion
-    .input(z.object({ conversationId: z.string() }).strict())
+    .input(z.object({ conversationId: z.string(), turnId: z.string().min(1).optional() }).strict())
     .mutation(({ ctx, input }) =>
       handle(async () => {
-        const result = await stopBaamTurn(ctx, input.conversationId);
-        abortBaamGeneration(input.conversationId);
-        return result;
+        const result = await stopBaamTurn(ctx, input.conversationId, input.turnId);
+        for (const id of result.stoppedTurnIds) abortBaamGeneration(id);
+        return { stopped: result.stopped };
       }),
     ),
   execute: companion

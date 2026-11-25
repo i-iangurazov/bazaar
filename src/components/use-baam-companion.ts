@@ -2,7 +2,7 @@
 import { uploadBaamImage } from "@/lib/baam/mediaClient";
 import type { WorkflowCommand } from "@/lib/baam/workflows";
 import { flushBaamWorkflowForms } from "@/lib/baam/workflowFlush";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { inferRouterOutputs } from "@trpc/server";
@@ -15,6 +15,21 @@ import type { BaamIdentity } from "./baam-assistant";
 import { useBaamVoice } from "./baam-voice";
 
 export type BaamData = inferRouterOutputs<AppRouter>["baam"]["conversation"];
+type EarlierMessages = Pick<BaamData, "messages" | "actions" | "workflows" | "next"> & {
+  conversationId: string;
+  revision: number;
+};
+
+const clearStoredRequest = (key: string, requestId: string) => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) ?? "null");
+    if (saved?.pending?.clientRequestId === requestId)
+      sessionStorage.setItem(key, JSON.stringify({ ...saved, pending: undefined }));
+  } catch {
+    /* Draft persistence is optional. */
+  }
+};
+
 export function useBaamCompanion(identity: BaamIdentity) {
   const locale = normalizeLocale(useLocale()) ?? "ru";
   const t = (key: BaamCopyKey) => baamCopy(locale, key);
@@ -26,10 +41,9 @@ export function useBaamCompanion(identity: BaamIdentity) {
   const [question, setQuestion] = useState("");
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
-  const [older, setOlder] = useState<BaamData["messages"]>([]);
-  const [olderActions, setOlderActions] = useState<BaamData["actions"]>([]);
-  const [olderWorkflows, setOlderWorkflows] = useState<BaamData["workflows"]>([]);
-  const [olderCursor, setOlderCursor] = useState<number | null>();
+  const [older, setOlder] = useState<EarlierMessages>();
+  const [olderError, setOlderError] = useState<string>();
+  const loadingEarlier = useRef<symbol | undefined>(undefined);
   const [loadingMore, setLoadingMore] = useState(false);
   const [rename, setRename] = useState<string>();
   const [unread, setUnread] = useState(false);
@@ -48,12 +62,14 @@ export function useBaamCompanion(identity: BaamIdentity) {
   const [voiceId, setVoiceId] = useState<string>();
   const [voiceBlob, setVoiceBlob] = useState<Blob>();
   const [pendingRequest, setPendingRequest] = useState<BaamSend>();
-  const [optimistic, setOptimistic] = useState<{ text: string; conversationId: string }>();
+  const [optimistic, setOptimistic] = useState<BaamSend>();
+  const [stoppingId, setStoppingId] = useState<string>();
   const [executions, setExecutions] = useState<Record<string, string>>({});
   const executing = executions[slot];
   const [sendingSlots, setSendingSlots] = useState<Record<string, string>>({});
   const [draftStore, setDraftStore] = useState("");
-  const draftKey = `baam-draft:${identity.organizationId}:${identity.userId}:${identity.activeId ?? "new"}`;
+  const draftPrefix = `baam-draft:${identity.organizationId}:${identity.userId}:`;
+  const draftKey = draftPrefix + (identity.activeId ?? "new");
   const [draftReady, setDraftReady] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const questionRef = useRef(question);
@@ -66,8 +82,8 @@ export function useBaamCompanion(identity: BaamIdentity) {
   identityRef.current = identity.activeId;
   const create = trpc.baam.createConversation.useMutation();
   const change = trpc.baam.changeConversation.useMutation();
-  const send = trpc.baam.send.useMutation();
-  const stop = trpc.baam.stop.useMutation();
+  const send = trpc.baam.send.useMutation({ networkMode: "always" });
+  const stop = trpc.baam.stop.useMutation({ networkMode: "always" });
   const execute = trpc.baam.execute.useMutation();
   const cancel = trpc.baam.cancelAction.useMutation();
   const capabilities = trpc.baam.companion.useQuery(undefined, {
@@ -105,29 +121,34 @@ export function useBaamCompanion(identity: BaamIdentity) {
     raw.conversation.userId === identity.userId &&
     raw.conversation.organizationId === identity.organizationId &&
     (!raw.conversation.storeId ||
-      capabilities.data?.stores.some((s) => s.id === raw.conversation.storeId))
+      capabilities.data?.stores.some((s) => s.id === raw.conversation.storeId)) &&
+    raw.conversation.scopeStoreIds.every((id) => capabilities.data?.stores.some((store) => store.id === id))
       ? raw
       : undefined;
-  const available = allowed;
-  const busy =
-    Boolean(sendingSlots[slot]) ||
-    Boolean(data?.activeTurn) ||
+  const available = allowed && (!identity.activeId || Boolean(data));
+  const sending = Boolean(sendingSlots[slot]);
+  const stopping = stoppingId === identity.activeId;
+  const runningAction =
     Boolean(data?.workflows.some((w) => w.status === "RUNNING" || w.pendingRequestId)) ||
     Boolean(executing) ||
     Boolean(data?.actions.some((a) => a.status === "RUNNING" && !a.canRecover));
-  const messages = [
-    ...new Map([...(data ? older : []), ...(data?.messages ?? [])].map((m) => [m.id, m])).values(),
-  ].sort((a, b) => a.sequence - b.sequence);
-  const actions = [
-    ...new Map(
-      [...(data ? olderActions : []), ...(data?.actions ?? [])].map((a) => [a.id, a]),
-    ).values(),
-  ];
-  const workflows = [
-    ...new Map(
-      [...(data ? olderWorkflows : []), ...(data?.workflows ?? [])].map((w) => [w.id, w]),
-    ).values(),
-  ];
+  const busy =
+    sending || stopping || Boolean(data?.activeTurn) || runningAction;
+  const progress: BaamCopyKey | undefined = stopping ? "stopping"
+    : runningAction ? "running"
+    : data?.activeTurn ? "thinking"
+    : sending ? "sending" : undefined;
+  const earlier = data && older?.conversationId === data.conversation.id &&
+    older.revision === data.conversation.revision ? older : undefined;
+  const messages = useMemo(() => [
+    ...new Map([...(earlier?.messages ?? []), ...(data?.messages ?? [])].map((m) => [m.id, m])).values(),
+  ].sort((a, b) => a.sequence - b.sequence), [data?.messages, earlier?.messages]);
+  const actions = useMemo(() => [
+    ...new Map([...(earlier?.actions ?? []), ...(data?.actions ?? [])].map((a) => [a.id, a])).values(),
+  ], [data?.actions, earlier?.actions]);
+  const workflows = useMemo(() => [
+    ...new Map([...(earlier?.workflows ?? []), ...(data?.workflows ?? [])].map((w) => [w.id, w])).values(),
+  ], [data?.workflows, earlier?.workflows]);
   const readableError = (value: unknown) => {
     const code =
       typeof value === "string" ? value : value instanceof Error ? value.message : "network";
@@ -148,10 +169,10 @@ export function useBaamCompanion(identity: BaamIdentity) {
     if (createdLocally.current && createdLocally.current === identity.activeId) {
       return;
     }
-    setOlder([]);
-    setOlderActions([]);
-    setOlderWorkflows([]);
-    setOlderCursor(undefined);
+    loadingEarlier.current = undefined;
+    setOlder(undefined);
+    setOlderError(undefined);
+    setLoadingMore(false);
     setQuestion("");
     setAttachments([]);
     setImageRetry(undefined);
@@ -229,15 +250,11 @@ export function useBaamCompanion(identity: BaamIdentity) {
   useEffect(() => {
     if (
       optimistic &&
-      data?.messages.some(
-        (m) =>
-          m.role === "user" &&
-          m.text === optimistic.text &&
-          m.conversationId === optimistic.conversationId,
-      )
+      data?.activeTurn?.clientRequestId === optimistic.clientRequestId &&
+      data.messages.some((message) => message.role === "user" && message.turnId === data.activeTurn?.id)
     )
       setOptimistic(undefined);
-  }, [data?.messages, optimistic]);
+  }, [data?.activeTurn, data?.messages, optimistic]);
   const pageStore = () => {
     let value = searchParams.get("storeId") ?? "";
     if (!value && pathname.startsWith("/inventory"))
@@ -253,8 +270,8 @@ export function useBaamCompanion(identity: BaamIdentity) {
       }
     return capabilities.data?.stores.some((s) => s.id === value) ? value : "";
   };
-  const ensureConversation = async () => {
-    if (identityRef.current) return identityRef.current;
+  const ensureConversation = async (): Promise<{ id: string; revision?: number }> => {
+    if (identityRef.current) return { id: identityRef.current };
     const originalSlot = slotRef.current;
     const storeId = draftStore || pageStore();
     const created = await create.mutateAsync({ locale, ...(storeId ? { storeId } : {}) });
@@ -262,11 +279,11 @@ export function useBaamCompanion(identity: BaamIdentity) {
       createdLocally.current = created.id;
       try {
         const source = sessionStorage.getItem(
-          `baam-draft:${identity.organizationId}:${identity.userId}:new`,
+          draftPrefix + "new",
         );
         if (source)
           sessionStorage.setItem(
-            `baam-draft:${identity.organizationId}:${identity.userId}:${created.id}`,
+            draftPrefix + created.id,
             source,
           );
       } catch {
@@ -276,7 +293,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
       slotRef.current = created.id;
       identity.setActiveId(created.id);
     }
-    return created.id;
+    return { id: created.id, revision: created.revision };
   };
   const refresh = async (id: string) => {
     await Promise.all([
@@ -300,20 +317,23 @@ export function useBaamCompanion(identity: BaamIdentity) {
     setError(undefined);
     setNotice(undefined);
     try {
-      const id = retry?.conversationId ?? (await ensureConversation());
-      if (!retry) await flushBaamWorkflowForms(id);
+      const { id, revision } = retry
+        ? { id: retry.conversationId, revision: undefined }
+        : await ensureConversation();
       requestId = id;
       busyRef.current.set(id, requestToken);
       setSendingSlots((old) => ({ ...old, [id]: requestToken }));
-      const current =
-        utils.baam.conversation.getData({ id }) ?? (await utils.baam.conversation.fetch({ id }));
+      // A fresh dialog cannot contain an unsaved workflow. Its create response already
+      // carries the verified revision, so it does not need a chat read before sending.
+      if (!retry && revision === undefined) await flushBaamWorkflowForms(id);
       const request: BaamSend = retry ?? {
         ...(command ? { command } : {}),
         conversationId: id,
         clientRequestId: crypto.randomUUID(),
         text: text.trim(),
         locale,
-        revision: current.conversation.revision,
+        revision: revision ?? (utils.baam.conversation.getData({ id }) ??
+          (await utils.baam.conversation.fetch({ id }))).conversation.revision,
         page: {
           path: pathname,
           ...(searchParams.get("registerId")
@@ -325,30 +345,33 @@ export function useBaamCompanion(identity: BaamIdentity) {
       };
       if (identityRef.current === id) {
         setPendingRequest(request);
-        setOptimistic({ text: request.text, conversationId: id });
-        setQuestion("");
-        setAttachments([]);
-        setVoiceId(undefined);
-        setVoiceBlob(undefined);
+        setOptimistic(request);
+        if (!retry) {
+          setQuestion((current) => current.trim() === request.text ? "" : current);
+          setAttachments((current) => current.filter((attachment) => !request.attachmentIds.includes(attachment.id)));
+          setVoiceId(undefined);
+          setVoiceBlob(undefined);
+        }
         nearBottom.current = true;
       }
-      const outboxKey = `baam-draft:${identity.organizationId}:${identity.userId}:${id}`;
+      const outboxKey = draftPrefix + id;
       try {
-        sessionStorage.setItem(outboxKey, JSON.stringify({ pending: request, at: Date.now() }));
+        const saved = JSON.parse(sessionStorage.getItem(outboxKey) ?? "null");
+        sessionStorage.setItem(outboxKey, JSON.stringify({ ...saved, pending: request, at: Date.now() }));
       } catch {
         /* optional */
       }
       const response = await send.mutateAsync(request);
-      utils.baam.conversation.setData({ id }, response.data);
-      try {
-        const saved = JSON.parse(sessionStorage.getItem(outboxKey) ?? "null");
-        if (saved?.pending?.clientRequestId === request.clientRequestId)
-          sessionStorage.setItem(outboxKey, JSON.stringify({ ...saved, pending: undefined }));
-      } catch {
-        /* optional */
+      clearStoredRequest(outboxKey, request.clientRequestId);
+      if (busyRef.current.get(id) !== requestToken) {
+        void utils.baam.conversation.invalidate({ id });
+        return;
       }
-      if (identityRef.current === id && busyRef.current.get(id) === requestToken)
+      utils.baam.conversation.setData({ id }, response.data);
+      if (identityRef.current === id) {
         setPendingRequest(undefined);
+        setOptimistic(undefined);
+      }
       void utils.baam.conversations.invalidate();
       if (identityRef.current === id)
         requestAnimationFrame(() => {
@@ -390,10 +413,10 @@ export function useBaamCompanion(identity: BaamIdentity) {
     setMediaKind(kind);
     setError(undefined);
     try {
-      const id = await ensureConversation();
+      const { id, revision } = await ensureConversation();
       const originalRevision =
         kind === "audio"
-          ? (await utils.baam.conversation.fetch({ id })).conversation.revision
+          ? revision ?? (await utils.baam.conversation.fetch({ id })).conversation.revision
           : undefined;
       uploadId = id;
       if (identityRef.current === id) setUploadSlot(id);
@@ -560,46 +583,78 @@ export function useBaamCompanion(identity: BaamIdentity) {
     }
   };
   const stopResponse = async () => {
-    if (identity.activeId) {
-      try {
-        const id = identity.activeId;
+    const id = identity.activeId;
+    const turn = data?.activeTurn;
+    if (!id || !turn || stopping) return;
+    setStoppingId(id);
+    setError(undefined);
+    try {
+      const result = await stop.mutateAsync({ conversationId: id, turnId: turn.id });
+      if (result.stopped) {
+        clearStoredRequest(draftPrefix + id, turn.clientRequestId);
+        if (identityRef.current === id) {
+          setPendingRequest((current) => current?.clientRequestId === turn.clientRequestId ? undefined : current);
+          setOptimistic((current) => current?.clientRequestId === turn.clientRequestId ? undefined : current);
+        }
         const token = busyRef.current.get(id);
-        await stop.mutateAsync({ conversationId: id });
-        if (token) {
+        if (token && pendingRequest?.clientRequestId === turn.clientRequestId) {
           for (const [key, value] of busyRef.current)
             if (value === token) busyRef.current.delete(key);
           setSendingSlots((old) =>
             Object.fromEntries(Object.entries(old).filter(([, value]) => value !== token)),
           );
         }
-        if (identityRef.current === id) setPendingRequest(undefined);
-        await refresh(id);
-      } catch (e) {
-        setError(readableError(e));
+      }
+      await refresh(id);
+    } catch (e) {
+      if (identityRef.current === id) setError(readableError(e));
+    } finally {
+      setStoppingId((current) => current === id ? undefined : current);
+    }
+  };
+  const olderCursor = earlier ? earlier.next : data?.next;
+  const loadOlder = async () => {
+    const element = scrollRef.current;
+    if (!data || !element || !olderCursor || loadingEarlier.current) return;
+    const { id, revision } = data.conversation;
+    const token = Symbol();
+    loadingEarlier.current = token;
+    const height = element.scrollHeight;
+    const top = element.scrollTop;
+    setLoadingMore(true);
+    setOlderError(undefined);
+    try {
+      const page = await utils.baam.conversation.fetch({ id, before: olderCursor });
+      if (identityRef.current !== id || loadingEarlier.current !== token ||
+        page.conversation.revision !== revision) return;
+      setOlder({
+        conversationId: id,
+        revision,
+        messages: [...page.messages, ...(earlier?.messages ?? [])],
+        actions: [...(earlier?.actions ?? []), ...page.actions],
+        workflows: [...(earlier?.workflows ?? []), ...page.workflows],
+        next: page.next,
+      });
+      requestAnimationFrame(() => {
+        if (scrollRef.current === element && identityRef.current === id)
+          element.scrollTop = top + element.scrollHeight - height;
+      });
+    } catch (e) {
+      if (identityRef.current === id && loadingEarlier.current === token) setOlderError(readableError(e));
+    } finally {
+      if (loadingEarlier.current === token) {
+        loadingEarlier.current = undefined;
+        setLoadingMore(false);
       }
     }
   };
-  const loadOlder = async () => {
-    if (!data || !scrollRef.current) return;
-    const height = scrollRef.current.scrollHeight,
-      top = scrollRef.current.scrollTop;
-    setLoadingMore(true);
-    try {
-      const page = await utils.baam.conversation.fetch({
-        id: data.conversation.id,
-        before: olderCursor ?? data.next ?? undefined,
-      });
-      setOlder((old) => [...page.messages, ...old]);
-      setOlderActions((old) => [...old, ...page.actions]);
-      setOlderWorkflows((old) => [...old, ...page.workflows]);
-      setOlderCursor(page.next);
-      requestAnimationFrame(() => {
-        if (scrollRef.current)
-          scrollRef.current.scrollTop = top + scrollRef.current.scrollHeight - height;
-      });
-    } finally {
-      setLoadingMore(false);
-    }
+  const loadError = conversation.error ?? capabilities.error;
+  const retryLoad = async () => {
+    setError(undefined);
+    await Promise.all([
+      capabilities.refetch(),
+      ...(identity.activeId ? [conversation.refetch()] : []),
+    ]);
   };
   return {
     identity,
@@ -610,11 +665,9 @@ export function useBaamCompanion(identity: BaamIdentity) {
     setShowHistory,
     question,
     setQuestion,
-    error:
-      error ??
-      (conversation.error || capabilities.error
-        ? readableError(conversation.error ?? capabilities.error)
-        : undefined),
+    error: error ?? (loadError ? readableError(loadError) : undefined),
+    loadError: Boolean(loadError),
+    retryLoad,
     notice,
     rename,
     setRename,
@@ -641,6 +694,8 @@ export function useBaamCompanion(identity: BaamIdentity) {
     allowed,
     available,
     busy,
+    progress,
+    stopping,
     messages,
     actions,
     workflows,
@@ -658,9 +713,10 @@ export function useBaamCompanion(identity: BaamIdentity) {
     stopResponse,
     loadOlder,
     loadingMore,
-    hasOlder: olderCursor === undefined ? data?.next : olderCursor,
+    olderError,
+    hasOlder: olderCursor,
     changing: change.isLoading,
-    fetching: conversation.isFetching,
+    fetching: conversation.isFetching || capabilities.isFetching,
   };
 }
 export type BaamController = ReturnType<typeof useBaamCompanion>;

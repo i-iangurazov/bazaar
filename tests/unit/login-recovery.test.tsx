@@ -20,7 +20,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("next-intl", () => ({
   useLocale: () => state.locale,
   useTranslations: (namespace: string) => Object.assign((key: string) =>
-    `${namespace}.${key}${state.localizeValidation && ["emailRequired", "emailInvalid", "passwordRequired"].includes(key) ? `:${state.locale}` : ""}`,
+    `${namespace}.${key}${state.localizeValidation && ["emailRequired", "emailInvalid", "phoneRequired", "phoneInvalid", "passwordRequired"].includes(key) ? `:${state.locale}` : ""}`,
   { has: () => true }),
 }));
 vi.mock("@/lib/trpc", () => ({ trpc: { publicAuth: { resendVerification: {
@@ -151,5 +151,49 @@ describe("login verification recovery", () => {
     act(() => state.success?.());
     expect((screen.getByRole("button", { name: "nav.emailVerificationSent" }) as HTMLButtonElement).disabled).toBe(true);
     expect(state.replace).not.toHaveBeenCalled();
+  });
+
+  it("uses the selected phone with the same password and leaves the email field available for autofill", async () => {
+    state.signIn.mockResolvedValue({ ok: true, error: null });
+    render(<LoginForm />);
+    const email = screen.getByLabelText("auth.email");
+    expect(email.getAttribute("autocomplete")).toBe("email");
+    expect(document.activeElement).not.toBe(email);
+    fireEvent.change(email, { target: { value: "synthetic@example.invalid" } });
+    fireEvent.click(screen.getByRole("button", { name: "auth.loginByPhone" }));
+    const phone = screen.getByLabelText("auth.loginPhone");
+    expect(phone.getAttribute("type")).toBe("tel");
+    expect(phone.getAttribute("placeholder")).toBe("+996 555 123 456");
+    expect(document.activeElement).toBe(phone);
+    expect(screen.getByRole("button", { name: "auth.loginByPhone" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.change(phone, { target: { value: "0 555 123 456" } });
+    fireEvent.change(screen.getByLabelText("auth.password"), { target: { value: "Synthetic-Password!" } });
+    fireEvent.click(screen.getByRole("button", { name: "auth.signIn" }));
+    await waitFor(() => expect(state.signIn).toHaveBeenCalledExactlyOnceWith("credentials", {
+      phone: "0 555 123 456", password: "Synthetic-Password!", redirect: false,
+    }));
+    await waitFor(() => expect(state.replace).toHaveBeenCalledWith("/dashboard"));
+    fireEvent.click(screen.getByRole("button", { name: "auth.loginByEmail" }));
+    expect((screen.getByLabelText("auth.email") as HTMLInputElement).value).toBe("synthetic@example.invalid");
+    expect(document.activeElement).toBe(screen.getByLabelText("auth.email"));
+  });
+
+  it("validates a phone before submission and routes verification recovery through email", async () => {
+    state.signIn.mockResolvedValue({ error: "emailNotVerified" });
+    render(<LoginForm />);
+    fireEvent.click(screen.getByRole("button", { name: "auth.loginByPhone" }));
+    const number = screen.getByLabelText("auth.loginPhone");
+    fireEvent.change(number, { target: { value: "1234" } });
+    fireEvent.change(screen.getByLabelText("auth.password"), { target: { value: "Synthetic-Password!" } });
+    fireEvent.click(screen.getByRole("button", { name: "auth.signIn" }));
+    expect(await screen.findByText("auth.phoneInvalid")).toBeTruthy();
+    expect(state.signIn).not.toHaveBeenCalled();
+
+    fireEvent.change(number, { target: { value: "+996 555 123 456" } });
+    fireEvent.click(screen.getByRole("button", { name: "auth.signIn" }));
+    expect(await screen.findByText("auth.confirmEmailAfterPhoneLogin")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "nav.emailVerificationResend" })).toBeNull();
+    expect(state.resend).not.toHaveBeenCalled();
+    expect(state.getSession).not.toHaveBeenCalled();
   });
 });

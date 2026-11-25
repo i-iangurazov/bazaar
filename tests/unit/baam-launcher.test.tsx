@@ -33,8 +33,13 @@ vi.stubGlobal(
     disconnect() {}
   },
 );
+const originalWidth = window.innerWidth;
 beforeEach(() => { native.platform = "web"; native.push.mockReset(); });
-afterEach(() => { cleanup(); window.history.replaceState(null, "", "/"); });
+afterEach(() => {
+  cleanup();
+  window.innerWidth = originalWidth;
+  window.history.replaceState(null, "", "/");
+});
 
 it("keeps a single launcher in its reserved header slot at mobile and desktop widths", async () => {
   const previousWidth = window.innerWidth;
@@ -108,8 +113,36 @@ describe("BAAM assistant launcher", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("preserves the compact assistant entry on Android", () => {
+  it.each([390, 767])("opens the full mobile browser workspace at %i px", (width) => {
+    window.innerWidth = width;
+    window.history.replaceState(null, "", "/products?storeId=chosen-store#items");
+    render(launcher());
+    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+    expect(native.push).toHaveBeenCalledTimes(1);
+    const destination = new URL(native.push.mock.calls[0][0], "https://bazaar.invalid");
+    expect(destination.pathname).toBe("/baam");
+    expect(destination.searchParams.get("storeId")).toBe("chosen-store");
+    expect(destination.searchParams.get("returnTo")).toBe("/products?storeId=chosen-store#items");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes the drawer across the desktop breakpoint and keeps it closed when returning", () => {
+    window.innerWidth = 768;
+    render(launcher());
+    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(native.push).not.toHaveBeenCalled();
+    window.innerWidth = 767;
+    fireEvent(window, new Event("resize"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    window.innerWidth = 768;
+    fireEvent(window, new Event("resize"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("preserves the compact assistant entry on a wide Android layout", () => {
     native.platform = "android";
+    window.innerWidth = 1024;
     render(launcher());
     fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
     expect(screen.getByRole("dialog", { name: "BAAM" })).toBeTruthy();

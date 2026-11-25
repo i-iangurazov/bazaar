@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as RuntimeConfig from "@/server/config/runtime";
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), findConsentingUser: vi.fn() }));
 vi.mock("@/server/db/prisma", () => ({ prisma: { user: { findUnique: mocks.findConsentingUser } } }));
 vi.mock("@/server/config/runtime", async (original) => ({
-  ...(await original<typeof import("@/server/config/runtime")>()),
+  ...(await original<typeof RuntimeConfig>()),
   assertExternalProviderCallAllowed: vi.fn(),
 }));
 import { understandBaamIntent as understandBaamIntentFromService, parseBaamFastIntent } from "@/server/services/baamWorkflowIntent";
@@ -73,6 +74,34 @@ describe("DeepSeek Baam intent contract", () => {
       parameters: {},
     });
   });
+  it("answers a general health question without passing business records or offering an operation", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ status: "completed", output: [call({
+      reply: "Головная боль может иметь разные причины. Если она беспокоит, обсудите это с врачом.",
+    })] }));
+    const result = await understandBaamIntent({
+      ...args, text: "Что делать, если болит голова?", page: "/products/example-record",
+      history: ["Previous private text"], recentRecords: [{ kind: "product_create", resourceId: "secret-record" }],
+    });
+    expect(result).toMatchObject({ kind: "answer", action: undefined, parameters: {} });
+    const body = JSON.parse(mocks.fetch.mock.calls[0][1].body);
+    const context = JSON.parse(body.input[0].content);
+    expect(context.personalHealthRule).toMatch(/never diagnose or prescribe/);
+    expect(context.personalHealth).toBe(true);
+    expect(context.guides).toEqual([]);
+    expect(context.relatedText).toEqual([]);
+    expect(context.recentRecords).toBeUndefined();
+    expect(context.currentPageRecord).toBeNull();
+  });
+  it.each(["Что делать, если болит голова?", "Составь инструкцию для кассира"])(
+    "keeps %s read-only even if the classifier suggests a write", async (text) => {
+      mocks.fetch.mockResolvedValue(Response.json({ status: "completed", output: [call({
+        kind: "action", action: "product_create", reply: null,
+      })] }));
+      expect(await understandBaamIntent({ ...args, text })).toMatchObject({
+        kind: "answer", parameters: {},
+      });
+    },
+  );
   it("rejects multiple calls even though DeepSeek ignores parallel_tool_calls=false", async () => {
     mocks.fetch.mockResolvedValue(
       Response.json({

@@ -169,20 +169,7 @@ export default function DashboardPage() {
       </span>
     );
   };
-  const header = (
-    <PageHeader
-      title={tWorkspace("dailyOverview")}
-      subtitle={tWorkspace("dailyHint")}
-      action={
-        <Button asChild variant="secondary">
-          <Link href={reportHref(weekStart, today)}>
-            <ReportsIcon className="h-4 w-4" aria-hidden />
-            {t("viewReports")}
-          </Link>
-        </Button>
-      }
-    />
-  );
+  const header = <PageHeader title={tWorkspace("dailyOverview")} />;
   if (dashboardQuery.isError && !dashboardQuery.data) {
     return (
       <div>
@@ -293,14 +280,8 @@ export default function DashboardPage() {
       trend: undefined,
     },
   ];
+  const canStartSale = hasPermission(access, "usePos");
   const actions = [
-    {
-      key: "sale",
-      label: t("startSale"),
-      href: saleHref,
-      icon: PosIcon,
-      allowed: hasPermission(access, "usePos"),
-    },
     {
       key: "receive",
       label: t("receiveStock"),
@@ -334,14 +315,21 @@ export default function DashboardPage() {
   const maxSales = Math.max(...salesSeries.map((day) => day.salesKgs), 0);
   const hasSales = salesSeries.some((day) => day.receiptsCount > 0);
   return (
-    <div data-dashboard>
-      {header}
-      <div className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 basis-64 items-center gap-3">
-          <label htmlFor="dashboard-store" className="text-sm text-muted-foreground">
-            {tCommon("store")}
-          </label>
-          <div className="min-w-0 flex-1 sm:max-w-72">
+    <div data-dashboard className="space-y-5 sm:space-y-6">
+      <section className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] sm:items-end sm:gap-6">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+              {tWorkspace("dailyOverview")}
+            </h1>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground sm:text-sm">
+              {tWorkspace("todayContext", { date: formatDate(businessDateOnlyToUtc(today), locale) })}
+            </p>
+          </div>
+          <div className="flex min-w-0 items-center gap-3 sm:flex-col sm:items-stretch sm:gap-1.5">
+            <label htmlFor="dashboard-store" className="text-xs font-medium text-muted-foreground">
+              {tCommon("store")}
+            </label>
             <Select
               value={storeId}
               onValueChange={(id) => {
@@ -349,82 +337,100 @@ export default function DashboardPage() {
                 router.replace(`/dashboard?storeId=${encodeURIComponent(id)}`, { scroll: false });
               }}
             >
-              <SelectTrigger id="dashboard-store" data-tour="dashboard-store-filter">
+              <SelectTrigger id="dashboard-store" data-tour="dashboard-store-filter" className="min-h-11 min-w-0 flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {dashboardQuery.data.stores.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
+                  <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         </div>
-        <p className="text-xs leading-5 text-muted-foreground">
-          {tWorkspace("todayContext", { date: formatDate(businessDateOnlyToUtc(today), locale) })}
-        </p>
-      </div>
-      {dashboardQuery.isError ? (
-        <QueryErrorState className="mb-4" onRetry={() => void dashboardQuery.refetch()} />
-      ) : null}
-      <section
-        aria-label={t("businessOverview")}
-        className="workspace-kpi-grid grid grid-cols-2 gap-3"
-      >
-        {kpis.map((kpi, index) => (
-          <Link
-            key={kpi.key}
-            href={reportHref()}
-            data-dashboard-kpi={kpi.key}
-            className={cn(
-              "group flex min-w-0 flex-col rounded-lg border border-border bg-card p-3 text-foreground transition-colors hover:border-primary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:p-5",
-              index === 0 && "border-primary/30",
-            )}
-          >
-            <div className="flex min-h-10 items-start justify-between gap-2 sm:min-h-0">
-              <h2 className="min-w-0 break-words text-sm font-medium leading-5 text-muted-foreground">
-                {kpi.label}
-              </h2>
-              <ChevronRightIcon
-                className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary"
-                aria-hidden
-              />
-            </div>
-            <p className="mt-2 break-normal text-lg font-semibold tabular-nums leading-snug tracking-tight sm:mt-3 sm:text-2xl">
-              {renderKpiValue(kpi.value)}
-            </p>
-            <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{kpi.hint}</p>
-            {kpi.trend !== null && kpi.trend !== undefined ? (
-              <div className="mt-auto pt-2">{renderTrendBadge(kpi.trend)}</div>
-            ) : null}
-          </Link>
-        ))}
-      </section>
-      <section aria-label={t("quickActions")} className="my-5 flex flex-wrap gap-2">
-        {actions.map((action, index) => (
-          <Button
-            key={action.key}
-            asChild
-            variant={index === 0 ? "primary" : "secondary"}
-            className="h-auto min-h-10 py-2"
-          >
-            <Link
-              href={action.href}
-              onNavigate={action.key === "sale" ? saleStart.onNavigate : undefined}
-              aria-busy={action.key === "sale" && saleStart.pending ? true : undefined}
-            >
-              {action.key === "sale" && saleStart.pending ? (
-                <Spinner className="text-current" />
+        {canStartSale ? (
+          <Button asChild className="mt-4 h-auto min-h-[3.25rem] w-full justify-start gap-3 rounded-lg px-4 py-2.5 sm:w-auto sm:min-w-56">
+            <Link href={saleHref} onNavigate={saleStart.onNavigate} aria-busy={saleStart.pending || undefined}>
+              {saleStart.pending ? (
+                <Spinner className="h-5 w-5 shrink-0 text-current" />
               ) : (
-                <action.icon className="h-4 w-4" aria-hidden />
+                <PosIcon className="h-5 w-5 shrink-0" aria-hidden />
               )}
-              {action.label}
+              <span className="flex-1 text-left">{t("startSale")}</span>
+              <ChevronRightIcon className="h-4 w-4 shrink-0" aria-hidden />
             </Link>
           </Button>
-        ))}
+        ) : null}
       </section>
+      {dashboardQuery.isError ? (
+        <QueryErrorState onRetry={() => void dashboardQuery.refetch()} />
+      ) : null}
+      <section aria-labelledby="dashboard-summary">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3">
+          <h2 id="dashboard-summary" className="text-base font-semibold text-foreground sm:text-lg">
+            {t("kpi.daySummary")}
+          </h2>
+          <Button asChild variant="ghost" className="min-h-11 px-2 font-medium">
+            <Link href={reportHref(weekStart, today)}>
+              <ReportsIcon className="h-4 w-4" aria-hidden />
+              {t("viewReports")}
+            </Link>
+          </Button>
+        </div>
+        <div className="workspace-kpi-grid grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
+          {kpis.map((kpi, index) => (
+            <Link
+              key={kpi.key}
+              href={reportHref()}
+              data-dashboard-kpi={kpi.key}
+              className={cn(
+                "group flex min-w-0 flex-col bg-card p-3.5 text-foreground hover:bg-muted focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:p-5",
+                index === 0 && "bg-primary/[0.05] hover:bg-primary/10",
+              )}
+            >
+              <div className="flex items-start justify-between gap-1.5">
+                <h3 className="min-w-0 break-words text-xs font-medium leading-5 text-muted-foreground sm:text-sm">
+                  {kpi.label}
+                </h3>
+                <ChevronRightIcon
+                  className="h-3.5 w-3.5 shrink-0 self-center text-muted-foreground group-hover:text-primary"
+                  aria-hidden
+                />
+              </div>
+              <p className={cn(
+                "mt-2 break-normal text-lg font-semibold leading-snug tracking-tight tabular-nums sm:text-2xl",
+                index === 0 && "text-primary",
+                kpi.key === "profit" && business!.grossProfitKgs === null && "text-base sm:text-xl",
+              )}>
+                {renderKpiValue(kpi.value)}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{kpi.hint}</p>
+              {kpi.trend !== null && kpi.trend !== undefined ? (
+                <div className="mt-auto pt-2">{renderTrendBadge(kpi.trend)}</div>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      </section>
+      {actions.length ? (
+        <section aria-labelledby="dashboard-operations">
+          <h2 id="dashboard-operations" className="mb-2 text-base font-semibold text-foreground sm:text-lg">
+            {t("quickActions")}
+          </h2>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {actions.map((action) => (
+              <Link
+                key={action.key}
+                href={action.href}
+                className="flex min-h-12 min-w-0 items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-left text-xs font-medium leading-5 text-foreground hover:border-primary/30 hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:text-sm"
+              >
+                <action.icon className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                <span className="min-w-0 break-words">{action.label}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <div className="workspace-dashboard-grid grid gap-5">
         <Card className="workspace-dashboard-chart">
           <CardHeader className="flex flex-wrap items-start justify-between gap-3">

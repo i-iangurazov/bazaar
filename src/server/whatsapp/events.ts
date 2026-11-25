@@ -8,9 +8,11 @@ const object = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 const list = (value: unknown) => (Array.isArray(value) ? value : []);
+export const WHATSAPP_ACCOUNT_LOCKED = "BUSINESS_ACCOUNT_LOCKED";
+
 export type WhatsAppNormalizedEvent = {
   key: string;
-  kind: "MESSAGE" | "STATUS" | "ECHO" | "ACCOUNT";
+  kind: "MESSAGE" | "STATUS" | "ECHO" | "ACCOUNT" | "CALLBACK";
   id: string;
   at: Date;
   identity?: string;
@@ -80,6 +82,27 @@ export function normalizeWhatsAppEvents(
         const status = object(rawStatus),
           id = str(status.gs_id || status.id),
           state = str(status.status).toUpperCase();
+        if (field === "messages" && status.type === "set-callback") {
+          result.push({
+            key: hash([appId, "callback"]),
+            kind: "CALLBACK",
+            id: "set-callback",
+            at: receivedAt,
+          });
+          continue;
+        }
+        if (state === "FAILED" && id && list(status.errors).some((error) => {
+          const code = object(error).code;
+          return code === 131031 || code === "131031";
+        })) {
+          result.push({
+            key: hash([appId, "account-locked", id]),
+            kind: "ACCOUNT",
+            id: WHATSAPP_ACCOUNT_LOCKED,
+            at: eventTime(status.timestamp, receivedAt),
+            status: WHATSAPP_ACCOUNT_LOCKED,
+          });
+        }
         if (id && ["SENT", "DELIVERED", "READ", "FAILED", "ENQUEUED"].includes(state))
           result.push({
             key: hash([appId, "status", id, state]),

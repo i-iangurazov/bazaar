@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 
 export const mobileShellMediaQuery = "(max-width: 767px)";
+export const phoneWorkspaceMediaQuery =
+  `${mobileShellMediaQuery}, (pointer: coarse) and (hover: none) and (max-height: 500px)`;
 
 export const useIsMobile = () => {
   const [matches, setMatches] = useState<boolean | null>(null);

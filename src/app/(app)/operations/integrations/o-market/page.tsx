@@ -11,6 +11,10 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { BackIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import {
+  isDescriptionGenerationJobRunning,
+  ProductDescriptionGenerationProgress,
+} from "@/components/product-description-generation-progress";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +43,9 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
+import { Spinner } from "@/components/ui/spinner";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDateTime } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
@@ -112,6 +119,7 @@ const getProductResults = (value: unknown): ProductResult[] => {
 const OMarketPage = () => {
   const t = useTranslations("integrations.oMarketPage");
   const tErrors = useTranslations("errors");
+  const tProducts = useTranslations("products");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const formatDate = (value?: Date | string | null) => {
@@ -130,10 +138,13 @@ const OMarketPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
 
   const settingsQuery = trpc.oMarket.settings.useQuery(undefined, { enabled: canManage });
   const [activeStoreId, setActiveStoreId] = useState("");
+  const [descriptionJobsByStore, setDescriptionJobsByStore] = useState<Record<string, string>>({});
+  const descriptionGenerationJobId = descriptionJobsByStore[activeStoreId];
   const [baseUrl, setBaseUrl] = useState("https://api-market.o.kg");
   const [apiToken, setApiToken] = useState("");
   const [clearToken, setClearToken] = useState(false);
@@ -304,6 +315,79 @@ const OMarketPage = () => {
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
+
+  const availability = trpc.products.descriptionGenerationAvailability.useQuery(undefined, {
+    enabled: canManage && Boolean(activeStoreId),
+  });
+  const { mutateAsync: startDescriptionJob, isLoading: startingDescriptionJob } =
+    trpc.oMarket.startDescriptionGenerationJob.useMutation();
+  const { mutateAsync: retryDescriptionJob, isLoading: retryingDescriptionJob } =
+    trpc.products.retryDescriptionGenerationJobFailed.useMutation();
+  const descriptionJobQuery = trpc.products.descriptionGenerationJob.useQuery(
+    { jobId: descriptionGenerationJobId ?? "" },
+    {
+      enabled: canManage && Boolean(descriptionGenerationJobId),
+      refetchInterval: (job) => !job || isDescriptionGenerationJobRunning(job.status) ? 2_000 : false,
+      onSuccess: async (job) => {
+        if (!isDescriptionGenerationJobRunning(job.status)) {
+          await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
+        }
+      },
+    },
+  );
+  const descriptionJob = descriptionJobQuery.data;
+  const descriptionJobBusy =
+    startingDescriptionJob || retryingDescriptionJob ||
+    Boolean(descriptionGenerationJobId && !descriptionJob) ||
+    isDescriptionGenerationJobRunning(descriptionJob?.status);
+  const missingDescriptionIds = preflightQuery.error
+    ? []
+    : (preflightQuery.data?.failedProducts ?? [])
+        .filter((product) => product.issues.includes("MISSING_DESCRIPTION") && !product.issues.includes("MISSING_IMAGE"))
+        .map((product) => product.productId);
+  const descriptionDisabledReason = availability.error
+    ? translateError(tErrors, availability.error)
+    : availability.isLoading
+      ? tProducts("aiDescriptionDisabledChecking")
+      : !availability.data?.enabled || !availability.data.configured
+        ? tProducts("aiDescriptionDisabledNotConfigured")
+        : descriptionJobBusy
+          ? tProducts("aiDescriptionDisabledRunning")
+          : null;
+  const startMissingDescriptions = async () => {
+    if (descriptionDisabledReason || !activeStoreId || !missingDescriptionIds.length) return;
+    const storeId = activeStoreId;
+    if (!(await confirm({
+      description: tProducts("confirmBulkGenerateMissingDescriptions", { count: missingDescriptionIds.length }),
+    }))) return;
+    try {
+      const job = await startDescriptionJob({
+        storeId,
+        locale: normalizeLocale(locale) ?? defaultLocale,
+        productIds: missingDescriptionIds,
+      });
+      setDescriptionJobsByStore((current) => ({ ...current, [storeId]: job.id }));
+    } catch (error) {
+      toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+    }
+  };
+  const retryFailedDescriptions = async () => {
+    if (!descriptionJob || !activeStoreId || descriptionJobBusy) return;
+    const storeId = activeStoreId;
+    try {
+      const job = await retryDescriptionJob({ jobId: descriptionJob.id });
+      setDescriptionJobsByStore((current) => ({ ...current, [storeId]: job.id }));
+    } catch (error) {
+      toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+    }
+  };
+  const closeDescriptionProgress = () => {
+    setDescriptionJobsByStore((current) => {
+      const remaining = { ...current };
+      delete remaining[activeStoreId];
+      return remaining;
+    });
+  };
 
   const preflight = preflightQuery.data;
   const canRunAll = !preflightQuery.error && Boolean(preflight?.actionability.canRunAll);
@@ -868,6 +952,42 @@ const OMarketPage = () => {
               </Badge>
             ))}
           </div>
+          {missingDescriptionIds.length ? (
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={Boolean(descriptionDisabledReason)}
+                onClick={() => void startMissingDescriptions()}
+              >
+                {startingDescriptionJob ? <Spinner className="h-4 w-4" /> : null}
+                {t("validation.fillMissingDescriptions", { count: missingDescriptionIds.length })}
+              </Button>
+              <p className="text-sm text-muted-foreground">
+                {descriptionDisabledReason ?? t("validation.fillMissingDescriptionsHint")}
+              </p>
+            </div>
+          ) : null}
+          {descriptionGenerationJobId && descriptionJobQuery.error ? (
+            <QueryErrorState
+              error={descriptionJobQuery.error}
+              onRetry={() => void descriptionJobQuery.refetch()}
+            />
+          ) : null}
+          {descriptionGenerationJobId && descriptionJobQuery.isLoading ? (
+            <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : null}
+          {descriptionJob ? (
+            <ProductDescriptionGenerationProgress
+              job={descriptionJob}
+              retryDisabled={retryingDescriptionJob}
+              onRetryFailed={() => void retryFailedDescriptions()}
+              onClose={closeDescriptionProgress}
+            />
+          ) : null}
           {(preflight?.failedProducts ?? []).length ? (
             <TableContainer>
               <Table>
@@ -969,6 +1089,7 @@ const OMarketPage = () => {
           })}
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 };

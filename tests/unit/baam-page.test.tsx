@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from "react";
+import Link from "next/link";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -109,7 +110,7 @@ const entry = (
 const shell = (open = true, nativeViewport = false, compactViewport = false) => (
   <NextIntlClientProvider locale="en" messages={{ errors: messages.errors }}>
     <BaamAssistantProvider>{open ? <BaamAssistant nativeViewport={nativeViewport} compactViewport={compactViewport}
-      workspaceHeader={compactViewport ? <a href="/inventory">Return to inventory</a> : undefined} /> : null}</BaamAssistantProvider>
+      workspaceHeader={compactViewport ? <Link href="/inventory" prefetch={false}>Return to inventory</Link> : undefined} /> : null}</BaamAssistantProvider>
   </NextIntlClientProvider>
 );
 const input = () =>
@@ -140,7 +141,7 @@ beforeEach(() => {
   }));
   mocks.fetch.mockImplementation(async () => saved);
   mocks.invalidate.mockResolvedValue(undefined);
-  mocks.create.mockResolvedValue({ id: "new-dialog" });
+  mocks.create.mockResolvedValue({ id: "new-dialog", revision: 0 });
   mocks.history.mockReturnValue({
     data: { pages: [{ items: [saved.conversation] }] },
     isLoading: false,
@@ -209,6 +210,16 @@ describe("BAAM persistent companion workspace", () => {
     expect(screen.queryByRole("table")).toBeNull();
     expect(mocks.send).not.toHaveBeenCalled();
   });
+  it("offers printer, sales and subscription guidance in the workspace, not write commands", async () => {
+    mocks.pathname.mockReturnValue("/baam");
+    render(shell());
+    expect(screen.getByRole("button", { name: "How to make a sale" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Help with your subscription" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "How to set up a printer" }));
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({
+      command: { kind: "help", query: "printing" },
+    })));
+  });
   it("sends one bounded page context with a durable request ID and displays the saved current answer", async () => {
     render(shell());
     submit();
@@ -225,6 +236,55 @@ describe("BAAM persistent companion workspace", () => {
       }),
     );
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it("sends the first question using the creation revision without a second conversation request", async () => {
+    localStorage.removeItem("baam-dialog:org:actor");
+    render(shell());
+    submit("First question");
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: "new-dialog", revision: 0, text: "First question",
+    })));
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it("preserves a newly typed draft when retrying a failed request", async () => {
+    mocks.send.mockRejectedValueOnce(new Error("network"));
+    render(shell());
+    submit("First request");
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    fireEvent.change(input(), { target: { value: "Next question I am typing" } });
+    fireEvent.click(retry);
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2));
+    expect(mocks.send.mock.calls[1][0]).toEqual(mocks.send.mock.calls[0][0]);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(input().value).toBe("Next question I am typing");
+  });
+  it("shows dispatch before the server claims the turn and stops only the displayed turn", async () => {
+    let finish!: (result: { data: BaamData }) => void;
+    mocks.send.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const view = render(shell());
+    submit("Open a product");
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Sending your request…")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Stop response" })).toBeNull();
+    saved = { ...saved, activeTurn: {
+      id: "shown-turn", clientRequestId: mocks.send.mock.calls[0][0].clientRequestId,
+      status: "RUNNING", cancelRequested: false,
+    } };
+    view.rerender(shell());
+    expect(screen.getByText("Working on your request…")).toBeTruthy();
+    mocks.stop.mockImplementationOnce(async () => {
+      saved = { ...saved, activeTurn: null };
+      return { stopped: true };
+    });
+    fireEvent.change(input(), { target: { value: "Another draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Stop response" }));
+    await waitFor(() => expect(mocks.stop).toHaveBeenCalledWith({
+      conversationId: "dialog", turnId: "shown-turn",
+    }));
+    await act(async () => { finish({ data: saved }); });
+    expect(input().value).toBe("Another draft");
+    expect(JSON.parse(sessionStorage.getItem("baam-draft:org:actor:dialog") ?? "{}").pending).toBeUndefined();
   });
   it.each([false, true])("preserves a failed request and retries with the SAME ID after reopening (short native viewport: %s)", async (compactViewport) => {
     mocks.send.mockRejectedValueOnce(new Error("network"));
@@ -437,6 +497,20 @@ describe("BAAM persistent companion workspace", () => {
     await waitFor(() => expect(screen.getByText("Earlier")).toBeTruthy());
     expect(screen.getByText("Latest")).toBeTruthy();
     expect(mocks.fetch).toHaveBeenCalledWith({ id: "dialog", before: 42 });
+  });
+  it("preserves existing messages and offers the same earlier page again after a read fails", async () => {
+    saved = { ...saved, messages: [entry("Latest", 42)], next: 42 };
+    mocks.fetch.mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce({
+      ...saved, messages: [entry("Earlier", 1)], next: null,
+    });
+    render(shell());
+    fireEvent.click(screen.getByRole("button", { name: "Earlier messages" }));
+    await screen.findByRole("alert");
+    expect(screen.getByText("Latest")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Earlier messages" }));
+    expect(await screen.findByText("Earlier")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mocks.fetch.mock.calls).toEqual([[{ id: "dialog", before: 42 }], [{ id: "dialog", before: 42 }]]);
   });
   it("keeps the native composer outside the scrolling content and preserves its draft through history", () => {
     render(shell(true, true));

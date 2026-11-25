@@ -2,7 +2,7 @@
 import { BaamWorkflowCard } from "./baam-workflow-card";
 import { BaamSpeech } from "./baam-speech";
 import { BaamAnswerText } from "./baam-answer-text";
-import type { WorkflowAction } from "@/lib/baam/workflows";
+import type { WorkflowAction, WorkflowCommand } from "@/lib/baam/workflows";
 import Link from "next/link";
 import {
   ArrowDownIcon as ArrowDown,
@@ -17,6 +17,18 @@ import { Spinner } from "./ui/spinner";
 import { cn } from "@/lib/utils";
 import { isBaamLink, type BaamActionSummary, type BaamPart } from "@/lib/baam/companion";
 import type { BaamCopyKey } from "@/lib/baam/copy";
+
+const suggestionsByKey = {
+  createProduct: { kind: "action", action: "product_create" },
+  receive: { kind: "action", action: "stock_receive" },
+  sell: { kind: "action", action: "pos_create_draft" },
+  sales: { kind: "report", period: "week" },
+  help: { kind: "help" },
+  saleGuide: { kind: "help", query: "make-sale" },
+  printerGuide: { kind: "help", query: "printing" },
+  billingGuide: { kind: "help", query: "billing" },
+  topProducts: undefined,
+} satisfies Partial<Record<BaamCopyKey, WorkflowCommand>>;
 import type { BaamController } from "./use-baam-companion";
 
 function ActionCard({ actionId, c }: { actionId: string; c: BaamController }) {
@@ -118,18 +130,18 @@ export function BaamMessageList({ c, externalScrollContainer = false }: { c: Baa
       if (part.type === "action") lastActionMessage.set(part.actionId, message.id);
       if (part.type === "workflow") lastWorkflowMessage.set(part.workflowId, message.id);
     }
-  const suggestions =
+  const suggestions: Array<keyof typeof suggestionsByKey> =
     c.pathname.startsWith("/inventory") || c.pathname.startsWith("/products")
       ? ["createProduct", "receive", "help"]
       : c.pathname.startsWith("/pos")
-        ? ["sell", "sales", "help"]
-        : ["topProducts", "sales", "help"];
+        ? ["saleGuide", "sell", "sales"]
+        : ["saleGuide", "printerGuide", "billingGuide", "topProducts"];
   return (
     <>
       <div
         ref={externalScrollContainer ? undefined : c.scrollRef}
         data-baam-history
-        className={cn("min-h-0 space-y-5 px-4 py-5 sm:px-5", externalScrollContainer ? "shrink-0" : "flex-1 overflow-y-auto overscroll-contain")}
+        className={cn("min-h-0 space-y-4 px-3 py-3 sm:px-5 sm:py-5", externalScrollContainer ? "shrink-0" : "flex-1 overflow-y-auto overscroll-contain")}
         onScroll={externalScrollContainer ? undefined : () => {
           const el = c.scrollRef.current;
           if (!el) return;
@@ -147,43 +159,24 @@ export function BaamMessageList({ c, externalScrollContainer = false }: { c: Baa
             {c.t("earlier")}
           </Button>
         ) : null}
-        {!c.messages.length && !c.optimistic && !c.fetching ? (
-          <div className="py-5">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-[18px] bg-primary/10 text-primary">
-              <BaamIcon className="h-9 w-9" />
+        {c.olderError ? <p role="alert" className="text-sm text-destructive">{c.olderError}</p> : null}
+        {!c.messages.length && !c.optimistic && !c.fetching && !c.loadError && !c.busy ? (
+          <div className="py-2 sm:py-5">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary sm:h-14 sm:w-14">
+              <BaamIcon className="h-7 w-7 sm:h-9 sm:w-9" />
             </div>
             <h2 className="text-2xl font-semibold tracking-tight">{c.t("welcome")}</h2>
-            <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground">{c.t("intro")}</p>
-            <div className="mt-7 grid gap-2">
+            <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">{c.t("intro")}</p>
+            <div className="mt-4 grid gap-2">
               {suggestions.map((key) => (
                 <button
                   type="button"
                   key={key}
                   disabled={!c.available || c.busy}
-                  onClick={() =>
-                    void c.ask(
-                      c.t(key as BaamCopyKey),
-                      undefined,
-                      key === "topProducts"
-                        ? undefined
-                        : key === "help"
-                          ? { kind: "help" }
-                          : key === "sales"
-                            ? { kind: "report", period: "week" }
-                            : {
-                                kind: "action",
-                                action:
-                                  key === "createProduct"
-                                    ? "product_create"
-                                    : key === "receive"
-                                      ? "stock_receive"
-                                      : "pos_create_draft",
-                              },
-                    )
-                  }
+                  onClick={() => void c.ask(c.t(key), undefined, suggestionsByKey[key])}
                   className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
                 >
-                  {c.t(key as BaamCopyKey)}
+                  {c.t(key)}
                   <ArrowUpRight size={16} className="shrink-0 text-muted-foreground" />
                 </button>
               ))}
@@ -515,11 +508,16 @@ export function BaamMessageList({ c, externalScrollContainer = false }: { c: Baa
             {c.optimistic.text}
           </div>
         ) : null}
-        {c.busy ? (
+        {c.progress ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Spinner />
-            {c.executing ? c.t("running") : c.t("thinking")}
+            {c.t(c.progress)}
           </div>
+        ) : null}
+        {!c.messages.length && c.fetching && !c.progress ? (
+          <p role="status" className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+            <Spinner /> {c.t("loading")}
+          </p>
         ) : null}
       </div>
       {c.unread ? (
@@ -531,12 +529,6 @@ export function BaamMessageList({ c, externalScrollContainer = false }: { c: Baa
           <ArrowDown size={15} />
           {c.t("latest")}
         </button>
-      ) : null}
-      {!c.messages.length && c.fetching ? (
-        <p role="status" className="flex items-center gap-2 py-5 text-sm text-muted-foreground">
-          <Spinner />
-          {c.t("loading")}
-        </p>
       ) : null}
     </>
   );

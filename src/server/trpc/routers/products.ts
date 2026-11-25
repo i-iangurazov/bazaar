@@ -520,22 +520,29 @@ export const productsRouter = router({
 
   descriptionGenerationJob: protectedProcedure
     .input(productDescriptionGenerationJobInputSchema)
-    .query(({ ctx, input }) =>
-      getProductDescriptionGenerationJob(ctx.user.organizationId, input.jobId),
-    ),
+    .query(async ({ ctx, input }) => {
+      const job = await getProductDescriptionGenerationJob(ctx.user.organizationId, input.jobId);
+      if (job.storeId) await assertUserCanAccessStore(ctx.prisma, ctx.user, job.storeId);
+      return job;
+    }),
 
   retryDescriptionGenerationJobFailed: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "products-descriptions-job-retry" }))
     .input(productDescriptionGenerationJobInputSchema)
-    .mutation(({ ctx, input }) =>
-      retryFailedProductDescriptionGenerationItems({
+    .mutation(async ({ ctx, input }) => {
+      const job = await ctx.prisma.productDescriptionGenerationJob.findFirst({
+        where: { id: input.jobId, organizationId: ctx.user.organizationId },
+        select: { storeId: true },
+      });
+      if (job?.storeId) await assertUserCanAccessStore(ctx.prisma, ctx.user, job.storeId);
+      return retryFailedProductDescriptionGenerationItems({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         jobId: input.jobId,
         logger: ctx.logger,
-      }),
-    ),
+      });
+    }),
 
   bulkUpdateCategory: managerProcedure
     .input(bulkUpdateProductCategoryInputSchema)

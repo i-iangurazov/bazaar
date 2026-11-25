@@ -650,6 +650,7 @@ export const ProductForm = ({
   enableSimilarProductCheck = true,
   categoryStoreId,
   onDirtyChange,
+  onReuseExisting,
   savedRevision,
   priceAutosave,
 }: {
@@ -675,6 +676,7 @@ export const ProductForm = ({
   enableSimilarProductCheck?: boolean;
   categoryStoreId?: string | null;
   onDirtyChange?: (isDirty: boolean) => void;
+  onReuseExisting?: (product: { id: string; name: string; sku?: string }) => void;
   savedRevision?: number;
   priceAutosave?: ProductPriceAutosaveConfig;
 }) => {
@@ -5060,9 +5062,13 @@ export const ProductForm = ({
         useExisting
         onPrepared={(ids) => {
           onDirtyChange?.(false);
-          setReuseNavigation(
-            `/products/${encodeURIComponent(reuseProduct.id)}?storeId=${encodeURIComponent(ids[0] ?? categoryStoreId)}`,
-          );
+          if (onReuseExisting) {
+            onReuseExisting(reuseProduct);
+          } else {
+            setReuseNavigation(
+              `/products/${encodeURIComponent(reuseProduct.id)}?storeId=${encodeURIComponent(ids[0] ?? categoryStoreId)}`,
+            );
+          }
           setReuseProduct(null);
         }}
       />

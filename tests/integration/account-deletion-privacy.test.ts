@@ -42,6 +42,7 @@ describeDb("own-account deletion and explicit AI privacy consent", () => {
     } });
     const token = await encode({ secret: process.env.NEXTAUTH_SECRET!, token: { sub: user.id, sessionVersion: user.sessionVersion } });
     await createAuthToken({ userId: user.id, email: user.email, purpose: "PASSWORD_RESET", expiresInMinutes: 30 });
+    await prisma.userLoginPhone.create({ data: { userId: user.id, phone: "+996555123456" } });
     await prisma.mobileDevice.create({ data: { userId: user.id, organizationId: f.org.id, platform: "IOS", installationId: "synthetic-installation", tokenEncrypted: "synthetic-encrypted", tokenHash: "a".repeat(64), appVersion: "1", buildNumber: "1" } });
     const conversation = await prisma.baamConversation.create({ data: { userId: user.id, organizationId: f.org.id, title: "Private title" } });
     await prisma.baamMessage.create({ data: { conversationId: conversation.id, sequence: 1, role: "user", text: "Synthetic private text" } });
@@ -58,6 +59,7 @@ describeDb("own-account deletion and explicit AI privacy consent", () => {
     expect(await bcrypt.compare(password, erased.passwordHash)).toBe(false);
     expect(await getAuthTokenFromCookieHeader(`next-auth.session-token=${token}`)).toBeNull();
     expect(await prisma.authToken.count({ where: { userId: user.id } })).toBe(0);
+    expect(await prisma.userLoginPhone.findUnique({ where: { userId: user.id } })).toBeNull();
     expect(await prisma.mobileDevice.count({ where: { userId: user.id } })).toBe(0);
     expect(await prisma.userStoreAccess.count({ where: { userId: user.id } })).toBe(0);
     expect(await prisma.baamMessage.count({ where: { conversationId: conversation.id } })).toBe(0);

@@ -52,7 +52,7 @@ export const productImageStudioRouter = router({
     }),
 
   create: managerProcedure
-    .use(rateLimit({ windowMs: 60_000, max: 8, prefix: "product-image-studio-create" }))
+    .use(rateLimit({ windowMs: 60_000, max: 12, prefix: "product-image-studio-create" }))
     .input(
       z.object({
         sourceImageUrl: z.string().min(1).max(4000),

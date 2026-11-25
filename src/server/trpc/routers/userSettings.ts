@@ -3,7 +3,9 @@ import { z } from "zod";
 
 import { defaultLocale, locales, normalizeLocale } from "@/lib/locales";
 import {
+  getMyLoginPhone,
   getMyProfile,
+  updateMyLoginPhone,
   updateMyPreferences,
   updateMyProfile,
 } from "@/server/services/userSettings";
@@ -53,6 +55,31 @@ export const userSettingsRouter = router({
       throw toTRPCError(error);
     }
   }),
+
+  getMyLoginPhone: personalAccountProcedure.query(async ({ ctx }) => {
+    try {
+      return await getMyLoginPhone({ userId: ctx.user.id, organizationId: ctx.user.organizationId });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+
+  updateMyLoginPhone: personalAccountProcedure
+    .use(rateLimit({ windowMs: 15 * 60_000, max: 5, prefix: "own-login-phone" }))
+    .input(z.object({ phone: z.string().max(40).nullable(), password: z.string().min(1).max(1024) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await updateMyLoginPhone({
+          ...input,
+          userId: ctx.user.id,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   updateMyProfile: personalAccountProcedure
     .input(

@@ -1,24 +1,11 @@
 import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
-import { readFile } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
-
-import sharp from "sharp";
-
+import { prepareProductAiImages, type ProductAiImagePreparer } from "./productAiImages";
 import { AppError } from "@/server/services/errors";
-import {
-  downloadRemoteImage,
-  normalizeProductImageUrl,
-} from "@/server/services/productImageStorage";
 
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
-const MAX_INPUT_IMAGES = 3;
 const MAX_OUTPUT_TOKENS = 180;
-const AI_IMAGE_MAX_DIMENSION = 1024;
-const AI_IMAGE_TARGET_BYTES = 350_000;
 const OPENAI_MAX_ATTEMPTS = 6;
 const OPENAI_MAX_RETRY_DELAY_MS = 30_000;
-const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
-const publicRootDir = resolve(process.cwd(), "public");
 const isTestRuntime = process.env.NODE_ENV === "test";
 
 const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
@@ -33,11 +20,6 @@ const OPENAI_REQUEST_TIMEOUT_MS = parsePositiveIntEnv(
   process.env.PRODUCT_SPEC_AI_TIMEOUT_MS ?? process.env.OPENAI_REQUEST_TIMEOUT_MS,
   30_000,
 );
-
-type DownloadedImage = {
-  buffer: Buffer;
-  contentType: string;
-};
 
 type ProductSpecSuggestionLogger = {
   info: (obj: Record<string, unknown>, msg?: string) => void;
@@ -77,21 +59,6 @@ type RequestedSpecSuggestion = {
   kind: ProductSpecSuggestionKind;
   labelRu: string;
   options?: string[];
-};
-
-const imageMimeByExtension: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".gif": "image/gif",
-  ".bmp": "image/bmp",
-  ".tif": "image/tiff",
-  ".tiff": "image/tiff",
-  ".svg": "image/svg+xml",
-  ".heic": "image/heic",
-  ".heif": "image/heif",
 };
 
 const invalidSuggestionPatterns = [
@@ -134,122 +101,6 @@ const isQuotaLikeProviderMessage = (value: string) =>
 const isAbortLikeError = (error: unknown) =>
   error instanceof Error &&
   (error.name === "AbortError" || /aborted|abort/i.test(error.message));
-
-const resolveManagedLocalImagePath = (sourceUrl: string) => {
-  try {
-    const parsed = new URL(sourceUrl, "https://local.invalid");
-    if (!parsed.pathname.startsWith(MANAGED_UPLOAD_PREFIX)) {
-      return null;
-    }
-    const candidatePath = resolve(publicRootDir, parsed.pathname.slice(1));
-    const rootPrefix = publicRootDir.endsWith(sep) ? publicRootDir : `${publicRootDir}${sep}`;
-    if (candidatePath !== publicRootDir && !candidatePath.startsWith(rootPrefix)) {
-      return null;
-    }
-    return candidatePath;
-  } catch {
-    return null;
-  }
-};
-
-const readManagedLocalImage = async (sourceUrl: string): Promise<DownloadedImage | null> => {
-  const filePath = resolveManagedLocalImagePath(sourceUrl);
-  if (!filePath) {
-    return null;
-  }
-
-  const contentType = imageMimeByExtension[extname(filePath).toLowerCase()];
-  if (!contentType) {
-    return null;
-  }
-
-  try {
-    const buffer = await readFile(filePath);
-    if (!buffer.length) {
-      return null;
-    }
-    return {
-      buffer,
-      contentType,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const loadImageForPrompt = async (rawUrl: string) => {
-  const normalizedUrl = normalizeProductImageUrl(rawUrl);
-  if (!normalizedUrl) {
-    return null;
-  }
-
-  if (normalizedUrl.startsWith(MANAGED_UPLOAD_PREFIX)) {
-    return readManagedLocalImage(normalizedUrl);
-  }
-
-  if (normalizedUrl.startsWith("data:image/")) {
-    return null;
-  }
-
-  return downloadRemoteImage(normalizedUrl);
-};
-
-const optimizeImageForModel = async (image: DownloadedImage): Promise<DownloadedImage> => {
-  const sourceBytes = image.buffer.byteLength;
-  if (sourceBytes <= AI_IMAGE_TARGET_BYTES / 2 && image.contentType === "image/jpeg") {
-    return image;
-  }
-
-  const candidates: Array<{ maxDimension: number; quality: number }> = [
-    { maxDimension: AI_IMAGE_MAX_DIMENSION, quality: 72 },
-    { maxDimension: AI_IMAGE_MAX_DIMENSION, quality: 60 },
-    { maxDimension: 896, quality: 56 },
-    { maxDimension: 768, quality: 50 },
-    { maxDimension: 640, quality: 44 },
-  ];
-
-  let bestBuffer: Buffer | null = null;
-  for (const candidate of candidates) {
-    try {
-      const nextBuffer = await sharp(image.buffer, { pages: 1 })
-        .rotate()
-        .resize({
-          width: candidate.maxDimension,
-          height: candidate.maxDimension,
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .flatten({ background: "#ffffff" })
-        .jpeg({
-          quality: candidate.quality,
-          mozjpeg: true,
-        })
-        .toBuffer();
-
-      if (!bestBuffer || nextBuffer.byteLength < bestBuffer.byteLength) {
-        bestBuffer = nextBuffer;
-      }
-      if (nextBuffer.byteLength <= AI_IMAGE_TARGET_BYTES) {
-        bestBuffer = nextBuffer;
-        break;
-      }
-    } catch {
-      return image;
-    }
-  }
-
-  if (!bestBuffer || bestBuffer.byteLength >= sourceBytes) {
-    return image;
-  }
-
-  return {
-    buffer: bestBuffer,
-    contentType: "image/jpeg",
-  };
-};
-
-const toDataUrl = (image: DownloadedImage) =>
-  `data:${image.contentType};base64,${image.buffer.toString("base64")}`;
 
 const extractResponseText = (responseBody: OpenAiResponseBody | null) => {
   if (typeof responseBody?.output_text === "string" && responseBody.output_text.trim()) {
@@ -388,28 +239,27 @@ const cleanSuggestionValue = (value: string) =>
 const normalizeComparable = (value: string) =>
   value
     .toLowerCase()
+    .replace(/ё/g, "е")
     .replace(/["'`]/g, "")
     .replace(/\s+/g, " ")
     .replace(/[^\p{L}\p{N}\s-]+/gu, "")
     .trim();
 
-const matchOption = (value: string, options: string[]) => {
-  if (!options.length) {
-    return value;
-  }
+export const matchProductSpecOption = (value: string, options: string[] = []) => {
+  const cleanedValue = cleanSuggestionValue(value);
+  if (!cleanedValue || !options.length) return cleanedValue || null;
 
-  const normalizedValue = normalizeComparable(value);
+  const normalizedValue = normalizeComparable(cleanedValue);
+  if (!normalizedValue) return null;
   const exactMatch = options.find((option) => normalizeComparable(option) === normalizedValue);
-  if (exactMatch) {
-    return exactMatch;
-  }
+  if (exactMatch) return exactMatch;
 
-  const looseMatch = options.find((option) => {
+  const looseMatches = options.filter((option) => {
     const normalizedOption = normalizeComparable(option);
-    return normalizedOption.includes(normalizedValue) || normalizedValue.includes(normalizedOption);
+    return normalizedOption &&
+      (normalizedOption.includes(normalizedValue) || normalizedValue.includes(normalizedOption));
   });
-
-  return looseMatch ?? value;
+  return looseMatches.length === 1 ? looseMatches[0] ?? null : null;
 };
 
 const findMulticolorOption = (options: string[]) =>
@@ -553,6 +403,7 @@ const buildUserPrompt = (requestedSpecs: RequestedSpecSuggestion[]) => {
 
 export const suggestProductSpecsFromImages = async (input: {
   imageUrls: string[];
+  prepareImage?: ProductAiImagePreparer;
   requestedSpecs: RequestedSpecSuggestion[];
   logger?: ProductSpecSuggestionLogger;
 }) => {
@@ -568,29 +419,13 @@ export const suggestProductSpecsFromImages = async (input: {
     return { suggestions: {} as Partial<Record<ProductSpecSuggestionKind, string>> };
   }
 
-  const normalizedImageUrls = Array.from(
-    new Set(input.imageUrls.map((value) => value.trim()).filter((value) => value.length > 0)),
-  ).slice(0, MAX_INPUT_IMAGES);
-  if (!normalizedImageUrls.length) {
-    throw new AppError("aiSpecNoUsableImages", "BAD_REQUEST", 400);
-  }
-
   const startedAt = Date.now();
-  const imageLoadStartedAt = Date.now();
-  const loadedImages = await Promise.all(
-    normalizedImageUrls.map((imageUrl) => loadImageForPrompt(imageUrl)),
-  );
-  const imageLoadDurationMs = Date.now() - imageLoadStartedAt;
-  const usableImages = loadedImages.filter((image): image is DownloadedImage => Boolean(image));
-  const sourceImageBytes = usableImages.reduce((sum, image) => sum + image.buffer.byteLength, 0);
-  const optimizedImages = await Promise.all(
-    usableImages.map((image) => optimizeImageForModel(image)),
-  );
-  const payloadImageBytes = optimizedImages.reduce(
-    (sum, image) => sum + image.buffer.byteLength,
-    0,
-  );
-  const imageDataUrls = optimizedImages.map(toDataUrl);
+  const {
+    imageDataUrls,
+    sourceImageBytes,
+    payloadImageBytes,
+    imageLoadDurationMs,
+  } = await prepareProductAiImages(input.imageUrls, input.prepareImage);
   const loadedImageCount = imageDataUrls.length;
 
   if (!imageDataUrls.length) {
@@ -707,7 +542,8 @@ export const suggestProductSpecsFromImages = async (input: {
     ) {
       continue;
     }
-    suggestions[spec.kind] = matchOption(cleanedValue, spec.options ?? []);
+    const matchingValue = matchProductSpecOption(cleanedValue, spec.options);
+    if (matchingValue) suggestions[spec.kind] = matchingValue;
   }
 
   return {

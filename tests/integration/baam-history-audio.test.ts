@@ -364,9 +364,12 @@ describe.skipIf(!shouldRunDbTests)("BAAM durable history, audio, and interrupted
     expect(history.messages.filter((m) => m.text === "baamStopped")).toHaveLength(1);
     expect((await executeBaamAction(f.ctx, proposal.id)).status).toBe("CANCELLED");
     expect(await prisma.supplier.count({ where: { name: "Never executed" } })).toBe(0);
-    expect(
-      (await claimBaamTurn(f.ctx, { ...f.request, clientRequestId: randomUUID() })).fresh,
-    ).toBe(true);
+    const next = await claimBaamTurn(f.ctx, { ...f.request, clientRequestId: randomUUID() });
+    expect(next.fresh).toBe(true);
+    // An old Stop click arriving after a different tab starts the next turn
+    // must leave that new turn running.
+    expect(await stopBaamTurn(f.ctx, f.conversation.id, turn.id)).toMatchObject({ stopped: false });
+    expect((await readBaamConversation(f.ctx, f.conversation.id)).activeTurn?.id).toBe(next.turn.id);
   });
   it("recovers successful steps after a partial failure and never repeats them", async () => {
     const f = await fixture();

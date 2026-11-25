@@ -216,14 +216,18 @@ describeDb("product image studio integration", () => {
     expect(fetchBody).not.toHaveProperty("tools");
     expect(fetchBody.images[0].image_url).toMatch(/^data:image\/png;base64,/);
 
-    const saved = await saveGeneratedImageToProduct({
+    const saveInput = {
       organizationId: org.id,
       actorId: adminUser.id,
-      requestId: "studio-save",
       jobId: created.jobId,
       productId: product.id,
       setAsPrimary: true,
-    });
+    };
+    const [saved, repeatedSave] = await Promise.all([
+      saveGeneratedImageToProduct({ ...saveInput, requestId: "studio-save" }),
+      saveGeneratedImageToProduct({ ...saveInput, requestId: "studio-save-repeat" }),
+    ]);
+    expect(repeatedSave).toEqual(saved);
 
     const productAfterSave = await prisma.product.findUniqueOrThrow({
       where: { id: product.id },
@@ -407,6 +411,32 @@ describeDb("product image studio integration", () => {
     expect(JSON.stringify(job.providerRequestJson)).not.toContain("base64");
     expect(JSON.stringify(job.providerRequestJson)).not.toContain("synthetic-test-key");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const repeat = await createProductImageStudioJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "deepseek-job-repeat",
+      sourceImageUrl: source.url,
+      backgroundMode: ProductImageStudioBackground.LIGHT_GRAY,
+      outputFormat: ProductImageStudioOutputFormat.SQUARE,
+      centered: true,
+      improveVisibility: true,
+    });
+    fetchMock.mockClear().mockImplementationOnce(async () => {
+      const processing = await getProductImageStudioJob(org.id, repeat.jobId);
+      expect(processing.processingStage).toBe("enhancing");
+      return Response.json({ data: [{ b64_json: buffer.toString("base64") }] });
+    });
+    await runProductImageStudioJob({ jobId: repeat.jobId });
+    const finished = await getProductImageStudioJob(org.id, repeat.jobId);
+    expect(finished.status).toBe(ProductImageStudioJobStatus.SUCCEEDED);
+    expect(finished.processingStage).toBeNull();
+    expect(finished.providerRequestJson).toMatchObject({
+      analysisReused: true,
+      analysis: { observations: { subject: "Synthetic product" } },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/images/edits");
   });
 
   it("keeps actionable errors and safe provider diagnostics when image access is rejected", async () => {
@@ -516,6 +546,59 @@ describeDb("product image studio integration", () => {
     await expect(getProductImageStudioJob(second.id, created.jobId)).rejects.toMatchObject({
       message: "productImageStudioJobNotFound",
     });
+  });
+
+  it("keeps the third photo queued while two photos from the organization are processing", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "studio-concurrency-test-key");
+    const { org, adminUser } = await seedBase();
+    const buffer = await createImageBuffer();
+    const source = await uploadProductImageBuffer({
+      organizationId: org.id,
+      buffer,
+      contentType: "image/png",
+      sourceFileName: "queue.png",
+    });
+    const input = {
+      organizationId: org.id,
+      actorId: adminUser.id,
+      sourceImageUrl: source.url,
+      backgroundMode: ProductImageStudioBackground.WHITE,
+      outputFormat: ProductImageStudioOutputFormat.SQUARE,
+      centered: true,
+      improveVisibility: true,
+    };
+    const [first, second, third] = await Promise.all([
+      createProductImageStudioJob({ ...input, requestId: "queue-1" }),
+      createProductImageStudioJob({ ...input, requestId: "queue-2", tighterCrop: true }),
+      createProductImageStudioJob({ ...input, requestId: "queue-3", brighterPresentation: true }),
+    ]);
+    const hold = deferred<void>();
+    const fetchMock = vi.fn(async () => {
+      await hold.promise;
+      return Response.json({ data: [{ b64_json: buffer.toString("base64") }] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const workers = [
+      runProductImageStudioJob({ jobId: first.jobId }),
+      runProductImageStudioJob({ jobId: second.jobId }),
+    ];
+    try {
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 2_000 });
+      expect(await runProductImageStudioJob({ jobId: third.jobId })).toMatchObject({
+        status: "skipped",
+        details: { reason: "capacity" },
+      });
+      const waiting = await getProductImageStudioJob(org.id, third.jobId);
+      expect(waiting.status).toBe(ProductImageStudioJobStatus.QUEUED);
+      expect(waiting.attemptCount).toBe(0);
+    } finally {
+      hold.resolve(undefined);
+      await Promise.allSettled(workers);
+    }
+    await runProductImageStudioJob({ jobId: third.jobId });
+    const done = await getProductImageStudioJob(org.id, third.jobId);
+    expect(done.status).toBe(ProductImageStudioJobStatus.SUCCEEDED);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("deduplicates concurrent identical requests and claims one provider attempt", async () => {

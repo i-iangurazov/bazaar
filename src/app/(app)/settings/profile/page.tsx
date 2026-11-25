@@ -39,6 +39,7 @@ import { translateError } from "@/lib/translateError";
 import { applyThemePreference, persistThemeCookie } from "@/lib/theme";
 import { DisplayScaleSettings } from "@/components/display-scale";
 import { AccountPrivacySettings } from "@/components/account-privacy-settings";
+import { LoginPhoneSettings } from "@/components/login-phone-settings";
 import { locales, normalizeLocale } from "@/lib/locales";
 import {
   defaultCurrencyRateKgsPerUnit,
@@ -566,6 +567,8 @@ const ProfilePage = () => {
           </Form>
         </CardContent>
       </Card>
+
+      {sessionIdentity && session?.user?.id ? <LoginPhoneSettings key={sessionIdentity} userId={session.user.id} /> : null}
 
       <DisplayScaleSettings />
 

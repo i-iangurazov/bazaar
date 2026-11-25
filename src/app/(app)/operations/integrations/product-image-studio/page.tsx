@@ -14,9 +14,10 @@ import { FormActions, FormGrid } from "@/components/form-layout";
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
+import { StudioCreateProductDialog } from "@/components/products/studio-create-product-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ViewIcon, RestoreIcon } from "@/components/icons";
+import { AddIcon, CloseIcon, RestoreIcon, ViewIcon } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,7 @@ const studioMaxProxyImageBytes = Math.min(
   resolveProductImageProxyUploadMaxBytes(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES),
 );
 const studioAcceptedFileTypes = productPhotoAccept;
+const STUDIO_PHOTO_LIMIT = 10;
 
 const isWorkingStudioJobStatus = (status?: ProductImageStudioJobStatus | null) =>
   status === ProductImageStudioJobStatus.QUEUED ||
@@ -95,6 +97,7 @@ const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name:
       <img
         src={imageUrl}
         alt={name}
+        loading="lazy"
         className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
       />
     );
@@ -149,6 +152,32 @@ type UploadedSource = {
   mimeType: string;
 };
 
+type StudioProductTarget = {
+  id: string;
+  sku: string;
+  name: string;
+  imageUrl?: string | null;
+};
+
+type StudioPhoto = {
+  id: string;
+  name: string;
+  file: File | null;
+  uploadStage: "waiting" | "preparing" | "uploading" | "ready" | "failed";
+  source?: UploadedSource;
+  error?: string;
+  product?: StudioProductTarget | null;
+  jobId?: string;
+  starting?: boolean;
+};
+
+type StudioProductCreation = {
+  photoId: string | null;
+  historyJobId: string | null;
+  attachJobId: string | null;
+  setAsPrimary: boolean;
+};
+
 const ProductImageStudioPage = () => {
   const t = useTranslations("productImageStudioSettings");
   const tCommon = useTranslations("common");
@@ -162,16 +191,37 @@ const ProductImageStudioPage = () => {
   const canEdit = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const canView = canEdit;
 
-  const [sourceImage, setSourceImage] = useState<UploadedSource | null>(null);
-  const [uploadingSource, setUploadingSource] = useState(false);
-  const [uploadPhase, setUploadPhase] = useState<"preparing" | "uploading">("preparing");
+  const [photos, setPhotos] = useState<StudioPhoto[]>([]);
+  const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
+  const [historyJobId, setHistoryJobId] = useState<string | null>(null);
+  const [historyTargets, setHistoryTargets] = useState<Record<string, StudioProductTarget | null>>({});
+  const [draftTarget, setDraftTarget] = useState<StudioProductTarget | null>(null);
+  const [productCreation, setProductCreation] = useState<StudioProductCreation | null>(null);
   const [productSearch, setProductSearch] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<{
-    id: string;
-    sku: string;
-    name: string;
-    imageUrl?: string | null;
-  } | null>(null);
+  const [startingBatch, setStartingBatch] = useState(false);
+  const nextPhotoId = useRef(0);
+  const uploading = useRef(false);
+  const pendingUploads = useRef<Array<{ id: string; file: File; actor: string }>>([]);
+  const studioActor = session?.user ? `${session.user.organizationId}:${session.user.id}` : "";
+  const actorRef = useRef(studioActor);
+
+  useEffect(() => {
+    if (actorRef.current === studioActor) return;
+    actorRef.current = studioActor;
+    pendingUploads.current = [];
+    setPhotos([]);
+    setActivePhotoId(null);
+    setHistoryJobId(null);
+    setHistoryTargets({});
+    setDraftTarget(null);
+    setProductCreation(null);
+    setProductSearch("");
+  }, [studioActor]);
+
+  const activePhoto = photos.find((photo) => photo.id === activePhotoId) ?? null;
+  const sourceImage = activePhoto?.source ?? null;
+  const selectedJobId = activePhoto ? activePhoto.jobId ?? null : historyJobId;
+
   const [backgroundMode, setBackgroundMode] = useState<ProductImageStudioBackground>(
     ProductImageStudioBackground.WHITE,
   );
@@ -181,14 +231,17 @@ const ProductImageStudioPage = () => {
   const [highQuality, setHighQuality] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
   const [saveAsPrimary, setSaveAsPrimary] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+
 
   const jobsQuery = trpc.productImageStudio.jobs.useQuery(
     { limit: 50 },
     {
       enabled: canView,
       refetchInterval: (jobs) =>
-        jobs?.some((job) => isWorkingStudioJobStatus(job.status)) ? 2_000 : false,
+        jobs?.some((job) => isWorkingStudioJobStatus(job.status)) ||
+        photos.some((photo) => photo.jobId && !jobs?.some((job) => job.id === photo.jobId))
+          ? 2_000
+          : false,
     },
   );
   const activeJobFromList = useMemo(
@@ -214,56 +267,24 @@ const ProductImageStudioPage = () => {
   );
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: productSearch },
-    { enabled: canView && productSearch.trim().length >= 1 },
+    { enabled: canView && productSearch.trim().length >= 2 },
   );
 
   useEffect(() => {
-    if (!sourceImage && !selectedJobId && jobsQuery.data?.length) {
-      setSelectedJobId(jobsQuery.data[0]?.id ?? null);
+    if (!activePhoto && !historyJobId && jobsQuery.data?.length) {
+      setHistoryJobId(jobsQuery.data[0]?.id ?? null);
     }
-  }, [jobsQuery.data, selectedJobId, sourceImage]);
+  }, [activePhoto, historyJobId, jobsQuery.data]);
 
-  const createJobMutation = trpc.productImageStudio.create.useMutation({
-    onSuccess: async (result) => {
-      setSelectedJobId(result.jobId);
-      await Promise.all([
-        overviewQuery.refetch(),
-        jobsQuery.refetch(),
-        trpcUtils.productImageStudio.job.invalidate({ jobId: result.jobId }),
-      ]);
-      toast({
-        variant: result.deduplicated ? "info" : "success",
-        description: result.deduplicated ? t("jobReused") : t("jobQueuedSuccess"),
-      });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-
-  const retryJobMutation = trpc.productImageStudio.retry.useMutation({
-    onSuccess: async (result) => {
-      setSelectedJobId(result.jobId);
-      await Promise.all([
-        overviewQuery.refetch(),
-        jobsQuery.refetch(),
-        trpcUtils.productImageStudio.job.invalidate({ jobId: result.jobId }),
-      ]);
-      toast({ variant: "success", description: t("jobRetrySuccess") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
+  const createJobMutation = trpc.productImageStudio.create.useMutation();
+  const retryJobMutation = trpc.productImageStudio.retry.useMutation();
 
   const saveToProductMutation = trpc.productImageStudio.saveToProduct.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (_result, variables) => {
       await Promise.all([
         overviewQuery.refetch(),
         jobsQuery.refetch(),
-        selectedJobId
-          ? trpcUtils.productImageStudio.job.invalidate({ jobId: selectedJobId })
-          : Promise.resolve(),
+        trpcUtils.productImageStudio.job.invalidate({ jobId: variables.jobId }),
         trpcUtils.products.bootstrap.invalidate(),
         trpcUtils.products.list.invalidate(),
       ]);
@@ -325,10 +346,7 @@ const ProductImageStudioPage = () => {
   const uploadSourceImageDirectly = async (file: File) => {
     let targetResponse: Response;
     try {
-      targetResponse = await fetchProductImageDirectUploadTarget({
-        file,
-        productId: selectedProduct?.id,
-      });
+      targetResponse = await fetchProductImageDirectUploadTarget({ file });
     } catch (error) {
       if (error instanceof ProductImageUploadTimeoutError) {
         throw new Error(resolveSourceUploadErrorMessage("imageUploadTimedOut"));
@@ -447,79 +465,167 @@ const ProductImageStudioPage = () => {
     } satisfies UploadedSource;
   };
 
-  const handleSourceUpload = async (file: File | null) => {
-    if (!file || !canEdit) {
-      return;
-    }
+  const updatePhoto = (id: string, change: Partial<StudioPhoto>) => {
+    setPhotos((current) => current.map((photo) => photo.id === id ? { ...photo, ...change } : photo));
+  };
 
-    setUploadingSource(true);
-    setUploadPhase("preparing");
+  const uploadNextPhotos = async () => {
+    if (uploading.current) return;
+    uploading.current = true;
     try {
-      const prepared = await prepareManagedProductImageForUpload({
-        file,
-        maxImageBytes: studioMaxImageBytes,
-        maxInputImageBytes: studioMaxInputImageBytes,
-        serverConversionMaxBytes: studioMaxProxyImageBytes,
-      });
-      if (!prepared.ok) {
-        throw new Error(resolveSourceUploadErrorMessage(prepared.code));
+      let pending = pendingUploads.current.shift();
+      while (pending) {
+        const { id, file, actor } = pending;
+        if (actor === actorRef.current) {
+          updatePhoto(id, { uploadStage: "preparing", error: undefined });
+          try {
+            const prepared = await prepareManagedProductImageForUpload({
+              file,
+              maxImageBytes: studioMaxImageBytes,
+              maxInputImageBytes: studioMaxInputImageBytes,
+              serverConversionMaxBytes: studioMaxProxyImageBytes,
+            });
+            if (!prepared.ok) throw new Error(resolveSourceUploadErrorMessage(prepared.code));
+            if (actor === actorRef.current) {
+              updatePhoto(id, { uploadStage: "uploading" });
+              const direct = supportedProductImageUploadMimeTypes.has(prepared.file.type)
+                ? await uploadSourceImageDirectly(prepared.file)
+                : { source: null };
+              if (actor === actorRef.current) {
+                const source = direct.source ?? await uploadSourceImageViaProxy(prepared.file);
+                if (actor === actorRef.current) {
+                  updatePhoto(id, { source, uploadStage: "ready", file: null });
+                }
+              }
+            }
+          } catch (error) {
+            if (actor === actorRef.current) {
+              updatePhoto(id, {
+                uploadStage: "failed",
+                error: error instanceof Error ? error.message : tErrors("genericMessage"),
+              });
+            }
+          }
+        }
+        pending = pendingUploads.current.shift();
       }
-
-      // HEIC/HEIF and other source formats must be decoded before they can
-      // reach the retoucher. Direct PUT intentionally accepts web formats only.
-      setUploadPhase("uploading");
-      const directUpload = supportedProductImageUploadMimeTypes.has(prepared.file.type)
-        ? await uploadSourceImageDirectly(prepared.file)
-        : { attempted: false, source: null };
-      const uploadedSource =
-        directUpload.source ?? (await uploadSourceImageViaProxy(prepared.file));
-
-      setSourceImage(uploadedSource);
-      setSelectedJobId(null);
-      toast({ variant: "success", description: t("input.sourceUploadSuccess") });
-    } catch (error) {
-      toast({
-        variant: "error",
-        description: error instanceof Error ? error.message : tErrors("genericMessage"),
-      });
     } finally {
-      setUploadingSource(false);
+      uploading.current = false;
     }
   };
 
-  const handleGenerate = () => {
-    if (
-      !canEdit ||
-      !overviewQuery.data ||
-      overviewQuery.error ||
-      providerMissing ||
-      !sourceImage?.url
-    ) {
-      return;
+  const addPhotos = (files: File[]) => {
+    if (!canEdit || !files.length) return;
+    const available = STUDIO_PHOTO_LIMIT - photos.length;
+    if (files.length > available) {
+      toast({ variant: "info", description: t("input.photoLimit", { count: STUDIO_PHOTO_LIMIT }) });
     }
-
-    createJobMutation.mutate({
-      sourceImageUrl: sourceImage.url,
-      productId: selectedProduct?.id,
-      backgroundMode,
-      outputFormat: ProductImageStudioOutputFormat.SQUARE,
-      centered: true,
-      improveVisibility: true,
-      softShadow,
-      tighterCrop,
-      brighterPresentation,
-      highQuality,
-    });
+    const next: StudioPhoto[] = files.slice(0, Math.max(0, available)).map((file, index) => ({
+      id: String(++nextPhotoId.current),
+      name: file.name,
+      file,
+      uploadStage: "waiting",
+      product: index === 0 && !activePhoto && !historyJobId ? draftTarget : undefined,
+    }));
+    if (!next.length) return;
+    setPhotos((current) => [...current, ...next]);
+    if (!activePhoto) setActivePhotoId(next[0]!.id);
+    for (const photo of next) {
+      if (photo.file) pendingUploads.current.push({ id: photo.id, file: photo.file, actor: studioActor });
+    }
+    setProductSearch("");
+    void uploadNextPhotos();
   };
 
-  const jobMutationInFlight = createJobMutation.isLoading || retryJobMutation.isLoading;
+  const retryUpload = (photo: StudioPhoto) => {
+    if (!photo.file || photo.uploadStage !== "failed") return;
+    updatePhoto(photo.id, { uploadStage: "waiting", error: undefined });
+    pendingUploads.current.push({ id: photo.id, file: photo.file, actor: studioActor });
+    void uploadNextPhotos();
+  };
 
-  useEffect(() => {
-    if (!jobMutationInFlight || !activeJobFromList || selectedJobId === activeJobFromList.id) {
-      return;
+  const removePhoto = (photoId: string) => {
+    pendingUploads.current = pendingUploads.current.filter(({ id }) => id !== photoId);
+    setPhotos((current) => current.filter((photo) => photo.id !== photoId));
+    if (activePhotoId === photoId) {
+      setActivePhotoId(photos.find((photo) => photo.id !== photoId)?.id ?? null);
+      setProductSearch("");
     }
-    setSelectedJobId(activeJobFromList.id);
-  }, [activeJobFromList, jobMutationInFlight, selectedJobId]);
+  };
+
+  const refetchStudioJobs = async () => {
+    await Promise.all([overviewQuery.refetch(), jobsQuery.refetch()]);
+  };
+
+  const generatePhoto = async (photo: StudioPhoto) => {
+    if (!photo.source || actorRef.current !== studioActor) return;
+    updatePhoto(photo.id, { starting: true, error: undefined });
+    try {
+      const result = await createJobMutation.mutateAsync({
+        sourceImageUrl: photo.source.url,
+        productId: photo.product?.id,
+        backgroundMode,
+        outputFormat: ProductImageStudioOutputFormat.SQUARE,
+        centered: true,
+        improveVisibility: true,
+        softShadow,
+        tighterCrop,
+        brighterPresentation,
+        highQuality,
+      });
+      updatePhoto(photo.id, { jobId: result.jobId });
+    } catch (error) {
+      updatePhoto(photo.id, { error: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+    } finally {
+      updatePhoto(photo.id, { starting: false });
+    }
+  };
+
+  const generateSelected = async () => {
+    if (!activePhoto || generateDisabled) return;
+    await generatePhoto(activePhoto);
+    await refetchStudioJobs();
+  };
+
+  const generateReady = async () => {
+    if (!canEdit || !overview || overviewQuery.error || providerMissing || startingBatch || createJobMutation.isLoading) return;
+    setStartingBatch(true);
+    try {
+      for (const photo of readyPhotos) await generatePhoto(photo);
+      await refetchStudioJobs();
+    } finally {
+      setStartingBatch(false);
+    }
+  };
+
+  const selectHistoryJob = (jobId: string) => {
+    setActivePhotoId(null);
+    setHistoryJobId(jobId);
+    setProductSearch("");
+  };
+
+  const retryStudioJob = async (jobId: string) => {
+    if (retryJobMutation.isLoading) return;
+    const photo = photos.find((entry) => entry.jobId === jobId);
+    if (photo) updatePhoto(photo.id, { starting: true, error: undefined });
+    try {
+      const result = await retryJobMutation.mutateAsync({ jobId });
+      if (photo) updatePhoto(photo.id, { jobId: result.jobId });
+      else {
+        setHistoryTargets((current) => Object.hasOwn(current, jobId)
+          ? { ...current, [result.jobId]: current[jobId]! }
+          : current);
+        selectHistoryJob(result.jobId);
+      }
+      await refetchStudioJobs();
+    } catch (error) {
+      const description = translateError(tErrors, error as Parameters<typeof translateError>[1]);
+      if (photo) updatePhoto(photo.id, { error: description });
+      else toast({ variant: "error", description });
+    } finally {
+      if (photo) updatePhoto(photo.id, { starting: false });
+    }
+  };
 
   const selectedJob = selectedJobId ? (selectedJobQuery.data ?? selectedJobFromList) : null;
   const overview = overviewQuery.data;
@@ -543,11 +649,58 @@ const ProductImageStudioPage = () => {
     Boolean(overviewQuery.error) ||
     providerMissing ||
     !sourceImage?.url ||
-    createJobMutation.isLoading;
-  const targetProductId = selectedProduct?.id ?? selectedJob?.product?.id ?? null;
-  const isBusy =
-    createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
-  const previewIsWorking = jobMutationInFlight || isWorkingStudioJobStatus(selectedJob?.status);
+    createJobMutation.isLoading ||
+    startingBatch ||
+    Boolean(activePhoto?.starting || (activePhoto?.jobId && !selectedJob)) ||
+    isWorkingStudioJobStatus(selectedJob?.status);
+  const savedProduct = selectedJob?.product
+    ? { ...selectedJob.product, imageUrl: selectedJob.productImageUrl }
+    : null;
+  const productOverride = activePhoto
+    ? activePhoto.product
+    : historyJobId
+      ? historyTargets[historyJobId]
+      : draftTarget;
+  const selectedProduct = productOverride === undefined ? savedProduct : productOverride;
+  const targetProductId = selectedProduct?.id ?? null;
+  const readyPhotos = photos.filter((photo) => photo.uploadStage === "ready" && !photo.starting && !photo.jobId);
+  const showBatchAction = startingBatch ||
+    readyPhotos.length > 1 ||
+    (readyPhotos.length === 1 && readyPhotos[0]?.id !== activePhotoId);
+  const setSelectedProduct = (product: StudioProductTarget | null) => {
+    if (activePhoto) updatePhoto(activePhoto.id, { product });
+    else if (historyJobId) setHistoryTargets((current) => ({ ...current, [historyJobId]: product }));
+    else setDraftTarget(product);
+  };
+
+  const openProductCreation = () => {
+    setProductCreation({
+      photoId: activePhoto?.id ?? null,
+      historyJobId,
+      attachJobId: selectedJob?.canSaveToProduct ? selectedJob.id : null,
+      setAsPrimary: saveAsPrimary,
+    });
+  };
+  const handleProductCreated = async (product: StudioProductTarget) => {
+    const origin = productCreation;
+    if (!origin) return;
+    setProductSearch("");
+    if (origin.photoId) updatePhoto(origin.photoId, { product });
+    else if (origin.historyJobId) setHistoryTargets((current) => ({ ...current, [origin.historyJobId!]: product }));
+    else setDraftTarget(product);
+    if (origin.attachJobId) {
+      await saveToProductMutation.mutateAsync({
+        jobId: origin.attachJobId,
+        productId: product.id,
+        setAsPrimary: origin.setAsPrimary,
+      });
+    }
+    setProductCreation(null);
+  };
+
+  const isBusy = saveToProductMutation.isLoading;
+  const previewIsWorking = Boolean(activePhoto?.starting || (selectedJobId && !selectedJob && !selectedJobQuery.error))
+    || isWorkingStudioJobStatus(selectedJob?.status);
   useEffect(() => {
     if (!previewIsWorking) return;
     setClockNow(Date.now());
@@ -595,89 +748,6 @@ const ProductImageStudioPage = () => {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="space-y-6">
-        <Card className="bazaar-admin-surface">
-          <CardHeader className="bazaar-admin-section-header space-y-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="text-xl">{t("overview.title")}</CardTitle>
-                <p className="text-sm text-muted-foreground">{t("overview.subtitle")}</p>
-              </div>
-              <Badge
-                variant={overviewQuery.error ? "danger" : overviewBadgeVariant(overviewStatus)}
-              >
-                {overviewQuery.error
-                  ? tCommon("notAvailable")
-                  : overviewLoading
-                    ? tCommon("loading")
-                    : overviewStatus === "READY"
-                      ? t("overview.status.ready")
-                      : overviewStatus === "ERROR"
-                        ? t("overview.status.error")
-                        : t("overview.status.notConfigured")}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {overviewQuery.error ? (
-              <QueryErrorState
-                error={overviewQuery.error}
-                onRetry={() => void overviewQuery.refetch()}
-              />
-            ) : (
-              <>
-                <div className="grid gap-4 md:grid-cols-4">
-                  <div className="bazaar-admin-info-tile p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t("overview.metrics.totalJobs")}
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold">{overview?.totalJobs ?? 0}</p>
-                  </div>
-                  <div className="bazaar-admin-info-tile p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t("overview.metrics.succeeded")}
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold">{overview?.succeededJobs ?? 0}</p>
-                  </div>
-                  <div className="bazaar-admin-info-tile p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t("overview.metrics.failed")}
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold">{overview?.failedJobs ?? 0}</p>
-                  </div>
-                  <div className="bazaar-admin-info-tile p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t("overview.metrics.lastGenerated")}
-                    </p>
-                    <p className="mt-2 text-sm font-medium">
-                      {overview?.lastGeneratedAt
-                        ? formatDateTime(overview.lastGeneratedAt, locale)
-                        : t("overview.never")}
-                    </p>
-                  </div>
-                </div>
-                {providerMissing ? (
-                  <p className="bazaar-admin-notice mt-4 text-sm">
-                    {t("overview.providerMissing")}
-                  </p>
-                ) : null}
-                {!providerMissing && overview ? (
-                  <details className="mt-4 text-sm text-muted-foreground">
-                    <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      {t("overview.processingDetails")}
-                    </summary>
-                    <p className="mt-2 max-w-2xl leading-relaxed">
-                      {overview.analysisProvider === "deepseek"
-                        ? t("overview.deepseekAnalysis")
-                        : t("overview.presetAnalysis")}{" "}
-                      {t("overview.imageRetouching")}
-                    </p>
-                  </details>
-                ) : null}
-              </>
-            )}
-          </CardContent>
-        </Card>
-
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <Card className="bazaar-admin-surface">
             <CardHeader className="bazaar-admin-section-header space-y-1">
@@ -686,64 +756,153 @@ const ProductImageStudioPage = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
-                <Label>{t("input.uploadLabel")}</Label>
                 <button
                   type="button"
-                  className="flex w-full flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/25 px-6 py-10 text-center transition hover:border-primary/40 hover:bg-primary/[0.035]"
+                  className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/25 px-4 py-6 text-center transition hover:border-primary/40 hover:bg-primary/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!canEdit || uploadingSource}
+                  disabled={!canEdit || photos.length >= STUDIO_PHOTO_LIMIT}
                 >
-                  {uploadingSource ? (
-                    <span className="flex items-center gap-2" role="status">
-                      <Spinner className="h-5 w-5" />
-                      {t(`input.${uploadPhase}`)}
-                    </span>
-                  ) : (
-                    <>
-                      <span className="text-sm font-medium">{t("input.uploadCta")}</span>
-                      <span className="mt-1 text-xs text-muted-foreground">
-                        {t("input.uploadHint")}
-                      </span>
-                    </>
-                  )}
+                  <AddIcon className="mb-1 size-5 text-primary" aria-hidden />
+                  <span className="text-sm font-semibold">{t("input.addPhotos")}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t("input.photoCount", { count: photos.length, limit: STUDIO_PHOTO_LIMIT })}
+                  </span>
                 </button>
+                <p className="text-xs text-muted-foreground">{t("input.uploadHint")}</p>
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
+                  aria-label={t("input.addPhotos")}
                   accept={studioAcceptedFileTypes}
                   className="hidden"
                   onChange={(event) => {
-                    const nextFile = event.target.files?.[0] ?? null;
-                    void handleSourceUpload(nextFile);
+                    addPhotos(Array.from(event.target.files ?? []));
                     event.currentTarget.value = "";
                   }}
                 />
-                {sourceImage ? (
-                  <div className="bazaar-admin-info-tile flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                    <div>
-                      <p className="font-medium">{sourceImage.fileName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {sourceImage.mimeType} · {formatFileSize(sourceImage.size)}
-                      </p>
-                    </div>
+                {sourceImage || showBatchAction ? (
+                  <FormActions className="border-0 pt-0 sm:justify-start">
                     <Button
                       type="button"
-                      variant="outline"
-                      onClick={() => setSourceImage(null)}
-                      disabled={isBusy}
+                      variant={showBatchAction ? "outline" : "default"}
+                      onClick={() => void generateSelected()}
+                      disabled={generateDisabled}
                     >
-                      {t("input.removeSource")}
+                      {activePhoto?.starting ? <Spinner className="h-4 w-4" /> : null}
+                      {t("actions.generate")}
                     </Button>
-                  </div>
+                    {showBatchAction ? (
+                      <Button
+                        type="button"
+                        onClick={() => void generateReady()}
+                        disabled={!canEdit || Boolean(overviewQuery.error) || !overview || providerMissing || startingBatch || createJobMutation.isLoading}
+                      >
+                        {startingBatch ? <Spinner className="h-4 w-4" /> : null}
+                        {t("actions.generateReady", { count: readyPhotos.length })}
+                      </Button>
+                    ) : null}
+                  </FormActions>
+                ) : null}
+                {generateDisabledReason && (sourceImage || providerMissing) ? (
+                  <p className="text-xs text-muted-foreground">{generateDisabledReason}</p>
+                ) : null}
+                {photos.length ? (
+                  <ul className="max-h-96 space-y-2 overflow-y-auto pr-1" aria-label={t("input.photoQueue")}>
+                    {photos.map((photo) => {
+                      const job = jobsQuery.data?.find((row) => row.id === photo.jobId);
+                      const selected = photo.id === activePhotoId;
+                      const working = Boolean(photo.starting || (photo.jobId && !job)) || isWorkingStudioJobStatus(job?.status);
+                      const assigned = photo.product === undefined ? job?.product : photo.product;
+                      const status = photo.uploadStage !== "ready"
+                        ? t(`input.photoStage.${photo.uploadStage}`)
+                        : working && !job
+                          ? t("status.QUEUED")
+                          : job?.processingStage
+                            ? t(`preview.${job.processingStage}`)
+                            : job?.savedAt && job.productId === assigned?.id
+                              ? t("input.photoStage.saved")
+                              : job
+                                ? t(`status.${job.status}`)
+                                : t("input.photoStage.ready");
+                      return (
+                        <li key={photo.id} className={`min-w-0 rounded-md border bg-card ${selected ? "border-primary/60" : "border-border"}`}>
+                          <div className="flex min-w-0 items-center gap-1 p-1">
+                            <button
+                              type="button"
+                              aria-pressed={selected}
+                              onClick={() => {
+                                setActivePhotoId(photo.id);
+                                setProductSearch("");
+                              }}
+                              className="flex min-w-0 flex-1 items-center gap-2 rounded p-1.5 text-left hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                            >
+                              <ProductImageThumb name={photo.name} imageUrl={job?.outputImageUrl ?? photo.source?.url} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium" title={photo.name}>{photo.name}</span>
+                                <span className="block break-words text-xs text-muted-foreground">
+                                  {assigned?.name ?? t("history.unlinkedProduct")}
+                                </span>
+                                <span className={`block break-words text-xs ${photo.error || job?.status === "FAILED" ? "text-danger" : "text-muted-foreground"}`}>
+                                  {photo.error ?? status}
+                                </span>
+                              </span>
+                            </button>
+                            {photo.uploadStage === "failed" ? (
+                              <IconButton
+                                type="button"
+                                variant="outline"
+                                icon={RestoreIcon}
+                                label={t("input.retryUpload", { name: photo.name })}
+                                onClick={() => retryUpload(photo)}
+                              />
+                            ) : job?.status === "FAILED" ? (
+                              <IconButton
+                                type="button"
+                                variant="outline"
+                                icon={RestoreIcon}
+                                label={t("actions.regenerate")}
+                                disabled={retryJobMutation.isLoading}
+                                onClick={() => void retryStudioJob(job.id)}
+                              />
+                            ) : null}
+                            <IconButton
+                              type="button"
+                              variant="outline"
+                              icon={CloseIcon}
+                              label={t("input.removePhoto", { name: photo.name })}
+                              disabled={working || photo.uploadStage === "preparing" || photo.uploadStage === "uploading"}
+                              onClick={() => removePhoto(photo.id)}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 ) : null}
               </div>
 
               <div className="space-y-3">
-                <Label htmlFor="product-search">{t("input.productLabel")}</Label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label htmlFor="product-search">{t("input.productLabel")}</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!canEdit || isBusy}
+                    onClick={openProductCreation}
+                  >
+                    <AddIcon className="h-4 w-4" aria-hidden />
+                    {selectedJob?.canSaveToProduct ? t("actions.createAndSave") : t("actions.createProduct")}
+                  </Button>
+                </div>
                 <Input
                   id="product-search"
                   value={productSearch}
-                  onChange={(event) => setProductSearch(event.target.value)}
+                  onChange={(event) => {
+                    setProductSearch(event.target.value);
+                    if (selectedProduct) setSelectedProduct(null);
+                  }}
                   placeholder={t("input.productPlaceholder")}
                 />
                 {selectedProduct ? (
@@ -761,7 +920,10 @@ const ProductImageStudioPage = () => {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setSelectedProduct(null)}
+                      onClick={() => {
+                        setSelectedProduct(null);
+                        setProductSearch("");
+                      }}
                       disabled={isBusy}
                     >
                       {t("input.clearProduct")}
@@ -792,7 +954,7 @@ const ProductImageStudioPage = () => {
                               name: product.name,
                               imageUrl: product.primaryImage ?? null,
                             });
-                            setProductSearch(product.name);
+                            setProductSearch("");
                           }}
                         />
                       ))
@@ -928,16 +1090,6 @@ const ProductImageStudioPage = () => {
                   />
                 </div>
               </div>
-
-              <FormActions>
-                <Button type="button" onClick={handleGenerate} disabled={generateDisabled}>
-                  {createJobMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                  {t("actions.generate")}
-                </Button>
-                {generateDisabledReason ? (
-                  <p className="text-xs text-muted-foreground">{generateDisabledReason}</p>
-                ) : null}
-              </FormActions>
             </CardContent>
           </Card>
         </div>
@@ -987,15 +1139,12 @@ const ProductImageStudioPage = () => {
                     <div className="flex h-[320px] flex-col items-center justify-center gap-4 px-6 text-center text-sm text-muted-foreground">
                       <Spinner className="h-5 w-5" />
                       <div className="w-full max-w-[240px] space-y-2">
-                        <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                          <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/80" />
-                        </div>
-                        <p>
+                        <p role="status" className="font-medium text-foreground">
                           {selectedJob?.status === "QUEUED"
                             ? t("preview.queued")
-                            : t("preview.processing")}
+                            : t(`preview.${selectedJob?.processingStage ?? "processing"}`)}
                         </p>
-                        <p className="font-mono tabular-nums" role="status">
+                        <p className="font-mono tabular-nums">
                           {t("preview.elapsed", { seconds: elapsedSeconds })}
                         </p>
                         {elapsedSeconds >= 45 ? (
@@ -1018,6 +1167,10 @@ const ProductImageStudioPage = () => {
               </div>
             </div>
 
+            {selectedJobId && selectedJobQuery.error ? (
+              <QueryErrorState error={selectedJobQuery.error} onRetry={() => void selectedJobQuery.refetch()} />
+            ) : null}
+
             {selectedJob?.errorMessage ? (
               <div className="bazaar-admin-error">
                 {formatJobErrorMessage(selectedJob.errorMessage, tErrors)}
@@ -1037,7 +1190,7 @@ const ProductImageStudioPage = () => {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => selectedJob && retryJobMutation.mutate({ jobId: selectedJob.id })}
+                onClick={() => selectedJob && void retryStudioJob(selectedJob.id)}
                 disabled={!canEdit || !selectedJob?.canRetry || retryJobMutation.isLoading}
               >
                 {retryJobMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
@@ -1069,6 +1222,89 @@ const ProductImageStudioPage = () => {
                 </span>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle className="text-xl">{t("overview.title")}</CardTitle>
+                <p className="text-sm text-muted-foreground">{t("overview.subtitle")}</p>
+              </div>
+              <Badge
+                variant={overviewQuery.error ? "danger" : overviewBadgeVariant(overviewStatus)}
+              >
+                {overviewQuery.error
+                  ? tCommon("notAvailable")
+                  : overviewLoading
+                    ? tCommon("loading")
+                    : overviewStatus === "READY"
+                      ? t("overview.status.ready")
+                      : overviewStatus === "ERROR"
+                        ? t("overview.status.error")
+                        : t("overview.status.notConfigured")}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {overviewQuery.error ? (
+              <QueryErrorState
+                error={overviewQuery.error}
+                onRetry={() => void overviewQuery.refetch()}
+              />
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.totalJobs")}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold">{overview?.totalJobs ?? 0}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.succeeded")}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold">{overview?.succeededJobs ?? 0}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.failed")}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold">{overview?.failedJobs ?? 0}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.lastGenerated")}
+                    </p>
+                    <p className="mt-2 text-sm font-medium">
+                      {overview?.lastGeneratedAt
+                        ? formatDateTime(overview.lastGeneratedAt, locale)
+                        : t("overview.never")}
+                    </p>
+                  </div>
+                </div>
+                {providerMissing ? (
+                  <p className="bazaar-admin-notice mt-4 text-sm">
+                    {t("overview.providerMissing")}
+                  </p>
+                ) : null}
+                {!providerMissing && overview ? (
+                  <details className="mt-4 text-sm text-muted-foreground">
+                    <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      {t("overview.processingDetails")}
+                    </summary>
+                    <p className="mt-2 max-w-2xl leading-relaxed">
+                      {overview.analysisProvider === "deepseek"
+                        ? t("overview.deepseekAnalysis")
+                        : t("overview.presetAnalysis")}{" "}
+                      {t("overview.imageRetouching")}
+                    </p>
+                  </details>
+                ) : null}
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -1132,15 +1368,15 @@ const ProductImageStudioPage = () => {
                             <IconButton
                               type="button"
                               variant="outline"
-                              onClick={() => setSelectedJobId(job.id)}
+                              onClick={() => selectHistoryJob(job.id)}
                               icon={ViewIcon}
                               label={t("actions.preview")}
                             />
                             <IconButton
                               type="button"
                               variant="outline"
-                              onClick={() => retryJobMutation.mutate({ jobId: job.id })}
-                              disabled={!canEdit || !job.canRetry}
+                              onClick={() => void retryStudioJob(job.id)}
+                              disabled={!canEdit || !job.canRetry || retryJobMutation.isLoading}
                               icon={RestoreIcon}
                               label={t("actions.regenerate")}
                             />
@@ -1164,6 +1400,11 @@ const ProductImageStudioPage = () => {
             )}
           </CardContent>
         </Card>
+        <StudioCreateProductDialog
+          open={Boolean(productCreation)}
+          onOpenChange={(open) => { if (!open) setProductCreation(null); }}
+          onCreated={handleProductCreated}
+        />
       </div>
     </div>
   );

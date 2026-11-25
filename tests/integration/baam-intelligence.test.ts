@@ -222,6 +222,34 @@ describe.skipIf(!shouldRunDbTests)(
       expect(await prisma.product.count()).toBe(before);
       expect(result.data.workflows).toHaveLength(0);
     });
+    it("answers named setup questions and remembers printer details without an AI provider", async () => {
+      const f = await fixture();
+      vi.stubEnv("DEEPSEEK_API_KEY", "");
+      const network = vi.fn().mockRejectedValue(new Error("Provider should not be called"));
+      vi.stubGlobal("fetch", network);
+
+      const initial = await f.send("Как настроить мой принтер Xprinter XP-350B?");
+      expect(initial.data.messages.at(-1)?.text).toContain("размер бумаги или этикетки");
+      expect(initial.data.messages.at(-1)?.parts).toEqual(expect.arrayContaining([
+        { type: "link", label: "Настройки печати", href: "/settings/printing" },
+      ]));
+      const followUp = await f.send("Этикетки 58×40 мм, USB, Windows 11");
+      expect(followUp.data.messages.at(-1)?.text).toContain("Xprinter XP-350B · USB · Windows 11");
+      expect(followUp.data.messages.at(-1)?.text).toContain("масштаб 100%");
+      const sale = await f.send("Составь инструкцию по оформлению продажи");
+      expect(sale.data.messages.at(-1)?.parts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ href: `/pos?store=${f.store.id}` }),
+        expect.objectContaining({ href: "/help/pos/make-sale" }),
+      ]));
+      const billing = await f.send("Как продлить подписку?");
+      expect(billing.data.messages.at(-1)?.parts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ href: "/billing" }),
+      ]));
+      const general = await f.send("Как дела?");
+      expect(general.data.messages.at(-1)?.text).toContain("после подключения ИИ");
+      expect(general.data.workflows).toHaveLength(0);
+      expect(network).not.toHaveBeenCalled();
+    });
     it("opens review for an identified action with incomplete parameters even when extraction confidence is low, without executing", async () => {
       const f = await fixture();
       vi.stubGlobal(

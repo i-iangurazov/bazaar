@@ -22,9 +22,11 @@ import {
   resolveProductContentSpecKind,
   type ProductContentSpecKind,
 } from "@/server/services/productContentGeneration";
+import { createProductAiImagePreparer, type ProductAiImagePreparer } from "./productAiImages";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
+  lockSubscriptionUsageOrganization,
   reserveSubscriptionUsageBatch,
   resumeSubscriptionUsage,
   startSubscriptionUsage,
@@ -269,6 +271,22 @@ export const startProductDescriptionGenerationJob = async (input: {
   );
 
   const job = await prisma.$transaction(async (tx) => {
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
+    if (input.source === ProductDescriptionGenerationSource.O_MARKET && storeId) {
+      const lockKey = `o-market-ai-cards:${input.organizationId}:${storeId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+      const active = await tx.productDescriptionGenerationJob.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          storeId,
+          source: input.source,
+          status: { in: [ProductDescriptionGenerationJobStatus.QUEUED, ProductDescriptionGenerationJobStatus.PROCESSING] },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (active) return active;
+    }
     const created = await tx.productDescriptionGenerationJob.create({
       data: {
         organizationId: input.organizationId,
@@ -619,6 +637,7 @@ const prepareProductSpecs = async (input: {
   };
   preparedTemplates: JobSpecPlan;
   imageUrls: string[];
+  prepareImage: ProductAiImagePreparer;
   overwriteExisting: boolean;
   logger: ProductDescriptionGenerationLogger;
 }): Promise<ProductSpecGenerationResult> => {
@@ -660,6 +679,7 @@ const prepareProductSpecs = async (input: {
     },
     category,
     imageUrls: input.imageUrls,
+    prepareImage: input.prepareImage,
     locale: "ru",
     mode: input.overwriteExisting ? "overwrite" : "missing-only",
     generateDescription: false,
@@ -1275,6 +1295,7 @@ const processJobItem = async (input: {
     async () => {
       const previousDescription = product.description?.trim() ?? "";
       const imageUrls = collectProductImageUrls(product);
+      const prepareImage = createProductAiImagePreparer();
       let generatedDescription: string | null = null;
       let descriptionSkipReason: string | null = null;
       let descriptionFailureReason: string | null = null;
@@ -1290,6 +1311,7 @@ const processJobItem = async (input: {
         },
         category: product.category,
         imageUrls,
+        prepareImage,
         locale: input.job.locale,
         mode: input.job.overwriteExisting ? "overwrite" : "missing-only",
         generateDescription: true,
@@ -1340,6 +1362,7 @@ const processJobItem = async (input: {
         product,
         preparedTemplates,
         imageUrls,
+        prepareImage,
         overwriteExisting: input.job.overwriteExisting,
         logger: input.logger,
       });
@@ -1347,6 +1370,7 @@ const processJobItem = async (input: {
       const specsUpdated = specResult.status === "generated" || specResult.status === "overwritten";
       if (generatedDescription || specsUpdated) {
         await prisma.$transaction(async (tx) => {
+          await lockSubscriptionUsageOrganization(tx, input.job.organizationId);
           if (specResult.status === "generated" || specResult.status === "overwritten")
             await specResult.persist(tx);
           if (generatedDescription) {
@@ -1593,7 +1617,7 @@ const processQueuedProductDescriptionGenerationJob = async (
     }
     const errorMessage = toErrorMessage(error);
     const failed = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${job.organizationId} FOR UPDATE`;
+      await lockSubscriptionUsageOrganization(tx, job.organizationId);
       const claimed = await tx.productDescriptionGenerationJob.updateMany({
         where: {
           id: job.id,

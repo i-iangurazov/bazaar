@@ -1,5 +1,7 @@
-import type { ThemePreference } from "@prisma/client";
+import { Prisma, type ThemePreference } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
+import { normalizeLoginPhone } from "@/lib/loginPhone";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
@@ -40,6 +42,79 @@ export const getMyProfile = async (input: Pick<UserSettingsScope, "userId" | "or
     throw new AppError("userNotFound", "NOT_FOUND", 404);
   }
   return sanitizeUser(user);
+};
+
+const ownedUser = ({ userId, organizationId }: Pick<UserSettingsScope, "userId" | "organizationId">) => ({
+  id: userId,
+  organizationId,
+  isActive: true,
+  deletedAt: null,
+});
+
+export const getMyLoginPhone = async (input: Pick<UserSettingsScope, "userId" | "organizationId">) => {
+  const user = await prisma.user.findFirst({
+    where: ownedUser(input),
+    select: { id: true, loginPhone: { select: { phone: true } } },
+  });
+  if (!user) throw new AppError("userNotFound", "NOT_FOUND", 404);
+  return { userId: user.id, phone: user.loginPhone?.phone ?? null };
+};
+
+export const updateMyLoginPhone = async (input: UserSettingsScope & { phone: string | null; password: string }) => {
+  const phone = normalizeLoginPhone(input.phone);
+  if (input.phone !== null && !phone) throw new AppError("loginPhoneInvalid", "BAD_REQUEST", 400);
+
+  const where = ownedUser(input);
+  const observed = await prisma.user.findFirst({ where, select: { passwordHash: true, sessionVersion: true } });
+  if (!observed) throw new AppError("userNotFound", "NOT_FOUND", 404);
+  if (!await bcrypt.compare(input.password, observed.passwordHash)) {
+    throw new AppError("accountPasswordIncorrect", "BAD_REQUEST", 400);
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      // Lock the owner before writing the alias, then check for a concurrent reset or deletion.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${input.userId} FOR UPDATE`;
+      const user = await tx.user.findFirst({
+        where,
+        select: { passwordHash: true, sessionVersion: true, loginPhone: { select: { phone: true } } },
+      });
+      if (!user) throw new AppError("userNotFound", "NOT_FOUND", 404);
+      if (user.passwordHash !== observed.passwordHash || user.sessionVersion !== observed.sessionVersion) {
+        throw new AppError("accountPasswordIncorrect", "BAD_REQUEST", 400);
+      }
+
+      const previous = user.loginPhone?.phone ?? null;
+      if (previous !== phone) {
+        if (phone) {
+          await tx.userLoginPhone.upsert({
+            where: { userId: input.userId },
+            create: { userId: input.userId, phone },
+            update: { phone },
+          });
+        } else {
+          await tx.userLoginPhone.delete({ where: { userId: input.userId } });
+        }
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "USER_LOGIN_PHONE_UPDATE",
+          entity: "User",
+          entityId: input.userId,
+          before: { enabled: Boolean(previous) },
+          after: { enabled: Boolean(phone) },
+          requestId: input.requestId,
+        });
+      }
+      return { userId: input.userId, phone };
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" &&
+      Array.isArray(error.meta?.target) && error.meta.target.includes("phone")) {
+      throw new AppError("loginPhoneInUse", "CONFLICT", 409);
+    }
+    throw error;
+  }
 };
 
 export const updateMyProfile = async (input: UpdateMyProfileInput) =>

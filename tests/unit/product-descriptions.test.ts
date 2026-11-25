@@ -510,6 +510,10 @@ describe("product description generation", () => {
     expect(result.description.length).toBeGreaterThanOrEqual(150);
     expect(result.description).not.toContain("на изображении");
     expect(fetchMock).toHaveBeenCalledTimes(4);
+    const extraction = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body));
+    const composition = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body));
+    expect(extraction.input[1].content.some(({ type }: { type: string }) => type === "input_image")).toBe(true);
+    expect(composition.input[1].content.every(({ type }: { type: string }) => type === "input_text")).toBe(true);
   });
 
   it("fails when none of the provided images can be processed", async () => {

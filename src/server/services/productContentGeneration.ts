@@ -1,7 +1,8 @@
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { AppError } from "@/server/services/errors";
+import { createProductAiImagePreparer, type ProductAiImagePreparer } from "./productAiImages";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
-import { suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
+import { matchProductSpecOption, suggestProductSpecsFromImages } from "@/server/services/productSpecSuggestions";
 
 export type ProductContentSpecKind =
   | "manufacturer"
@@ -50,6 +51,7 @@ type GenerateProductContentInput = {
   };
   category?: string | null;
   imageUrls?: string[];
+  prepareImage?: ProductAiImagePreparer;
   locale?: string | null;
   mode?: "overwrite" | "missing-only";
   generateDescription?: boolean;
@@ -216,28 +218,6 @@ const normalizeComparable = (value: string) =>
     .replace(/[^\p{L}\p{N}\s-]+/gu, "")
     .trim();
 
-export const matchProductSpecOption = (value: string, options?: string[]) => {
-  const cleaned = cleanSpecValue(value);
-  const normalizedOptions = (options ?? [])
-    .map((option) => option.trim())
-    .filter((option) => option.length > 0);
-  if (!cleaned || !normalizedOptions.length) {
-    return cleaned;
-  }
-
-  const comparable = normalizeComparable(cleaned);
-  const exact = normalizedOptions.find((option) => normalizeComparable(option) === comparable);
-  if (exact) {
-    return exact;
-  }
-  return (
-    normalizedOptions.find((option) => {
-      const normalizedOption = normalizeComparable(option);
-      return normalizedOption.includes(comparable) || comparable.includes(normalizedOption);
-    }) ?? cleaned
-  );
-};
-
 const textIncludes = (input: string, values: string[]) =>
   values.some((value) => input.includes(value));
 
@@ -382,6 +362,7 @@ export const generateProductContent = async (input: GenerateProductContentInput)
   const imageUrls = Array.from(
     new Set((input.imageUrls ?? []).map((url) => url.trim()).filter(Boolean)),
   );
+  const prepareImage = input.prepareImage ?? createProductAiImagePreparer();
   const locale = normalizeLocale(input.locale) ?? defaultLocale;
   const previousDescription = input.product.description?.trim() ?? "";
 
@@ -406,6 +387,7 @@ export const generateProductContent = async (input: GenerateProductContentInput)
           isBundle: input.product.isBundle,
           locale,
           imageUrls,
+          prepareImage,
           logger: input.logger,
         });
         const nextDescription = result.description.trim();
@@ -443,6 +425,7 @@ export const generateProductContent = async (input: GenerateProductContentInput)
       try {
         const result = await suggestProductSpecsFromImages({
           imageUrls,
+          prepareImage,
           requestedSpecs: aiRequestedSpecs.map((spec) => ({
             kind: spec.kind as Exclude<ProductContentSpecKind, "manufacturer" | "model">,
             labelRu: spec.labelRu,

@@ -1,4 +1,6 @@
-import { OMarketJobType } from "@prisma/client";
+import { OMarketJobType, ProductDescriptionGenerationSource } from "@prisma/client";
+import { locales } from "@/lib/locales";
+import { startProductDescriptionGenerationJob } from "@/server/services/productDescriptionGenerationJobs";
 import { z } from "zod";
 
 import {
@@ -194,6 +196,32 @@ export const oMarketRouter = router({
           storeId,
           search: input?.search,
           selection: input?.selection,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  startDescriptionGenerationJob: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "o-market-descriptions-job-start" }))
+    .input(z.object({
+      storeId: z.string().min(1),
+      productIds: z.array(z.string().min(1)).min(1).max(5_000),
+      locale: z.enum(locales).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
+        return await startProductDescriptionGenerationJob({
+          organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          source: ProductDescriptionGenerationSource.O_MARKET,
+          locale: input.locale,
+          productIds: input.productIds,
+          overwriteExisting: false,
+          logger: ctx.logger,
         });
       } catch (error) {
         throw toTRPCError(error);

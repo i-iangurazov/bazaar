@@ -12,6 +12,8 @@ import {
   loginRateLimiter,
   registerLoginFailure,
   assertLoginAttemptAllowed,
+  consumePhoneLoginLookup,
+  unknownPhoneLoginIdentity,
 } from "@/server/auth/rateLimiter";
 import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { getLogger } from "@/server/logging";
@@ -19,11 +21,13 @@ import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 import { ThemePreference } from "@prisma/client";
 import { getRuntimeEnv } from "@/server/config/runtime";
 import { isEmailVerificationRequired } from "@/server/config/auth";
+import { normalizeLoginPhone } from "@/lib/loginPhone";
 
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email().optional(),
+  phone: z.string().max(40).optional(),
   password: z.string().min(6),
-});
+}).refine(({ email, phone }) => Boolean(email) !== Boolean(phone));
 
 const DUMMY_PASSWORD_HASH = "$2a$10$4In6MZoI8L6wHWgM6i5yQOmx2s7b2Vsl6u5uzI2P7j3r4eN5mQf5K";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
@@ -202,6 +206,7 @@ export const authOptions: NextAuthOptions = {
       name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
+        phone: { label: "Phone", type: "tel" },
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials, req) => {
@@ -212,21 +217,37 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const { email, password } = parsed.data;
+        const { email, phone, password } = parsed.data;
+        const identifier = email ?? normalizeLoginPhone(phone);
+        if (!identifier) return null;
+
         const ip = resolveRequestIp(req);
-        const loginAttempt = { email, ip };
+        if (!email) {
+          try {
+            await consumePhoneLoginLookup(ip);
+          } catch {
+            logger.warn({ ip }, "phone login lookup rate limit hit");
+            throw new Error("loginRateLimited");
+          }
+        }
+
+        const alias = email
+          ? null
+          : await prisma.userLoginPhone.findUnique({ where: { phone: identifier }, include: { user: true } });
+        // Both sign-in identifiers must use the original account's lock and attempt counters.
+        const loginAttempt = { email: email ?? alias?.user.email ?? unknownPhoneLoginIdentity(identifier), ip };
         try {
-          await loginRateLimiter.consume(`${email}:${ip}`);
+          await loginRateLimiter.consume(`${loginAttempt.email}:${ip}`);
           await assertLoginAttemptAllowed(loginAttempt);
         } catch (error) {
-          logger.warn({ email, ip, error }, "login rate limit hit");
+          logger.warn({ ip }, "login rate limit hit");
           if (error instanceof Error && (error.message === "loginLocked" || error.message === "loginBackoff")) {
             throw error;
           }
           throw new Error("loginRateLimited");
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = email ? await prisma.user.findUnique({ where: { email } }) : alias?.user;
         if (!user || !user.isActive || user.deletedAt) {
           await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
           await registerLoginFailure(loginAttempt);
@@ -263,7 +284,7 @@ export const authOptions: NextAuthOptions = {
           });
         }
 
-        logger.info({ userId: user.id, email }, "user authenticated");
+        logger.info({ userId: user.id }, "user authenticated");
         await clearLoginFailures(loginAttempt);
 
         return {

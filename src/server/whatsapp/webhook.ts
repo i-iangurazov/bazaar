@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { whatsappPeriod, whatsappRecipientCountry } from "@/lib/whatsapp-ai";
 import { decryptWhatsAppSecret, validWhatsAppWebhookSecret, whatsappConfig } from "./config";
-import { normalizeWhatsAppEvents, type WhatsAppNormalizedEvent } from "./events";
+import { normalizeWhatsAppEvents, WHATSAPP_ACCOUNT_LOCKED, type WhatsAppNormalizedEvent } from "./events";
 import { cancelWhatsAppPrepared } from "./workspace";
 import { whatsappOrganizationLock } from "./access";
 
@@ -68,27 +68,36 @@ export async function receiveWhatsAppWebhook(request: Request, connectionId: str
         ],
         skipDuplicates: true,
       });
-      if (!inserted.count) return null;
-      await tx.whatsAppConnection.update({
+      // The setup callback proves that this route is reachable. It does not
+      // stand in for the inbound-message check before automation is enabled.
+      if (!inserted.count || event.kind === "CALLBACK") return null;
+      const currentConnection = await tx.whatsAppConnection.update({
         where: { id: c.id },
         data: { lastWebhookAt: new Date() },
+        select: { state: true, aiEnabled: true },
       });
       // Receipt is durable before acknowledgement; the worker applies monotonic status changes.
       if (event.kind === "STATUS") return null;
       if (event.kind === "ACCOUNT") {
-        if (/DISABLED|BANNED|DELETED|REVOKED/.test(event.status ?? "")) {
-          await tx.whatsAppConnection.update({
-            where: { id: c.id },
-            data: {
-              state: "ATTENTION",
-              aiEnabled: false,
-              lastIssue: "whatsappReconnectRequired",
-              configVersion: { increment: 1 },
-            },
-          });
-          return { connectionId: c.id, conversationId: null };
+        const accountLocked = event.status === WHATSAPP_ACCOUNT_LOCKED;
+        if (!accountLocked && !/DISABLED|BANNED|DELETED|REVOKED/.test(event.status ?? "")) {
+          return null;
         }
-        return null;
+        const issue = accountLocked ? "whatsappMetaAccountLocked" : "whatsappReconnectRequired";
+        const paused = await tx.whatsAppConnection.updateMany({
+          where: {
+            id: c.id,
+            state: { not: "DISCONNECTED" },
+            NOT: { state: "ATTENTION", lastIssue: issue },
+          },
+          data: {
+            state: "ATTENTION",
+            aiEnabled: false,
+            lastIssue: issue,
+            configVersion: { increment: 1 },
+          },
+        });
+        return paused.count ? { connectionId: c.id, conversationId: null } : null;
       }
       if (!event.identity) return null;
       const country = whatsappRecipientCountry(event.phone, event.country);
@@ -151,7 +160,8 @@ export async function receiveWhatsAppWebhook(request: Request, connectionId: str
         !supported ||
         buyerCountry !== "KG" ||
         existing.mode === "HUMAN" ||
-        !c.aiEnabled ||
+        currentConnection.state !== "CONNECTED" ||
+        !currentConnection.aiEnabled ||
         !whatsappConfig().ready;
       const conversation = await tx.whatsAppConversation.update({
         where: { id: existing.id },

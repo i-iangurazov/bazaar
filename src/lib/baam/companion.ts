@@ -36,6 +36,14 @@ export const baamSendSchema = z
   .strict();
 export type BaamSend = z.infer<typeof baamSendSchema>;
 export type BaamChoice = { label: string; value: string };
+export type BaamPrinterDetails = {
+  model?: string;
+  media?: "receipt" | "label";
+  width?: number;
+  height?: number;
+  connection?: string;
+  device?: string;
+};
 export type BaamPart =
   | {
       type: "metrics";
@@ -62,6 +70,7 @@ export type BaamPart =
   | { type: "commands"; commands: Array<{ label: string; action: string }> }
   | { type: "choices"; choices: BaamChoice[] }
   | { type: "link"; label: string; href: string }
+  | { type: "printerHelpContext"; details: BaamPrinterDetails }
   | { type: "attachment"; id: string; name: string; url: string }
   | { type: "action"; actionId: string }
   | { type: "transcription"; id: string; text: string };

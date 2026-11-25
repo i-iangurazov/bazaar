@@ -17,8 +17,9 @@ import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
 import { baamCopy } from "@/lib/baam/copy";
 import { BaamIcon } from "@/components/icons";
 import { Button } from "./ui/button";
+import { mobileShellMediaQuery, phoneWorkspaceMediaQuery } from "@/hooks/useIsMobile";
 import { isIOS } from "@/lib/native/platform";
-import { baamPathname, nativeBaamWorkspaceHref } from "@/lib/baam/workspaceNavigation";
+import { baamPathname, baamWorkspaceHref } from "@/lib/baam/workspaceNavigation";
 
 export const canShowBaamLauncher = (access: RoleAccess, pathname: string) => {
   const path = baamPathname(pathname);
@@ -41,28 +42,28 @@ export function BaamLauncher({
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
-  const [viewport, setViewport] = useState<{ height: number; top: number }>();
+  const [phoneWorkspace, setPhoneWorkspace] = useState(false);
   useEffect(() => setMounted(true), []);
-  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => setOpen(false), [pathname, phoneWorkspace]);
   useEffect(() => {
     if (!mounted) return;
+    const mobileShell = window.matchMedia?.(mobileShellMediaQuery);
+    const phone = window.matchMedia?.(phoneWorkspaceMediaQuery);
     const measure = () => {
+      const mobile = mobileShell?.matches ?? window.innerWidth < 768;
+      setPhoneWorkspace(phone?.matches ?? mobile);
       setHeaderSlot(
         document.querySelector<HTMLElement>(
-          innerWidth < 768 ? "[data-baam-mobile-slot]" : "[data-baam-desktop-slot]",
+          mobile ? "[data-baam-mobile-slot]" : "[data-baam-desktop-slot]",
         ),
       );
-      const visual = window.visualViewport;
-      setViewport(visual ? { height: visual.height, top: visual.offsetTop } : undefined);
     };
     measure();
     window.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("scroll", measure);
+    phone?.addEventListener("change", measure);
     return () => {
       window.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("scroll", measure);
+      phone?.removeEventListener("change", measure);
     };
   }, [mounted, pathname]);
   if (!mounted || !headerSlot || !canShowBaamLauncher(access, pathname)) return null;
@@ -83,32 +84,26 @@ export function BaamLauncher({
           const target = input ?? document.querySelector<HTMLElement>("[data-baam-workspace]");
           target?.focus({ preventScroll: true });
           target?.scrollIntoView({ block: "nearest" });
-        } else if (isIOS()) {
-          // A native tap opens the existing full workspace directly. Prevent
-          // Radix's trigger as well if the bridge became ready after rendering.
+        } else if (phoneWorkspace || isIOS()) {
+          // Cancel the dialog trigger if the native bridge became ready after rendering.
           event.preventDefault();
-          router.push(nativeBaamWorkspaceHref(window.location));
+          router.push(baamWorkspaceHref(window.location));
         }
       }}
     >
-      <BaamIcon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
+      <BaamIcon className="h-6 w-6 shrink-0 md:h-[18px] md:w-[18px]" />
       <span className="hidden text-sm font-medium lg:inline">
         {baamCopy(locale, "name")}
       </span>
     </Button>
   );
-  if (inWorkspace || isIOS()) return createPortal(launcher, headerSlot);
+  if (inWorkspace || phoneWorkspace || isIOS()) return createPortal(launcher, headerSlot);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {createPortal(<DialogTrigger asChild>{launcher}</DialogTrigger>, headerSlot)}
       <DialogContent
         data-baam-drawer
-        style={
-          viewport && typeof window !== "undefined" && window.innerWidth < 640
-            ? { height: viewport.height, maxHeight: viewport.height, top: viewport.top }
-            : undefined
-        }
-        className="bottom-0 left-0 right-0 top-auto h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none pb-[env(safe-area-inset-bottom,0px)] sm:bottom-4 sm:left-auto sm:right-4 sm:h-[min(48rem,calc(100dvh-2rem))] sm:max-h-[calc(100dvh-2rem)] sm:max-w-[29rem] sm:rounded-lg"
+        className="bottom-4 left-auto right-4 top-auto h-[min(48rem,calc(100dvh-2rem))] w-full translate-x-0 translate-y-0 rounded-lg sm:max-w-[29rem]"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           requestAnimationFrame(() =>

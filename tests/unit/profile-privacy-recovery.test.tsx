@@ -16,6 +16,7 @@ vi.mock("next-auth/react", () => ({ useSession: () => ({
 vi.mock("next-intl", () => ({ useTranslations: (namespace: string) => Object.assign((key: string) => `${namespace}.${key}`, { has: () => true }) }));
 vi.mock("@/components/page-header", () => ({ PageHeader: ({ title }: { title: string }) => <h1>{title}</h1> }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/components/login-phone-settings", () => ({ LoginPhoneSettings: () => null }));
 vi.mock("@/components/account-privacy-settings", () => ({ AccountPrivacySettings: () => {
   const [open, setOpen] = useState(false);
   return <section>

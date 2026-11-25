@@ -1,26 +1,15 @@
 import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
-import { readFile } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { prepareProductAiImages, type ProductAiImagePreparer } from "./productAiImages";
 
-import sharp from "sharp";
-
-import {
-  downloadRemoteImage,
-  normalizeProductImageUrl,
-} from "@/server/services/productImageStorage";
+export { prepareProductAiImage } from "./productAiImages";
 import { AppError } from "@/server/services/errors";
 import { defaultLocale, normalizeLocale as normalizeAppLocale, type Locale } from "@/lib/locales";
 
 const DEFAULT_OPENAI_MODEL = "gpt-5-mini";
-const MAX_INPUT_IMAGES = 3;
 const MAX_OUTPUT_TOKENS = 220;
 const MIN_DESCRIPTION_LENGTH = 150;
 const MAX_DESCRIPTION_ATTEMPTS = 2;
-const AI_IMAGE_MAX_DIMENSION = 1024;
-const AI_IMAGE_TARGET_BYTES = 350_000;
 const OPENAI_MAX_ATTEMPTS = 3;
-const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
-const publicRootDir = resolve(process.cwd(), "public");
 
 const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -43,12 +32,8 @@ type GenerateProductDescriptionInput = {
   isBundle?: boolean;
   locale?: string | null;
   imageUrls: string[];
+  prepareImage?: ProductAiImagePreparer;
   logger?: ProductDescriptionLogger;
-};
-
-type DownloadedImage = {
-  buffer: Buffer;
-  contentType: string;
 };
 
 type ProductDescriptionLogger = {
@@ -74,21 +59,6 @@ type OpenAiResponseBody = {
   error?: {
     message?: string;
   };
-};
-
-const imageMimeByExtension: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".gif": "image/gif",
-  ".bmp": "image/bmp",
-  ".tif": "image/tiff",
-  ".tiff": "image/tiff",
-  ".svg": "image/svg+xml",
-  ".heic": "image/heic",
-  ".heif": "image/heif",
 };
 
 const normalizeLocale = (value?: string | null): ProductDescriptionLocale =>
@@ -176,74 +146,6 @@ const extractResponseText = (responseBody: OpenAiResponseBody | null) => {
   return parts.join("\n").trim();
 };
 
-const resolveManagedLocalImagePath = (sourceUrl: string) => {
-  try {
-    const parsed = new URL(sourceUrl, "https://local.invalid");
-    if (!parsed.pathname.startsWith(MANAGED_UPLOAD_PREFIX)) {
-      return null;
-    }
-    const candidatePath = resolve(publicRootDir, parsed.pathname.slice(1));
-    const rootPrefix = publicRootDir.endsWith(sep) ? publicRootDir : `${publicRootDir}${sep}`;
-    if (candidatePath !== publicRootDir && !candidatePath.startsWith(rootPrefix)) {
-      return null;
-    }
-    return candidatePath;
-  } catch {
-    return null;
-  }
-};
-
-const readManagedLocalImage = async (sourceUrl: string): Promise<DownloadedImage | null> => {
-  const filePath = resolveManagedLocalImagePath(sourceUrl);
-  if (!filePath) {
-    return null;
-  }
-
-  const contentType = imageMimeByExtension[extname(filePath).toLowerCase()];
-  if (!contentType) {
-    return null;
-  }
-
-  try {
-    const buffer = await readFile(filePath);
-    if (!buffer.length) {
-      return null;
-    }
-    return {
-      buffer,
-      contentType,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const loadImageForPrompt = async (rawUrl: string) => {
-  const normalizedUrl = normalizeProductImageUrl(rawUrl);
-  if (!normalizedUrl) {
-    return null;
-  }
-
-  if (normalizedUrl.startsWith(MANAGED_UPLOAD_PREFIX)) {
-    return readManagedLocalImage(normalizedUrl);
-  }
-
-  if (normalizedUrl.startsWith("data:image/")) {
-    return null;
-  }
-
-  return downloadRemoteImage(normalizedUrl);
-};
-
-const toDataUrl = (image: DownloadedImage) =>
-  `data:${image.contentType};base64,${image.buffer.toString("base64")}`;
-
-export const prepareProductAiImage = async (url: string) => {
-  const image = await loadImageForPrompt(url);
-  if (!image || image.buffer.length > 5 * 1024 * 1024) return null;
-  return toDataUrl(await optimizeImageForModel(image));
-};
-
 const parseRetryAfterMs = (value: string | null) => {
   if (!value) {
     return null;
@@ -268,60 +170,6 @@ const isQuotaLikeProviderMessage = (value: string) =>
 const isAbortLikeError = (error: unknown) =>
   error instanceof Error &&
   (error.name === "AbortError" || /aborted|abort/i.test(error.message));
-
-const optimizeImageForModel = async (image: DownloadedImage): Promise<DownloadedImage> => {
-  const sourceBytes = image.buffer.byteLength;
-  if (sourceBytes <= AI_IMAGE_TARGET_BYTES / 2 && image.contentType === "image/jpeg") {
-    return image;
-  }
-
-  const candidates: Array<{ maxDimension: number; quality: number }> = [
-    { maxDimension: AI_IMAGE_MAX_DIMENSION, quality: 72 },
-    { maxDimension: AI_IMAGE_MAX_DIMENSION, quality: 60 },
-    { maxDimension: 896, quality: 56 },
-    { maxDimension: 768, quality: 50 },
-    { maxDimension: 640, quality: 44 },
-  ];
-
-  let bestBuffer: Buffer | null = null;
-  for (const candidate of candidates) {
-    try {
-      const nextBuffer = await sharp(image.buffer, { pages: 1 })
-        .rotate()
-        .resize({
-          width: candidate.maxDimension,
-          height: candidate.maxDimension,
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .flatten({ background: "#ffffff" })
-        .jpeg({
-          quality: candidate.quality,
-          mozjpeg: true,
-        })
-        .toBuffer();
-
-      if (!bestBuffer || nextBuffer.byteLength < bestBuffer.byteLength) {
-        bestBuffer = nextBuffer;
-      }
-      if (nextBuffer.byteLength <= AI_IMAGE_TARGET_BYTES) {
-        bestBuffer = nextBuffer;
-        break;
-      }
-    } catch {
-      return image;
-    }
-  }
-
-  if (!bestBuffer || bestBuffer.byteLength >= sourceBytes) {
-    return image;
-  }
-
-  return {
-    buffer: bestBuffer,
-    contentType: "image/jpeg",
-  };
-};
 
 const callOpenAiResponses = async (input: {
   apiKey: string;
@@ -776,54 +624,26 @@ export const generateProductDescriptionFromImages = async (
     throw new AppError("aiDescriptionNotConfigured", "BAD_REQUEST", 400);
   }
 
-  const normalizedImageUrls = Array.from(
-    new Set(input.imageUrls.map((value) => value.trim()).filter((value) => value.length > 0)),
-  ).slice(0, MAX_INPUT_IMAGES);
-  if (!normalizedImageUrls.length) {
+  const locale = normalizeLocale(input.locale);
+  const {
+    imageDataUrls,
+    imageLoadDurationMs,
+    imageLoadMetrics,
+    sourceImageBytes,
+    payloadImageBytes,
+    imageCount,
+  } = await prepareProductAiImages(input.imageUrls, input.prepareImage);
+  if (!imageCount) {
     throw new AppError("aiDescriptionImageRequired", "BAD_REQUEST", 400);
   }
 
-  const locale = normalizeLocale(input.locale);
-  const imageLoadStartedAt = Date.now();
-  const imageLoadMetrics: Array<{
-    url: string;
-    durationMs: number;
-    ok: boolean;
-    bytes: number;
-  }> = [];
-  const loadedImages = await Promise.all(
-    normalizedImageUrls.map(async (imageUrl) => {
-      const imageStartedAt = Date.now();
-      const image = await loadImageForPrompt(imageUrl);
-      imageLoadMetrics.push({
-        url: imageUrl,
-        durationMs: Date.now() - imageStartedAt,
-        ok: Boolean(image),
-        bytes: image?.buffer.byteLength ?? 0,
-      });
-      return image;
-    }),
-  );
-  const imageLoadDurationMs = Date.now() - imageLoadStartedAt;
-  const usableImages = loadedImages.filter((image): image is DownloadedImage => Boolean(image));
-  const sourceImageBytes = usableImages.reduce((sum, image) => sum + image.buffer.byteLength, 0);
-  const optimizedImages = await Promise.all(
-    usableImages.map((image) => optimizeImageForModel(image)),
-  );
-  const payloadImageBytes = optimizedImages.reduce(
-    (sum, image) => sum + image.buffer.byteLength,
-    0,
-  );
-  const imageDataUrls = optimizedImages
-    .filter((image): image is DownloadedImage => Boolean(image))
-    .map(toDataUrl);
   const loadedImageCount = imageDataUrls.length;
   if (!imageDataUrls.length) {
     logger?.warn(
       {
         phase: "image-load",
         durationMs: imageLoadDurationMs,
-        imageCount: normalizedImageUrls.length,
+        imageCount,
         loadedImageCount,
         sourceImageBytes,
         payloadImageBytes,
@@ -836,7 +656,7 @@ export const generateProductDescriptionFromImages = async (
 
   const { apiKey, model } = providerConfig;
   const provider = providerConfig.provider;
-  const buildProviderRequestBody = (promptText: string) =>
+  const buildProviderRequestBody = (promptText: string, photoUrls: string[]) =>
     JSON.stringify({
       model,
       reasoning: {
@@ -852,7 +672,7 @@ export const generateProductDescriptionFromImages = async (
           role: "user",
           content: [
             { type: "input_text", text: promptText },
-            ...imageDataUrls.map((imageUrl) => ({
+            ...photoUrls.map((imageUrl) => ({
               type: "input_image" as const,
               image_url: imageUrl,
             })),
@@ -865,7 +685,9 @@ export const generateProductDescriptionFromImages = async (
     inputPrompt: string,
     phase: "complete" | "rewrite-retry" | "fact-extract" | "fact-compose" = "complete",
   ) => {
-    const requestBody = buildProviderRequestBody(inputPrompt);
+    // Composition receives only the facts already extracted from the photo.
+    const photoUrls = phase === "fact-compose" ? [] : imageDataUrls;
+    const requestBody = buildProviderRequestBody(inputPrompt, photoUrls);
 
     const providerStartedAt = Date.now();
     const { response, responseBody, attempts } = await callOpenAiResponses({
@@ -873,9 +695,9 @@ export const generateProductDescriptionFromImages = async (
       model,
       body: requestBody,
       logger,
-      loadedImageCount,
-      sourceImageBytes,
-      payloadImageBytes,
+      loadedImageCount: photoUrls.length,
+      sourceImageBytes: photoUrls.length ? sourceImageBytes : 0,
+      payloadImageBytes: photoUrls.length ? payloadImageBytes : 0,
     });
     const providerDurationMs = Date.now() - providerStartedAt;
     const parseDurationMs = 0;
@@ -888,7 +710,7 @@ export const generateProductDescriptionFromImages = async (
         provider,
         phase,
         model,
-        imageCount: normalizedImageUrls.length,
+        imageCount,
         loadedImageCount,
         sourceImageBytes,
         payloadImageBytes,
@@ -1114,7 +936,7 @@ export const generateProductDescriptionFromImages = async (
       {
         provider,
         model,
-        imageCount: normalizedImageUrls.length,
+        imageCount,
         loadedImageCount,
         sourceImageBytes,
         payloadImageBytes,

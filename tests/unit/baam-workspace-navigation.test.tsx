@@ -7,7 +7,7 @@ import en from "../../messages/en.json";
 import ru from "../../messages/ru.json";
 import kg from "../../messages/kg.json";
 import BaamPage from "@/app/(app)/baam/page";
-import { baamPathname, baamWorkspaceReturnHref, nativeBaamWorkspaceHref } from "@/lib/baam/workspaceNavigation";
+import { baamPathname, baamWorkspaceHref, baamWorkspaceReturnHref } from "@/lib/baam/workspaceNavigation";
 
 const native = vi.hoisted(() => ({ ios: true, search: "" }));
 vi.mock("@/lib/native/platform", () => ({ isIOS: () => native.ios }));
@@ -31,16 +31,17 @@ afterEach(() => {
   delete document.documentElement.dataset.nativeKeyboard;
   document.documentElement.style.removeProperty("--native-available-height");
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("native BAAM workspace navigation", () => {
   it("carries only a valid explicit store hint and an internal return destination", () => {
-    const href = nativeBaamWorkspaceHref({ pathname: "/kg/inventory", search: "?storeId=store_1&page=3", hash: "#product" });
+    const href = baamWorkspaceHref({ pathname: "/kg/inventory", search: "?storeId=store_1&page=3", hash: "#product" });
     const url = new URL(href, "https://bazaar.invalid");
     expect(url.pathname).toBe("/baam");
     expect(url.searchParams.get("storeId")).toBe("store_1");
     expect(url.searchParams.get("returnTo")).toBe("/kg/inventory?storeId=store_1&page=3#product");
-    const invalid = new URL(nativeBaamWorkspaceHref({ pathname: "/products", search: "?storeId=%2Funsafe", hash: "" }), "https://bazaar.invalid");
+    const invalid = new URL(baamWorkspaceHref({ pathname: "/products", search: "?storeId=%2Funsafe", hash: "" }), "https://bazaar.invalid");
     expect(invalid.searchParams.has("storeId")).toBe(false);
   });
 
@@ -77,6 +78,57 @@ describe("native BAAM workspace navigation", () => {
     expect(screen.getByTestId("existing-baam-assistant")).toBeTruthy();
     expect(screen.getByTestId("existing-baam-assistant").getAttribute("data-native-viewport")).toBe("false");
     expect(screen.getByTestId("baam-page").style.getPropertyValue("--baam-workspace-top")).toBe("");
+  });
+
+  it("fits a mobile browser's keyboard viewport and keeps its typed draft focused", () => {
+    native.ios = false;
+    let height = 844;
+    let top = 0;
+    const viewport = new EventTarget();
+    Object.defineProperties(viewport, {
+      height: { get: () => height },
+      offsetTop: { get: () => top },
+    });
+    vi.stubGlobal("visualViewport", viewport);
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.hasAttribute("data-native-bottom-nav")) return new DOMRect(0, 780, 390, 64);
+      return new DOMRect(0, 96, 390, 0);
+    });
+    const nav = document.createElement("nav");
+    nav.setAttribute("data-native-bottom-nav", "");
+    document.body.append(nav);
+    render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
+    const workspace = screen.getByTestId("baam-page");
+    const draft = screen.getByRole("textbox", { name: "Workspace draft" });
+    expect(workspace.style.getPropertyValue("--baam-visible-height")).toBe("844px");
+    expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).toBe("72px");
+    fireEvent.change(draft, { target: { value: "Mobile draft" } });
+    draft.focus();
+    act(() => {
+      height = 360;
+      top = 30;
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    expect(workspace.style.getPropertyValue("--baam-visible-height")).toBe("360px");
+    expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("66px");
+    expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).not.toBe("72px");
+    expect(document.activeElement).toBe(draft);
+    expect((draft as HTMLInputElement).value).toBe("Mobile draft");
+  });
+
+  it("shows the in-app return from a mobile web workspace opened by the launcher", () => {
+    native.ios = false;
+    native.search = new URLSearchParams({ returnTo: "/products?storeId=store_1#items" }).toString();
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
+    render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
+    const back = screen.getByRole("link", { name: en.common.back });
+    expect(back.getAttribute("href")).toBe("/products?storeId=store_1#items");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("tracks the actual iOS workspace top and visible navigation without remounting a focused draft", async () => {

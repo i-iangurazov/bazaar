@@ -16,8 +16,8 @@ export function baamWorkspaceReturnHref(value: string | null | undefined) {
     : destination;
 }
 
-/** Keep the originating workspace/filter and an explicit store hint on iOS. */
-export function nativeBaamWorkspaceHref(location: { pathname: string; search: string; hash: string }) {
+/** Keep the originating workspace, filters and an explicit store hint on phones. */
+export function baamWorkspaceHref(location: { pathname: string; search: string; hash: string }) {
   const query = new URLSearchParams();
   const storeId = new URLSearchParams(location.search).get("storeId");
   if (storeId && /^[A-Za-z0-9_-]{1,160}$/.test(storeId)) query.set("storeId", storeId);

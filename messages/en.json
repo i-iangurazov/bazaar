@@ -264,6 +264,13 @@
   },
   "auth": {
     "loginTitle": "Sign in to Bazaar",
+    "loginMethod": "Sign-in method",
+    "loginByEmail": "By email",
+    "loginByPhone": "By phone",
+    "loginPhone": "Phone number",
+    "phoneRequired": "Enter your phone number.",
+    "phoneInvalid": "Enter a complete phone number, such as +996 555 123 456.",
+    "phoneSetupHint": "Add a sign-in phone number in your Bazaar profile.",
     "email": "Email",
     "emailPlaceholder": "you@company.com",
     "emailRequired": "Email is required.",
@@ -273,12 +280,13 @@
     "passwordRequired": "Password is required.",
     "signIn": "Sign in",
     "signingIn": "Signing in...",
-    "invalidCredentials": "Invalid email or password.",
+    "invalidCredentials": "Check your sign-in details and password.",
     "loginUnavailable": "Could not complete sign-in. Check your connection and try again.",
     "loginRateLimited": "Too many sign-in attempts. Try again later.",
     "loginLocked": "Sign-in is temporarily locked after several failed attempts.",
     "loginBackoff": "Attempts are too frequent. Wait a bit and try again.",
     "emailNotVerified": "Confirm your email to sign in.",
+    "confirmEmailAfterPhoneLogin": "Confirm your account email. Choose By email to request another confirmation message.",
     "registrationNotCompleted": "Complete business registration before signing in.",
     "forgotPassword": "Forgot password?",
     "createAccount": "Create account",
@@ -1608,6 +1616,8 @@
         "pageOf": "Page {page} of {total}"
       },
       "validation": {
+        "fillMissingDescriptions": "Prepare cards with AI ({count})",
+        "fillMissingDescriptionsHint": "AI fills empty catalogue fields from product photos. Review the cards before exporting.",
         "title": "Errors, warnings, and validation summary",
         "loading": "Loading validation...",
         "noBlockers": "No blocking validation errors"
@@ -2478,7 +2488,7 @@
   },
   "productImageStudioSettings": {
     "title": "Bazaar Image Studio",
-    "subtitle": "Turn product photos into clean catalogue images on a light studio background.",
+    "subtitle": "Prepare catalogue photos and save them to your products.",
     "soonBadge": "Soon",
     "overview": {
       "title": "Overview",
@@ -2502,8 +2512,22 @@
       "providerMissing": "Photo processing is not connected yet. Contact your Bazaar administrator."
     },
     "input": {
-      "title": "Source photo",
-      "subtitle": "Upload one JPG, PNG, WEBP, AVIF, GIF, TIFF, BMP, HEIC or HEIF. Your original is kept separately.",
+      "addPhotos": "Add photos",
+      "photoCount": "{count} of {limit} photos",
+      "photoLimit": "The queue holds up to {count} photos.",
+      "photoQueue": "Photo queue",
+      "retryUpload": "Retry uploading {name}",
+      "removePhoto": "Remove {name} from queue",
+      "photoStage": {
+        "waiting": "Waiting to upload",
+        "preparing": "Preparing the file",
+        "uploading": "Uploading",
+        "ready": "Ready to retouch",
+        "failed": "Upload failed",
+        "saved": "Saved to product"
+      },
+      "title": "Photos to prepare",
+      "subtitle": "Add photos from your phone or computer. Originals are stored separately.",
       "uploadLabel": "Upload",
       "uploadCta": "Upload a product photo",
       "uploadHint": "JPG, PNG, WEBP, AVIF, GIF, TIFF, BMP, HEIC and HEIF are supported. Large files are optimized before upload.",
@@ -2584,6 +2608,10 @@
       "emptyOriginal": "Upload a source photo to get started.",
       "emptyGenerated": "The finished image will appear here.",
       "processing": "Your photo is being processed.",
+      "preparing": "Preparing the source photo…",
+      "analyzing": "Identifying product details…",
+      "enhancing": "Retouching the photo…",
+      "saving": "Saving the result…",
       "setAsPrimary": "Set as the main product image",
       "productRequired": "Choose a product to save the result.",
       "elapsed": "Elapsed: {seconds} s",
@@ -2591,6 +2619,9 @@
       "queued": "The image is queued for processing."
     },
     "actions": {
+      "generateReady": "Retouch ready photos ({count})",
+      "createProduct": "Create product",
+      "createAndSave": "Create product and save photo",
       "generate": "Create catalogue image",
       "generateDisabledNoAccess": "Photo processing is available to administrators and managers.",
       "generateDisabledNoSource": "Upload a source photo to start.",
@@ -3602,6 +3633,7 @@
     "businessOverview": "Business overview",
     "businessOverviewHint": "Focused on today and the selected store.",
     "kpi": {
+      "daySummary": "Today's summary",
       "completedSales": "Completed sales",
       "completedOrders": "Completed today",
       "todayAverage": "Today's average",
@@ -5799,6 +5831,17 @@
     "saved": "Category settings saved."
   },
   "profile": {
+    "loginPhone": {
+      "title": "Sign in by phone",
+      "description": "Add your personal phone number and confirm with your current password. Account recovery uses email.",
+      "number": "Sign-in phone number",
+      "currentPassword": "Current password",
+      "removeHint": "Clear the field to turn off sign-in by phone.",
+      "save": "Save phone number",
+      "remove": "Turn off sign-in by phone",
+      "saved": "Sign-in phone number saved.",
+      "removed": "Sign-in by phone turned off."
+    },
     "display": {
       "title": "Display",
       "scale": "Large-screen scale",
@@ -6129,6 +6172,8 @@
     "APPLE_CANCELLED": "The action was cancelled in the App Store.",
     "APPLE_INVALID_ARGUMENT": "Purchase details changed. Refresh offers and check again.",
     "accountPasswordIncorrect": "The current password is incorrect. Try again.",
+    "loginPhoneInvalid": "Enter a complete phone number, such as +996 555 123 456.",
+    "loginPhoneInUse": "This number is already used to sign in. Enter a different number.",
     "accountSuccessorRequired": "Choose an active colleague to take over the organization, then try again.",
     "accountConsentChanged": "The AI sharing notice changed. Reload it and review the current version.",
     "aiConsentRequired": "AI sharing permission is required. Open profile settings → Privacy and account to review the services and give permission.",
@@ -6580,6 +6625,7 @@
     "whatsappReconnectRequired": "The connection must be verified again.",
     "whatsappProviderBusy": "The provider is busy or a message is still processing. Try later.",
     "whatsappProviderUnavailable": "The provider is temporarily unavailable. Try later.",
+    "whatsappMetaAccountLocked": "Meta locked the WhatsApp business account (131031). Automatic replies are paused. Verify the connection after the account is unlocked.",
     "whatsappInvalidMessage": "Check the message text.",
     "whatsappChanged": "Settings changed. Reload and review before saving.",
     "whatsappProvisioningReview": "Bazaar support must review the connection. Do not create it again.",
@@ -9232,6 +9278,7 @@
     "workerReady": "Message worker is running.",
     "workerMissing": "The message worker is not connected or unavailable. Automatic replies cannot be enabled.",
     "pilotReady": "Platform requirements are approved. This store still needs published knowledge and an inbound message check.",
+    "callbackReceived": "Gupshup confirmed that the webhook is reachable.",
     "scope": "Initially: Kyrgyzstan buyers (+996), within 24 hours of their message. The assistant searches products and uses approved store knowledge. It does not post orders, payments or stock movements.",
     "style": "Conversation style",
     "language": "Reply language",

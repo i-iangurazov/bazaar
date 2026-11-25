@@ -19,6 +19,7 @@ import {
   markWhatsAppSeen,
   listWhatsAppConversations,
   eraseWhatsAppConversation,
+  whatsAppWorkspace,
 } from "@/server/whatsapp/workspace";
 import {
   runWhatsAppWorkerBatch,
@@ -335,6 +336,64 @@ describeDb("WhatsApp AI isolation, delivery and money with a real database", () 
     );
     expect(await prisma.whatsAppEvent.count()).toBe(0);
   });
+  it("shows an authenticated setup callback independently of an actual incoming message", async () => {
+    const callback = { statuses: [{ type: "set-callback" }] };
+    expect((await webhook(callback, "messages", "a".repeat(64))).status).toBe(403);
+    expect((await webhook(callback, "messages", webhookKey, "app-other")).status).toBe(400);
+    expect((await whatsAppWorkspace(actor(), f.store.id)).connection?.callbackReceived).toBe(false);
+    expect((await webhook(callback)).status).toBe(200);
+    expect((await webhook(callback)).status).toBe(200);
+    expect(await prisma.whatsAppEvent.count({ where: { eventType: "CALLBACK" } })).toBe(1);
+    expect((await whatsAppWorkspace(actor(), f.store.id)).connection).toMatchObject({
+      callbackReceived: true,
+      lastWebhookAt: null,
+    });
+    expect(await prisma.whatsAppMessage.count()).toBe(0);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("pauses a locked Meta account and reconciles the definitive failed send once", async () => {
+    const inFlight = await outgoing();
+    const pending = await outgoing();
+    await reserveWhatsAppUnit(f.org.id, inFlight.id);
+    await reserveWhatsAppUnit(f.org.id, pending.id);
+    await prisma.whatsAppMessage.update({
+      where: { id: inFlight.id },
+      data: {
+        state: "SENT",
+        providerMessageId: "failed-meta-id",
+        sendStartedAt: new Date(),
+      },
+    });
+    const failure = {
+      statuses: [{
+        gs_id: "failed-meta-id",
+        status: "failed",
+        timestamp: String(Math.floor(Date.now() / 1000)),
+        errors: [{ code: 131031 }],
+      }],
+    };
+    expect((await webhook(failure)).status).toBe(200);
+    expect((await webhook(failure)).status).toBe(200);
+    expect(await prisma.whatsAppConnection.findUnique({ where: { id: connection.id } })).toMatchObject({
+      state: "ATTENTION",
+      aiEnabled: false,
+      lastIssue: "whatsappMetaAccountLocked",
+      configVersion: connection.configVersion + 1,
+    });
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: pending.id } })).toMatchObject({
+      state: "CANCELLED",
+    });
+    await reconcileWhatsAppStatuses();
+    expect(await prisma.whatsAppMessage.findUnique({ where: { id: inFlight.id } })).toMatchObject({
+      state: "FAILED",
+    });
+    expect(await prisma.whatsAppCreditUse.count({
+      where: { messageId: { in: [inFlight.id, pending.id] }, state: "RELEASED" },
+    })).toBe(2);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
   it("deduplicates incoming messages and keeps unread state independent of Meta", async () => {
     await incoming("same-id");
     await incoming("same-id");

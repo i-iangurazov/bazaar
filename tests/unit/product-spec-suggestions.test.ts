@@ -20,6 +20,15 @@ describe("product spec suggestions", () => {
     mockNormalizeProductImageUrl.mockImplementation((value: string) => value);
   });
 
+  it("keeps unknown and ambiguous values out of marketplace options", async () => {
+    const { matchProductSpecOption } = await import("../../src/server/services/productSpecSuggestions");
+    const options = ["Синий", "Красный", "Зелёный"];
+    expect(matchProductSpecOption("зеленыЙ", options)).toBe("Зелёный");
+    expect(matchProductSpecOption("красный или синий", options)).toBeNull();
+    expect(matchProductSpecOption("Бежевый", options)).toBeNull();
+    expect(matchProductSpecOption("Бежевый")).toBe("Бежевый");
+  });
+
   it("requires OpenAI configuration", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     const { suggestProductSpecsFromImages } =

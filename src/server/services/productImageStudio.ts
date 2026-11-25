@@ -1,8 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
-import { reserveSubscriptionUsage, resumeSubscriptionUsage, startSubscriptionUsage,
-  settleSubscriptionUsage, type UsageLease } from "@/server/billing/subscriptionUsage";
+import {
+  lockSubscriptionUsageOrganization,
+  reserveSubscriptionUsage,
+  resumeSubscriptionUsage,
+  settleSubscriptionUsage,
+  startSubscriptionUsage,
+  type UsageLease,
+} from "@/server/billing/subscriptionUsage";
 import { reserveProviderExpense, settleProviderExpense, imageExpenseMinor } from "@/server/billing/providerExpense";
 import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 import { extname, resolve, sep } from "node:path";
@@ -41,6 +47,11 @@ const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
 const PRODUCT_IMAGE_STUDIO_MIN_DIMENSION = 512;
 const OPENAI_MAX_ATTEMPTS = 3;
+const STUDIO_ACTIVE_JOB_LIMIT = 2;
+const PHOTO_ANALYSIS_REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const PHOTO_ANALYSIS_PROMPT_VERSION = "studio-identity-v1";
+
+type StudioProcessingStage = "preparing" | "analyzing" | "enhancing" | "saving";
 const sleep = (ms: number) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 
 const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
@@ -207,15 +218,8 @@ const resolveManagedLocalImagePath = (sourceUrl: string) => {
 const resolveMimeTypeFromExtension = (sourcePath: string) =>
   imageMimeByExtension[extname(sourcePath).toLowerCase()] ?? null;
 
-const detectMimeTypeFromBuffer = async (buffer: Buffer, fallback?: string | null) => {
-  try {
-    const metadata = await sharp(buffer).metadata();
-    const bySharp = metadata.format ? imageMimeBySharpFormat[metadata.format] : null;
-    return bySharp ?? fallback ?? "image/jpeg";
-  } catch {
-    return fallback ?? "image/jpeg";
-  }
-};
+const resolveImageMimeType = (metadata: Metadata, fallback?: string | null) =>
+  (metadata.format ? imageMimeBySharpFormat[metadata.format] : null) ?? fallback ?? "image/jpeg";
 
 const readProductImageSource = async (sourceUrl: string) => {
   const managedLocalPath = resolveManagedLocalImagePath(sourceUrl);
@@ -269,12 +273,16 @@ const ownedManagedProductImageUrl = (organizationId: string, rawUrl: string) => 
   return null;
 };
 
-const ensureProductAccess = async (organizationId: string, productId?: string | null) => {
+const ensureProductAccess = async (
+  organizationId: string,
+  productId?: string | null,
+  db: Prisma.TransactionClient = prisma,
+) => {
   if (!productId) {
     return null;
   }
 
-  const product = await prisma.product.findFirst({
+  const product = await db.product.findFirst({
     where: {
       id: productId,
       organizationId,
@@ -404,7 +412,7 @@ export const validateUploadedImage = async (input: {
   return {
     normalizedUrl,
     buffer: sourceImage.buffer,
-    mimeType: await detectMimeTypeFromBuffer(sourceImage.buffer, sourceImage.contentType),
+    mimeType: resolveImageMimeType(metadata, sourceImage.contentType),
     bytes: sourceImage.buffer.length,
     width: metadata.width,
     height: metadata.height,
@@ -596,8 +604,63 @@ export const prepareStudioPhotoAnalysis = async (sourceImage: ProductImageStudio
   }
 };
 
+type StudioWorkerContext = {
+  organizationId: string;
+  actorId: string;
+  setStage: (stage: StudioProcessingStage) => Promise<void>;
+};
+
+type CompletedStudioAnalysis = Extract<
+  Awaited<ReturnType<typeof prepareStudioPhotoAnalysis>>,
+  { status: "completed" }
+>;
+
+const loadCompletedStudioAnalysis = async (
+  worker: StudioWorkerContext,
+  sourceImageUrl: string,
+  analysisCacheKey: string,
+  model: string,
+): Promise<CompletedStudioAnalysis | null> => {
+  const latest = await prisma.productImageStudioJob.findFirst({
+    where: {
+      organizationId: worker.organizationId,
+      createdById: worker.actorId,
+      sourceImageUrl,
+      status: ProductImageStudioJobStatus.SUCCEEDED,
+      createdAt: { gte: new Date(Date.now() - PHOTO_ANALYSIS_REUSE_WINDOW_MS) },
+      providerRequestJson: { path: ["analysisCacheKey"], equals: analysisCacheKey },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { providerRequestJson: true },
+  });
+  const request = latest?.providerRequestJson;
+  const analysis = isObject(request) ? request.analysis : null;
+  if (
+    !isObject(analysis) ||
+    analysis.status !== "completed" ||
+    analysis.provider !== "deepseek" ||
+    analysis.model !== model ||
+    !isObject(analysis.observations) ||
+    typeof analysis.observations.subject !== "string" ||
+    !Array.isArray(analysis.observations.detailsToPreserve) ||
+    !analysis.observations.detailsToPreserve.every((value) => typeof value === "string")
+  ) {
+    return null;
+  }
+  return {
+    status: "completed",
+    provider: "deepseek",
+    model,
+    observations: {
+      subject: analysis.observations.subject.slice(0, 240),
+      detailsToPreserve: analysis.observations.detailsToPreserve.slice(0, 6).map((value: string) => value.slice(0, 240)),
+    },
+  };
+};
+
 export const callOpenAiImageEnhancement = async (input: {
   organizationId?: string;
+  worker?: StudioWorkerContext;
   jobId: string;
   sourceImage: ProductImageStudioSourceImage;
   prompt: string;
@@ -607,20 +670,37 @@ export const callOpenAiImageEnhancement = async (input: {
   if (!config) {
     throw new AppError("productImageStudioNotConfigured", "INTERNAL_SERVER_ERROR", 500);
   }
-  const analysis = await prepareStudioPhotoAnalysis(input.sourceImage);
+  const visionConfig = resolveTextAiConfig("vision");
+  const deepseekModel = visionConfig?.provider === "deepseek" ? visionConfig.model : null;
+  const analysisCacheKey = input.worker && deepseekModel
+    ? createHash("sha256")
+        .update(JSON.stringify([PHOTO_ANALYSIS_PROMPT_VERSION, deepseekModel]))
+        .update(input.sourceImage.buffer)
+        .digest("hex")
+    : null;
+  const reusedAnalysis = input.worker && deepseekModel && analysisCacheKey
+    ? await loadCompletedStudioAnalysis(input.worker, input.sourceImage.normalizedUrl, analysisCacheKey, deepseekModel)
+    : null;
+  if (!reusedAnalysis && deepseekModel) {
+    await input.worker?.setStage("analyzing");
+  }
+
   // Legacy catalogue sources can be TIFF/AVIF/GIF even when the upload UI now
   // optimizes these formats. Normalize them before the image API, which accepts
   // only JPEG, PNG and WebP references for editing.
   const supportedSource = ["image/jpeg", "image/png", "image/webp"].includes(
     input.sourceImage.mimeType,
   );
-  const providerImage = supportedSource
-    ? input.sourceImage.buffer
-    : await sharp(input.sourceImage.buffer)
-        .rotate()
-        .flatten({ background: "#ffffff" })
-        .jpeg({ quality: 95 })
-        .toBuffer();
+  const [analysis, providerImage] = await Promise.all([
+    reusedAnalysis ?? prepareStudioPhotoAnalysis(input.sourceImage),
+    supportedSource
+      ? input.sourceImage.buffer
+      : sharp(input.sourceImage.buffer)
+          .rotate()
+          .flatten({ background: "#ffffff" })
+          .jpeg({ quality: 95 })
+          .toBuffer(),
+  ]);
   const providerMimeType = supportedSource ? input.sourceImage.mimeType : "image/jpeg";
   const imageDataUrl = `data:${providerMimeType};base64,${providerImage.toString("base64")}`;
   const prompt = ensurePromptPreservesProductIdentity(
@@ -653,12 +733,15 @@ export const callOpenAiImageEnhancement = async (input: {
     endpoint: "images/edits",
     model: config.imageModel,
     analysis,
+    analysisReused: reusedAnalysis !== null,
+    ...(analysis.status === "completed" && analysisCacheKey ? { analysisCacheKey } : {}),
     sourceImageBytes: input.sourceImage.bytes,
     sourceImageMimeType: input.sourceImage.mimeType,
     quality: requestBody.quality as string,
     presets: input.presets,
   } satisfies Record<string, unknown>;
 
+  await input.worker?.setStage("enhancing");
   const deadline = Date.now() + PRODUCT_IMAGE_STUDIO_PROVIDER_TIMEOUT_MS;
   for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
     const expense = input.organizationId ? await reserveProviderExpense({
@@ -726,15 +809,16 @@ export const callOpenAiImageEnhancement = async (input: {
       throw new AppError("productImageStudioProviderOutputMissing", "INTERNAL_SERVER_ERROR", 502);
     }
     const imageBuffer = Buffer.from(result, "base64");
+    let metadata: Metadata;
     try {
-      const metadata = await sharp(imageBuffer).metadata();
+      metadata = await sharp(imageBuffer).metadata();
       if (!metadata.width || !metadata.height) throw new Error("empty image");
     } catch {
       throw new AppError("productImageStudioProviderOutputMissing", "INTERNAL_SERVER_ERROR", 502);
     }
     return {
       imageBuffer,
-      mimeType: await detectMimeTypeFromBuffer(imageBuffer, "image/jpeg"),
+      mimeType: resolveImageMimeType(metadata),
       requestSummary,
       responseSummary: {
         provider: PROVIDER_NAME,
@@ -812,7 +896,7 @@ const attachGeneratedImageToProduct = async (input: {
         organizationId: input.organizationId,
         productId: input.product.id,
         url: input.imageUrl,
-        position: currentImages.length,
+        position: (currentImages.at(-1)?.position ?? -1) + 1,
         isAiGenerated: true,
       },
     });
@@ -917,10 +1001,19 @@ const productImageStudioJobSelect = {
   },
 } satisfies Prisma.ProductImageStudioJobSelect;
 
+const readStudioProcessingStage = (value: Prisma.JsonValue): StudioProcessingStage => {
+  const stage = isObject(value) ? value.processingStage : null;
+  if (stage === "analyzing" || stage === "enhancing" || stage === "saving") return stage;
+  return "preparing";
+};
+
 const serializeJob = (
   job: Prisma.ProductImageStudioJobGetPayload<{ select: typeof productImageStudioJobSelect }>,
 ) => ({
   ...job,
+  processingStage: job.status === ProductImageStudioJobStatus.PROCESSING
+    ? readStudioProcessingStage(job.providerRequestJson)
+    : null,
   sourcePreviewPath: `/api/product-image-studio/jobs/${job.id}/image?kind=source`,
   outputPreviewPath: job.outputImageUrl
     ? `/api/product-image-studio/jobs/${job.id}/image?kind=output`
@@ -1068,23 +1161,23 @@ export const createProductImageStudioJob = async (input: {
   };
   validatePresetSelection(presets);
 
-  const [product, sourceImage] = await Promise.all([
-    ensureProductAccess(input.organizationId, input.productId),
-    validateUploadedImage({
-      organizationId: input.organizationId,
-      sourceImageUrl: input.sourceImageUrl,
-    }),
-  ]);
+  const normalizedUrl = validateSourceImageOwnership(input.organizationId, input.sourceImageUrl);
+  const product = await ensureProductAccess(input.organizationId, input.productId);
+  if (product) {
+    await assertActorCanWriteProducts(prisma, input.organizationId, input.actorId, [product.id], {
+      allowShared: true,
+    });
+  }
 
   const activeDedupeKey = buildProductImageStudioActiveDedupeKey({
     organizationId: input.organizationId,
     productId: product?.id ?? null,
-    sourceImageUrl: sourceImage.normalizedUrl,
+    sourceImageUrl: normalizedUrl,
     presets,
   });
   const activeJobWhere = {
     organizationId: input.organizationId,
-    sourceImageUrl: sourceImage.normalizedUrl,
+    sourceImageUrl: normalizedUrl,
     productId: product?.id ?? null,
     backgroundMode: presets.backgroundMode,
     outputFormat: presets.outputFormat,
@@ -1108,6 +1201,11 @@ export const createProductImageStudioJob = async (input: {
     return { jobId: activeJob.id, deduplicated: true };
   }
 
+  const sourceImage = await validateUploadedImage({
+    organizationId: input.organizationId,
+    sourceImageUrl: normalizedUrl,
+  });
+
   const prompt = buildStructuredEnhancementPrompt({
     ...presets,
     productName: product?.name ?? null,
@@ -1117,6 +1215,8 @@ export const createProductImageStudioJob = async (input: {
   for (let createAttempt = 0; createAttempt < 2 && !job; createAttempt += 1) {
     const candidateId = randomUUID();
     job = await prisma.$transaction(async (tx) => {
+      // Enqueue, completion and expiration follow the same organization-first order.
+      await lockSubscriptionUsageOrganization(tx, input.organizationId);
       const inserted = await tx.productImageStudioJob.createMany({
         data: [
           {
@@ -1279,20 +1379,17 @@ export const saveGeneratedImageToProduct = async (input: {
     throw new AppError("productImageStudioProductRequired", "BAD_REQUEST", 400);
   }
 
-  const product = await ensureProductAccess(input.organizationId, targetProductId);
-  if (!product) {
-    throw new AppError("productNotFound", "NOT_FOUND", 404);
-  }
   const outputImageUrl = job.outputImageUrl;
-  if (!outputImageUrl) {
-    throw new AppError("productImageStudioAttachFailed", "BAD_REQUEST", 400);
-  }
   const setAsPrimary = Boolean(input.setAsPrimary);
 
   const result = await prisma.$transaction(async (tx) => {
-    await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [product.id], {
+    await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [targetProductId], {
       allowShared: true,
     });
+    // Read album order only after obtaining the same product lock as the editor.
+    await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${targetProductId} AND "organizationId" = ${input.organizationId} FOR UPDATE`;
+    const product = await ensureProductAccess(input.organizationId, targetProductId, tx);
+    if (!product) throw new AppError("productNotFound", "NOT_FOUND", 404);
     const savedProductImageId = await attachGeneratedImageToProduct({
       tx,
       organizationId: input.organizationId,
@@ -1378,6 +1475,7 @@ const timeoutAbandonedProductImageStudioJobs = async () => {
   const timedOutJobIds: string[] = [];
   for (const staleJob of staleJobs) {
     const timedOut = await prisma.$transaction(async (tx) => {
+      await lockSubscriptionUsageOrganization(tx, staleJob.organizationId);
       const updated = await tx.productImageStudioJob.updateMany({
         where: {
           id: staleJob.id,
@@ -1429,6 +1527,20 @@ const timeoutAbandonedProductImageStudioJobs = async () => {
   return timedOutJobIds;
 };
 
+const dispatchWaitingStudioJobs = (organizationId: string) => {
+  if (process.env.NODE_ENV === "test") return;
+  keepBackgroundTaskAlive(
+    prisma.productImageStudioJob.findMany({
+      where: { organizationId, status: ProductImageStudioJobStatus.QUEUED },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: STUDIO_ACTIVE_JOB_LIMIT,
+      select: { id: true },
+    }).then((jobs) => Promise.all(
+      jobs.map(({ id }) => runJob(PRODUCT_IMAGE_STUDIO_JOB_NAME, { jobId: id, organizationId })),
+    )).catch(() => null),
+  );
+};
+
 const processQueuedProductImageStudioJob = async (jobId?: string) => {
   await timeoutAbandonedProductImageStudioJobs();
   const job = jobId
@@ -1453,31 +1565,51 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
 
   const startedAt = new Date();
   const leaseToken = randomUUID();
-  const claimed = await prisma.productImageStudioJob.updateMany({
-    where: { id: job.id, status: ProductImageStudioJobStatus.QUEUED },
-    data: {
-      status: ProductImageStudioJobStatus.PROCESSING,
-      attemptCount: { increment: 1 },
-      leaseToken,
-      leaseExpiresAt: new Date(startedAt.getTime() + PRODUCT_IMAGE_STUDIO_JOB_TIMEOUT_MS),
-      startedAt,
-      errorMessage: null,
-      providerRequestJson: Prisma.DbNull,
-      providerResponseJson: Prisma.DbNull,
-      completedAt: null,
-    },
+  const claimed = await prisma.$transaction(async (tx) => {
+    const lockKey = `image-studio-worker:${job.organizationId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    const active = await tx.productImageStudioJob.count({
+      where: { organizationId: job.organizationId, status: ProductImageStudioJobStatus.PROCESSING },
+    });
+    if (active >= STUDIO_ACTIVE_JOB_LIMIT) return "capacity";
+    const updated = await tx.productImageStudioJob.updateMany({
+      where: { id: job.id, status: ProductImageStudioJobStatus.QUEUED },
+      data: {
+        status: ProductImageStudioJobStatus.PROCESSING,
+        attemptCount: { increment: 1 },
+        leaseToken,
+        leaseExpiresAt: new Date(startedAt.getTime() + PRODUCT_IMAGE_STUDIO_JOB_TIMEOUT_MS),
+        startedAt,
+        errorMessage: null,
+        providerRequestJson: Prisma.DbNull,
+        providerResponseJson: Prisma.DbNull,
+        completedAt: null,
+      },
+    });
+    return updated.count === 1 ? "started" : "claimed";
   });
-  if (claimed.count !== 1) {
+  if (claimed !== "started") {
     return {
       job: job.id,
       status: "skipped" as const,
-      details: { reason: "claimed" },
+      details: { reason: claimed },
     };
   }
   const running = await prisma.productImageStudioJob.findUniqueOrThrow({
     where: { id: job.id },
   });
 
+  const worker: StudioWorkerContext = {
+    organizationId: running.organizationId,
+    actorId: running.createdById,
+    setStage: async (processingStage) => {
+      const owned = await prisma.productImageStudioJob.updateMany({
+        where: { id: running.id, status: ProductImageStudioJobStatus.PROCESSING, leaseToken },
+        data: { providerRequestJson: { processingStage } },
+      });
+      if (owned.count !== 1) throw new Error("productImageStudioLeaseLost");
+    },
+  };
   let usageLease: UsageLease = null;
   try {
     await assertFeatureEnabled({ organizationId: running.organizationId, feature: "imageStudio" });
@@ -1490,6 +1622,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
     });
     const providerResult = await withAiPrivacyIdentity({ userId: running.createdById, organizationId: running.organizationId }, () => withAiOperationBudget({ organizationId: running.organizationId, kind: "image", enabled: usageLease !== null }, () => callOpenAiImageEnhancement({
       organizationId: usageLease ? running.organizationId : undefined,
+      worker,
       jobId: running.id,
       sourceImage,
       prompt:
@@ -1514,21 +1647,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
         brighterPresentation: running.brighterPresentation,
       },
     })));
-    const stillOwned = await prisma.productImageStudioJob.findFirst({
-      where: {
-        id: running.id,
-        status: ProductImageStudioJobStatus.PROCESSING,
-        leaseToken,
-      },
-      select: { id: true },
-    });
-    if (!stillOwned) {
-      return {
-        job: running.id,
-        status: "skipped" as const,
-        details: { reason: "leaseLost" },
-      };
-    }
+    await worker.setStage("saving");
     const persistedOutput = await persistGeneratedImage({
       organizationId: running.organizationId,
       jobId: running.id,
@@ -1537,6 +1656,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
     });
 
     const finished = await prisma.$transaction(async (tx) => {
+      await lockSubscriptionUsageOrganization(tx, running.organizationId);
       const completed = await tx.productImageStudioJob.updateMany({
         where: {
           id: running.id,
@@ -1599,6 +1719,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
         ? error
         : new AppError("productImageStudioProviderFailed", "INTERNAL_SERVER_ERROR", 502);
     const failed = await prisma.$transaction(async (tx) => {
+      await lockSubscriptionUsageOrganization(tx, running.organizationId);
       const completed = await tx.productImageStudioJob.updateMany({
         where: {
           id: running.id,
@@ -1653,6 +1774,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
       },
     };
   } finally {
+    dispatchWaitingStudioJobs(running.organizationId);
     if (usageLease) {
       const completed = await prisma.productImageStudioJob.findUnique({
         where: { id: running.id }, select: { status: true },

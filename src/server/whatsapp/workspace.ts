@@ -34,16 +34,22 @@ import { settleWhatsAppUnit, whatsappQuota } from "./quota";
 
 export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
   const access = await whatsappConnection(actor, storeId);
-  const [quota, worker, store] = await Promise.all([
+  const c = access.connection;
+  const [quota, worker, store, callback] = await Promise.all([
     whatsappQuota(actor.organizationId),
     prisma.whatsAppWorkerState.findUnique({ where: { id: "worker" } }),
     prisma.store.findFirstOrThrow({
       where: { id: storeId, organizationId: actor.organizationId },
       select: { name: true, currencyCode: true },
     }),
+    c
+      ? prisma.whatsAppEvent.findFirst({
+          where: { connectionId: c.id, organizationId: actor.organizationId, eventType: "CALLBACK" },
+          select: { id: true },
+        })
+      : null,
   ]);
-  const config = whatsappConfig(),
-    c = access.connection;
+  const config = whatsappConfig();
   const workerReady = Boolean(
     worker?.state === "READY" && Date.now() - worker.heartbeatAt.getTime() < 90000,
   );
@@ -69,6 +75,7 @@ export async function whatsAppWorkspace(actor: WhatsAppActor, storeId: string) {
           lastIssue: c.lastIssue,
           lastWebhookAt: c.lastWebhookAt,
           lastProviderCheckAt: c.lastProviderCheckAt,
+          callbackReceived: Boolean(callback),
         }
       : null,
     profile: whatsappProfileSchema.parse(c?.profile ?? {}),

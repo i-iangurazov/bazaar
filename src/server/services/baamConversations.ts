@@ -107,7 +107,7 @@ export async function createBaamConversation(
 
 export async function readBaamConversation(ctx: Context, id: string, before?: number) {
   const { conversation } = await ownBaamConversation(ctx, id);
-  await expireBaamTurn(id);
+  if (conversation.activeTurnId) await expireBaamTurn(id);
   const [messages, activeTurn] = await Promise.all([
     prisma.baamMessage.findMany({
       where: { conversationId: id, ...(before ? { sequence: { lt: before } } : {}) },
@@ -116,30 +116,41 @@ export async function readBaamConversation(ctx: Context, id: string, before?: nu
     }),
     prisma.baamTurn.findFirst({
       where: { conversationId: id, status: "RUNNING" },
-      select: { id: true, status: true, cancelRequested: true },
+      select: { id: true, clientRequestId: true, status: true, cancelRequested: true },
     }),
   ]);
-  const actions = await prisma.baamAction.findMany({
-    where: {
-      conversationId: id,
-      OR: [
-        { turnId: { in: messages.flatMap((m) => (m.turnId ? [m.turnId] : [])) } },
-        { status: { in: ["PROPOSED", "RUNNING", "FAILED", "NEEDS_REVIEW"] } },
-      ],
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    select: {
-      id: true,
-      status: true,
-      summary: true,
-      result: true,
-      errorCode: true,
-      scopeRevision: true,
-      turnId: true,
-      updatedAt: true,
-    },
-  });
+  const turnIds = [...new Set(messages.flatMap((m) => (m.turnId ? [m.turnId] : [])))];
+  const [actions, workflows] = await Promise.all([
+    prisma.baamAction.findMany({
+      where: {
+        conversationId: id,
+        OR: [
+          { turnId: { in: turnIds } },
+          { status: { in: ["PROPOSED", "RUNNING", "FAILED", "NEEDS_REVIEW"] } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      select: {
+        id: true,
+        status: true,
+        summary: true,
+        result: true,
+        errorCode: true,
+        scopeRevision: true,
+        turnId: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.baamWorkflow.findMany({
+      where: {
+        conversationId: id,
+        OR: [{ turnId: { in: turnIds } }, { id: conversation.activeWorkflowId ?? "" }],
+      },
+      orderBy: { createdAt: "desc" },
+      take: 60,
+    }),
+  ]);
   return {
     conversation,
     messages: messages.slice(0, 40).reverse(),
@@ -147,17 +158,7 @@ export async function readBaamConversation(ctx: Context, id: string, before?: nu
       ...action,
       canRecover: action.status === "RUNNING" && action.updatedAt.getTime() < Date.now() - 90_000,
     })),
-    workflows: await prisma.baamWorkflow.findMany({
-      where: {
-        conversationId: id,
-        OR: [
-          { turnId: { in: messages.flatMap((m) => (m.turnId ? [m.turnId] : [])) } },
-          { id: conversation.activeWorkflowId ?? "" },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
-      take: 60,
-    }),
+    workflows,
     activeTurn,
     next: messages.length > 40 ? messages[39].sequence : null,
   };
@@ -244,12 +245,14 @@ export async function appendBaamMessage(
 export async function expireBaamTurn(conversationId: string) {
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "BaamConversation" WHERE "id" = ${conversationId} FOR UPDATE`;
+    const where = { conversationId, status: "RUNNING", leaseUntil: { lt: new Date() } };
     const turns = await tx.baamTurn.findMany({
-      where: { conversationId, status: "RUNNING", leaseUntil: { lt: new Date() } },
+      where,
       select: { id: true },
     });
+    if (!turns.length) return;
     const expired = await tx.baamTurn.updateMany({
-      where: { conversationId, status: "RUNNING", leaseUntil: { lt: new Date() } },
+      where,
       data: { status: "INTERRUPTED", errorCode: "baamInterrupted", completedAt: new Date() },
     });
     if (expired.count) {
@@ -392,21 +395,26 @@ export async function assertBaamTurnActive(ctx: Context, turnId: string) {
   return { ...access, turn };
 }
 
-export async function stopBaamTurn(ctx: Context, conversationId: string) {
+export async function stopBaamTurn(ctx: Context, conversationId: string, turnId?: string) {
   await ownBaamConversation(ctx, conversationId);
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "BaamConversation" WHERE "id" = ${conversationId} FOR UPDATE`;
-    const running = await tx.baamTurn.findMany({ where: { conversationId, status: "RUNNING" } });
+    const running = await tx.baamTurn.findMany({
+      where: { conversationId, status: "RUNNING", ...(turnId ? { id: turnId } : {}) },
+      select: { id: true },
+    });
+    const stoppedTurnIds = running.map((turn) => turn.id);
+    if (!stoppedTurnIds.length) return { stopped: false, stoppedTurnIds };
     await tx.baamTurn.updateMany({
-      where: { conversationId, status: "RUNNING" },
+      where: { conversationId, id: { in: stoppedTurnIds }, status: "RUNNING" },
       data: { cancelRequested: true, status: "CANCELLED", completedAt: new Date() },
     });
-    await tx.baamConversation.update({
-      where: { id: conversationId },
+    await tx.baamConversation.updateMany({
+      where: { id: conversationId, activeTurnId: { in: stoppedTurnIds } },
       data: { activeTurnId: null },
     });
     await tx.baamAction.updateMany({
-      where: { turnId: { in: running.map((t) => t.id) }, status: "PROPOSED" },
+      where: { turnId: { in: stoppedTurnIds }, status: "PROPOSED" },
       data: { status: "CANCELLED" },
     });
     for (const turn of running)
@@ -416,6 +424,6 @@ export async function stopBaamTurn(ctx: Context, conversationId: string) {
         role: "error",
         text: "baamStopped",
       });
+    return { stopped: true, stoppedTurnIds };
   });
-  return { stopped: true };
 }

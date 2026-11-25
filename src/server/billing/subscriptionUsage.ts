@@ -69,8 +69,8 @@ export const subscriptionUsageContext = (org: Organization) => {
 };
 const windowFor = (org: Organization, resource: UsageResource, now: Date) => usageWindow({ resource, now, ...subscriptionUsageContext(org) });
 const keyDigest = (key: string) => createHash("sha256").update(key).digest("hex");
-const lock = (tx: Prisma.TransactionClient, organizationId: string) =>
-  tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+export const lockSubscriptionUsageOrganization = (tx: Prisma.TransactionClient, organizationId: string) =>
+  tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR NO KEY UPDATE`;
 
 const releaseRows = async (tx: Prisma.TransactionClient, rows: Array<{ id: string; bucketId: string; units: number }>) => {
   const totals = new Map<string, number>();
@@ -107,7 +107,7 @@ export async function reserveSubscriptionUsage(input: {
   if (!Number.isSafeInteger(units) || units < 1 || units > 10000 || !input.operationKey)
     throw new AppError("validationError", "BAD_REQUEST", 400);
   const reserve = async (tx: Prisma.TransactionClient) => {
-    await lock(tx, input.organizationId);
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
     const org = await getOrganizationPlan(input.organizationId, tx);
     const limit = resourceLimit(org, input.resource);
     if (limit === null) return null;
@@ -149,7 +149,7 @@ export async function reserveSubscriptionUsageBatch(input: {
   if (!input.operationKeys.length || input.operationKeys.length > 5000 ||
     new Set(input.operationKeys).size !== input.operationKeys.length)
     throw new AppError("validationError", "BAD_REQUEST", 400);
-  await lock(db, input.organizationId);
+  await lockSubscriptionUsageOrganization(db, input.organizationId);
   const org = await getOrganizationPlan(input.organizationId, db);
   const limit = resourceLimit(org, input.resource);
   if (limit === null) return;
@@ -190,7 +190,7 @@ export async function resumeSubscriptionUsage(input: {
   organizationId: string; resource: UsageResource; operationKey: string;
 }): Promise<UsageLease> {
   return prisma.$transaction(async (tx) => {
-    await lock(tx, input.organizationId);
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
     await releaseExpired(tx, input.organizationId, new Date());
     const row = await tx.subscriptionUsageReservation.findUnique({
       where: { organizationId_resource_operationKey: { organizationId: input.organizationId,
@@ -205,7 +205,7 @@ export async function resumeSubscriptionUsage(input: {
 export async function startSubscriptionUsage(lease: UsageLease) {
   if (!lease) return;
   await prisma.$transaction(async (tx) => {
-    await lock(tx, lease.organizationId);
+    await lockSubscriptionUsageOrganization(tx, lease.organizationId);
     const row = await tx.subscriptionUsageReservation.updateMany({
       where: { id: lease.id, organizationId: lease.organizationId, leaseToken: lease.token,
         state: "RESERVED", startedAt: null, expiresAt: { gt: new Date() } },
@@ -218,7 +218,7 @@ export async function startSubscriptionUsage(lease: UsageLease) {
 export async function settleSubscriptionUsage(lease: UsageLease, success: boolean, db?: Prisma.TransactionClient) {
   if (!lease) return;
   const settle = async (tx: Prisma.TransactionClient) => {
-    await lock(tx, lease.organizationId);
+    await lockSubscriptionUsageOrganization(tx, lease.organizationId);
     const row = await tx.subscriptionUsageReservation.findFirst({
       where: { id: lease.id, organizationId: lease.organizationId, leaseToken: lease.token },
     });
@@ -238,7 +238,7 @@ export async function settleSubscriptionExpense(lease: UsageLease, actualUnits: 
   if (!Number.isSafeInteger(actualUnits) || actualUnits < 0 || actualUnits > 1000000)
     throw new AppError("validationError", "BAD_REQUEST", 400);
   await prisma.$transaction(async (tx) => {
-    await lock(tx, lease.organizationId);
+    await lockSubscriptionUsageOrganization(tx, lease.organizationId);
     const row = await tx.subscriptionUsageReservation.findFirst({ where: {
       id: lease.id, organizationId: lease.organizationId, leaseToken: lease.token,
     } });
@@ -281,7 +281,7 @@ export async function getSubscriptionUsage(organizationId: string, now = new Dat
   const org = await getOrganizationPlan(organizationId);
   if (org.billingCatalogVersion === "2026-11" && !org.lifetimeAccess) {
     await prisma.$transaction(async (tx) => {
-      await lock(tx, organizationId);
+      await lockSubscriptionUsageOrganization(tx, organizationId);
       await releaseExpired(tx, organizationId, now);
     });
   }
@@ -301,7 +301,7 @@ export async function releaseUnusedSubscriptionUsage(input: {
   organizationId: string; resource: UsageResource; operationKeys: string[];
 }) {
   await prisma.$transaction(async (tx) => {
-    await lock(tx, input.organizationId);
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
     const rows = await tx.subscriptionUsageReservation.findMany({
       where: { organizationId: input.organizationId, resource: input.resource, state: "RESERVED",
         startedAt: null, operationKey: { in: input.operationKeys.map(keyDigest) } },
@@ -316,7 +316,7 @@ export async function startSubscriptionUsageBatch(input: {
 }) {
   if (!input.operationKeys.length) return;
   await prisma.$transaction(async (tx) => {
-    await lock(tx, input.organizationId);
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
     const org = await getOrganizationPlan(input.organizationId, tx);
     if (resourceLimit(org, input.resource) === null) return;
     if (!resolveOrganizationAccessState(org).hasAccess) throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
@@ -351,7 +351,7 @@ export async function settleSubscriptionUsageBatch(input: {
 }, db?: Prisma.TransactionClient) {
   if (!input.operationKeys.length) return;
   const settle = async (tx: Prisma.TransactionClient) => {
-    await lock(tx, input.organizationId);
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
     const rows = await tx.subscriptionUsageReservation.findMany({ where: {
       organizationId: input.organizationId, resource: input.resource,
       operationKey: { in: input.operationKeys.map(keyDigest) }, state: "RESERVED",
@@ -378,7 +378,7 @@ export async function holdUncertainSubscriptionUsageBatch(input: {
 }, db?: Prisma.TransactionClient) {
   if (!input.operationKeys.length) return;
   const hold = async (tx: Prisma.TransactionClient) => {
-    await lock(tx, input.organizationId);
+    await lockSubscriptionUsageOrganization(tx, input.organizationId);
     const rows = await tx.subscriptionUsageReservation.findMany({ where: {
       organizationId: input.organizationId, resource: "marketingEmails", state: "RESERVED",
       startedAt: { not: null }, operationKey: { in: input.operationKeys.map(keyDigest) },
