@@ -182,6 +182,12 @@ export async function verifyPosPhotoAndWholesale(
     await expect(cell()).toContainText("80");
     await page.screenshot({ path: `${output}/wholesale-desktop.png` });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .locator("article")
+      .filter({ has: page.getByText(name, { exact: true }) })
+      .locator("summary")
+      .click();
+    await expect(cell()).toBeVisible();
     await expect(cell()).toContainText("80");
     await cell().scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${output}/wholesale-mobile.png` });
