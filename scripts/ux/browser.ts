@@ -25,7 +25,7 @@ const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://l
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
 await mkdir(directory, { recursive: true });
-const browser = await chromium.launch();
+const browser = await chromium.launch({ channel: process.env.UI_BROWSER_CHANNEL });
 const checks: string[] = [];
 const errors: string[] = [];
 const record = (name: string) => {
