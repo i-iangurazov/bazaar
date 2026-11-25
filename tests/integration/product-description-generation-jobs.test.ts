@@ -551,6 +551,15 @@ describeDb("product description generation jobs", () => {
     const { org, store, product, adminUser } = await seedMeteredFixture();
     const category = "Аксессуары";
     await seedPhoneCaseSpecTemplate(org.id, category);
+    await prisma.attributeDefinition.create({
+      data: {
+        organizationId: org.id,
+        key: "store_field",
+        labelRu: "Поле магазина",
+        labelKg: "Дүкөндүн талаасы",
+        type: AttributeType.TEXT,
+      },
+    });
     await prisma.attributeDefinition.update({
       where: { organizationId_key: { organizationId: org.id, key: "color" } },
       data: { type: AttributeType.SELECT, optionsRu: ["Серебристый.", "Красный"] },
