@@ -198,7 +198,7 @@ const requestPlan = async (input: {
       (async () => {
         const config = resolveTextAiConfig();
         if (!config) throw new Error("AI not configured");
-        const response = await fetchAiResponse(config, request, controller.signal);
+        const response = await fetchAiResponse(config, request, controller.signal, { feature: "baam_analytics" });
         if (!response.ok) throw new Error("provider rejected request");
         const text = await response.text();
         if (text.length > 100000) throw new Error("oversized response");

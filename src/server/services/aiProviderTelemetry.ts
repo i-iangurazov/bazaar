@@ -5,7 +5,10 @@ import { getLogger } from "@/server/logging";
 export type AiProviderFeature =
   | "baam_text"
   | "baam_voice"
+  | "baam_analytics"
+  | "baam_workflow"
   | "marketplace_catalog"
+  | "catalog_category"
   | "catalog_description"
   | "catalog_specs"
   | "studio_analysis"

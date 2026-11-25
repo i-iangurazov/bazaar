@@ -401,7 +401,7 @@ export async function understandBaamIntent(input: {
   let result: z.infer<typeof intentSchema> | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     const started = performance.now();
-    const response = await fetchAiResponse(config, JSON.parse(payload), input.signal);
+    const response = await fetchAiResponse(config, JSON.parse(payload), input.signal, { feature: "baam_workflow" });
     input.record({
       ms: performance.now() - started,
       bytes: Buffer.byteLength(payload),

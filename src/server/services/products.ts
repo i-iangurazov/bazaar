@@ -803,7 +803,7 @@ const callCategoryArrangementAi = async (
       requestBody.reasoning = { effort: "minimal" };
     }
 
-    response = await fetchAiResponse(config, requestBody, controller.signal);
+    response = await fetchAiResponse(config, requestBody, controller.signal, { feature: "catalog_category" });
   } catch {
     return new Map<string, CategoryArrangementDecision>();
   } finally {
