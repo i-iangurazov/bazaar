@@ -142,6 +142,7 @@ try {
       for (const width of [360, 390, 768]) {
         await page.setViewportSize({ width, height: 844 });
         await page.goto(base + "/inventory");
+        await page.waitForURL((url) => url.searchParams.get("list") === "1");
         const launcher = page.locator("[data-baam-launcher]");
         const drawer = page.locator("[data-baam-drawer]");
         try {
@@ -185,6 +186,7 @@ try {
         await context.addCookies([{ name: "NEXT_LOCALE", value: locale, url: base }]);
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto(base + "/inventory");
+        await page.waitForURL((url) => url.searchParams.get("list") === "1");
         const mobile = await openMobileBaam(page);
         assert.equal(
           await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),

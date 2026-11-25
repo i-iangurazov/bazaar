@@ -4,12 +4,14 @@ import type { Page } from "playwright";
 const workspaceUrl = (url: URL) => `${url.pathname}${url.search}${url.hash}`;
 
 export async function openMobileBaam(page: Page) {
+  const launcher = page.locator("[data-baam-launcher]");
+  await launcher.waitFor();
   const source = new URL(page.url());
   const returnTo = workspaceUrl(source);
-  const launcher = page.locator("[data-baam-launcher]");
   await launcher.click();
   await page.waitForURL(
     (url) => url.pathname === "/baam" && url.searchParams.get("returnTo") === returnTo,
+    { timeout: 15_000 },
   );
 
   const storeId = source.searchParams.get("storeId");
