@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   retries: [] as string[],
   queries: [] as Array<{ path: string; enabled: boolean }>,
   mutate: vi.fn(),
+  resetMutation: vi.fn(),
   stores: [{ id: "assigned-store", name: "Assigned store", code: "QA" }],
   catalogStores: [
     {
@@ -50,6 +51,7 @@ vi.mock("@/lib/trpc", async () => {
   const { getPlanCatalogEntry } = await import("@/server/billing/planCatalog");
   const legacyPlan = getPlanCatalogEntry("ENTERPRISE", "2026-10");
   const paths = [
+    "attributes.list",
     "billing.features",
     "bakaiStore.apiSyncNow",
     "bakaiStore.apiSyncReadyNow",
@@ -129,6 +131,7 @@ vi.mock("@/lib/trpc", async () => {
     "oMarket.saveSettings",
     "oMarket.saveStoreMappings",
     "oMarket.settings",
+    "oMarket.startDescriptionGenerationJob",
     "oMarket.syncStockPriceNow",
     "oMarket.testConnection",
     "oMarket.updateProducts",
@@ -138,11 +141,14 @@ vi.mock("@/lib/trpc", async () => {
     "productImageStudio.overview",
     "productImageStudio.retry",
     "productImageStudio.saveToProduct",
+    "products.create",
     "products.descriptionGenerationAvailability",
     "products.descriptionGenerationJob",
     "products.retryDescriptionGenerationJobFailed",
     "products.searchQuick",
+    "products.suggestSku",
     "stores.list",
+    "units.list",
   ];
   const tree: Record<string, Record<string, unknown>> = {};
   for (const path of paths) {
@@ -172,11 +178,13 @@ vi.mock("@/lib/trpc", async () => {
           data = state.emptyStores ? [] : state.catalogStores;
         if (
           [
+            "attributes.list",
             "bazaarApi.apiKeys",
             "productImageStudio.jobs",
             "emailMarketing.history",
             "emailMarketing.logoGallery",
             "emailMarketing.automations",
+            "units.list",
           ].includes(path)
         )
           data = [];
@@ -200,7 +208,12 @@ vi.mock("@/lib/trpc", async () => {
           },
         };
       },
-      useMutation: () => ({ mutate: state.mutate, mutateAsync: state.mutate, isLoading: false }),
+      useMutation: () => ({
+        mutate: state.mutate,
+        mutateAsync: state.mutate,
+        reset: state.resetMutation,
+        isLoading: false,
+      }),
       invalidate: vi.fn(),
       getData: vi.fn(),
     };

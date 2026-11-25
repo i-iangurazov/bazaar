@@ -132,7 +132,9 @@ describe("integration source structure", () => {
     expect(imageStudioPage).toContain("activeJobFromList");
     expect(imageStudioPage).toContain("previewIsWorking");
     expect(imageStudioPage).toContain("generatedPreviewUrl");
-    expect(imageStudioPage).toContain("animate-pulse");
+    expect(imageStudioPage).toContain('role="status"');
+    expect(imageStudioPage).toContain('selectedJob?.processingStage ?? "processing"');
+    expect(imageStudioPage).toContain('t("preview.elapsed", { seconds: elapsedSeconds })');
   });
 
   it("exposes O! Market integration with store scope, masked tokens, and per-product statuses", async () => {
