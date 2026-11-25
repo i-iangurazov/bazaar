@@ -21,9 +21,10 @@ import { productPhotoSearchMaxBytes, type ProductPhotoProgress, type ProductPhot
 const ProductPhotoRegionEditor = dynamic(() => import("./product-photo-region-editor").then((module) => module.ProductPhotoRegionEditor), { ssr: false });
 import { convertFromKgs, normalizeCurrencyCode } from "@/lib/currency";
 import { formatCurrency, formatNumber } from "@/lib/i18nFormat";
+import { cn } from "@/lib/utils";
 
 type Props = { identityKey: string; storeId: string; stores: { id: string; name: string }[]; disabled?: boolean; selectionMode?: "card" | "preview";
-  iconOnly?: boolean; loadingStores?: boolean; storeError?: boolean; onRetryStores?: () => void };
+  iconOnly?: boolean; iconOnMobile?: boolean; loadingStores?: boolean; storeError?: boolean; onRetryStores?: () => void };
 
 function Photo({ src, alt, className, onDimensions }: { src: string | null; alt: string; className: string; onDimensions?: (size: { width: number; height: number }) => void }) {
   const [failed, setFailed] = useState(false);
@@ -65,7 +66,7 @@ export function ProductPhotoSearchButton(props: Props) {
   return <Workspace key={`${props.identityKey}:${props.storeId}`} {...props} />;
 }
 
-function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly, loadingStores, storeError, onRetryStores }: Props) {
+function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly, iconOnMobile, loadingStores, storeError, onRetryStores }: Props) {
   const t = useTranslations("productPhotoSearch");
   const common = useTranslations("common");
   const errors = useTranslations("errors");
@@ -202,10 +203,14 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
 
   return <>
     <Button type="button" variant="secondary" size={iconOnly ? "icon" : "default"}
-      className={iconOnly ? "h-11 w-11 shrink-0 md:h-9 md:w-9" : undefined}
+      className={cn(
+        iconOnly && "h-11 w-11 shrink-0 md:h-9 md:w-9",
+        iconOnMobile && "max-md:h-11 max-md:w-11 max-md:shrink-0 max-md:p-0",
+      )}
       aria-label={t("open")} title={t("open")} aria-haspopup="dialog" aria-expanded={open}
       disabled={disabled || (!stores.length && !loadingStores && !storeError)} onClick={() => setOpen(true)}>
-      <Camera className="h-4 w-4" aria-hidden />{!iconOnly ? t("open") : null}
+      <Camera className="h-4 w-4" aria-hidden />
+      {!iconOnly ? <span className={cn(iconOnMobile && "hidden md:inline")}>{t("open")}</span> : null}
     </Button>
     <Modal open={open} onOpenChange={changeOpen} title={t("title")} subtitle={t("subtitle")}
       className="sm:max-w-4xl sm:data-[state=open]:-translate-y-1/2 sm:data-[state=closed]:-translate-y-1/2" bodyClassName="p-0 sm:p-0" animated mobileSheet>

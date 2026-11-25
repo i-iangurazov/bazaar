@@ -37,12 +37,16 @@ export function FilterSummary({
   total,
   loading = false,
   className,
+  compactMobile = false,
+  mobileScope,
 }: {
   filters?: ActiveListFilter[];
   onReset?: () => void;
   total?: number;
   loading?: boolean;
   className?: string;
+  compactMobile?: boolean;
+  mobileScope?: string;
 }) {
   const t = useTranslations("workspace");
   return (
@@ -50,19 +54,34 @@ export function FilterSummary({
       data-filter-summary
       className={cn(
         "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs",
+        compactMobile && "max-md:flex-nowrap max-md:gap-2",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <div
+        className={cn(
+          "flex min-w-0 flex-wrap items-center gap-1.5",
+          compactMobile && "max-md:flex-nowrap max-md:overflow-x-auto max-md:py-0.5",
+        )}
+      >
+        {mobileScope ? (
+          <span className="max-w-[10rem] shrink-0 truncate rounded-md bg-muted px-2 py-1 font-medium text-foreground md:hidden" title={mobileScope}>
+            {mobileScope}
+          </span>
+        ) : null}
         {filters.map((filter) => (
           <button
             key={filter.key}
             type="button"
             onClick={filter.onRemove}
             aria-label={t("removeFilter", { filter: filter.label })}
-            className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 text-left text-primary hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+            title={compactMobile ? filter.label : undefined}
+            className={cn(
+              "inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 text-left text-primary hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+              compactMobile && "max-md:max-w-[10rem] max-md:shrink-0",
+            )}
           >
-            <span className="break-words">{filter.label}</span>
+            <span className={cn("break-words", compactMobile && "max-md:truncate")}>{filter.label}</span>
             <CloseIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
           </button>
         ))}
@@ -72,13 +91,15 @@ export function FilterSummary({
             variant="ghost"
             size="sm"
             onClick={onReset}
-            className="h-8 px-2 text-xs"
+            className={cn("h-8 px-2 text-xs", compactMobile && "max-md:shrink-0")}
           >
             {t("resetFilters")}
           </Button>
         ) : null}
         {!filters.length ? (
-          <span className="text-muted-foreground">{t("filtersImmediate")}</span>
+          <span className={cn("text-muted-foreground", compactMobile && "max-md:hidden")}>
+            {t("filtersImmediate")}
+          </span>
         ) : null}
       </div>
       <span
@@ -100,6 +121,7 @@ export function ListToolbar({
   total,
   loading,
   className,
+  compactMobile,
 }: {
   children: ReactNode;
   extra?: ReactNode;
@@ -109,30 +131,77 @@ export function ListToolbar({
   total?: number;
   loading?: boolean;
   className?: string;
+  compactMobile?: { search: ReactNode; scope?: string; extraCount: number };
 }) {
   const t = useTranslations("workspace");
+  const tCommon = useTranslations("common");
   const [expanded, setExpanded] = useState(false);
   const id = useId();
+  const fieldsId = `${id}-fields`;
+  const desktopFilterLabel =
+    extraCount > 0 ? t("moreFiltersWithCount", { count: extraCount }) : t("moreFilters");
+  const mobileFilterLabel = compactMobile?.extraCount
+    ? t("moreFiltersWithCount", { count: compactMobile.extraCount })
+    : tCommon("filters");
   return (
     <section
       data-list-toolbar
       aria-busy={loading || undefined}
       aria-label={t("searchAndFilters")}
-      className={cn("mb-4 min-w-0 rounded-lg border border-border bg-card p-3 sm:p-4", className)}
+      className={cn(
+        "mb-4 min-w-0 rounded-lg border border-border bg-card p-3 sm:p-4",
+        compactMobile && "max-md:mb-3 max-md:border-0 max-md:bg-transparent max-md:p-0",
+        className,
+      )}
     >
-      <div className="flex min-w-0 flex-wrap items-end gap-3">
-        {children}
+      <div
+        className={cn(
+          "flex min-w-0 flex-wrap items-end gap-3",
+          compactMobile && "max-md:items-center max-md:gap-2",
+        )}
+      >
+        {compactMobile ? (
+          <>
+            {compactMobile.search}
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              aria-expanded={expanded}
+              aria-controls={extra ? `${fieldsId} ${id}` : fieldsId}
+              aria-label={mobileFilterLabel}
+              onClick={() => setExpanded(!expanded)}
+              className="relative h-11 w-11 md:hidden"
+            >
+              <AdjustIcon className="h-4 w-4" aria-hidden />
+              {compactMobile.extraCount > 0 ? (
+                <span aria-hidden className="absolute right-0.5 top-0.5 min-w-4 rounded bg-primary px-0.5 text-[10px] leading-4 text-primary-foreground">
+                  {compactMobile.extraCount}
+                </span>
+              ) : null}
+            </Button>
+            <div
+              id={fieldsId}
+              className={cn(
+                "md:contents",
+                expanded
+                  ? "max-md:flex max-md:min-w-0 max-md:basis-full max-md:flex-wrap max-md:items-end max-md:gap-3"
+                  : "max-md:hidden",
+              )}
+            >
+              {children}
+            </div>
+          </>
+        ) : children}
         {extra ? (
           <Button
             type="button"
             variant="secondary"
             aria-expanded={expanded}
             aria-controls={id}
-            aria-label={
-              extraCount > 0 ? t("moreFiltersWithCount", { count: extraCount }) : t("moreFilters")
-            }
+            aria-label={desktopFilterLabel}
             onClick={() => setExpanded(!expanded)}
-            className="ml-auto shrink-0"
+            className={cn("ml-auto shrink-0", compactMobile && "max-md:hidden")}
           >
             <AdjustIcon className="h-4 w-4" aria-hidden />
             {t("moreFilters")}
@@ -155,7 +224,9 @@ export function ListToolbar({
         onReset={onReset}
         total={total}
         loading={loading}
-        className="mt-3"
+        className={cn("mt-3", compactMobile && "max-md:mt-2")}
+        compactMobile={Boolean(compactMobile)}
+        mobileScope={compactMobile?.scope}
       />
     </section>
   );

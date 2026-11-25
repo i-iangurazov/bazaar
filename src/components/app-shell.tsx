@@ -178,6 +178,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const normalizedPath = stripLocaleFromPath(pathname);
+  const mobileListHasOwnSearch = normalizedPath === "/products" || normalizedPath === "/sales/orders";
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [customizeNavOpen, setCustomizeNavOpen] = useState(false);
   const [verificationResent, setVerificationResent] = useState(false);
@@ -1131,7 +1132,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               </div>
             ) : null}
             <MobileAppShell
-              search={<>
+              search={mobileListHasOwnSearch ? undefined : <>
                 <div className="min-w-0 flex-1"><ScanInput context="global" placeholder={tHeader("scanPlaceholder")}
                   ariaLabel={tHeader("scanLabel")} supportsTabSubmit enableProductSearch portalDropdown onResolved={handleScanResolved} /></div>
                 <GlobalPhotoSearch key={`${user.organizationId}:${user.email}:${normalizedPath}`} identityKey={`${user.organizationId}:${user.email}`} canViewProducts={hasPermission(access, "viewProducts")} />

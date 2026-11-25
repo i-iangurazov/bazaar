@@ -27,6 +27,7 @@ export const PageHeader = ({
   filters,
   actionClassName,
   filtersClassName,
+  compactMobile = false,
 }: {
   title: string;
   subtitle?: string;
@@ -34,16 +35,37 @@ export const PageHeader = ({
   filters?: ReactNode;
   actionClassName?: string;
   filtersClassName?: string;
+  compactMobile?: boolean;
 }) => (
-  <header data-page-header className="mb-5 min-w-0 space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+  <header
+    data-page-header
+    className={cn("mb-5 min-w-0 space-y-4", compactMobile && "max-md:mb-3")}
+  >
+    <div
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-x-5 gap-y-3",
+        compactMobile && "max-md:gap-0",
+      )}
+    >
       <div className="min-w-0 flex-1 basis-56">
         <PageBreadcrumbs />
-        <h1 className="text-xl font-semibold tracking-tight text-foreground md:text-[22px] md:leading-8">
+        <h1
+          className={cn(
+            "text-xl font-semibold tracking-tight text-foreground md:text-[22px] md:leading-8",
+            compactMobile && "max-md:sr-only",
+          )}
+        >
           {title}
         </h1>
         {subtitle ? (
-          <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">{subtitle}</p>
+          <p
+            className={cn(
+              "mt-1 max-w-3xl text-sm leading-5 text-muted-foreground",
+              compactMobile && "max-md:hidden",
+            )}
+          >
+            {subtitle}
+          </p>
         ) : null}
       </div>
       {action ? <PageHeaderActions className={actionClassName}>{action}</PageHeaderActions> : null}

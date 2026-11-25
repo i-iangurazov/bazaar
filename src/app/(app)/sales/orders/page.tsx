@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import {
   AddIcon,
+  ChevronDownIcon,
   AdjustIcon,
   ArchiveIcon,
   RestoreIcon,
@@ -47,6 +48,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import { scrollChildIntoHorizontalView } from "@/lib/horizontalScrollFocus";
 import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
@@ -66,7 +68,9 @@ const parseOption = <T extends string>(value: string | null, options: readonly T
 
 const SalesOrdersPageContent = () => {
   const t = useTranslations("salesOrders");
+  const isMobile = useIsMobile();
   const tCommon = useTranslations("common");
+  const tWorkspace = useTranslations("workspace");
   const tDocuments = useTranslations("salesDocuments");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
@@ -141,6 +145,9 @@ const SalesOrdersPageContent = () => {
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const showAllStoresFilter = stores.length !== 1;
+  const selectedStore =
+    stores.find((store) => store.id === storeId) ??
+    (storeId === "all" && stores.length === 1 ? stores[0] : undefined);
   const employeesQuery = trpc.salesOrders.employeeOptions.useQuery({
     storeId: storeId === "all" ? undefined : storeId,
   });
@@ -396,40 +403,39 @@ const SalesOrdersPageContent = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 md:space-y-6">
       <PageHeader
+        compactMobile
+        actionClassName="max-md:w-full max-md:flex-nowrap max-md:justify-start"
         title={t("title")}
         subtitle={t("subtitle")}
         action={
           <>
             {canFinalize ? (
-              <Link href="/sales/orders/metrics" className="w-full sm:w-auto">
-                <Button variant="secondary" className="w-full sm:w-auto">
+              <Button asChild variant="secondary" className="w-full sm:w-auto max-md:h-11 max-md:w-11 max-md:shrink-0 max-md:p-0">
+                <Link href="/sales/orders/metrics" aria-label={t("metricsTitle")} title={t("metricsTitle")}>
                   <ViewIcon className="h-4 w-4" aria-hidden />
-                  {t("metricsTitle")}
-                </Button>
-              </Link>
-            ) : null}
-            <Link
-              href={`/sales/orders/new?${new URLSearchParams({ returnTo: listReturnUrl, ...(storeId !== "all" ? { storeId } : {}) })}`}
-              className="w-full sm:w-auto"
-            >
-              <Button className="w-full sm:w-auto" data-tour="sales-orders-create">
-                <AddIcon className="h-4 w-4" aria-hidden />
-                {t("new")}
+                  <span className="hidden md:inline">{t("metricsTitle")}</span>
+                </Link>
               </Button>
-            </Link>
+            ) : null}
+            <Button asChild className="w-full sm:w-auto max-md:h-11 max-md:min-w-0 max-md:flex-1" data-tour="sales-orders-create">
+              <Link href={`/sales/orders/new?${new URLSearchParams({ returnTo: listReturnUrl, ...(storeId !== "all" ? { storeId } : {}) })}`}>
+                <AddIcon className="h-4 w-4" aria-hidden />
+                <span className="truncate">{t("new")}</span>
+              </Link>
+            </Button>
           </>
         }
       />
 
-      <Card className="bazaar-admin-surface">
-        <CardHeader className="border-b border-border bg-muted/20">
+      <Card className="bazaar-admin-surface max-md:border-0 max-md:bg-transparent">
+        <CardHeader className="hidden border-b border-border bg-muted/20 md:block">
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 max-md:space-y-2 max-md:p-0">
           <div
-            className="grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/35 p-1"
+            className="grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/35 p-1 max-md:gap-0.5"
             role="tablist"
             aria-label={t("lifecycleViewLabel")}
             onKeyDown={(event) => {
@@ -486,7 +492,7 @@ const SalesOrdersPageContent = () => {
               {t("archive.view")}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground max-md:sr-only">
             {archiveView
               ? t("archive.hint")
               : lifecycleView === "ACTIVE"
@@ -623,13 +629,23 @@ const SalesOrdersPageContent = () => {
                 </FilterField>
               </div>
             }
+            compactMobile={{
+              scope: selectedStore?.name ?? (storeId === "all" ? tCommon("allStores") : t("store")),
+              extraCount:
+                activeExtraFilterCount +
+                Number(employeeId !== "all") +
+                Number(Boolean(createdFromDay || createdToDay)),
+              search: (
+                <ListSearch
+                  className="max-md:basis-0 max-md:[&>label]:sr-only"
+                  value={search}
+                  onChange={(value) => setFilter("search", value)}
+                  label={tCommon("search")}
+                  placeholder={isMobile ? tCommon("search") : t("searchPlaceholder")}
+                />
+              ),
+            }}
           >
-            <ListSearch
-              value={search}
-              onChange={(value) => setFilter("search", value)}
-              label={tCommon("search")}
-              placeholder={t("searchPlaceholder")}
-            />
             <FilterField id="sales-order-store" label={t("store")}>
               <Select
                 value={storeId === "all" && stores.length === 1 ? stores[0].id : storeId}
@@ -675,7 +691,7 @@ const SalesOrdersPageContent = () => {
               <legend className="mb-1.5 block text-xs font-medium text-muted-foreground">
                 {t("createdPeriod")}
               </legend>
-              <div className="grid min-w-0 grid-cols-2 gap-2">
+              <div className="grid min-w-0 grid-cols-2 gap-2 max-[380px]:grid-cols-1">
                 <div className="min-w-0">
                   <label
                     htmlFor="sales-order-created-from"
@@ -730,6 +746,7 @@ const SalesOrdersPageContent = () => {
             defaultPageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
+            mobileItemsClassName="space-y-2"
             renderDesktop={(visibleItems) => (
               <div className="bazaar-admin-table-shell">
                 <div
@@ -865,92 +882,85 @@ const SalesOrdersPageContent = () => {
               </div>
             )}
             renderMobile={(order) => (
-              <Card className="bazaar-admin-mobile-card">
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-2">
+              <Card className="p-2.5">
+                <div className="flex min-w-0 items-start gap-2">
+                  <div className="min-w-0 flex-1">
                     <Link
-                      className="text-sm font-semibold text-foreground"
+                      className="inline-block max-w-full break-words text-sm font-semibold text-foreground [overflow-wrap:anywhere]"
                       href={orderHref(order.id)}
                     >
                       {order.number}
                     </Link>
-                    <Badge variant={statusVariant(order.status)}>
+                    <p className="mt-0.5 break-words text-xs font-medium text-foreground [overflow-wrap:anywhere]">
+                      {order.customerName || tCommon("notAvailable")}
+                    </p>
+                  </div>
+                  <div className="min-w-0 max-w-[44%] text-right">
+                    <p className="break-words text-sm font-semibold tabular-nums text-foreground [overflow-wrap:anywhere]">
+                      {formatKgsMoney(
+                        order.totalKgs,
+                        locale,
+                        currencySourceWithFallback(order, order.store),
+                      )}
+                    </p>
+                    <Badge
+                      className="mt-0.5 max-w-full whitespace-normal text-left"
+                      variant={statusVariant(order.status)}
+                    >
                       {getCustomerOrderStatusLabel(t, order.status)}
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <RowActions
+                    className="-mr-1 -mt-1 shrink-0"
+                    maxInline={0}
+                    moreLabel={t("orderActions", { number: order.number })}
+                    moreTriggerRef={(node) => {
+                      const current = actionTriggerRefs.current.get(order.id) ?? [];
+                      if (node) {
+                        if (!current.includes(node)) {
+                          actionTriggerRefs.current.set(order.id, [...current, node]);
+                        }
+                      } else {
+                        actionTriggerRefs.current.set(
+                          order.id,
+                          current.filter((item) => item !== node),
+                        );
+                      }
+                    }}
+                    actions={orderActions(order)}
+                  />
+                </div>
+                <p className="mt-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                  {order.store.name} · {formatDate(order.createdAt, locale)}
+                </p>
+                <details className="group">
+                  <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1 text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+                    {tWorkspace("viewDetails")}
+                    <ChevronDownIcon className="h-3.5 w-3.5 group-open:rotate-180" aria-hidden />
+                  </summary>
+                  <dl className="grid min-w-0 grid-cols-2 gap-2 border-t border-border/70 pt-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                     <div>
-                      <p>{t("customer")}</p>
-                      <p className="font-medium text-foreground">
-                        {order.customerName || tCommon("notAvailable")}
-                      </p>
+                      <dt>{t("employee")}</dt>
+                      <dd className="text-foreground">{employeeLabel(order)}</dd>
                     </div>
                     <div>
-                      <p>{t("store")}</p>
-                      <p className="font-medium text-foreground">{order.store.name}</p>
-                    </div>
-                    <div>
-                      <p>{t("employee")}</p>
-                      <p className="font-medium text-foreground">{employeeLabel(order)}</p>
+                      <dt>{t("sourceLabel")}</dt>
+                      <dd className="text-foreground">{sourceLabel(order.source)}</dd>
                     </div>
                     <div className="col-span-2">
-                      <p>{t("customerAddress")}</p>
-                      <p className="font-medium text-foreground">
-                        {order.customerAddress || tCommon("notAvailable")}
-                      </p>
+                      <dt>{t("customerAddress")}</dt>
+                      <dd className="text-foreground">{order.customerAddress || tCommon("notAvailable")}</dd>
                     </div>
                     <div>
-                      <p>{t("sourceLabel")}</p>
-                      <p className="font-medium text-foreground">{sourceLabel(order.source)}</p>
+                      <dt>{t("trackingNumber")}</dt>
+                      <dd className="text-foreground">{order.trackingNumber || tCommon("notAvailable")}</dd>
                     </div>
                     <div>
-                      <p>{t("trackingNumber")}</p>
-                      <p className="font-medium text-foreground">
-                        {order.trackingNumber || tCommon("notAvailable")}
-                      </p>
+                      <dt>{t("payment.method")}</dt>
+                      <dd className="text-foreground">{renderReceivedPayments(order)}</dd>
                     </div>
-                    <div>
-                      <p>{t("total")}</p>
-                      <p className="font-medium text-foreground">
-                        {formatKgsMoney(
-                          order.totalKgs,
-                          locale,
-                          currencySourceWithFallback(order, order.store),
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <p>{t("payment.method")}</p>
-                      <div className="font-medium text-foreground">{renderReceivedPayments(order)}</div>
-                    </div>
-                    <div>
-                      <p>{t("created")}</p>
-                      <p className="font-medium text-foreground">
-                        {formatDate(order.createdAt, locale)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end">
-                    <RowActions
-                      maxInline={0}
-                      moreLabel={t("orderActions", { number: order.number })}
-                      moreTriggerRef={(node) => {
-                        const current = actionTriggerRefs.current.get(order.id) ?? [];
-                        if (node) {
-                          if (!current.includes(node)) {
-                            actionTriggerRefs.current.set(order.id, [...current, node]);
-                          }
-                        } else {
-                          actionTriggerRefs.current.set(
-                            order.id,
-                            current.filter((item) => item !== node),
-                          );
-                        }
-                      }}
-                      actions={orderActions(order)}
-                    />
-                  </div>
-                </CardContent>
+                  </dl>
+                </details>
               </Card>
             )}
             paginationKey="sales-orders"

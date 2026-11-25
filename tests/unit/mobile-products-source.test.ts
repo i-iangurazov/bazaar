@@ -12,9 +12,11 @@ describe("mobile products source", () => {
 
     expect(source).toContain("<ListToolbar");
     expect(source).toContain('id="products-category"');
-    expect(source).toContain('mobileItemsClassName="grid grid-cols-1 gap-3"');
-    expect(source).toContain("relative h-24 w-24");
-    expect(source).toContain("Phones always use");
+    const mobile = source.slice(source.indexOf("renderMobile={(product) =>"));
+    expect(source).toContain('mobileItemsClassName="grid grid-cols-1 gap-2"');
+    expect(mobile).toContain("relative size-12");
+    expect(mobile).toContain('t("selectProduct", { name: product.name })');
+    expect(mobile).toContain('<details className="group">');
     expect(source).toContain('action.key === "edit" ? { ...action, openInNewTab: false } : action');
     expect(source).toContain('<SelectItem value="missingImage">');
     expect(source).toContain('<SelectItem value="outOfStock">');

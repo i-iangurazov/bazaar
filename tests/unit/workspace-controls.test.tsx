@@ -148,6 +148,57 @@ describe("workspace controls", () => {
     fireEvent.click(screen.getByRole("button", { name: en.workspace.resetFilters }));
     expect(reset).toHaveBeenCalledOnce();
   });
+  it("keeps one contextual search and the active scope while compact filters are toggled", () => {
+    const remove = vi.fn();
+    const changeSearch = vi.fn();
+    render(
+      <ListToolbar
+        compactMobile={{
+          search: <Input type="search" aria-label="Search orders" onChange={changeSearch} />,
+          scope: "Central",
+          extraCount: 1,
+        }}
+        filters={[{ key: "employee", label: "Dana", onRemove: remove }]}
+        extra={<Input aria-label="Order status" />}
+        total={2}
+      >
+        <FilterField id="compact-order-employee" label="Employee">
+          <Input id="compact-order-employee" />
+        </FilterField>
+      </ListToolbar>,
+      { wrapper },
+    );
+
+    const search = screen.getByRole("searchbox", { name: "Search orders" });
+    const toggle = screen.getByRole("button", {
+      name: en.workspace.moreFiltersWithCount.replace("{count}", "1"),
+    });
+    const [fieldsId, extraId] = toggle.getAttribute("aria-controls")!.split(" ");
+    const fields = document.getElementById(fieldsId)!;
+    const advanced = document.getElementById(extraId)!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(fields.classList.contains("max-md:hidden")).toBe(true);
+    expect(advanced.hidden).toBe(true);
+    expect(toggle.compareDocumentPosition(fields) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Central")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: en.workspace.removeFilter.replace("{filter}", "Dana") }),
+    );
+    expect(remove).toHaveBeenCalledOnce();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(fields.classList.contains("max-md:hidden")).toBe(false);
+    expect(advanced.hidden).toBe(false);
+    expect(screen.getByLabelText("Employee")).toBeTruthy();
+    expect(screen.getByRole("searchbox", { name: "Search orders" })).toBe(search);
+    fireEvent.change(search, { target: { value: "10024" } });
+    expect(changeSearch).toHaveBeenCalledOnce();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(advanced.hidden).toBe(true);
+  });
   it("keeps ordinary edit navigation in the current tab while honoring explicit external views", () => {
     const Icon = () => <svg aria-hidden />;
     render(

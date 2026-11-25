@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Select,
   SelectContent,
@@ -42,6 +43,7 @@ import { activityTranslationValues } from "@/lib/i18n/activityValues";
 import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
 import { addBusinessDays, businessDateKey, businessDateOnlyToUtc } from "@/lib/timezone";
 import { trpc } from "@/lib/trpc";
+import { useDashboardSaleStart } from "@/lib/useDashboardSaleStart";
 import { useSse } from "@/lib/useSse";
 import { cn } from "@/lib/utils";
 
@@ -133,6 +135,18 @@ export default function DashboardPage() {
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     return url.pathname + "?" + url.searchParams.toString();
   };
+  const saleHref = scopedHref("/pos");
+  const saleStart = useDashboardSaleStart({
+    storeId,
+    fallbackHref: saleHref,
+    scopeKey: JSON.stringify([
+      session?.user?.organizationId,
+      session?.user?.id,
+      session?.user?.role,
+      requestedStoreId,
+      storeId,
+    ]),
+  });
   const reportHref = (from = today, to = today) =>
     scopedHref("/reports/analytics", { dateFrom: from, dateTo: to });
   const renderTrendBadge = (delta: number | null | undefined) => {
@@ -283,7 +297,7 @@ export default function DashboardPage() {
     {
       key: "sale",
       label: t("startSale"),
-      href: scopedHref("/pos"),
+      href: saleHref,
       icon: PosIcon,
       allowed: hasPermission(access, "usePos"),
     },
@@ -330,9 +344,10 @@ export default function DashboardPage() {
           <div className="min-w-0 flex-1 sm:max-w-72">
             <Select
               value={storeId}
-              onValueChange={(id) =>
-                router.replace(`/dashboard?storeId=${encodeURIComponent(id)}`, { scroll: false })
-              }
+              onValueChange={(id) => {
+                saleStart.cancel();
+                router.replace(`/dashboard?storeId=${encodeURIComponent(id)}`, { scroll: false });
+              }}
             >
               <SelectTrigger id="dashboard-store" data-tour="dashboard-store-filter">
                 <SelectValue />
@@ -395,8 +410,16 @@ export default function DashboardPage() {
             variant={index === 0 ? "primary" : "secondary"}
             className="h-auto min-h-10 py-2"
           >
-            <Link href={action.href}>
-              <action.icon className="h-4 w-4" aria-hidden />
+            <Link
+              href={action.href}
+              onNavigate={action.key === "sale" ? saleStart.onNavigate : undefined}
+              aria-busy={action.key === "sale" && saleStart.pending ? true : undefined}
+            >
+              {action.key === "sale" && saleStart.pending ? (
+                <Spinner className="text-current" />
+              ) : (
+                <action.icon className="h-4 w-4" aria-hidden />
+              )}
               {action.label}
             </Link>
           </Button>
