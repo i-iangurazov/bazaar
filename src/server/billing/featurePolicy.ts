@@ -48,12 +48,11 @@ export function requiredPlanFeature(path: string): PlanFeature | null {
       ].includes(operation)
     )
       return "bulkAiContent";
-    // The category operation also serves single-cell editing; its service gates
-    // multiple IDs so an ordinary category edit remains part of the base plan.
+    // The product editor uses duplicateDiagnostics while saving a single item.
+    // Catalog-wide duplicate review is a separate bulk operation.
     if (
       [
         "duplicateReview",
-        "duplicateDiagnostics",
         "bulkGenerateBarcodes",
         "arrangeClothingCategories",
       ].includes(operation)

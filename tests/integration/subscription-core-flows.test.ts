@@ -13,6 +13,7 @@ import {
   listImportBatches,
   rollbackImportBatch,
 } from "@/server/services/imports";
+import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 async function seedModern(plan: "STARTER" | "BUSINESS" = "STARTER") {
@@ -58,6 +59,38 @@ function upload(
 
 (shouldRunDbTests ? describe : describe.skip)("new catalog core flows on PostgreSQL", () => {
   beforeEach(resetDatabase);
+  it("lets a paid Starter run the product editor's duplicate check and save after trial expiry", async () => {
+    const f = await seedModern();
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: {
+        subscriptionBillingMode: "SELF_SERVE",
+        trialEndsAt: new Date(Date.now() - 86_400_000),
+      },
+    });
+    const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+    const existing = await caller.products.duplicateDiagnostics({ name: f.product.name });
+    expect(existing.likelyNameMatches).toContainEqual(expect.objectContaining({ id: f.product.id }));
+
+    const name = "New test garment";
+    const diagnostics = await caller.products.duplicateDiagnostics({ name });
+    expect(diagnostics.likelyNameMatches).toEqual([]);
+    const product = await caller.products.create({
+      name,
+      sku: "SINGLE-STARTER",
+      storeId: f.store.id,
+      baseUnitId: f.baseUnit.id,
+      idempotencyKey: randomUUID(),
+    });
+    await expect(prisma.product.findUnique({ where: { id: product.id } })).resolves.toMatchObject({
+      name,
+      organizationId: f.org.id,
+    });
+    await expect(caller.products.duplicateReview({ page: 1 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+
   it("imports one file in resumable chunks and consumes one allowance only after all chunks", async () => {
     const f = await seedModern();
     const session = await start(f, [1, 1]);
