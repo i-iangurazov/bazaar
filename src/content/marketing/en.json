@@ -303,7 +303,7 @@
       },
       {
         "question": "Are all integrations connected when I sign up?",
-        "answer": "Each channel is connected and configured separately. Data exchange capabilities depend on the provider and your plan. Fiscalization is not currently connected in BAZAAR: POS tracks sales and stock. The system does not submit fiscal receipts to Kyrgyzstan’s State Tax Service."
+        "answer": "Each channel is connected and configured separately. Data exchange depends on the provider and your plan. POS hardware and fiscal services also require compatible equipment and their own setup."
       },
       {
         "question": "What can BAAM help with?",
