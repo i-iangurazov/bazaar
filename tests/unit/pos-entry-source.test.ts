@@ -35,6 +35,53 @@ describe("pos entry navigation", () => {
     expect(source).toMatch(/!openShift\s*\?\s*<Button disabled>/);
   });
 
+  it("links back to shifts below the register-creation action on mobile", async () => {
+    for (const file of ["src/app/(app)/pos/page.tsx", "src/app/(app)/pos/registers/page.tsx"]) {
+      const source = await readSource(file);
+      expect(source).toMatch(/t\("registers\.create"\)[\s\S]+href="\/pos\/shifts">\{t\("shifts\.returnToShifts"\)\}/);
+    }
+  });
+
+  it("uses real document values and saves a mobile comment from the first draft and on corrections", async () => {
+    const source = await readSource("src/app/(app)/pos/sell/page.tsx");
+    expect(source).toContain("const saleDocument = isCompletedSaleEdit ? journalSelectedSale : sale;");
+    expect(source).toContain("value={saleDocument?.number ?? tCommon(\"notAvailable\")}");
+    expect(source).toContain("saleStatusLabel(saleDocument.status)");
+    const createDraft = source.slice(source.indexOf("const ensureSaleDraftId"), source.indexOf("const handleAddLine"));
+    expect(createDraft).toContain("notes: isPhoneScreen === true ? mobileComment.trim() || undefined : undefined");
+    const editReceipt = source.slice(source.indexOf("await editCompletedSaleMutation.mutateAsync"));
+    expect(editReceipt).toContain("notes: mobileComment.trim() || null");
+    expect(editReceipt).not.toContain("notes: mobileComment.trim() || journalSelectedSale.notes");
+  });
+
+  it("labels the ordinary mobile receipt and separates adjacent visible sale sections once", async () => {
+    const [source, ru, kg, en] = await Promise.all([
+      readSource("src/app/(app)/pos/sell/page.tsx"),
+      readSource("messages/ru.json"),
+      readSource("messages/kg.json"),
+      readSource("messages/en.json"),
+    ]);
+    const saleForm = source.slice(source.indexOf("const renderRegisterPanel"), source.indexOf("const renderSaleScreen"));
+    expect(saleForm).toContain('isCompletedSaleEdit ? checkoutPanelTitle : t("sell.mobile.order")');
+    expect([ru, kg, en].map((messages) => JSON.parse(messages).pos.sell.mobile.order)).toEqual([
+      "Данные чека", "Чектин маалыматы", "Receipt details",
+    ]);
+    expect(saleForm).not.toContain("border-y");
+    const tabs = saleForm.slice(saleForm.indexOf("const renderDocumentTab"));
+    expect(tabs.match(/className="divide-y divide-border/g)).toHaveLength(2);
+    expect(saleForm).toContain('{saleOptions ? <div className="bg-card px-3">{saleOptions}</div> : null}');
+  });
+
+  it("keeps completed receipt corrections available without a current shift and respects loyalty restrictions", async () => {
+    const source = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const service = await readSource("src/server/services/pos.ts");
+    const discount = source.slice(source.indexOf("const canEditDocumentDiscount"), source.indexOf("const handleMobileDone"));
+    expect(discount).toMatch(/isCompletedSaleEdit\s*\?[^\n]+loyalty\.status === "RELEASED"[^\n]*\s*:\s*hasOpenShift/);
+    expect(discount).toContain("saleId && hasCartLines && canEditDocumentDiscount");
+    expect(service).toContain('if (loyaltyApplication && loyaltyApplication.status !== "RELEASED")');
+    expect(source).toContain("onEdit={activeStoreId || isCompletedSaleEdit ? () => setCustomerSelectorOpen(true)");
+  });
+
   it("keeps shift and receipt blocker state fresh across POS navigation", async () => {
     const entrySource = await readSource("src/app/(app)/pos/page.tsx");
     const sellSource = await readSource("src/app/(app)/pos/sell/page.tsx");

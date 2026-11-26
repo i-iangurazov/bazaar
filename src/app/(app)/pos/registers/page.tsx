@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -334,6 +335,9 @@ const PosRegistersPage = () => {
                 {t("registers.create")}
               </Button>
             </div>
+            <Button variant="secondary" className="min-h-11 w-full md:hidden" asChild>
+              <Link href="/pos/shifts">{t("shifts.returnToShifts")}</Link>
+            </Button>
           </CardContent>
         </Card>
       ) : null}

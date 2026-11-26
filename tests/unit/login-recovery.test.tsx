@@ -31,7 +31,7 @@ vi.mock("@/lib/trpc", () => ({ trpc: { publicAuth: { resendVerification: {
 } } } }));
 import { LoginForm } from "@/components/login-form";
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); state.next = null; });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); state.next = null; });
 beforeEach(() => {
   state.locale = "ru";
   state.localizeValidation = false;
@@ -45,6 +45,35 @@ const submitCredentials = () => {
 };
 
 describe("login verification recovery", () => {
+  it.each(["email", "phone"])("offers the next keyboard key for mobile %s login", method => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    render(<LoginForm />);
+    if (method === "phone") fireEvent.click(screen.getByRole("button", { name: "auth.loginByPhone" }));
+    const identity = screen.getByLabelText(method === "phone" ? "auth.loginPhone" : "auth.email");
+    const password = screen.getByLabelText("auth.password");
+    Object.defineProperty(password, "getClientRects", { value: () => ({ length: 1 }) });
+    expect(identity.getAttribute("enterkeyhint")).toBe("next");
+    expect(password.getAttribute("enterkeyhint")).toBe("done");
+    identity.focus();
+    expect(fireEvent.keyDown(identity, { key: "Enter", isComposing: true })).toBe(true);
+    expect(document.activeElement).toBe(identity);
+    expect(fireEvent.keyDown(identity, { key: "Enter" })).toBe(false);
+    expect(document.activeElement).toBe(password);
+    expect(fireEvent.keyDown(password, { key: "Enter" })).toBe(true);
+    expect(state.signIn).not.toHaveBeenCalled();
+  });
+
+  it("preserves the browser's desktop Enter handling on the identifier", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    render(<LoginForm />);
+    const identity = screen.getByLabelText("auth.email");
+    const password = screen.getByLabelText("auth.password");
+    Object.defineProperty(password, "getClientRects", { value: () => ({ length: 1 }) });
+    identity.focus();
+    expect(fireEvent.keyDown(identity, { key: "Enter" })).toBe(true);
+    expect(document.activeElement).toBe(identity);
+  });
+
   it("translates existing field errors when the interface locale changes without clearing input", async () => {
     state.localizeValidation = true;
     const view = render(<LoginForm />);

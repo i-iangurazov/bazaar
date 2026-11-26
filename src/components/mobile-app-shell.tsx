@@ -1,7 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import React, { useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import React, { useId, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
@@ -9,7 +9,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import { SignOutButton } from "@/components/signout-button";
 import { Button } from "@/components/ui/button";
-import { CloseIcon, MoreIcon, UserIcon } from "@/components/icons";
+import { ChevronDownIcon, CloseIcon, MoreIcon, UserIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
 export type MobileShellNavItem = {
@@ -21,12 +21,19 @@ export type MobileShellNavItem = {
   description?: string;
 };
 
+export type MobileShellNavSection = Pick<MobileShellNavItem, "key" | "label" | "icon" | "active"> & {
+  children: MobileShellNavEntry[];
+};
+
+export type MobileShellNavEntry = MobileShellNavItem | MobileShellNavSection;
+
 type MobileAppShellProps = {
   pageTitle: string;
   storeName?: string | null;
   statusLabel?: string | null;
   bottomItems: MobileShellNavItem[];
-  moreItems: MobileShellNavItem[];
+  moreSections: MobileShellNavSection[];
+  profileItem?: MobileShellNavItem;
   moreLabel: string;
   profileLabel?: string;
   closeLabel?: string;
@@ -57,7 +64,8 @@ type MobileBottomNavProps = {
 
 type MobileMoreMenuProps = {
   open: boolean;
-  items: MobileShellNavItem[];
+  sections: MobileShellNavSection[];
+  profileItem?: MobileShellNavItem;
   title: string;
   closeLabel: string;
   onClose: () => void;
@@ -92,7 +100,8 @@ export const MobileAppShell = ({
   storeName,
   statusLabel,
   bottomItems,
-  moreItems,
+  moreSections,
+  profileItem,
   moreLabel,
   profileLabel = "Profile",
   closeLabel = "Close",
@@ -102,7 +111,8 @@ export const MobileAppShell = ({
   search,
 }: MobileAppShellProps) => {
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreActive = useMemo(() => moreItems.some((item) => item.active), [moreItems]);
+  const moreActive = !bottomItems.some((item) => item.active) &&
+    Boolean(profileItem?.active || moreSections.some((section) => section.active));
 
   return (
     <>
@@ -127,7 +137,8 @@ export const MobileAppShell = ({
       />
       <MobileMoreMenu
         open={moreOpen}
-        items={moreItems}
+        sections={moreSections}
+        profileItem={profileItem}
         title={moreLabel}
         closeLabel={closeLabel}
         onClose={() => setMoreOpen(false)}
@@ -190,6 +201,7 @@ export const MobileTopBar = ({
           className="bazaar-mobile-header-button"
           onClick={onOpenMore}
           aria-label={moreLabel}
+          aria-haspopup="dialog"
         >
           <MoreIcon className="h-4 w-4" aria-hidden />
         </Button>
@@ -228,6 +240,7 @@ export const MobileBottomNav = ({
             : "text-muted-foreground hover:bg-secondary hover:text-foreground",
         )}
         onClick={onOpenMore}
+        aria-haspopup="dialog"
         aria-current={moreActive ? "page" : undefined}
       >
         <MoreIcon className="h-5 w-5" aria-hidden />
@@ -254,9 +267,88 @@ const MobileBottomNavLink = ({ item }: { item: MobileShellNavItem }) => (
   </Link>
 );
 
+const moreRowClass =
+  "flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-start text-sm text-foreground no-underline transition hover:bg-secondary hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+
+const MobileMoreLink = ({
+  item,
+  onNavigate,
+}: {
+  item: MobileShellNavItem;
+  onNavigate: () => void;
+}) => (
+  <Link
+    href={item.href}
+    prefetch={false}
+    onClick={onNavigate}
+    aria-current={item.active ? "page" : undefined}
+    className={cn(moreRowClass, item.active && "bg-primary/10 font-medium text-primary")}
+  >
+    <item.icon className="h-4 w-4 shrink-0" aria-hidden />
+    <span className="min-w-0 break-words">
+      {item.label}
+      {item.description ? (
+        <span className="block text-xs text-muted-foreground">{item.description}</span>
+      ) : null}
+    </span>
+  </Link>
+);
+
+const MobileMoreNavigation = ({
+  items,
+  onNavigate,
+}: {
+  items: MobileShellNavEntry[];
+  onNavigate: () => void;
+}) => {
+  const id = useId();
+  const [expandedKey, setExpandedKey] = useState(
+    () => items.find((item) => "children" in item && item.active)?.key,
+  );
+
+  return (
+    <ul className="grid gap-1">
+      {items.map((item) => {
+        if (!("children" in item)) {
+          return <li key={item.key}><MobileMoreLink item={item} onNavigate={onNavigate} /></li>;
+        }
+
+        const expanded = expandedKey === item.key;
+        const contentId = `${id}-${item.key}`;
+        return (
+          <li key={item.key}>
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={contentId}
+              onClick={() => setExpandedKey(expanded ? undefined : item.key)}
+              className={cn(
+                moreRowClass,
+                "font-medium",
+                item.active && "bg-primary/10 text-primary",
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1 break-words">{item.label}</span>
+              <ChevronDownIcon
+                className={cn("h-4 w-4 shrink-0 transition-transform", expanded && "rotate-180")}
+                aria-hidden
+              />
+            </button>
+            <div id={contentId} hidden={!expanded} className="ml-5 mt-1 border-l border-border pl-2">
+              {expanded ? <MobileMoreNavigation items={item.children} onNavigate={onNavigate} /> : null}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
 export const MobileMoreMenu = ({
   open,
-  items,
+  sections,
+  profileItem,
   title,
   closeLabel,
   onClose,
@@ -276,7 +368,7 @@ export const MobileMoreMenu = ({
         <DialogPrimitive.Overlay className="fixed inset-0 z-[1000] bg-black/30 data-[state=closed]:opacity-0 data-[state=open]:opacity-100 md:hidden" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-[1001] max-h-[85dvh] overflow-y-auto rounded-t-xl border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden"
+          className="fixed inset-x-0 bottom-0 z-[1001] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-xl border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden"
           onOpenAutoFocus={() => {
             previouslyFocusedRef.current =
               document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -292,7 +384,7 @@ export const MobileMoreMenu = ({
             });
           }}
         >
-          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
             <DialogPrimitive.Title className="text-lg font-semibold text-foreground">
               {title}
             </DialogPrimitive.Title>
@@ -303,33 +395,20 @@ export const MobileMoreMenu = ({
             </DialogPrimitive.Close>
           </div>
 
-          <div className="grid gap-2 px-4 py-4">
-            {items.map((item) => (
-              <Link
-                key={item.key}
-                href={item.href}
-                prefetch={false}
-                onClick={onClose}
-                className={cn(
-                  "flex min-h-11 items-center gap-3 rounded-md border border-transparent bg-transparent px-3 py-2 text-sm font-normal text-foreground no-underline transition hover:bg-secondary hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  item.active && "bg-primary/10 text-primary",
-                )}
-              >
-                <item.icon className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="min-w-0">
-                  <span className="block truncate">{item.label}</span>
-                  {item.description ? (
-                    <span className="block truncate text-xs font-normal text-muted-foreground">
-                      {item.description}
-                    </span>
-                  ) : null}
-                </span>
-              </Link>
-            ))}
-          </div>
+          <nav aria-label={title} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+            <MobileMoreNavigation items={sections} onNavigate={onClose} />
+            {profileItem ? (
+              <div className="mt-2 border-t border-border pt-2">
+                <MobileMoreLink item={profileItem} onNavigate={onClose} />
+              </div>
+            ) : null}
+          </nav>
 
-          <div className="space-y-2 border-t border-border/70 bg-muted/25 px-4 py-4">
-            <div className="flex min-h-11 items-center justify-center px-3 py-2">
+          <div
+            className="space-y-2 border-t border-border/70 bg-muted/25 px-4 pt-2"
+            style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="flex min-h-11 items-center justify-center">
               <LanguageSwitcher
                 compact
                 className="border-0 bg-transparent p-0 shadow-none"
@@ -342,7 +421,6 @@ export const MobileMoreMenu = ({
             />
             <SignOutButton className="min-h-11 rounded-md border-border bg-card shadow-none" />
           </div>
-          <div style={{ height: "max(1rem, env(safe-area-inset-bottom))" }} />
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

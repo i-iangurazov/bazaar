@@ -13,7 +13,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
   type SetStateAction,
 } from "react";
 import Link from "next/link";
@@ -35,7 +34,6 @@ import {
   BackIcon,
   AddIcon,
   ChevronDownIcon,
-  ChevronRightIcon,
   CloseIcon,
   DeleteIcon,
   DownloadIcon,
@@ -54,6 +52,7 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { SearchInput } from "@/components/search-input";
 import { ScanInput } from "@/components/ScanInput";
 import { ProductPhotoSearchButton } from "@/components/products/product-photo-search";
+import { MobileSaleProperty } from "@/components/pos/mobile-sale-property";
 import { PosPaymentMethodControl } from "@/components/pos/payment-method-control";
 import { PosReturnQuantityInput } from "@/components/pos/return-quantity-input";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -98,6 +97,7 @@ import {
   resolveCurrency,
 } from "@/lib/currencyDisplay";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { isPosSaleChannelEnabled } from "@/lib/featureFlags";
 import {
   resolveMobilePosCompletionAttempt,
   type MobilePosCompletionAttempt,
@@ -2107,6 +2107,7 @@ const PosSellPage = () => {
             selectedCustomer && !selectedCustomer.id ? selectedCustomer.phone : undefined,
           customerAddress:
             selectedCustomer && !selectedCustomer.id ? selectedCustomer.address : undefined,
+          notes: isPhoneScreen === true ? mobileComment.trim() || undefined : undefined,
         })
         .then((draft) => { saleChannel.adopt(draft.id); return { id: draft.id }; })
         .finally(() => {
@@ -2120,7 +2121,7 @@ const PosSellPage = () => {
     }
     setSaleId(draft.id);
     return draft.id;
-  }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer, saleChannel, priceMode]);
+  }, [activeDraft?.id, createDraftMutation, isPhoneScreen, mobileComment, priceMode, registerId, saleId, saleChannel, selectedCustomer]);
 
   const handleAddLine = useCallback(
     async (
@@ -3093,7 +3094,7 @@ const PosSellPage = () => {
           customerEmail: selectedCustomer?.email ?? null,
           customerPhone: selectedCustomer?.phone ?? null,
           customerAddress: selectedCustomer?.address ?? null,
-          notes: mobileComment.trim() || journalSelectedSale.notes || null,
+          notes: mobileComment.trim() || null,
           reason: t("sell.editReceipt"),
           discountKgs: currentDiscountKgs,
           payments: paymentPayload.payments,
@@ -4134,10 +4135,11 @@ const PosSellPage = () => {
     }
   };
 
-  const saleOptions = !isCompletedSaleEdit ? (
-    <div className="flex min-h-11 items-center justify-between gap-2" data-testid="pos-sale-options">
+  const showSaleLoyalty = Boolean(loyaltyStatus.data?.enabled && hasCartLines);
+  const saleOptions = !isCompletedSaleEdit && (isPosSaleChannelEnabled() || showSaleLoyalty) ? (
+    <div className="flex items-center justify-between gap-2" data-testid="pos-sale-options">
       {saleChannelControl}
-      {loyaltyStatus.data?.enabled && hasCartLines ? <LoyaltyButton
+      {showSaleLoyalty ? <LoyaltyButton
         disabled={!saleId || isLineBusy || Boolean(cartPriceSync) || completeMutation.isLoading || saleQuery.isFetching}
         onOpen={() => void openLoyalty()} /> : null}
     </div>
@@ -5136,11 +5138,21 @@ const PosSellPage = () => {
       else finishCartPriceSync();
     }
   };
+  const renderPriceTypeControl = (className: string) => (
+    <select
+      aria-label={t("tools.priceType")}
+      value={priceMode}
+      onChange={(event) => void changePriceMode(event.target.value === "WHOLESALE" ? "WHOLESALE" : "RETAIL")}
+      disabled={isCompletedSaleEdit || isLineBusy || completeMutation.isLoading || Boolean(cartPriceSync) || !hasOpenShift}
+      className={cn("h-11 rounded-md border border-border bg-background", className)}
+    >
+      <option value="RETAIL">{t("tools.retail")}</option>
+      <option value="WHOLESALE">{t("tools.wholesale")}</option>
+    </select>
+  );
   const PosHeaderTools = () => posToolsQuery.data?.priceTypesEnabled || posToolsQuery.data?.canTransfer ? (
     <div className="flex shrink-0 items-center gap-1">
-      {posToolsQuery.data.priceTypesEnabled ? <select aria-label={t("tools.priceType")} value={priceMode} onChange={event=>void changePriceMode(event.target.value as "RETAIL"|"WHOLESALE")} disabled={isLineBusy || completeMutation.isLoading || !hasOpenShift} className="h-11 w-[76px] rounded-md border border-border bg-background px-1 text-xs min-[360px]:w-[88px] sm:w-[96px] sm:text-sm">
-        <option value="RETAIL">{t("tools.retail")}</option><option value="WHOLESALE">{t("tools.wholesale")}</option>
-      </select> : null}
+      {posToolsQuery.data.priceTypesEnabled ? renderPriceTypeControl("w-[76px] px-1 text-xs min-[360px]:w-[88px] sm:w-[96px] sm:text-sm") : null}
       {posToolsQuery.data.canTransfer ? <Button variant="secondary" className="h-11 min-w-11 shrink-0 px-2" aria-label={t("tools.transferTitle")} title={t("tools.transferTitle")} disabled={!hasOpenShift || Boolean(cartPriceSync)} onClick={()=>setTransferOpen(true)}><TransferIcon className="h-5 w-5" aria-hidden /></Button> : null}
     </div>
   ) : null;
@@ -6396,20 +6408,19 @@ const PosSellPage = () => {
           }) ??
           null)
         : null;
-      const documentDate = new Date(
-        (isCompletedSaleEdit ? journalSelectedSale?.createdAt : sale?.createdAt) ?? Date.now(),
-      );
-      const documentDateLabel = new Intl.DateTimeFormat(locale, {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }).format(documentDate);
-      const mobileStoreName = shiftQuery.data?.store.name ?? selectedRegister?.store.name ?? "";
-      const orderStatusLabel = isCompletedSaleEdit
-        ? checkoutPanelTitle
-        : sale?.status && sale.status !== CustomerOrderStatus.DRAFT
-          ? saleStatusLabel(sale.status)
-          : t("sell.mobile.newStatus");
+      const saleDocument = isCompletedSaleEdit ? journalSelectedSale : sale;
+      const documentDateLabel = saleDocument?.createdAt
+        ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(new Date(saleDocument.createdAt))
+        : tCommon("notAvailable");
+      const mobileStoreName = saleDocument?.store.name ?? shiftQuery.data?.store.name ?? selectedRegister?.store.name ?? tCommon("notAvailable");
+      const orderStatusLabel = saleDocument
+        ? saleStatusLabel(saleDocument.status)
+        : saleId ? tCommon(saleQuery.isInitialLoading ? "loading" : "notAvailable") : t("sell.mobile.newStatus");
+      const loyalty = saleDocument?.loyalty;
+      const canEditDocumentDiscount = isCompletedSaleEdit
+        ? Boolean(saleDocument && (!loyalty || loyalty.status === "RELEASED"))
+        : hasOpenShift && saleDocument?.status === CustomerOrderStatus.DRAFT && !saleDocument.isHeld;
+      const canEditDiscount = Boolean(saleId && hasCartLines && canEditDocumentDiscount);
 
       const handleMobileDone = () => {
         if (mobileScreen !== "sale") {
@@ -6612,10 +6623,10 @@ const PosSellPage = () => {
       };
 
       const renderMobileHeader = () => (
-        <header className="sticky top-0 z-40 border-b border-border bg-card text-foreground md:hidden">
+        <header data-pos-mobile-header className="sticky top-0 z-40 border-b border-border bg-card text-foreground md:hidden">
           <div
             className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_40px_58px] items-center gap-2 px-3 pb-3"
-            style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
+            style={{ paddingTop: "calc(0.55rem + var(--pos-header-inset, env(safe-area-inset-top)))" }}
           >
             <button
               type="button"
@@ -6677,67 +6688,9 @@ const PosSellPage = () => {
         </header>
       );
 
-      const renderMobileRow = ({
-        icon,
-        label,
-        value,
-        muted = false,
-        chevron = true,
-        action,
-      }: {
-        icon: ReactNode;
-        label: string;
-        value?: ReactNode;
-        muted?: boolean;
-        chevron?: boolean;
-        action?: () => void;
-      }) => {
-        const content = (
-          <>
-            <span className="grid h-8 w-8 shrink-0 place-items-center text-muted-foreground">
-              {icon}
-            </span>
-            <span
-              className={cn(
-                "min-w-0 flex-1 text-[14px] leading-none",
-                muted && "text-muted-foreground",
-              )}
-            >
-              {label}
-            </span>
-            {value !== undefined ? (
-              <span className="min-w-0 max-w-[48%] shrink truncate text-right text-[14px] leading-none text-primary">
-                {value}
-              </span>
-            ) : null}
-            {chevron ? (
-              <ChevronRightIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
-            ) : null}
-          </>
-        );
-
-        if (action) {
-          return (
-            <button
-              type="button"
-              className="flex min-h-[48px] w-full items-center gap-2 border-b border-border py-2 pl-3 pr-2.5 text-left last:border-b-0"
-              onClick={action}
-            >
-              {content}
-            </button>
-          );
-        }
-
-        return (
-          <div className="flex min-h-[48px] items-center gap-2 border-b border-border py-2 pl-3 pr-2.5 last:border-b-0">
-            {content}
-          </div>
-        );
-      };
-
       const renderRegisterPanel = () =>
         showMobileRegisterPanel ? (
-          <section className="mx-0 border-y border-border bg-card px-3 py-3">
+          <section className="bg-card px-3 py-3">
             <label className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               {t("entry.register")}
             </label>
@@ -6771,7 +6724,7 @@ const PosSellPage = () => {
 
       const renderDraftNotice = () =>
         activeDraft && !saleId ? (
-          <section className="border-y border-warning/40 bg-warning/10 px-3 py-3 text-sm text-foreground">
+          <section className="bg-warning/10 px-3 py-3 text-sm text-foreground">
             <p className="font-semibold text-foreground">{t("sell.draftDetectedTitle")}</p>
             <p className="mt-1">{t("sell.draftDetectedHint", { number: activeDraft.number })}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -6792,7 +6745,7 @@ const PosSellPage = () => {
 
       const renderOrderSection = () =>
         hasCartLines ? (
-          <section className="border-y border-border bg-card px-3 py-3">
+          <section className="bg-card px-3 py-3">
             <div className="mb-2">
               <h2 className="text-[15px] font-semibold leading-none text-primary">
                 {isCompletedSaleEdit ? checkoutPanelTitle : t("sell.mobile.order")}
@@ -6802,31 +6755,8 @@ const PosSellPage = () => {
               </p>
             </div>
             <div>
-              {renderMobileRow({
-                icon: <ClipboardText className="h-5 w-5" aria-hidden />,
-                label: tCommon("status"),
-                value: (
-                  <span className="inline-flex h-7 w-12 items-center rounded-full bg-success p-0.5 align-middle">
-                    <span className="ml-auto h-6 w-6 rounded-full bg-success-foreground" />
-                  </span>
-                ),
-                chevron: false,
-              })}
-              {renderMobileRow({
-                icon: <Coins className="h-5 w-5" aria-hidden />,
-                label: t("sell.mobile.amount"),
-                value: formatSaleMoney(cartTotalKgs),
-              })}
-              {renderMobileRow({
-                icon: <Storefront className="h-5 w-5" aria-hidden />,
-                label: t("sell.mobile.account"),
-                value: mobileStoreName || selectedRegisterLabel,
-              })}
-              {renderMobileRow({
-                icon: <CalendarBlank className="h-5 w-5" aria-hidden />,
-                label: t("sell.mobile.date"),
-                value: documentDateLabel,
-              })}
+              <MobileSaleProperty icon={<Coins className="h-5 w-5" aria-hidden />} label={t("sell.mobile.amount")} value={formatSaleMoney(cartTotalKgs)} />
+              <MobileSaleProperty icon={<CalendarBlank className="h-5 w-5" aria-hidden />} label={t("sell.mobile.date")} value={documentDateLabel} />
             </div>
             {saleId ? (
               <div className="mt-3 flex justify-end">
@@ -6848,8 +6778,8 @@ const PosSellPage = () => {
         ) : null;
 
       const renderPropertiesSection = () => (
-        <section className="border-y border-border bg-card">
-          <div className="px-3">{saleOptions}</div>
+        <section className="bg-card">
+          {saleOptions ? <div className="px-3">{saleOptions}</div> : null}
           <button
             type="button"
             className="flex min-h-[48px] w-full items-center justify-between px-3 text-left"
@@ -6867,69 +6797,54 @@ const PosSellPage = () => {
           </button>
           {mobilePropertiesExpanded ? (
             <div className="border-t border-border">
-              {renderMobileRow({
-                icon: <Hash className="h-5 w-5" aria-hidden />,
-                label: t("sell.mobile.documentNumber"),
-                muted: !(isCompletedSaleEdit ? journalSelectedSale?.number : sale?.number),
-                value: isCompletedSaleEdit
-                  ? (journalSelectedSale?.number ?? "")
-                  : (sale?.number ?? ""),
-                chevron: false,
-              })}
-              {renderMobileRow({
-                icon: <ClipboardText className="h-5 w-5" aria-hidden />,
-                label: tCommon("status"),
-                value: (
-                  <span className="inline-flex h-7 w-12 items-center rounded-full bg-primary p-0.5 align-middle">
-                    <span className="ml-auto h-6 w-6 rounded-full bg-primary-foreground" />
-                  </span>
-                ),
-                chevron: false,
-              })}
-              {renderMobileRow({
-                icon: <CalendarBlank className="h-5 w-5" aria-hidden />,
-                label: t("sell.mobile.date"),
-                value: documentDateLabel,
-              })}
-              {renderMobileRow({
-                icon: <ClipboardText className="h-5 w-5" aria-hidden />,
-                label: t("sell.mobile.orderStatus"),
-              })}
-              {renderMobileRow({
-                icon: <TagIcon className="h-5 w-5" aria-hidden />,
-                label: t("sell.discount"),
-                value: cartDiscountKgs > 0 ? formatSaleMoney(cartDiscountKgs) : "0%",
-                action: openMobileDiscountEditor,
-              })}
+              <MobileSaleProperty
+                icon={<Hash className="h-5 w-5" aria-hidden />}
+                label={t("sell.mobile.documentNumber")}
+                value={saleDocument?.number ?? tCommon("notAvailable")}
+              />
+              <MobileSaleProperty icon={<CalendarBlank className="h-5 w-5" aria-hidden />} label={t("sell.mobile.date")} value={documentDateLabel} />
+              <MobileSaleProperty icon={<ClipboardText className="h-5 w-5" aria-hidden />} label={t("sell.mobile.orderStatus")} value={orderStatusLabel} />
+              {posToolsQuery.data?.priceTypesEnabled ? (
+                <MobileSaleProperty
+                  icon={<TagIcon className="h-5 w-5" aria-hidden />}
+                  label={t("tools.priceType")}
+                  value={isCompletedSaleEdit
+                    ? t(saleDocument?.priceMode === "WHOLESALE" ? "tools.wholesale" : "tools.retail")
+                    : renderPriceTypeControl("max-w-full px-2 text-base")}
+                />
+              ) : null}
+              <MobileSaleProperty
+                icon={<TagIcon className="h-5 w-5" aria-hidden />}
+                label={t("sell.discount")}
+                value={formatSaleMoney(cartDiscountKgs)}
+                onEdit={canEditDiscount ? openMobileDiscountEditor : undefined}
+                disabled={isLineBusy || completeMutation.isLoading || Boolean(cartPriceSync)}
+              />
             </div>
           ) : null}
         </section>
       );
 
       const renderCounterpartiesSection = () => (
-        <section className="border-y border-border bg-card px-3 py-3">
+        <section className="bg-card px-3 py-3">
           <h2 className="mb-2 text-[15px] font-semibold leading-none text-primary">
             {t("sell.mobile.counterparties")}
           </h2>
           <div>
-            {renderMobileRow({
-              icon: <Storefront className="h-5 w-5" aria-hidden />,
-              label: t("sell.mobile.store"),
-              value: mobileStoreName || selectedRegisterLabel,
-              action: () => setMobilePropertiesExpanded(true),
-            })}
-            {renderMobileRow({
-              icon: <UserGlyph className="h-5 w-5" aria-hidden />,
-              label: t("sell.mobile.client"),
-              value: currentCustomerLabel,
-              action: () => setCustomerSelectorOpen(true),
-            })}
+            <MobileSaleProperty icon={<Storefront className="h-5 w-5" aria-hidden />} label={t("sell.mobile.store")} value={mobileStoreName} />
+            <MobileSaleProperty
+              icon={<UserGlyph className="h-5 w-5" aria-hidden />}
+              label={t("sell.mobile.client")}
+              value={currentCustomerLabel}
+              onEdit={activeStoreId || isCompletedSaleEdit ? () => setCustomerSelectorOpen(true) : undefined}
+              disabled={updateCustomerMutation.isLoading || completeMutation.isLoading || editCompletedSaleMutation.isLoading}
+            />
           </div>
         </section>
       );
 
       const renderAddProductsBar = () => (
-        <section className="border-y border-border bg-card px-3 py-3">
+        <section className="bg-card px-3 py-3">
           <div className="grid grid-cols-[minmax(0,1fr)_50px] gap-2.5">
             <button
               type="button"
@@ -6954,7 +6869,7 @@ const PosSellPage = () => {
 
       const renderMobileLines = () =>
         hasCartLines ? (
-          <section className="border-y border-border bg-card px-3 py-3">
+          <section className="bg-card px-3 py-3">
             <h2 className="mb-2 text-[15px] font-semibold text-primary">
               {t("sell.mobile.products")}
             </h2>
@@ -7004,7 +6919,7 @@ const PosSellPage = () => {
         ) : null;
 
       const renderCommentBar = () => (
-        <section className="border-y border-border bg-card px-3 py-2">
+        <section className="bg-card px-3 py-2">
           <label className="flex min-h-[44px] items-center gap-2.5 text-muted-foreground">
             <ChatCircle className="h-6 w-6 shrink-0" aria-hidden />
             <input
@@ -7015,19 +6930,25 @@ const PosSellPage = () => {
                   void persistMobileComment(saleId).catch(() => undefined);
                 }
               }}
+              aria-label={t("sell.mobile.commentPlaceholder")}
+              maxLength={2000}
+              disabled={
+                (!hasOpenShift && !isCompletedSaleEdit) || createDraftMutation.isLoading ||
+                updateNotesMutation.isLoading || completeMutation.isLoading || editCompletedSaleMutation.isLoading
+              }
               placeholder={t("sell.mobile.commentPlaceholder")}
-              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
+              className="min-w-0 flex-1 rounded-md border-0 bg-transparent px-2 py-1 text-base text-foreground shadow-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             />
           </label>
         </section>
       );
 
       const renderDocumentTab = () => (
-        <section className="space-y-3 pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] pt-0">
+        <section className="divide-y divide-border pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]">
           {renderRegisterPanel()}
           {renderDraftNotice()}
           {saleId && saleQuery.error ? (
-            <div className="mx-4 border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+            <div role="alert" className="bg-danger/10 px-3 py-3 text-sm text-danger">
               {translateError(tErrors, saleQuery.error)}
             </div>
           ) : null}
@@ -7105,8 +7026,8 @@ const PosSellPage = () => {
               </div>
             </>
           ) : (
-            <div className="space-y-3 pt-3">
-              <section className="border-y border-border bg-card px-3 py-3">
+            <div className="divide-y divide-border">
+              <section className="bg-card px-3 py-3">
                 <h2 className="text-[15px] font-semibold leading-none text-primary">
                   {t("sell.mobile.paymentSummary")}
                 </h2>
@@ -7147,7 +7068,7 @@ const PosSellPage = () => {
               <section
                 ref={paymentsSectionRef}
                 data-baam-obstacle="action"
-                className="border-y border-border bg-card px-3 py-3"
+                className="bg-card px-3 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-[15px] font-semibold leading-none text-primary">
@@ -7180,7 +7101,7 @@ const PosSellPage = () => {
                 )}
               </section>
 
-              <div className="px-3">{saleOptions}</div>
+              {saleOptions ? <div className="bg-card px-3">{saleOptions}</div> : null}
               {renderOrderSection()}
 
               <div className={cn("fixed inset-x-0 bottom-0 z-30 grid gap-2 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden", !isCompletedSaleEdit && "grid-cols-2")}>
@@ -7225,10 +7146,10 @@ const PosSellPage = () => {
 
       const renderCatalogScreen = () => (
         <div className="min-h-[100dvh] bg-background text-foreground md:hidden">
-          <header className="sticky top-0 z-40 border-b border-border bg-card">
+          <header data-pos-mobile-header className="sticky top-0 z-40 border-b border-border bg-card">
             <div
-              className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-end gap-2 px-3 pb-3"
-              style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
+              className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-center gap-2 px-3 pb-3"
+              style={{ paddingTop: "calc(0.55rem + var(--pos-header-inset, env(safe-area-inset-top)))" }}
             >
               <button
                 type="button"
@@ -7275,7 +7196,7 @@ const PosSellPage = () => {
             <div className="flex min-h-[46px] w-full items-center gap-2.5 border-b border-border bg-muted px-3 text-left">
               <StoresIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-muted-foreground">
-                {mobileStoreName || selectedRegisterLabel}
+                {mobileStoreName}
               </span>
             </div>
 
@@ -7397,11 +7318,11 @@ const PosSellPage = () => {
       );
 
       const renderScannerScreen = () => (
-        <div className="min-h-[100dvh] bg-background text-foreground md:hidden">
-          <header className="sticky top-0 z-40 bg-card">
+        <div data-pos-mobile-scanner className="flex flex-1 flex-col bg-background text-foreground md:hidden">
+          <header data-pos-mobile-header className="sticky top-0 z-40 shrink-0 bg-card">
             <div
-              className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-end gap-2 px-3 pb-3"
-              style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
+              className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-center gap-2 px-3 pb-3"
+              style={{ paddingTop: "calc(0.55rem + var(--pos-header-inset, env(safe-area-inset-top)))" }}
             >
               <button
                 type="button"
@@ -7416,18 +7337,15 @@ const PosSellPage = () => {
               </h1>
             </div>
           </header>
-          <section className="grid min-h-[calc(100dvh-68px)] place-items-center px-5 pb-[env(safe-area-inset-bottom)]">
+          <section className="grid flex-1 place-items-center px-5 pb-[calc(1rem+var(--mobile-bottom-safe-area))] pt-4">
             <section className="w-full max-w-sm text-center">
               <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-border bg-card">
                 <BarcodeIcon className="h-9 w-9 text-primary" aria-hidden />
               </div>
-              <h1 className="mt-4 text-[15px] font-semibold">
-                {t("sell.mobile.scanner")}
-              </h1>
-              <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+              <p className="mt-4 text-[13px] leading-5 text-muted-foreground">
                 {t("sell.mobile.cameraScannerHint")}
               </p>
-              <div className="mt-5 rounded-lg border border-border bg-card px-3 py-2">
+              <div className="mt-5 rounded-lg border border-border bg-card px-2 py-1">
                 <ScanInput
                   context="pos"
                   showClearButton
@@ -7448,7 +7366,7 @@ const PosSellPage = () => {
                   showDropdown={false}
                   disabled={!hasOpenShift}
                   className="w-full"
-                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                  inputClassName="h-[52px] border-0 bg-transparent pl-2 text-base text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
                 />
               </div>
             </section>

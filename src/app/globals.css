@@ -138,14 +138,9 @@ html.native-ios [data-toast-viewport] {
   pointer-events: none;
 }
 
-html.native-ios [data-toast-viewport] .es-toast {
-  align-items: flex-start;
-}
-
 html.native-ios [data-toast-viewport] .es-toast__close {
-  width: 2.5rem;
-  height: 2.5rem;
-  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
 /* One horizontal fence protects both AppShell branches, including the sticky
@@ -165,6 +160,31 @@ html.native-ios [data-native-pos-shell] > main {
 
 html.native-ios [data-native-pos-shell] > main > [data-subscription-access-notice] {
   margin-top: var(--mobile-top-safe-area);
+}
+
+@media (max-width: 767px) {
+  [data-native-pos-shell] > main > [data-subscription-access-notice] {
+    margin-bottom: 0.25rem;
+  }
+
+  [data-native-pos-shell]:has(> main > [data-pos-mobile-scanner]) {
+    display: flex;
+    min-height: var(--native-available-height, 100dvh);
+    flex-direction: column;
+  }
+
+  [data-native-pos-shell]:has(> main > [data-pos-mobile-scanner]) > main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+}
+
+/* An access notice already reserves the status-bar space in the document flow.
+   Keep POS headers below the status strip when scrolling past that notice. */
+html.native-ios [data-native-pos-shell] > main:has(> [data-subscription-access-notice]) [data-pos-mobile-header] {
+  --pos-header-inset: 0px;
+  top: var(--mobile-top-safe-area);
 }
 
 /* Keep a scrolling notice behind the same opaque status strip as normal chrome.
@@ -328,6 +348,46 @@ html.native-ios[data-native-keyboard="visible"] [role="dialog"][class~="h-[100dv
     max-height: calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top))) !important;
     --tw-translate-y: 0px;
   }
+}
+
+/* Keep document forms scrollable to their last field when the layout viewport
+   extends behind the keyboard. Portalled dialogs have their own scroll body. */
+html[data-mobile-keyboard-open] body:not([data-scroll-locked])::after {
+  content: "";
+  display: block;
+  block-size: var(--mobile-keyboard-scroll-room, 0px);
+}
+
+/* Mobile Safari shrinks the visual viewport rather than the fixed layout. */
+html[data-mobile-keyboard-open]:not(.native-ios) {
+  --web-keyboard-top: max(var(--native-viewport-offset-top), var(--mobile-top-safe-area));
+  --web-keyboard-height: max(0px, calc(var(--native-available-height) - var(--web-keyboard-top)));
+}
+
+html[data-mobile-keyboard-open]:not(.native-ios) [role="dialog"][class~="top-1/2"] {
+  top: calc(var(--web-keyboard-top) + var(--web-keyboard-height) / 2) !important;
+  max-height: max(0px, calc(var(--web-keyboard-height) - 1rem)) !important;
+}
+
+html[data-mobile-keyboard-open]:not(.native-ios) [role="dialog"][class~="bottom-0"] {
+  bottom: max(0px, calc(100dvh - var(--native-available-height))) !important;
+  max-height: max(0px, calc(var(--web-keyboard-height) - 0.5rem)) !important;
+}
+
+@media (min-width: 640px) {
+  html[data-mobile-keyboard-open]:not(.native-ios) [role="dialog"][data-native-overlay-layout="responsive-bottom"] {
+    top: calc(var(--web-keyboard-top) + var(--web-keyboard-height) / 2) !important;
+    bottom: auto !important;
+    max-height: min(85dvh, max(0px, calc(var(--web-keyboard-height) - 1rem))) !important;
+  }
+}
+
+html[data-mobile-keyboard-open]:not(.native-ios) [role="dialog"]:is([class~="inset-y-0"], [class~="h-[100dvh]"]) {
+  top: var(--web-keyboard-top) !important;
+  bottom: auto !important;
+  height: var(--web-keyboard-height) !important;
+  max-height: var(--web-keyboard-height) !important;
+  --tw-translate-y: 0px;
 }
 
 @media (min-width: 768px) {

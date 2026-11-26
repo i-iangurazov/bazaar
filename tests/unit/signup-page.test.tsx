@@ -81,6 +81,28 @@ describe("signup mode transitions", () => {
 
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+  it("moves through mobile registration fields without discarding values or submitting", () => {
+    mocks.modeQuery.isLoading = false;
+    mocks.modeQuery.data = { mode: "open" };
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    render(<SignupPage />);
+    const name = screen.getByLabelText("signup.name") as HTMLInputElement;
+    const email = screen.getByLabelText("signup.email");
+    const password = screen.getByLabelText("signup.password");
+    for (const field of [email, password]) {
+      Object.defineProperty(field, "getClientRects", { value: () => ({ length: 1 }) });
+    }
+    fireEvent.change(name, { target: { value: "Synthetic Reviewer" } });
+    name.focus();
+    expect(fireEvent.keyDown(name, { key: "Enter" })).toBe(false);
+    expect(document.activeElement).toBe(email);
+    expect(fireEvent.keyDown(email, { key: "Enter" })).toBe(false);
+    expect(document.activeElement).toBe(password);
+    expect(name.value).toBe("Synthetic Reviewer");
+    expect(fireEvent.keyDown(password, { key: "Enter" })).toBe(true);
+    expect(mocks.signupMutate).not.toHaveBeenCalled();
+  });
+
   it("measures a new account after server success and does not count onboarding resumption", async () => {
     mocks.modeQuery.isLoading = false;
     mocks.modeQuery.data = { mode: "open" };

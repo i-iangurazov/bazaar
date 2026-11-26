@@ -87,4 +87,14 @@ describe("per-receipt channel recovery", () => {
     expect(fetch).not.toHaveBeenCalled();
     fetch.mockRestore();
   });
+
+  it("does not change a checked channel while checkout is saving", async () => {
+    const change = vi.fn();
+    render(<SaleChannelControl value="ONLINE" onChange={change} disabled />);
+    const checkbox = screen.getByRole<HTMLInputElement>("checkbox", { name: "checkbox" });
+    expect(checkbox.checked).toBe(true);
+    expect(checkbox.disabled).toBe(true);
+    await userEvent.click(screen.getByText("checkbox"));
+    expect(change).not.toHaveBeenCalled();
+  });
 });
