@@ -146,7 +146,7 @@ export async function verifyProductCameraSearch(
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));
         await page.goto(`${base}/products?storeId=${store.id}&list=1`);
-        const search = page.locator("#products-search");
+        const search = page.locator("#products-search:enabled").filter({ visible: true });
         const field = search.locator("..");
         const camera = field.getByRole("button", { name: "Сканировать камерой", exact: true });
         await expect(camera).toBeEnabled();
@@ -206,6 +206,7 @@ export async function verifyProductCameraSearch(
         await expect(page.getByText(name, { exact: true }).filter({ visible: true })).toBeVisible();
         await api("stores.updateProductSettings", { ...settings, enableBarcode: false }, true);
         await page.reload();
+        await expect(search).toBeVisible();
         await expect(camera).toHaveCount(0);
         await api("stores.updateProductSettings", { ...settings, enableBarcode: true }, true);
         assert.deepEqual(errors, []);

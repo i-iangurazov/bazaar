@@ -91,8 +91,17 @@ export async function verifyStockCountSearch(
   const more = page
     .locator("[data-native-bottom-nav]")
     .getByRole("button", { name: "Ещё", exact: true });
-  await more.click();
   const menu = page.getByRole("dialog", { name: "Ещё", exact: true });
+  const openInventoryMenu = async () => {
+    await more.click();
+    for (const name of ["Основное", "Запасы"]) {
+      const group = menu.getByRole("button", { name, exact: true });
+      await expect(group).toBeVisible();
+      if ((await group.getAttribute("aria-expanded")) === "false") await group.click();
+      await expect(group).toHaveAttribute("aria-expanded", "true");
+    }
+  };
+  await openInventoryMenu();
   await expect(menu.getByRole("link", { name: "Оприходование", exact: true })).toBeVisible();
   await expect(menu.getByRole("link", { name: "Инвентаризация", exact: true })).toBeVisible();
   await page.screenshot({ path: `${output}/mobile-inventory-menu.png` });
@@ -128,7 +137,7 @@ export async function verifyStockCountSearch(
     }),
     "Receiving product results cover mobile navigation",
   );
-  await more.click();
+  await openInventoryMenu();
   await menu.getByRole("link", { name: "Инвентаризация", exact: true }).click();
   await expect(page).toHaveURL(/\/inventory\/counts/);
   await expect(menu).toBeHidden();
