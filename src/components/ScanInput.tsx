@@ -148,6 +148,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
 
     const currentValue = controlled ? (value ?? "") : internalValue;
     const hasClearAction = showClearButton && currentValue.length > 0;
+    const reserveDesktopClearAction = showClearButton && !hasClearAction;
     const hasStatusIndicator = submitting || feedback === "success";
     const observedValueRef = useRef(currentValue);
     useEffect(() => {
@@ -676,6 +677,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
             inputClassName,
             hasClearAction ? "pr-24" : "pr-14",
             hasStatusIndicator && (hasClearAction ? "pr-32" : "pr-20"),
+            reserveDesktopClearAction && (hasStatusIndicator ? "md:pr-32" : "md:pr-24"),
           )}
         />
         {submitting ? (
@@ -683,6 +685,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
               hasClearAction ? "right-24" : "right-14",
+              reserveDesktopClearAction && "md:right-24",
             )}
           >
             <Spinner className="h-4 w-4" />
@@ -692,6 +695,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-success",
               hasClearAction ? "right-24" : "right-14",
+              reserveDesktopClearAction && "md:right-24",
             )}
           >
             <CheckIcon className="h-4 w-4" aria-hidden />
@@ -699,14 +703,17 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
         ) : null}
 
         <div className="absolute inset-y-1 right-1 flex items-center">
-          {hasClearAction ? (
+          {showClearButton ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-full w-11 shrink-0 rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0"
+              className={cn(
+                "h-full w-11 shrink-0 rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0",
+                reserveDesktopClearAction && "max-md:hidden",
+              )}
               aria-label={tCommon("clearSearch")}
-              disabled={Boolean(disabled || submitting)}
+              disabled={Boolean(disabled || submitting || !hasClearAction)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 clearInput();
