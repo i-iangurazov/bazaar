@@ -953,7 +953,7 @@
       "trialExpiredDescription": "Your data and history are preserved. Viewing and available exports remain; choose and pay for a subscription to start new operations."
     },
     "trial": {
-      "offer": "{days} days free — no card or automatic charges.",
+      "offer": "{days} days free.",
       "remaining": "Free trial: {count, plural, one {# day left} other {# days left}}",
       "deadline": "Free access until {date}. After expiry, history, viewing and exporting your own data remain available.",
       "scope": "Core Monopolist features: 1 store, 1,000 products, 2 users, 100 AI requests and 3 images for the entire trial. Campaign sends and WhatsApp replies are not included. Marketplace connections, Bazaar API and campaign automations are excluded.",
