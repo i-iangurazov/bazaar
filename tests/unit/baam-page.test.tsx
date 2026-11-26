@@ -6,7 +6,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { Capacitor } from "@capacitor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
-import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
+import { BaamAssistant, BaamAssistantProvider, type BaamPhoneLayout } from "@/components/baam-assistant";
 import type { BaamData } from "@/components/use-baam-companion";
 // This suite isolates an already-consented person's chat/draft behavior.
 // Explicit permission/refusal/revocation have a separate component suite.
@@ -108,10 +108,11 @@ const entry = (
   parts: [],
   createdAt: new Date(),
 });
-const shell = (open = true, nativeViewport = false, compactViewport = false) => (
+const shell = (open = true, nativeViewport = false, compactViewport = false, phoneLayout?: BaamPhoneLayout) => (
   <NextIntlClientProvider locale="en" messages={{ errors: messages.errors }}>
     <BaamAssistantProvider>{open ? <BaamAssistant nativeViewport={nativeViewport} compactViewport={compactViewport}
-      workspaceHeader={compactViewport ? <Link href="/inventory" prefetch={false}>Return to inventory</Link> : undefined} /> : null}</BaamAssistantProvider>
+      phoneLayout={phoneLayout}
+      workspaceHeader={compactViewport || phoneLayout ? <Link href="/inventory" prefetch={false}>Return to inventory</Link> : undefined} /> : null}</BaamAssistantProvider>
   </NextIntlClientProvider>
 );
 const input = () =>
@@ -159,6 +160,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("BAAM persistent companion workspace", () => {
@@ -529,6 +531,66 @@ describe("BAAM persistent companion workspace", () => {
     expect(input().value).toBe("Draft above the keyboard");
     expect(document.activeElement).toBe(input());
     expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("keeps iPhone controls and running status outside the transcript through keyboard changes", () => {
+    let resize: (() => void) | undefined;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { resize = callback; }
+      observe() {}
+      disconnect() {}
+    });
+    saved = {
+      ...saved,
+      messages: [entry("Old reply", 1), entry("Latest answer", 2)],
+      activeTurn: { id: "turn", clientRequestId: "request", status: "RUNNING", cancelRequested: false },
+    };
+    const view = render(shell(true, true, false, "normal"));
+    const transcript = document.querySelector<HTMLElement>('[data-baam-scrollport="workspace"]')!;
+    let viewportHeight = 400;
+    Object.defineProperties(transcript, {
+      scrollHeight: { configurable: true, value: 1500 },
+      clientHeight: { configurable: true, get: () => viewportHeight },
+    });
+    expect(screen.getByRole("combobox")).toBeTruthy();
+    const draft = input();
+    draft.focus();
+    fireEvent.change(draft, { target: { value: "My unfinished question" } });
+    transcript.scrollTop = 1100;
+    fireEvent.scroll(transcript);
+
+    viewportHeight = 220;
+    view.rerender(shell(true, true, true, "keyboard"));
+    const toolbar = document.querySelector("[data-baam-phone-toolbar]")!;
+    const status = document.querySelector("[data-baam-response-progress]")!;
+    expect(toolbar.contains(screen.getByRole("link", { name: "Return to inventory" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "Conversations" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "New conversation" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "BAAM actions" }))).toBe(true);
+    expect(transcript.contains(toolbar)).toBe(false);
+    expect(transcript.contains(screen.getByText("Latest answer"))).toBe(true);
+    expect(status.textContent).toContain("Working on your request…");
+    expect(status.previousElementSibling).toBe(transcript);
+    expect(status.nextElementSibling?.contains(draft)).toBe(true);
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(input()).toBe(draft);
+    expect(draft.value).toBe("My unfinished question");
+    expect(document.activeElement).toBe(draft);
+    expect(transcript.scrollTop).toBe(1500);
+
+    transcript.scrollTop = 120;
+    fireEvent.scroll(transcript);
+    viewportHeight = 180;
+    act(() => resize?.());
+    expect(transcript.scrollTop).toBe(120);
+    fireEvent.click(screen.getByRole("button", { name: "Conversations" }));
+    expect(transcript.scrollTop).toBe(0);
+    expect(transcript.querySelector("[data-baam-dialogs]")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to conversation" }));
+    expect(transcript.scrollTop).toBe(120);
+    expect(input().value).toBe("My unfinished question");
+    view.rerender(shell(true, true, false, "normal"));
+    expect(screen.getByRole("combobox")).toBeTruthy();
+    expect(transcript.scrollTop).toBe(120);
   });
   it("keeps compact native navigation and voice auto-send explanation in the scrolling content", () => {
     const view = render(shell(true, true, true));

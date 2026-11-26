@@ -28,8 +28,14 @@
     content: none;
   }
 
+  :global(html.native-app.native-ios).nativeWorkspace :global([data-bazaar-app]) > :global(header),
+  :global(html.native-app.native-ios[data-mobile-keyboard-open]).nativeWorkspace :global([data-native-bottom-nav]) {
+    display: none;
+  }
+
   :global(html.native-app.native-ios).nativeWorkspace :global([data-sidebar-wrapper]) {
     min-height: 0;
+    padding-top: max(var(--mobile-top-safe-area), var(--native-viewport-offset-top, 0px));
   }
 
   :global(html.native-app.native-ios).nativeWorkspace :global(#workspace-content) {
@@ -74,11 +80,11 @@
   gap: 0;
 }
 
-.workspace[data-baam-short-viewport="true"] :global([data-baam-scrollport="workspace"]) {
+.workspace[data-baam-short-viewport="true"] :global([data-baam-chat]:not([data-baam-phone-layout])) :global([data-baam-scrollport="workspace"]) {
   min-height: 2.75rem;
 }
 
-.workspace[data-baam-short-viewport="true"] :global([data-baam-toolbar]) {
+.workspace[data-baam-short-viewport="true"] :global([data-baam-chat]:not([data-baam-phone-layout])) :global([data-baam-toolbar]) {
   position: static;
   padding-block: 0.25rem;
 }
@@ -87,11 +93,13 @@
   max-height: max(0px, calc(100% - 2.75rem));
 }
 
-.workspace[data-baam-short-viewport="true"] :global([data-baam-composer-content]) {
+.workspace[data-baam-short-viewport="true"] :global([data-baam-composer-content]),
+.workspace :global([data-baam-phone-layout]) :global([data-baam-composer-content]) {
   padding: 0.25rem 0.5rem;
 }
 
-.workspace[data-baam-short-viewport="true"] :global([data-baam-compose-form]) {
+.workspace[data-baam-short-viewport="true"] :global([data-baam-compose-form]),
+.workspace :global([data-baam-phone-layout]) :global([data-baam-compose-form]) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -99,7 +107,8 @@
   padding: 0.25rem;
 }
 
-.workspace[data-baam-short-viewport="true"] :global([data-baam-input]) {
+.workspace[data-baam-short-viewport="true"] :global([data-baam-input]),
+.workspace :global([data-baam-phone-layout]) :global([data-baam-input]) {
   flex: 1 0 10rem;
   width: auto;
   min-width: 0;
@@ -108,7 +117,8 @@
   max-height: 2.75rem;
 }
 
-.workspace[data-baam-short-viewport="true"] :global([data-baam-compose-tools]) {
+.workspace[data-baam-short-viewport="true"] :global([data-baam-compose-tools]),
+.workspace :global([data-baam-phone-layout]) :global([data-baam-compose-tools]) {
   flex: 0 0 auto;
   max-width: 100%;
   margin-left: auto;

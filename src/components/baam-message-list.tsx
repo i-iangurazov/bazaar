@@ -120,7 +120,25 @@ function ActionCard({ actionId, c }: { actionId: string; c: BaamController }) {
     </div>
   );
 }
-export function BaamMessageList({ c, externalScrollContainer = false }: { c: BaamController; externalScrollContainer?: boolean }) {
+export function BaamResponseProgress({ c, docked = false }: { c: BaamController; docked?: boolean }) {
+  if (!c.progress) return null;
+  return (
+    <div
+      data-baam-response-progress
+      className={cn("flex items-center gap-2 text-sm text-muted-foreground", docked && "shrink-0 border-t border-border/60 bg-card px-3 py-1.5")}
+      role="status"
+    >
+      <Spinner />
+      {c.t(c.progress)}
+    </div>
+  );
+}
+
+export function BaamMessageList({ c, externalScrollContainer = false, externalProgress = false }: {
+  c: BaamController;
+  externalScrollContainer?: boolean;
+  externalProgress?: boolean;
+}) {
   const lastActionMessage = new Map<string, string>();
   const lastWorkflowMessage = new Map<string, string>();
   for (const message of c.messages)
@@ -508,12 +526,7 @@ export function BaamMessageList({ c, externalScrollContainer = false }: { c: Baa
             {c.optimistic.text}
           </div>
         ) : null}
-        {c.progress ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-            <Spinner />
-            {c.t(c.progress)}
-          </div>
-        ) : null}
+        {!externalProgress ? <BaamResponseProgress c={c} /> : null}
         {!c.messages.length && c.fetching && !c.progress ? (
           <p role="status" className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <Spinner /> {c.t("loading")}
