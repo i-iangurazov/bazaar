@@ -156,6 +156,43 @@ html.native-ios [data-bazaar-app] {
   padding-right: var(--native-safe-area-right, 0px);
 }
 
+/* Fullscreen POS omits MobileAppShell. Its own headers reserve the status bar,
+   but the layout's preceding access notice does not. Contain that notice's
+   margin without creating a scroll/positioning ancestor or another header gap. */
+html.native-ios [data-native-pos-shell] > main {
+  display: flow-root;
+}
+
+html.native-ios [data-native-pos-shell] > main > [data-subscription-access-notice] {
+  margin-top: var(--mobile-top-safe-area);
+}
+
+/* Keep a scrolling notice behind the same opaque status strip as normal chrome.
+   It adds no layout space, never intercepts controls, and disappears with the
+   notice; shared portalled dialogs retain their own higher safe-area layer. */
+html.native-ios [data-native-pos-shell] > main > [data-subscription-access-notice]::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--mobile-top-safe-area);
+  z-index: 90;
+  background: hsl(var(--background));
+  pointer-events: none;
+}
+
+/* Native iPads and landscape iPhones use the desktop chrome. Reserve the
+   overlay status bar inside each sticky surface so its background continues
+   covering the screen edge when the page scrolls. */
+@media (min-width: 768px) {
+  html.native-ios [data-bazaar-app] :is([data-app-header], [data-module-dock]) {
+    padding-top: calc(0.5rem + var(--mobile-top-safe-area));
+  }
+
+  html.native-ios [data-bazaar-app] [data-sidebar] {
+    padding-top: var(--mobile-top-safe-area);
+  }
+}
+
 html.native-ios [data-native-bottom-nav] {
   left: var(--native-safe-area-left, 0px);
   right: var(--native-safe-area-right, 0px);

@@ -1348,7 +1348,7 @@ describe("iOS Apple checkout and recovery", () => {
     expect(mock.purchase).not.toHaveBeenCalled();
   });
 
-  it("displays verified Apple money in its currency and treats a refund request as pending Apple decision", async () => {
+  it("does not assert refund submission from a successful StoreKit sheet return", async () => {
     const data = fixture();
     data.recentTransactions = [
       {
@@ -1369,7 +1369,7 @@ describe("iOS Apple checkout and recovery", () => {
     expect(history.textContent).toContain("9,99");
     expect(history.textContent).not.toContain("2000");
     fireEvent.click(screen.getByRole("button", { name: ru.billingApple.refund }));
-    await screen.findByText(ru.billingApple.refundSubmitted);
+    expect((await within(history).findByText(ru.billingApple.refundStatus)).getAttribute("role")).toBe("status");
     expect(mock.refund).toHaveBeenCalledWith("paid-receipt");
     expect(mock.confirm).not.toHaveBeenCalled();
   });
@@ -1390,7 +1390,7 @@ describe("iOS Apple checkout and recovery", () => {
     const refund = screen.getByRole("button", { name: ru.billingApple.refund }) as HTMLButtonElement;
     await waitFor(() => expect(refund.disabled).toBe(false));
     fireEvent.click(refund);
-    await screen.findByText(ru.billingApple.refundSubmitted);
+    await screen.findByText(ru.billingApple.refundStatus);
     expect(mock.refund).toHaveBeenCalledWith("9007199254740993001");
     expect(screen.queryByText(ru.appleConsumption.withdrawn)).toBeNull();
     expect(mock.purchase).not.toHaveBeenCalled();
