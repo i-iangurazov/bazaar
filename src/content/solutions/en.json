@@ -19,9 +19,9 @@
   },
   "pages": {
     "inventory": {
-      "title": "Inventory management software for stores",
+      "title": "Inventory management software for retail stores",
       "metaTitle": "Store inventory and stock management in Kyrgyzstan | BAZAAR",
-      "description": "Inventory management for retail and wholesale stores: catalog, prices, sales and stock by store. Spreadsheet imports and product movement history in BAZAAR.",
+      "description": "Manage products, prices, sales, and stock by store. Learn how to move your spreadsheet into BAZAAR and trace the movements behind each product's recorded quantity.",
       "eyebrow": "Products and stock",
       "intro": "BAZAAR connects a product record with its price and stock movements. Instead of maintaining several spreadsheets with different quantities, work from one catalog and investigate why stock changed. Start with one store, then introduce other available workflows when your team is ready.",
       "sections": [
@@ -31,14 +31,6 @@
           "items": [
             "Another delivery of the same product usually needs another receipt of stock, not another product card.",
             "Map spreadsheet columns and resolve preview errors before importing Excel or CSV data."
-          ]
-        },
-        {
-          "title": "Retail and wholesale prices for one product",
-          "body": "A product in BAZAAR can have separate retail and wholesale prices. Enable price types in your organization settings, then select the type when recording a sale or creating a customer order. Stock is tracked by product, variant and store.",
-          "items": [
-            "Set the appropriate prices for each store and product variant.",
-            "Before confirming, check the price type, quantity and selected store."
           ]
         },
         {
@@ -222,34 +214,34 @@
       ]
     },
     "retail": {
-      "title": "Retail and wholesale store software",
-      "metaTitle": "Retail and wholesale store software in Kyrgyzstan | BAZAAR",
-      "description": "BAZAAR for retail and wholesale stores in Kyrgyzstan: products, prices, sales and stock control. Explore features, guides and plans.",
+      "title": "How to start managing a store with software",
+      "metaTitle": "Retail store management software in Bishkek and Kyrgyzstan | BAZAAR",
+      "description": "Introduce store software in a practical order: catalog, verified stock, checkout, and staff access. Start BAZAAR with one complete workflow before adding more modules.",
       "eyebrow": "Putting store operations in order",
-      "intro": "Manage retail and wholesale sales in BAZAAR using one product catalog. Receive stock, record sales and check stock levels for the selected store. Assign staff roles and store access, and view results in reports.",
+      "intro": "Introducing store software starts with a clear way of working. If product names, stock quantities, and staff responsibilities are unsettled, software simply brings that confusion onto a screen. BAZAAR connects catalog, receiving, sales, stock control, and reporting, with additional workflows introduced when they solve an actual need.",
       "sections": [
         {
-          "title": "Connected products, sales and inventory",
-          "body": "Stock receipts, sales, write-offs and transfers are linked to the catalog. Select the store and product variant; completing the operation updates its stock quantity. Use the movement history to check where stock came from and where it went.",
+          "title": "Start with one complete workflow",
+          "body": "For the first stage, choose a store, a checked assortment, and someone responsible for the change. Decide who creates products, receives deliveries, and records sales. Follow one product from receiving to a completed sale. Bring in the full dataset after testing that path rather than before it.",
           "items": [
-            "The catalog stores product photos, SKUs, barcodes and variants.",
-            "In POS, you can record sales and returns and close the register shift."
+            "Set a transition date and retain the original spreadsheets separately.",
+            "Explain which records are authoritative so the team does not maintain conflicting stock totals."
           ]
         },
         {
-          "title": "Stock and access by store",
-          "body": "BAZAAR tracks stock separately for each store. The owner assigns staff roles and the stores they can access. Select a store and reporting period in analytics to view its sales and gross profit.",
+          "title": "Separate daily tasks from oversight",
+          "body": "A cashier needs their store's products and sales; a stockkeeper needs movements; an owner needs results and team access. Assigned roles and stores help organize this work. When adding another location, recheck the assortment and permissions. When responsibilities change, review the previous employee's access too.",
           "items": [
-            "Transfers record stock moving between stores.",
-            "Plans specify limits for stores, products and users."
+            "Reconcile sales, product stock, and cash as connected but different measures.",
+            "Compare reports for equivalent periods and inspect source documents when figures disagree."
           ]
         },
         {
-          "title": "Orders, online catalog and BAAM",
-          "body": "Customer orders record requests for products, while purchase orders help plan incoming stock. The public online catalog shows customers the store’s published products. BAAM answers questions about store operations using data the user is allowed to access.",
+          "title": "Expand after the core routine works",
+          "body": "Once everyday records are reliable, consider orders, customers, the online catalog, BAAM, and available integrations. These are separate workflows with their own setup, conditions, and limits. For example, a marketplace export requires prepared product records and seller access to that platform. Not every feature is included in every plan.",
           "items": [
-            "Product images can be prepared in the image studio.",
-            "Available modules and integrations depend on your plan and configuration."
+            "Choose the next module for a specific recurring task, not the length of a feature list.",
+            "Check plan limits before adding more stores or employees."
           ]
         }
       ],
