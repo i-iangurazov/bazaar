@@ -1,6 +1,6 @@
 import { productPhotoSearchMaxBytes, validProductPhotoRegion, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "@/server/services/errors";
-import { findPhotoCandidates, presentPhotoCandidates } from "@/server/services/productPhotoSearch";
+import { findPhotoCandidates, preparedPhotoSearchProgress, presentPreparedPhotoCandidates, presentPhotoCandidates } from "@/server/services/productPhotoSearch";
 import { photoSearchConfigured, checkPhotoSearchEngine } from "@/server/services/productPhotoSearchEngine";
 import { assertPhotoOrigin, consumePhotoRate, photoFailure, photoJson, photoSearchUser, readPhotoBody } from "@/server/services/productPhotoSearchHttp";
 import { assertPhotoStore, loadPhotoSearchScope } from "@/server/services/productPhotoSearchScope";
@@ -16,9 +16,14 @@ export async function GET(request: Request) {
     const storeId = new URL(request.url).searchParams.get("storeId") ?? "";
     await assertPhotoStore(user, storeId);
     const configured = photoSearchConfigured();
-    if (configured) await checkPhotoSearchEngine(request.signal);
+    const progress = configured ? await preparedPhotoSearchProgress(user, storeId, request.signal) : null;
+    if (configured && !progress) await checkPhotoSearchEngine(request.signal);
     const current = await photoSearchUser(request);
     if (current.id !== user.id || current.organizationId !== user.organizationId) throw new AppError("forbidden", "FORBIDDEN", 403);
+    if (progress) {
+      await assertPhotoStore(current, storeId);
+      return photoJson({ configured, progress, preparedIndex: true });
+    }
     const scope = await loadPhotoSearchScope(current, storeId);
     return photoJson({ configured, progress: scope.progress });
   } catch (error) { return photoFailure(error); }
@@ -49,10 +54,11 @@ export async function POST(request: Request) {
     }
     const rawAutomatic = form.get("autoRegion");
     if (rawAutomatic !== null && rawAutomatic !== "0" && rawAutomatic !== "1") throw new AppError("invalidInput", "BAD_REQUEST", 400);
-    const { candidates, analysis } = await findPhotoCandidates({ user, storeId, file, allowPartial, signal: request.signal, region, autoRegion: rawAutomatic !== "0" });
+    const result = await findPhotoCandidates({ user, storeId, file, allowPartial, signal: request.signal, region, autoRegion: rawAutomatic !== "0" });
     const currentUser = await photoSearchUser(request);
     if (currentUser.id !== user.id || currentUser.organizationId !== user.organizationId)
       throw new AppError("forbidden", "FORBIDDEN", 403);
-    return photoJson(await presentPhotoCandidates(currentUser, storeId, candidates, allowPartial, analysis));
+    return photoJson(result.prepared ? await presentPreparedPhotoCandidates(currentUser, storeId, result.prepared)
+      : await presentPhotoCandidates(currentUser, storeId, result.candidates, allowPartial, result.analysis));
   } catch (error) { return photoFailure(error); }
 }

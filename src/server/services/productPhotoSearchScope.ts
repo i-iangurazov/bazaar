@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { productPhotoSearchMaxImages, productPhotoSearchStreamMaxImages, productPhotoSearchModel, type ProductPhotoProgress } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
@@ -9,26 +10,27 @@ export type PhotoSource = { productId: string; sourceKey: string; sourceUrl: str
 export const photoSourceKey = (productId: string, url: string, revision: Date) =>
   createHash("sha256").update(JSON.stringify([productId, url, revision.toISOString()])).digest("hex");
 
-export async function assertPhotoStore(user: StoreAccessUser, storeId: string) {
+export async function assertPhotoStore(user: StoreAccessUser, storeId: string, db: Prisma.TransactionClient = prisma) {
   if (!storeId || storeId.length > 128) throw new AppError("invalidInput", "BAD_REQUEST", 400);
-  await assertUserCanAccessStore(prisma, user, storeId);
+  await assertUserCanAccessStore(db, user, storeId);
 }
 
+export const photoSearchStoreSelect = { id: true, name: true, enableSku: true, currencyCode: true, currencyRateKgsPerUnit: true } as const;
+
 /** Bounded metadata only; never uses embeddings of another store or organization. */
-export async function loadPhotoSearchScope(user: StoreAccessUser, storeId: string) {
-  await assertPhotoStore(user, storeId);
+export async function loadPhotoSearchScope(user: StoreAccessUser, storeId: string, db: Prisma.TransactionClient = prisma, productId?: string) {
+  await assertPhotoStore(user, storeId, db);
   const limit = photoSearchStreamingEnabled() ? productPhotoSearchStreamMaxImages : productPhotoSearchMaxImages;
-  const assortment = { organizationId: user.organizationId, isDeleted: false,
+  const assortment = { id: productId, organizationId: user.organizationId, isDeleted: false,
     storeProducts: { some: { organizationId: user.organizationId, storeId, isActive: true, isHidden: false } } };
-  const store = await prisma.store.findFirstOrThrow({ where: { id: storeId, organizationId: user.organizationId },
-    select: { id: true, name: true, enableSku: true, currencyCode: true, currencyRateKgsPerUnit: true } });
-  const products = await prisma.product.findMany({
+  const store = await db.store.findFirstOrThrow({ where: { id: storeId, organizationId: user.organizationId }, select: photoSearchStoreSelect });
+  const products = await db.product.findMany({
     where: assortment,
     select: { id: true, name: true, photoUrl: true, updatedAt: true }, orderBy: { id: "asc" }, take: limit + 1,
   });
   if (products.length > limit) throw new AppError("photoSearchCatalogTooLarge", "BAD_REQUEST", 422);
   const productIds = new Set(products.map((product) => product.id));
-  const images = products.length ? await prisma.productImage.findMany({
+  const images = products.length ? await db.productImage.findMany({
     where: { organizationId: user.organizationId, product: assortment, url: { not: "" } },
     select: { id: true, productId: true, url: true, updatedAt: true }, orderBy: [{ position: "asc" }, { id: "asc" }], take: limit + 1,
   }) : [];
@@ -53,7 +55,7 @@ export async function loadPhotoSearchScope(user: StoreAccessUser, storeId: strin
   const selectFeature = { id: true, productId: true, sourceKey: true, status: true } as const;
   const featuresByKey = new Map<string, { id: string; productId: string; sourceKey: string; status: string }>();
   if (photoSearchStreamingEnabled() && sources.length) {
-    const rows = await prisma.productPhotoFeature.findMany({ where: featureWhere, select: selectFeature, take: limit + 1 });
+    const rows = await db.productPhotoFeature.findMany({ where: featureWhere, select: selectFeature, take: limit + 1 });
     if (rows.length <= limit) {
       for (const row of rows) if (productByKey.get(row.sourceKey) === row.productId) featuresByKey.set(row.sourceKey, row);
     } else {
@@ -66,7 +68,7 @@ export async function loadPhotoSearchScope(user: StoreAccessUser, storeId: strin
   }
   async function findCurrentFeatures() {
     for (let offset = 0; offset < sources.length; offset += 8_192) {
-      const rows = await prisma.productPhotoFeature.findMany({
+      const rows = await db.productPhotoFeature.findMany({
         where: { ...featureWhere, sourceKey: { in: sources.slice(offset, offset + 8_192).map(({ sourceKey }) => sourceKey) } },
         select: selectFeature,
       });

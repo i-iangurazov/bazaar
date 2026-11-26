@@ -94,6 +94,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
   const controller = useRef<AbortController | null>(null);
   const epoch = useRef(0);
   const useReady = useRef(false);
+  const preparedIndex = useRef(false);
   const currentStore = stores.find((store) => store.id === selectedStore);
   const cancel = () => { epoch.current += 1; controller.current?.abort(); setBusy(false); setPhase(null); };
 
@@ -111,6 +112,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
     setBusy(false); setPhase(null);
     setError(null);
     setProgress(null);
+    preparedIndex.current = false;
     setResult(null); setSelectedId(null);
     if (!open || !selectedStore) { setStatus(null); return; }
     const active = new AbortController();
@@ -122,6 +124,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
         if (active.signal.aborted || sequence !== epoch.current) return;
         setStatus(body.configured ? "ready" : "unconfigured");
         setProgress(body.progress);
+        preparedIndex.current = body.preparedIndex === true && body.progress?.pending === 0;
       }).catch((cause) => {
         if (!active.signal.aborted && sequence === epoch.current) { setStatus(null); setError(cause instanceof Error ? cause.message : "photoSearchUnavailable"); }
       });
@@ -151,21 +154,25 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
       if (!prepared.ok) throw new Error(prepared.code);
       if (!valid()) return;
       const deadline = Date.now() + 180_000;
+      let prepare = retryFailed || !preparedIndex.current;
       for (let changed = 0; changed < 3; changed += 1) {
-        setPhase("catalog");
-        let first = true;
-        while (valid()) {
-          const body = await requestJson("/api/products/photo-search/prepare", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ storeId: selectedStore, retryFailed: retryFailed && first }),
-          }, active.signal);
-          if (!valid()) return;
-          first = false;
-          setProgress(body.progress);
-          if (!body.progress.pending || (useReady.current && body.progress.ready > 0)) break;
-          if (Date.now() > deadline) throw new Error("photoSearchPreparingLong");
-          await pause(active.signal);
+        if (prepare) {
+          setPhase("catalog");
+          let first = true;
+          while (valid()) {
+            const body = await requestJson("/api/products/photo-search/prepare", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ storeId: selectedStore, retryFailed: retryFailed && first }),
+            }, active.signal);
+            if (!valid()) return;
+            first = false;
+            setProgress(body.progress);
+            if (!body.progress.pending || (useReady.current && body.progress.ready > 0)) break;
+            if (Date.now() > deadline) throw new Error("photoSearchPreparingLong");
+            await pause(active.signal);
+          }
         }
+        prepare = true; // A changed catalog gets the normal preparation and retry on the next pass.
         if (!valid()) return;
         setPhase("search");
         const form = new FormData();
@@ -183,7 +190,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
             throw cause;
           }
         }
-        if (!body) continue;
+        if (!body) { preparedIndex.current = false; continue; }
         if (!valid()) return;
         if (body.storeId !== selectedStore || !Array.isArray(body.items)) throw new Error("photoSearchUnavailable");
         setResult(body); setProgress(body.progress);

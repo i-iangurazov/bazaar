@@ -22,9 +22,9 @@ def read_exact(stream, size):
     return value
 
 
-def read_header(stream):
+def read_header(stream, max_bytes=MAX_HEADER_BYTES):
     size, = struct.unpack('<I', read_exact(stream, 4))
-    if not 0 < size <= MAX_HEADER_BYTES:
+    if not 0 < size <= max_bytes:
         raise ValueError('invalidHeaderLength')
     value = json.loads(read_exact(stream, size))
     if not isinstance(value, dict):

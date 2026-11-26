@@ -7,6 +7,8 @@ import { POST as PREPARE } from "@/app/api/products/photo-search/prepare/route";
 import { prisma } from "@/server/db/prisma";
 import { getRedisPublisher } from "@/server/redis";
 import { productPhotoSearchModel as modelVersion } from "@/lib/productPhotoSearch";
+import { productPhotoIndexRevision } from "@/server/services/productPhotoIndexRevision";
+import { presentPreparedPhotoCandidates } from "@/server/services/productPhotoSearch";
 import { photoSourceKey, preparePhotoSearch, loadPhotoSearchScope } from "@/server/services/productPhotoSearchScope";
 import { processNextProductPhoto } from "@/server/services/productPhotoSearchWorker";
 import { createContractTerms } from "@/server/billing/contractTerms";
@@ -74,6 +76,33 @@ suite("internal photo search: isolated PostgreSQL, Redis and authentication", ()
     expect(await prisma.productImage.count()).toBe(0);
     expect(await prisma.product.count()).toBe(1);
     expect(await prisma.subscriptionUsageReservation.count()).toBe(0);
+  });
+  it("uses the prepared store index and rejects a catalog change during inference", async () => {
+    await ready();
+    vi.stubEnv("PRODUCT_PHOTO_SEARCH_STREAMING", "1");
+    vi.stubEnv("PRODUCT_PHOTO_SEARCH_PACKED", "1");
+    const feature = await prisma.productPhotoFeature.findFirstOrThrow({ where: { organizationId: f.org.id } });
+    const revision = await productPhotoIndexRevision(prisma, f.org.id, f.store.id);
+    if (!revision) throw new Error("Expected the isolated catalog revision");
+    const index = { revision, count: 1, withoutPhoto: 0 };
+    const analysis = { regionSource: "full", region: null, ocrStatus: "ready", lines: [] } as const;
+    transport.mockImplementation(async (url, options) => {
+      expect(String(url)).toBe("http://127.0.0.1:3160/snapshot-search");
+      const body = JSON.parse(options.body);
+      expect(body).toMatchObject({ organizationId: f.org.id, storeId: f.store.id });
+      expect(body.vectorsBase64).toBeUndefined();
+      return Response.json({ modelVersion, snapshot: index, analysis, matches: [{ index: 0, score: 0.93, sourceKey: feature.sourceKey }] });
+    });
+
+    const auth = await cookie(f.cashierUser);
+    const before = await query(auth);
+    expect(before.status).toBe(200);
+    expect(await before.json()).toMatchObject({ items: [{ id: f.product.id, priceKgs: 123 }], partial: false });
+    await prisma.storeProduct.update({
+      where: { storeId_productId: { storeId: f.store.id, productId: f.product.id } }, data: { isHidden: true },
+    });
+    await expect(presentPreparedPhotoCandidates({ ...f.cashierUser, organizationId: f.org.id }, f.store.id,
+      { index, analysis: { ...analysis, lines: [] }, sourceKeys: [feature.sourceKey] })).rejects.toThrow("photoSearchPreparing");
   });
   it("revalidates identities and grants and rejects foreign and unassigned stores before inference", async () => {
     await ready();
@@ -153,7 +182,9 @@ suite("internal photo search: isolated PostgreSQL, Redis and authentication", ()
     expect(result.items).toHaveLength(8);
     expect(result.items[0]).toMatchObject({ id: f.product.id, matchSource: "text", labelMatched: true });
   });
-  it("never sends embeddings of another store, hidden or archived products; deduplicates photos", async () => {
+  it.each(["0", "1"])("scopes embeddings and deduplicates photos (streaming %s)", async (streaming) => {
+    vi.stubEnv("PRODUCT_PHOTO_SEARCH_STREAMING", streaming);
+    const analysis = { regionSource: "full", region: null, ocrStatus: "ready", lines: [] };
     await ready();
     const p = await prisma.product.findUniqueOrThrow({ where: { id: f.product.id } });
     const gallery = await prisma.productImage.create({ data: { productId: p.id, organizationId: f.org.id, url: p.photoUrl! } });
@@ -166,10 +197,27 @@ suite("internal photo search: isolated PostgreSQL, Redis and authentication", ()
       await prisma.storeProduct.create({ data: { organizationId: f.org.id, productId: product.id, storeId, isHidden: hidden } });
       await prisma.productPhotoFeature.create({ data: { organizationId: f.org.id, productId: product.id, sourceKey: photoSourceKey(product.id, product.photoUrl!, product.updatedAt), sourceUrl: product.photoUrl!, modelVersion, status: "READY", embedding: vector } });
     }
+    if (streaming === "1") {
+      transport.mockImplementationOnce(async (url, init) => {
+        expect(String(url)).toMatch(/\/search-stream$/);
+        const bytes = Buffer.from(await new Response(init.body).arrayBuffer());
+        const headerSize = bytes.readUInt32LE();
+        const sent = JSON.parse(bytes.subarray(4, 4 + headerSize).toString());
+        expect(sent.count).toBe(1);
+        const records = bytes.subarray(4 + headerSize);
+        expect(records).toHaveLength(4 + 512 * 4);
+        expect(records.readUInt32LE()).toBe(0);
+        expect(records.readFloatLE(4)).toBe(1);
+        expect((await sharp(Buffer.from(sent.imageBase64, "base64")).metadata()).exif).toBeUndefined();
+        return Response.json({ modelVersion, matches: [{ index: 0, score: 0.93 }], analysis });
+      });
+    }
     const response = await query(await cookie()); expect(response.status).toBe(200);
-    const sent = JSON.parse(transport.mock.calls.find((call) => String(call[0]).endsWith("/search"))![1].body);
-    expect(sent.groups).toEqual([0]); expect(Buffer.from(sent.vectorsBase64, "base64")).toHaveLength(512*4);
-    const jpeg = await sharp(Buffer.from(sent.imageBase64, "base64")).metadata(); expect(jpeg.exif).toBeUndefined();
+    if (streaming === "0") {
+      const sent = JSON.parse(transport.mock.calls.find((call) => String(call[0]).endsWith("/search"))![1].body);
+      expect(sent.groups).toEqual([0]); expect(Buffer.from(sent.vectorsBase64, "base64")).toHaveLength(512*4);
+      expect((await sharp(Buffer.from(sent.imageBase64, "base64")).metadata()).exif).toBeUndefined();
+    }
     expect(await response.json()).toMatchObject({ items: [{ id: p.id }] });
   });
   it("rejects cross-organization feature rows at the database boundary", async () => {

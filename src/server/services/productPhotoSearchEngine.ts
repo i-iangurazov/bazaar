@@ -6,6 +6,7 @@ import { AppError } from "./errors";
 
 export const photoSearchConfigured = () => Boolean(process.env.PRODUCT_PHOTO_SEARCH_URL?.trim() && (process.env.PRODUCT_PHOTO_SEARCH_TOKEN?.length ?? 0) >= 32);
 export const photoSearchStreamingEnabled = () => process.env.PRODUCT_PHOTO_SEARCH_STREAMING === "1";
+export const photoSearchIndexEnabled = () => photoSearchStreamingEnabled() && process.env.PRODUCT_PHOTO_SEARCH_PACKED === "1";
 export const validPhotoEmbedding = (value: unknown): value is number[] => {
   if (!Array.isArray(value) || value.length !== productPhotoSearchDimension || !value.every((item) => typeof item === "number" && Number.isFinite(item))) return false;
   const norm = Math.sqrt(value.reduce((sum, item) => sum + item * item, 0));
@@ -20,7 +21,7 @@ async function requestEngine(path: string, body?: unknown, signal?: AbortSignal,
       (url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))
     throw new AppError("photoSearchNotConfigured", "INTERNAL_SERVER_ERROR", 503);
   url.pathname = `${url.pathname.replace(/\/$/, "")}/${path}`;
-  const deadline = AbortSignal.timeout(path === "health" ? 2500 : gallery ? 46_000 : 20_000);
+  const deadline = AbortSignal.timeout(path === "health" || path === "snapshot-status" ? 2500 : gallery ? 46_000 : 20_000);
   const combined = signal ? AbortSignal.any([signal, deadline]) : deadline;
   try {
     const options: RequestInit & { duplex?: "half" } = {
@@ -34,6 +35,10 @@ async function requestEngine(path: string, body?: unknown, signal?: AbortSignal,
     };
     const response = await fetch(url, options);
     if (response.status === 429) { await response.body?.cancel(); throw new AppError("photoSearchBusy", "TOO_MANY_REQUESTS", 429); }
+    if ((path === "snapshot-status" || path === "snapshot-search") && response.status === 404) {
+      await response.body?.cancel();
+      return null;
+    }
     if (!response.ok) { await response.body?.cancel(); throw new Error("unavailable"); }
     const reader = response.body?.getReader();
     if (!reader) throw new Error("invalidResponse");
@@ -91,6 +96,23 @@ type FeatureVector = { productId: string; embedding: number[] };
 type PhotoHit = { index: number; score: number };
 type EngineSearchReply = { matches?: unknown; analysis?: unknown };
 
+type PhotoIndexScope = { organizationId: string; storeId: string };
+export type PreparedPhotoIndex = { revision: string; count: number; withoutPhoto: number };
+const isDigest = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+
+function readPreparedIndex(value: unknown): PreparedPhotoIndex {
+  const index = value as PreparedPhotoIndex | null;
+  if (!index || !isDigest(index.revision) || !Number.isInteger(index.count) || index.count < 1 || index.count > productPhotoSearchStreamMaxImages ||
+    !Number.isInteger(index.withoutPhoto) || index.withoutPhoto < 0 || index.withoutPhoto > productPhotoSearchStreamMaxImages)
+    throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  return index;
+}
+
+export async function checkPreparedPhotoIndex(scope: PhotoIndexScope, signal?: AbortSignal) {
+  const result = await requestEngine("snapshot-status", scope, signal);
+  return result === null ? null : readPreparedIndex(result.snapshot);
+}
+
 function queryBody(jpeg: Buffer, { region, autoRegion }: QueryOptions) {
   if (region && !validProductPhotoRegion(region)) throw new AppError("invalidInput", "BAD_REQUEST", 400);
   return { imageBase64: jpeg.toString("base64"), minScore: productPhotoSearchMinScore,
@@ -109,6 +131,18 @@ function readQueryResult(result: EngineSearchReply, count: number, { region, aut
     throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
   if (!region && autoRegion === false && analysis.regionSource === "auto") throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
   return { matches: result.matches as PhotoHit[], analysis };
+}
+
+export async function queryPreparedProductPhoto(jpeg: Buffer, scope: PhotoIndexScope, signal?: AbortSignal, options: QueryOptions = {}) {
+  const result = await requestEngine("snapshot-search", { ...scope, ...queryBody(jpeg, options) }, signal);
+  if (result === null) return null;
+  const index = readPreparedIndex(result.snapshot);
+  if (result.analysis === undefined)
+    throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  const { matches, analysis } = readQueryResult(result, index.count, options);
+  const sourceKeys = result.matches.map((hit: { sourceKey?: unknown }) => hit.sourceKey) as unknown[];
+  if (!sourceKeys.every(isDigest)) throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  return { index, sourceKeys: sourceKeys.filter((_, i) => matches[i].score >= productPhotoSearchMinScore), analysis };
 }
 
 export async function queryProductPhoto(jpeg: Buffer, features: FeatureVector[], signal?: AbortSignal, options: QueryOptions = {}) {
@@ -130,8 +164,28 @@ export async function queryProductPhoto(jpeg: Buffer, features: FeatureVector[],
 const recordBytes = 4 + 4 * productPhotoSearchDimension;
 export const photoSearchVectorPage = 1024;
 
+// PostgreSQL's binary real[] has a 20-byte header and a length prefix before
+// each big-endian float. Preserve the stored float32 bits on the Faiss wire.
+export function packPostgresVector(embedding: Uint8Array, packed: Buffer, offset: number) {
+  const data = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
+  if (data.length !== 20 + 8 * productPhotoSearchDimension ||
+      data.readUInt32BE(0) !== 1 || data.readUInt32BE(4) !== 0 || data.readUInt32BE(8) !== 700 ||
+      data.readUInt32BE(12) !== productPhotoSearchDimension)
+    throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+  let sum = 0;
+  for (let column = 0; column < productPhotoSearchDimension; column += 1) {
+    const index = 20 + 8 * column;
+    if (data.readUInt32BE(index) !== 4) throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+    const value = data.readFloatBE(index + 4);
+    sum += value * value;
+    packed.writeUInt32LE(data.readUInt32BE(index + 4), offset + 4 * column);
+  }
+  if (!Number.isFinite(sum) || Math.abs(Math.sqrt(sum) - 1) >= 0.01)
+    throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
+}
+
 export async function queryProductPhotoStream(jpeg: Buffer, count: number,
-  pages: AsyncGenerator<FeatureVector[]>, signal?: AbortSignal, options: QueryOptions = {}) {
+  pages: AsyncGenerator<{ productId: string; embedding: Uint8Array }[]>, signal?: AbortSignal, options: QueryOptions = {}) {
   const body = queryBody(jpeg, options);
   if (!count) return { matches: [] as PhotoHit[], analysis: noAnalysis() };
   if (!Number.isInteger(count) || count < 0 || count > productPhotoSearchStreamMaxImages)
@@ -155,11 +209,10 @@ export async function queryProductPhotoStream(jpeg: Buffer, count: number,
         throw new AppError("photoSearchPreparing", "CONFLICT", 409);
       const packed = Buffer.allocUnsafe(page.value.length * recordBytes);
       page.value.forEach(({ productId, embedding }, row) => {
-        if (!validPhotoEmbedding(embedding)) throw new AppError("photoSearchUnavailable", "INTERNAL_SERVER_ERROR", 503);
         if (!groups.has(productId)) groups.set(productId, groups.size);
         const offset = row * recordBytes;
         packed.writeUInt32LE(groups.get(productId)!, offset);
-        embedding.forEach((value, col) => packed.writeFloatLE(value, offset + 4 + col * 4));
+        packPostgresVector(embedding, packed, offset + 4);
       });
       sent += page.value.length;
       controller.enqueue(packed);

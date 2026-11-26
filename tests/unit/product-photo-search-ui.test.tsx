@@ -30,6 +30,22 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe("store photo search interaction", () => {
+  it("searches a prepared index immediately and prepares only after the catalog changes", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(Response.json({ configured: true, progress, preparedIndex: true }))
+      .mockResolvedValueOnce(Response.json({ message: "photoSearchPreparing" }, { status: 409 }))
+      .mockResolvedValueOnce(Response.json({ progress }))
+      .mockResolvedValueOnce(Response.json(result));
+    const view = render(screen());
+    await select(view);
+    fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+    await view.findByText("Red cup");
+    expect(vi.mocked(fetch).mock.calls.map(([path]) => path)).toEqual([
+      "/api/products/photo-search?storeId=s1", "/api/products/photo-search",
+      "/api/products/photo-search/prepare", "/api/products/photo-search",
+    ]);
+  });
+
   it("prepares the existing upload, shows real candidate fields and requires an explicit choice", async () => {
     const view = render(screen()); await select(view);
     expect(view.getByLabelText("Take a photo").getAttribute("capture")).toBe("environment");

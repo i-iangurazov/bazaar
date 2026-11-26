@@ -3,6 +3,18 @@ import { checkPhotoSearchEngine, embedProductPhoto, matchProductPhoto, queryProd
   validPhotoEmbedding } from "@/server/services/productPhotoSearchEngine";
 import { productPhotoSearchModel as modelVersion, productPhotoSearchMinScore, productPhotoSearchStreamMaxImages } from "@/lib/productPhotoSearch";
 const v = [1, ...Array<number>(511).fill(0)];
+const vectorBytes = (values: number[]) => {
+  const data = Buffer.alloc(20 + 8 * values.length);
+  data.writeUInt32BE(1, 0);
+  data.writeUInt32BE(700, 8);
+  data.writeUInt32BE(values.length, 12);
+  data.writeUInt32BE(1, 16);
+  values.forEach((value, index) => {
+    data.writeUInt32BE(4, 20 + index * 8);
+    data.writeFloatBE(value, 24 + index * 8);
+  });
+  return data;
+};
 beforeEach(() => { vi.stubEnv("PRODUCT_PHOTO_SEARCH_URL", "http://127.0.0.1:3160"); vi.stubEnv("PRODUCT_PHOTO_SEARCH_TOKEN", "private-service-test-token-with-32-characters"); });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("private PP-ShiTu contract", () => {
@@ -59,6 +71,7 @@ describe("private PP-ShiTu contract", () => {
     await expect(checkPhotoSearchEngine()).rejects.toMatchObject({ status: 503 });
     await checkPhotoSearchEngine();
     const analysis = { regionSource: "full", region: null, ocrStatus: "ready", lines: [] };
+    const embedding = vectorBytes([Math.fround(-0.6), Math.fround(0.8), ...v.slice(2)]);
     vi.mocked(fetch).mockImplementationOnce(async (url, init) => {
       expect(String(url)).toMatch(/\/search-stream$/);
       expect(init?.headers).toMatchObject({ "Content-Type": "application/octet-stream" });
@@ -69,14 +82,25 @@ describe("private PP-ShiTu contract", () => {
       expect(data.includes("tenant-secret")).toBe(false);
       const rows = data.subarray(4 + headerSize);
       expect([0, 1, 2].map((row) => rows.readUInt32LE(row * 2052))).toEqual([0, 1, 0]);
-      expect(rows.readFloatLE(4)).toBe(1);
+      expect([rows.readFloatLE(4), rows.readFloatLE(8)]).toEqual([Math.fround(-0.6), Math.fround(0.8)]);
       return Response.json({ modelVersion, matches: [{ index: 2, score: 0.9 }], analysis });
     });
     async function* pages() {
-      yield [{ productId: "tenant-secret-1", embedding: v }];
-      yield [{ productId: "tenant-secret-2", embedding: v }, { productId: "tenant-secret-1", embedding: v }];
+      yield [{ productId: "tenant-secret-1", embedding }];
+      yield [{ productId: "tenant-secret-2", embedding }, { productId: "tenant-secret-1", embedding }];
     }
     await expect(queryProductPhotoStream(Buffer.from("jpeg"), 3, pages()))
       .resolves.toMatchObject({ matches: [{ index: 2, score: 0.9 }], analysis });
+  });
+  it("rejects invalid or non-unit binary PostgreSQL vectors before scoring", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_url, init) => {
+      await new Response(init.body).arrayBuffer();
+      throw new Error("invalid vector was streamed");
+    }));
+    for (const embedding of [Buffer.alloc(0), vectorBytes(v.slice(1)),
+      vectorBytes([NaN, ...v.slice(1)]), vectorBytes([0.5, ...v.slice(1)])]) {
+      async function* pages() { yield [{ productId: "p", embedding }]; }
+      await expect(queryProductPhotoStream(Buffer.from("jpeg"), 1, pages())).rejects.toMatchObject({ status: 503 });
+    }
   });
 });
