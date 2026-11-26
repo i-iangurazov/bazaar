@@ -65,8 +65,10 @@ export function BaamAssistantProvider({ children }: { children: ReactNode }) {
     </CompanionContext.Provider>
   );
 }
-export function BaamAssistant({ compact = false, nativeViewport = false, compactViewport = false, workspaceHeader }: {
-  compact?: boolean; nativeViewport?: boolean; compactViewport?: boolean; workspaceHeader?: ReactNode;
+export type BaamPhoneLayout = "normal" | "keyboard";
+
+export function BaamAssistant({ compact = false, nativeViewport = false, compactViewport = false, phoneLayout, workspaceHeader }: {
+  compact?: boolean; nativeViewport?: boolean; compactViewport?: boolean; phoneLayout?: BaamPhoneLayout; workspaceHeader?: ReactNode;
 }) {
   const { identity, loading } = useContext(CompanionContext);
   const locale = useLocale();
@@ -100,6 +102,7 @@ export function BaamAssistant({ compact = false, nativeViewport = false, compact
       compact={compact}
       nativeViewport={nativeViewport}
       compactViewport={compactViewport}
+      phoneLayout={phoneLayout}
       workspaceHeader={workspaceHeader}
     />
   );

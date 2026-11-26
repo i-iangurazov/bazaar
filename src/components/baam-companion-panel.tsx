@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import {
   ProductMovementIcon as ClockCounterClockwise,
   EditIcon as PencilSimple,
@@ -20,12 +20,12 @@ import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import type { BaamIdentity } from "./baam-assistant";
+import type { BaamIdentity, BaamPhoneLayout } from "./baam-assistant";
 import { useBaamCompanion, type BaamController } from "./use-baam-companion";
-import { BaamMessageList } from "./baam-message-list";
+import { BaamMessageList, BaamResponseProgress } from "./baam-message-list";
 import { BaamComposer } from "./baam-composer";
 
-function History({ c }: { c: BaamController }) {
+function History({ c, externalScrollContainer }: { c: BaamController; externalScrollContainer: boolean }) {
   const history = trpc.baam.conversations.useInfiniteQuery(
     {},
     {
@@ -36,7 +36,7 @@ function History({ c }: { c: BaamController }) {
   );
   // tRPC infinite queries use a `cursor` input; the server exposes a stable ID cursor.
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4" data-baam-dialogs>
+    <div className={cn("p-4", externalScrollContainer ? "shrink-0" : "min-h-0 flex-1 overflow-y-auto")} data-baam-dialogs>
       <h2 className="mb-4 text-lg font-semibold">{c.t("history")}</h2>
       {history.isLoading ? <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
         <Spinner /> {c.t("loading")}
@@ -105,43 +105,78 @@ export function BaamCompanionPanel({
   compact,
   nativeViewport = false,
   compactViewport = false,
+  phoneLayout,
   workspaceHeader,
 }: {
   identity: BaamIdentity;
   compact: boolean;
   nativeViewport?: boolean;
   compactViewport?: boolean;
+  phoneLayout?: BaamPhoneLayout;
   workspaceHeader?: ReactNode;
 }) {
   const c = useBaamCompanion(identity);
-  return (
-    <section
-      data-baam-chat
-      className={cn(
-        "relative flex min-h-0 flex-col bg-card text-card-foreground",
-        compact
-          ? "h-full"
-          : "h-[calc(100dvh-16rem)] min-h-[24rem] sm:h-[min(50rem,78dvh)] sm:min-h-[30rem]",
-      )}
-    >
+  const phone = Boolean(phoneLayout);
+  const keyboard = phoneLayout === "keyboard";
+  const { scrollRef, nearBottom, showHistory } = c;
+  const activeWorkflow = c.data?.conversation.activeWorkflowId;
+  const hasConversationActivity = Boolean(c.messages.length || c.optimistic || c.progress);
+  const dialogListRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const readingPosition = useRef<{ id: BaamIdentity["activeId"]; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!phone) return;
+    if (showHistory) {
+      if (dialogListRef.current) dialogListRef.current.scrollTop = 0;
+      return;
+    }
+    const previous = readingPosition.current;
+    readingPosition.current = null;
+    if (previous && previous.id === identity.activeId && scrollRef.current) {
+      scrollRef.current.scrollTop = previous.top;
+    }
+  }, [identity.activeId, phone, scrollRef, showHistory]);
+
+  useLayoutEffect(() => {
+    const port = scrollRef.current;
+    if (!phoneLayout || showHistory || !port || !hasConversationActivity || activeWorkflow) return;
+    const followLatest = () => {
+      if (nearBottom.current) port.scrollTop = port.scrollHeight;
+    };
+    followLatest();
+    if (typeof ResizeObserver === "undefined") return;
+    let viewportHeight = port.clientHeight;
+    let contentHeight = port.scrollHeight;
+    const observer = new ResizeObserver(() => {
+      if (port.clientHeight === viewportHeight && port.scrollHeight === contentHeight) return;
+      viewportHeight = port.clientHeight;
+      contentHeight = port.scrollHeight;
+      followLatest();
+    });
+    observer.observe(port);
+    if (transcriptRef.current) observer.observe(transcriptRef.current);
+    return () => observer.disconnect();
+  }, [activeWorkflow, hasConversationActivity, nearBottom, phoneLayout, scrollRef, showHistory]);
+
+  const toolbar = (
       <div
-        ref={nativeViewport ? c.scrollRef : undefined}
-        data-baam-scrollport={nativeViewport ? "workspace" : undefined}
-        className={nativeViewport ? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain" : "contents"}
-        onScroll={nativeViewport ? () => {
-          const element = c.scrollRef.current;
-          if (!element) return;
-          c.nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
-          if (c.nearBottom.current) c.setUnread(false);
-        } : undefined}
+        data-baam-toolbar
+        data-baam-phone-toolbar={phone ? "" : undefined}
+        className={cn(
+          "flex shrink-0 items-center border-b border-border/70",
+          phone ? "min-h-11 gap-1 px-1" : "gap-2 px-3 py-1.5 sm:px-4",
+        )}
       >
-      {workspaceHeader}
-      <div data-baam-toolbar className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-1.5 sm:px-4">
+        {phone ? workspaceHeader : null}
         <Button
           size="sm"
           className="h-11 shrink-0 whitespace-nowrap px-2 sm:h-9"
           variant={c.showHistory ? "secondary" : "ghost"}
           onClick={() => {
+            if (phone && !showHistory && scrollRef.current) {
+              readingPosition.current = { id: identity.activeId, top: scrollRef.current.scrollTop };
+            }
             c.voice.stop(true);
             c.setShowHistory(!c.showHistory);
           }}
@@ -193,19 +228,21 @@ export function BaamCompanionPanel({
           <span className="ml-1.5 hidden sm:inline">{c.t("new")}</span>
         </Button>
       </div>
-      {c.allowed && !c.capabilities.data?.configured ? (
-        <p className="border-b border-border/60 px-3 py-2 text-xs text-muted-foreground" role="status">
-          {c.t("localMode")}
-        </p>
-      ) : null}
-      {compactViewport && c.capabilities.data?.voiceConfigured ? <p data-baam-voice-hint className="shrink-0 border-b border-border/60 px-4 py-2 text-[10px] leading-4 text-muted-foreground">
+  );
+  const localMode = c.allowed && !c.capabilities.data?.configured ? (
+    <p className={cn("border-b border-border/60 px-3 py-2 text-xs text-muted-foreground", phone && "shrink-0")} role="status">
+      {c.t("localMode")}
+    </p>
+  ) : null;
+  const conversationControls = (
+    <>
+      {!phone ? localMode : null}
+      {!keyboard && compactViewport && c.capabilities.data?.voiceConfigured ? <p data-baam-voice-hint className="shrink-0 border-b border-border/60 px-4 py-2 text-[10px] leading-4 text-muted-foreground">
         {c.t("voiceSupport")}
       </p> : null}
-      {c.showHistory ? (
-        <History c={c} />
-      ) : (
+      {!showHistory ? (
         <>
-          <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-1.5 text-xs sm:px-4">
+          {!keyboard ? <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-1.5 text-xs sm:px-4">
             <label htmlFor="baam-store" className="sr-only">
               {c.t("store")}
             </label>
@@ -247,7 +284,7 @@ export function BaamCompanionPanel({
                 </button>
               </>
             ) : null}
-          </div>
+          </div> : null}
           {c.rename !== undefined ? (
             <form
               className="flex shrink-0 gap-2 border-b p-3"
@@ -277,11 +314,45 @@ export function BaamCompanionPanel({
               </Button>
             </form>
           ) : null}
-          <BaamMessageList c={c} externalScrollContainer={nativeViewport} />
         </>
+      ) : null}
+    </>
+  );
+  const transcript = showHistory
+    ? <History c={c} externalScrollContainer={phone} />
+    : <BaamMessageList c={c} externalScrollContainer={nativeViewport} externalProgress={phone} />;
+  return (
+    <section
+      data-baam-chat
+      data-baam-phone-layout={phoneLayout}
+      className={cn(
+        "relative flex min-h-0 flex-col bg-card text-card-foreground",
+        compact
+          ? "h-full"
+          : "h-[calc(100dvh-16rem)] min-h-[24rem] sm:h-[min(50rem,78dvh)] sm:min-h-[30rem]",
       )}
+    >
+      {phone ? <>{toolbar}{conversationControls}</> : null}
+      <div
+        ref={nativeViewport ? (phone && showHistory ? dialogListRef : scrollRef) : undefined}
+        data-baam-scrollport={nativeViewport ? "workspace" : undefined}
+        className={nativeViewport ? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain" : "contents"}
+        onScroll={nativeViewport && !(phone && showHistory) ? () => {
+          const element = scrollRef.current;
+          if (!element) return;
+          nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
+          if (nearBottom.current) c.setUnread(false);
+        } : undefined}
+      >
+        {phone ? (
+          <div ref={transcriptRef} className="min-w-0 shrink-0">
+            {localMode}
+            {transcript}
+          </div>
+        ) : <>{workspaceHeader}{toolbar}{conversationControls}{transcript}</>}
       </div>
-      {!c.showHistory ? <div data-baam-composer className={nativeViewport ? "min-h-0 shrink-0 overflow-y-auto" : "min-h-0 shrink overflow-y-auto overscroll-contain"}><BaamComposer c={c} inlineControls={compactViewport} /></div> : null}
+      {phone && !showHistory ? <BaamResponseProgress c={c} docked /> : null}
+      {!showHistory ? <div data-baam-composer className={nativeViewport ? "min-h-0 shrink-0 overflow-y-auto" : "min-h-0 shrink overflow-y-auto overscroll-contain"}><BaamComposer c={c} inlineControls={phone || compactViewport} /></div> : null}
     </section>
   );
 }
