@@ -90,7 +90,7 @@ export async function verifyPosReceiptEditing(
     .first()
     .click();
   // Wait for the receipt to hydrate before navigating to its payment tab.
-  await page.getByRole("button", { name: "Открыть чек", exact: true }).click();
+  await page.getByRole("button", { name: /^Перейти к оплате(?:\s|$)/ }).click();
   await expect(save()).toBeEnabled({ timeout: 30_000 });
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
