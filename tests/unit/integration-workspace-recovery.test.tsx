@@ -335,6 +335,23 @@ describe("integration workspace recovery", () => {
     expect(screen.getAllByText("common.loading").length).toBeGreaterThan(0);
   });
 
+  it("shows announcement tiles with disabled actions and no configuration links", () => {
+    render(<Hub />);
+    const upcoming = [
+      ["integrations.upcoming.yandexGo.title", "/brand/integrations/yandex-go.png"],
+      ["integrations.upcoming.yandexDelivery.title", "/brand/integrations/yandex-delivery.png"],
+      ["whatsappAi.title", "/brand/integrations/whatsapp.png"],
+    ];
+    for (const [title, logo] of upcoming) {
+      const tile = screen.getByRole("heading", { name: title }).closest(".flex-col") as HTMLElement;
+      const { getByText, getByRole, queryByRole } = within(tile);
+      expect(getByText("integrations.upcoming.status")).toBeTruthy();
+      expect(getByRole<HTMLButtonElement>("button", { name: "integrations.upcoming.connect" }).disabled).toBe(true);
+      expect(queryByRole("link")).toBeNull();
+      expect(tile.querySelector("img")?.getAttribute("src")).toBe(logo);
+    }
+  });
+
   it("offers a store choice instead of endless loading when the catalog has no stores", () => {
     state.emptyStores = true;
     render(<Catalog />);

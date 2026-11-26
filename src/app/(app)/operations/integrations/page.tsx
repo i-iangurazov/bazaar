@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, type ComponentProps, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -28,6 +29,7 @@ const queryState = (query: {
 
 const IntegrationTile = ({
   title,
+  logoSrc,
   description,
   status,
   statusVariant,
@@ -38,6 +40,7 @@ const IntegrationTile = ({
   pending,
 }: {
   title: string;
+  logoSrc?: string;
   description: string;
   status: string;
   statusVariant: BadgeVariant;
@@ -53,14 +56,25 @@ const IntegrationTile = ({
       <CardHeader className="px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
-            <IntegrationsIcon className="h-4 w-4" aria-hidden />
+            {logoSrc ? (
+              <Image
+                src={logoSrc}
+                alt=""
+                width={36}
+                height={36}
+                unoptimized
+                className="h-9 w-9 shrink-0 rounded-lg object-contain"
+              />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+                <IntegrationsIcon className="h-4 w-4" aria-hidden />
+              </div>
+            )}
+            <div className="min-w-0 space-y-1">
+              <CardTitle className="text-base leading-6">{title}</CardTitle>
+              <p className="text-sm leading-5 text-muted-foreground">{description}</p>
+            </div>
           </div>
-          <div className="min-w-0 space-y-1">
-            <CardTitle className="text-base leading-6">{title}</CardTitle>
-            <p className="text-sm leading-5 text-muted-foreground">{description}</p>
-          </div>
-        </div>
           <Badge
             variant={failure ? "danger" : pending ? "muted" : statusVariant}
             className="shrink-0"
@@ -69,7 +83,7 @@ const IntegrationTile = ({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="mt-auto flex flex-col gap-3 px-4 pb-4 pt-0">
+      <CardContent className="mt-auto flex flex-col gap-3">
         {failure ? (
           <QueryErrorState {...failure} />
         ) : !pending && detail ? (
@@ -254,15 +268,14 @@ const IntegrationsPage = () => {
       </div>
     );
   }
+  const upcomingAction = (
+    <Button type="button" variant="secondary" disabled>{t("upcoming.connect")}</Button>
+  );
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="grid max-w-[1500px] gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <IntegrationTile title={tWhatsApp("title")} description={tWhatsApp("subtitle")}
-          status={tWhatsApp("setupRequired")} statusVariant="muted"
-          detail={tWhatsApp("tileHelp")}
-          actions={<ActionLink href="/operations/integrations/whatsapp-ai">{tWhatsApp("open")}</ActionLink>} />
         <IntegrationTile
           title={t("bazaarCatalog.title")}
           {...queryState(storesQuery)}
@@ -335,6 +348,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("mMarket.title")}
+          logoSrc="/brand/marketplaces/m-market.png"
           {...queryState(mMarketOverviewQuery)}
           description={t("mMarket.description")}
           status={mMarketStatus}
@@ -355,6 +369,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("bakaiStore.title")}
+          logoSrc="/brand/marketplaces/bakai-store.png"
           {...queryState(bakaiStoreOverviewQuery)}
           description={t("bakaiStore.description")}
           status={bakaiStoreStatus}
@@ -375,6 +390,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("oMarket.title")}
+          logoSrc="/brand/marketplaces/o-market.png"
           {...queryState(oMarketOverviewQuery)}
           description={t("oMarket.description")}
           status={oMarketStatus}
@@ -425,6 +441,35 @@ const IntegrationsPage = () => {
             </>
           }
         />
+        <section aria-label={t("upcoming.status")} className="col-span-full grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <IntegrationTile
+            title={t("upcoming.yandexGo.title")}
+            logoSrc="/brand/integrations/yandex-go.png"
+            description={t("upcoming.yandexGo.description")}
+            status={t("upcoming.status")}
+            statusVariant="muted"
+            detail={t("upcoming.plans")}
+            actions={upcomingAction}
+          />
+          <IntegrationTile
+            title={t("upcoming.yandexDelivery.title")}
+            logoSrc="/brand/integrations/yandex-delivery.png"
+            description={t("upcoming.yandexDelivery.description")}
+            status={t("upcoming.status")}
+            statusVariant="muted"
+            detail={t("upcoming.plans")}
+            actions={upcomingAction}
+          />
+          <IntegrationTile
+            title={tWhatsApp("title")}
+            logoSrc="/brand/integrations/whatsapp.png"
+            description={tWhatsApp("subtitle")}
+            status={t("upcoming.status")}
+            statusVariant="muted"
+            detail={tWhatsApp("tileHelp")}
+            actions={upcomingAction}
+          />
+        </section>
       </div>
     </div>
   );
