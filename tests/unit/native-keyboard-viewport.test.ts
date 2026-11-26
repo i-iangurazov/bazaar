@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createNativeKeyboardViewport, nativeAvailableViewport } from "@/lib/native/keyboardViewport";
+import { createNativeKeyboardViewport, createWebKeyboardViewport, nativeAvailableViewport } from "@/lib/native/keyboardViewport";
 
 let viewport: ReturnType<typeof createNativeKeyboardViewport> | undefined;
 let frames: Map<number, FrameRequestCallback>;
 let serial: number;
-let visual: EventTarget & { height: number; offsetTop: number };
+let visual: EventTarget & { height: number; offsetTop: number; scale: number };
+const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 0, right: 300, width: 300, height, x: 0, y: top, toJSON: () => ({}) });
 const flush = () => {
   for (let turn = 0; frames.size && turn < 4; turn++) {
     const pending = [...frames.values()]; frames.clear();
@@ -22,7 +23,7 @@ beforeEach(() => {
   vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => { frames.delete(id); });
   vi.stubGlobal("innerHeight", 844);
   vi.stubGlobal("innerWidth", 393);
-  visual = Object.assign(new EventTarget(), { height: 844, offsetTop: 0 });
+  visual = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
   vi.stubGlobal("visualViewport", visual);
 });
 afterEach(() => {
@@ -75,7 +76,6 @@ describe("native keyboard visible viewport", () => {
     const form = document.querySelector<HTMLElement>("form")!;
     const first = document.querySelector<HTMLInputElement>("#first")!;
     const second = document.querySelector<HTMLInputElement>("#second")!;
-    const rect = (top: number, height: number) => ({ top, bottom: top + height, left: 0, right: 300, width: 300, height, x: 0, y: top, toJSON: () => ({}) });
     vi.spyOn(dialog, "getBoundingClientRect").mockImplementation(() => rect(60, 440));
     vi.spyOn(form, "getBoundingClientRect").mockImplementation(() => rect(100, 380));
     vi.spyOn(first, "getBoundingClientRect").mockImplementation(() => rect(600 - form.scrollTop, 40));
@@ -92,5 +92,76 @@ describe("native keyboard visible viewport", () => {
     expect(second.getBoundingClientRect().bottom).toBe(472);
     expect(document.activeElement).toBe(second);
     expect(pageScroll).not.toHaveBeenCalled(); expect(globalScroll).not.toHaveBeenCalled();
+  });
+
+  it("scrolls a regular product form to the active field and retains focus, caret and value", () => {
+    document.body.innerHTML = '<main><form><input aria-label="Product name" value="Synthetic" /></form></main>';
+    const input = document.querySelector("input")!;
+    const page = document.documentElement;
+    vi.spyOn(page, "clientHeight", "get").mockReturnValue(844);
+    vi.spyOn(page, "scrollHeight", "get").mockReturnValue(1200);
+    vi.spyOn(input, "getBoundingClientRect").mockImplementation(() => rect(710 - page.scrollTop, 40));
+    viewport = createNativeKeyboardViewport(page);
+    input.focus();
+    input.setSelectionRange(2, 4);
+    viewport.show(300);
+    flush();
+    expect(page.scrollTop).toBe(214);
+    expect(input.getBoundingClientRect().bottom).toBe(536);
+    expect(document.activeElement).toBe(input);
+    expect([input.value, input.selectionStart, input.selectionEnd]).toEqual(["Synthetic", 2, 4]);
+    expect(page.style.getPropertyValue("--mobile-keyboard-scroll-room")).toBe("300px");
+    viewport.hide();
+    flush();
+    expect(page.hasAttribute("data-mobile-keyboard-open")).toBe(false);
+    expect(page.style.getPropertyValue("--mobile-keyboard-scroll-room")).toBe("");
+    page.scrollTop = 0;
+  });
+
+  it("uses the mobile web viewport for quantity fields and allows manual scrolling while editing", () => {
+    document.body.innerHTML = '<section style="overflow-y:auto"><input aria-label="Counted quantity" inputmode="decimal" /></section>';
+    const pane = document.querySelector("section")!;
+    const field = document.querySelector("input")!;
+    Object.defineProperties(pane, { clientHeight: { value: 550 }, scrollHeight: { value: 1000 } });
+    vi.spyOn(pane, "getBoundingClientRect").mockReturnValue(rect(120, 550));
+    vi.spyOn(field, "getBoundingClientRect").mockImplementation(() => rect(630 - pane.scrollTop, 35));
+    viewport = createWebKeyboardViewport(document.documentElement);
+    field.focus();
+    visual.height = 490;
+    visual.dispatchEvent(new Event("resize"));
+    flush();
+    expect(pane.scrollTop).toBe(183);
+    expect(document.documentElement.hasAttribute("data-mobile-keyboard-open")).toBe(true);
+
+    pane.scrollTop = 125;
+    visual.dispatchEvent(new Event("scroll"));
+    flush();
+    expect(pane.scrollTop).toBe(125);
+
+    visual.height = 844;
+    visual.dispatchEvent(new Event("resize"));
+    flush();
+    expect(document.documentElement.hasAttribute("data-mobile-keyboard-open")).toBe(false);
+    expect(document.activeElement).toBe(field);
+  });
+
+  it("does not treat pinch zoom or a scanner-only field as a software keyboard", () => {
+    document.body.innerHTML = '<input id="text" /><input id="scanner" inputmode="none" />';
+    const [textInput, scanner] = document.querySelectorAll("input");
+    const page = document.documentElement;
+    viewport = createWebKeyboardViewport(page);
+    textInput.focus();
+    visual.height = 422;
+    visual.scale = 2;
+    visual.dispatchEvent(new Event("resize"));
+    flush();
+    expect(page.hasAttribute("data-mobile-keyboard-open")).toBe(false);
+
+    visual.scale = 1;
+    scanner.focus();
+    visual.dispatchEvent(new Event("resize"));
+    flush();
+    expect(page.hasAttribute("data-mobile-keyboard-open")).toBe(false);
+    expect(document.activeElement).toBe(scanner);
   });
 });

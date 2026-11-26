@@ -297,6 +297,9 @@ const PosEntryPage = () => {
                   <Link href="/pos/registers">{t("registers.create")}</Link>
                 </Button>
               ) : null}
+              <Button variant="secondary" className="h-11 w-full" asChild>
+                <Link href="/pos/shifts">{t("shifts.returnToShifts")}</Link>
+              </Button>
             </div>
           ) : null}
 

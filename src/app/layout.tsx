@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { Providers } from "./providers";
 import { GlobalNumberInputGuard } from "@/components/global-number-input-guard";
+import { MobileWebKeyboard } from "@/components/native/mobile-web-keyboard";
 import { bazaarBaseFontStylesheetHref } from "@/lib/catalogFonts";
 import { defaultLocale, toIntlLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
@@ -76,6 +77,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
       <body className="min-h-screen bg-background font-sans">
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
           <GlobalNumberInputGuard />
+          <MobileWebKeyboard />
           <MarketingAnalytics />
           {children}
         </Providers>

@@ -147,6 +147,8 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     } | null>(null);
 
     const currentValue = controlled ? (value ?? "") : internalValue;
+    const hasClearAction = showClearButton && currentValue.length > 0;
+    const hasStatusIndicator = submitting || feedback === "success";
     const observedValueRef = useRef(currentValue);
     useEffect(() => {
       if (currentValue !== observedValueRef.current) {
@@ -670,18 +672,17 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           enterKeyHint="search"
           autoComplete="off"
           className={cn(
-            !showClearButton ? "pr-20" : undefined,
             feedback === "error" ? "border-danger focus-visible:ring-danger/30" : undefined,
             inputClassName,
-            showClearButton ? "pr-24" : undefined,
-            showClearButton && (submitting || feedback === "success") ? "pr-32" : undefined,
+            hasClearAction ? "pr-24" : "pr-14",
+            hasStatusIndicator && (hasClearAction ? "pr-32" : "pr-20"),
           )}
         />
         {submitting ? (
           <span
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
-              showClearButton ? "right-24" : "right-12",
+              hasClearAction ? "right-24" : "right-14",
             )}
           >
             <Spinner className="h-4 w-4" />
@@ -690,7 +691,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           <span
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-success",
-              showClearButton ? "right-24" : "right-12",
+              hasClearAction ? "right-24" : "right-14",
             )}
           >
             <CheckIcon className="h-4 w-4" aria-hidden />
@@ -698,14 +699,14 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
         ) : null}
 
         <div className="absolute inset-y-1 right-1 flex items-center">
-          {showClearButton ? (
+          {hasClearAction ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="aspect-square h-full w-auto rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0"
+              className="h-full w-11 shrink-0 rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0"
               aria-label={tCommon("clearSearch")}
-              disabled={Boolean(disabled || submitting || !currentValue)}
+              disabled={Boolean(disabled || submitting)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 clearInput();
@@ -718,7 +719,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           ) : null}
           <CameraScanButton
             iconOnly
-            className="aspect-square h-full w-auto rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0"
+            className="h-full w-11 shrink-0 rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0"
             disabled={Boolean(disabled || submitting)}
             onScan={async (scannedValue) => {
               updateValue(scannedValue);

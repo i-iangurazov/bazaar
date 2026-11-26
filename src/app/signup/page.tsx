@@ -29,6 +29,7 @@ import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/loca
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { TRIAL_DAYS } from "@/lib/billing/trial";
+import { moveToNextAuthField } from "@/lib/native/mobileKeyboard";
 import { replaceAfterMarketingSuccess, trackMarketingEvent, trackSignupBeforeNavigation } from "@/lib/marketingAnalytics";
 import { trackMetaSignupBeforeNavigation } from "@/lib/metaMarketing";
 
@@ -299,7 +300,7 @@ const SignupPage = () => {
           ) : null}
           {formError ? <p className="text-sm font-medium text-danger">{translateError(tErrors, formError)}</p> : null}
           {mode === "invite_only" ? (
-            <form onSubmit={handleRequestSubmit}>
+            <form onSubmit={handleRequestSubmit} onKeyDown={moveToNextAuthField}>
               <FormStack>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground" htmlFor="signup-email">
@@ -308,6 +309,9 @@ const SignupPage = () => {
                   <Input
                     id="signup-email"
                     type="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    enterKeyHint="next"
                     placeholder={t("emailPlaceholder")}
                     value={requestValues.email}
                     onChange={(event) => {
@@ -328,6 +332,8 @@ const SignupPage = () => {
                   </label>
                   <Input
                     id="signup-org-name"
+                    autoComplete="organization"
+                    enterKeyHint="done"
                     placeholder={t("orgPlaceholder")}
                     value={requestValues.orgName ?? ""}
                     onChange={(event) => {
@@ -354,7 +360,7 @@ const SignupPage = () => {
               </FormStack>
             </form>
           ) : (
-            <form method="post" onSubmit={handleSignupSubmit}>
+            <form method="post" onSubmit={handleSignupSubmit} onKeyDown={moveToNextAuthField}>
               <FormStack>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground" htmlFor="signup-name">
@@ -362,6 +368,8 @@ const SignupPage = () => {
                   </label>
                   <Input
                     id="signup-name"
+                    autoComplete="name"
+                    enterKeyHint="next"
                     placeholder={t("namePlaceholder")}
                     value={signupValues.name}
                     onChange={(event) => {
@@ -386,6 +394,9 @@ const SignupPage = () => {
                   <Input
                     id="signup-open-email"
                     type="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    enterKeyHint="next"
                     placeholder={t("emailPlaceholder")}
                     value={signupValues.email}
                     onChange={(event) => {
@@ -406,6 +417,8 @@ const SignupPage = () => {
                   </label>
                   <PasswordInput
                     id="signup-password"
+                    autoComplete="new-password"
+                    enterKeyHint="done"
                     placeholder={t("passwordPlaceholder")}
                     value={signupValues.password}
                     showLabel={tCommon("showPassword")}

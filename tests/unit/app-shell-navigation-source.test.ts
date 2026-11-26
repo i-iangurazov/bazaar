@@ -90,13 +90,9 @@ describe("conservative app shell navigation source", () => {
   it("exposes only print settings from the settings group to cashiers", () => {
     const printingStart = source.indexOf('key: "printing"');
     const printingSource = source.slice(printingStart, printingStart + 240);
-    const mobilePrintingStart = source.indexOf('key: "mobile-printing"');
-    const mobilePrintingSource = source.slice(mobilePrintingStart, mobilePrintingStart + 260);
 
     expect(printingSource).toContain('requiredPermission: "managePrinting"');
     expect(printingSource).not.toContain("adminOnly: true");
-    expect(mobilePrintingSource).toContain('requiredPermission: "managePrinting"');
-    expect(mobilePrintingSource).not.toContain("adminOnly: true");
     expect(source).toContain('requiredPermission: "manageUsers"');
     expect(source).toContain('requiredPermission: "manageIntegrations"');
   });
@@ -115,14 +111,23 @@ describe("conservative app shell navigation source", () => {
     expect(inventorySource).toContain("icon: StockCountsIcon");
   });
 
-  it("keeps integrations reachable from the mobile more menu", () => {
-    const mobileMoreStart = source.indexOf("const mobileMoreCandidates");
-    const mobileMoreSource = source.slice(mobileMoreStart, mobileMoreStart + 1800);
-
-    expect(mobileMoreSource).toContain('key: "mobile-integrations"');
-    expect(mobileMoreSource).toContain('label: tNav("integrations")');
-    expect(mobileMoreSource).toContain('href: "/operations/integrations"');
-    expect(mobileMoreSource).toContain('requiredPermission: "manageIntegrations"');
+  it("shares visible desktop navigation, including operations and billing, with the mobile menu", () => {
+    expect(source).toContain("const mobileMoreSections = desktopNavGroups.flatMap");
+    expect(source).toContain("const children = group.items.flatMap(toMobileMoreEntry)");
+    expect(source).toContain("if (!isItemVisible(item)) return []");
+    expect(source).not.toContain("mobileBottomKeys");
+    expect(source).toContain("moreSections={mobileMoreSections}");
+    for (const [key, href, permission] of [
+      ["integrations", "/operations/integrations", "manageIntegrations"],
+      ["imports", "/settings/import", "manageImports"],
+      ["billing", "/billing", "manageBilling"],
+      ["printing", "/settings/printing", "managePrinting"],
+    ]) {
+      const start = source.indexOf(`key: "${key}"`);
+      const item = source.slice(start, start + 235);
+      expect(item).toContain(`href: "${href}"`);
+      expect(item).toContain(`requiredPermission: "${permission}"`);
+    }
   });
 
   it("keeps POS sell as a standalone cashier workspace outside the admin shell", () => {

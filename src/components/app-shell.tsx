@@ -19,6 +19,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   MobileAppShell,
   MobilePageContainer,
+  type MobileShellNavEntry,
   type MobileShellNavItem,
 } from "@/components/mobile-app-shell";
 import { PwaInstallButton } from "@/components/pwa-install-button";
@@ -685,7 +686,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       : undefined) ??
     desktopNavGroups.find((group) => group.items.some((item) => isItemActive(item))) ??
     desktopNavGroups[0];
-  const desktopGroupIcons: Record<NavGroupId, ComponentType<{ className?: string }>> = {
+  const navGroupIcons: Record<NavGroupId, ComponentType<{ className?: string }>> = {
     core: GridViewIcon,
     operations: IntegrationsIcon,
     insights: ReportsIcon,
@@ -880,196 +881,60 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     </Link>
   );
 
-  type MobileNavCandidate = MobileShellNavItem & {
-    activePath?: string;
-    exact?: boolean;
-    adminOnly?: boolean;
-    managerOnly?: boolean;
-    platformOwnerOnly?: boolean;
-    orgOwnerOnly?: boolean;
-    requiredPermission?: AppPermission;
-  };
+  const mobileBottomTabs = [
+    ["dashboard", tBreadcrumbs("home")],
+    ["pos", tNav("pos")],
+    ["products", tNav("products")],
+    ["salesOrders", tNav("sales"), "/sales"],
+  ] as const;
 
-  const isMobileNavCandidateAllowed = (item: MobileNavCandidate) => {
-    if (item.adminOnly && user.role !== "ADMIN") {
-      return false;
-    }
-    if (item.managerOnly && user.role !== "ADMIN" && user.role !== "MANAGER") {
-      return false;
-    }
-    if (item.platformOwnerOnly && !user.isPlatformOwner) {
-      return false;
-    }
-    if (item.orgOwnerOnly && !isOrgOwner) {
-      return false;
-    }
-    return hasPermission(access, item.requiredPermission);
-  };
-
-  const toMobileShellItem = (item: MobileNavCandidate): MobileShellNavItem => {
-    const activePath = item.activePath ?? item.href;
-    return {
-      key: item.key,
-      label: item.label,
+  const allowedNavItems = customizableNavGroups.flatMap((group) => group.items);
+  const mobileBottomItems = mobileBottomTabs.flatMap(([key, label, activePath]) => {
+    const item = allowedNavItems.find((item) => item.key === key);
+    if (!item?.href) return [];
+    return [{
+      key,
+      label,
       href: item.href,
       icon: item.icon,
-      description: item.description,
-      active:
-        normalizedPath === activePath ||
-        (!item.exact && normalizedPath.startsWith(`${activePath}/`)),
-    };
+      active: activePath
+        ? normalizedPath === activePath || normalizedPath.startsWith(`${activePath}/`)
+        : isItemActive(item),
+    }];
+  });
+  const toMobileMoreEntry = (item: NavItem): MobileShellNavEntry[] => {
+    if (!isItemVisible(item)) return [];
+
+    const entry = { key: item.key, label: tNav(item.key), icon: item.icon };
+    if (item.children?.length) {
+      const children = item.children.flatMap(toMobileMoreEntry);
+      return children.length ? [{ ...entry, children, active: children.some((child) => child.active) }] : [];
+    }
+    return item.href ? [{ ...entry, href: item.href, active: isItemActive(item) }] : [];
   };
 
-  const mobileBottomCandidates: MobileNavCandidate[] = [
-    {
-      key: "mobile-dashboard",
-      label: tBreadcrumbs("home"),
-      href: "/dashboard",
-      activePath: "/dashboard",
-      icon: DashboardIcon,
-      requiredPermission: "viewDashboard",
-    },
-    {
-      key: "mobile-pos",
-      label: tNav("pos"),
-      href: appRoutes.pos,
-      activePath: "/pos",
-      icon: PosIcon,
-      requiredPermission: "usePos",
-    },
-    {
-      key: "mobile-products",
-      label: tNav("products"),
-      href: appRoutes.products,
-      icon: ProductsIcon,
-      requiredPermission: "viewProducts",
-    },
-    {
-      key: "mobile-sales",
-      label: tNav("sales"),
-      href: "/sales/orders",
-      activePath: "/sales",
-      icon: SalesOrdersIcon,
-      requiredPermission: "viewSales",
-    },
-  ];
-
-  const mobileMoreCandidates: MobileNavCandidate[] = [
-    {
-      key: "mobile-inventory",
-      label: tNav("inventory"),
-      href: appRoutes.inventory,
-      activePath: "/inventory",
-      exact: true,
-      icon: InventoryIcon,
-      requiredPermission: "viewInventory",
-    },
-    {
-      key: "mobile-stock-receiving",
-      label: tNav("stockReceiving"),
-      href: appRoutes.receiving,
-      icon: ReceiveIcon,
-      requiredPermission: "viewInventory",
-    },
-    {
-      key: "mobile-stock-counts",
-      label: tNav("stockCounts"),
-      href: appRoutes.counts,
-      icon: StockCountsIcon,
-      requiredPermission: "viewInventory",
-    },
-    {
-      key: "mobile-customers",
-      label: tNav("customers"),
-      href: appRoutes.customers,
-      icon: CustomerDatabaseIcon,
-      requiredPermission: "manageCustomers",
-    },
-    {
-      key: "mobile-integrations",
-      label: tNav("integrations"),
-      href: "/operations/integrations",
-      activePath: "/operations/integrations",
-      icon: IntegrationsIcon,
-      requiredPermission: "manageIntegrations",
-    },
-    {
-      key: "mobile-baam",
-      label: tNav("baam"),
-      href: appRoutes.baam,
-      icon: BaamIcon,
-      managerOnly: true,
-      requiredPermission: "viewReports",
-    },
-    {
-      key: "mobile-reports",
-      label: tNav("reports"),
-      href: "/reports",
-      icon: ReportsIcon,
-      requiredPermission: "viewReports",
-    },
-    {
-      key: "mobile-settings",
-      label: tBreadcrumbs("settings"),
-      href: "/settings/profile",
-      activePath: "/settings/profile",
-      icon: UserIcon,
-      requiredPermission: "viewProfile",
-    },
-    {
-      key: "mobile-categories",
-      label: tNav("categories"),
-      href: "/settings/categories",
-      icon: TagIcon,
-      adminOnly: true,
-      requiredPermission: "manageProducts",
-    },
-    {
-      key: "mobile-printing",
-      label: tNav("printing"),
-      href: "/settings/printing",
-      icon: PrintIcon,
-      requiredPermission: "managePrinting",
-    },
-    {
-      key: "mobile-stores",
-      label: tNav("stores"),
-      href: appRoutes.stores,
-      icon: StoresIcon,
-      requiredPermission: "viewStores",
-    },
-    {
-      key: "mobile-users",
-      label: tNav("users"),
-      href: appRoutes.users,
-      icon: UsersIcon,
-      adminOnly: true,
-      requiredPermission: "manageUsers",
-    },
-    {
-      key: "mobile-help",
-      label: tNav("help"),
-      href: "/help",
-      icon: HelpIcon,
-      requiredPermission: "viewHelp",
-    },
-    {
-      key: "mobile-loyalty",
-      label: tNav("loyalty"),
-      href: "/settings/loyalty",
-      activePath: "/settings/loyalty",
-      icon: LoyaltyIcon,
-      adminOnly: true,
-      requiredPermission: "manageSettings",
-    },
-  ];
-
-  const mobileBottomItems = mobileBottomCandidates
-    .filter(isMobileNavCandidateAllowed)
-    .map(toMobileShellItem);
-  const mobileMoreItems = mobileMoreCandidates
-    .filter(isMobileNavCandidateAllowed)
-    .map(toMobileShellItem);
+  const mobileMoreSections = desktopNavGroups.flatMap((group) => {
+    const children = group.items.flatMap(toMobileMoreEntry);
+    if (group.id === "admin") {
+      children.sort((first, second) => Number(second.key === "billing") - Number(first.key === "billing"));
+    }
+    return children.length ? [{
+      key: group.id,
+      label: tNav(group.labelKey),
+      icon: navGroupIcons[group.id],
+      active: children.some((child) => child.active),
+      children,
+    }] : [];
+  });
+  const mobileProfileItem: MobileShellNavItem | undefined = hasPermission(access, "viewProfile")
+    ? {
+        key: "profile",
+        label: tNav("profile"),
+        href: "/settings/profile",
+        icon: UserIcon,
+        active: normalizedPath === "/settings/profile",
+      }
+    : undefined;
 
   const mobilePageTitle = useMemo(() => getMobilePageTitle(normalizedPath, {
     nav: tNav,
@@ -1142,7 +1007,8 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               pageTitle={mobilePageTitle}
               storeName={mobileStoreName}
               bottomItems={mobileBottomItems}
-              moreItems={mobileMoreItems}
+              moreSections={mobileMoreSections}
+              profileItem={mobileProfileItem}
               moreLabel={tNav("more")}
               profileLabel={tNav("profile")}
               closeLabel={tCommon("closeMenu")}
@@ -1172,7 +1038,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   ) : null}
                 </div>
                 {desktopNavGroups.map((group) => {
-                  const Icon = desktopGroupIcons[group.id];
+                  const Icon = navGroupIcons[group.id];
                   const selected = selectedDesktopGroup?.id === group.id;
                   return (
                     <Tooltip key={group.id}>

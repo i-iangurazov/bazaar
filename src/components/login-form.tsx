@@ -13,6 +13,7 @@ import { normalizeLocale } from "@/lib/locales";
 import { loginPhoneExample, normalizeLoginPhone } from "@/lib/loginPhone";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { getRoleHomePath } from "@/lib/roleAccess";
+import { moveToNextAuthField } from "@/lib/native/mobileKeyboard";
 import { MailIcon, PhoneIcon } from "@/components/icons";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -171,7 +172,7 @@ export const LoginForm = () => {
 
   return (
     <Form {...form}>
-      <form method="post" noValidate aria-busy={isLoading} onSubmit={form.handleSubmit(handleSubmit)}>
+      <form method="post" noValidate aria-busy={isLoading} onSubmit={form.handleSubmit(handleSubmit)} onKeyDown={moveToNextAuthField}>
         <FormStack className="gap-3.5 sm:gap-4">
           <div role="group" aria-label={t("loginMethod")} className="grid grid-cols-2 gap-1 rounded-xl border border-primary/10 bg-primary/5 p-1">
             {loginMethods.map(({ method: option, message, Icon }) => (
@@ -206,6 +207,7 @@ export const LoginForm = () => {
                     className={credentialInputClass}
                     disabled={!hydrated}
                     type={method === "email" ? "email" : "tel"}
+                    enterKeyHint="next"
                     autoComplete={method === "email" ? "email" : "username"}
                     autoCapitalize="none"
                     spellCheck={false}
@@ -231,6 +233,7 @@ export const LoginForm = () => {
                     wrapperClassName="col-span-2 [&>button]:size-10"
                     disabled={!hydrated}
                     autoComplete="current-password"
+                    enterKeyHint="done"
                     placeholder={t("passwordPlaceholder")}
                     showLabel={tCommon("showPassword")}
                     hideLabel={tCommon("hidePassword")}
