@@ -115,6 +115,7 @@
   height: 2.75rem;
   min-height: 2.75rem;
   max-height: 2.75rem;
+  padding-block: 0.625rem;
 }
 
 .workspace[data-baam-short-viewport="true"] :global([data-baam-compose-tools]),
