@@ -82,6 +82,8 @@ export default function BaamPage() {
       : ["data-native-keyboard", "data-mobile-keyboard-open", "style", "class"] });
     const resize = nativeIOS && typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : undefined;
     if (element.parentElement) resize?.observe(element.parentElement);
+    const accessNotice = element.closest("[data-app-page]")?.querySelector("[data-subscription-access-notice]");
+    if (accessNotice) resize?.observe(accessNotice);
     if (nav) resize?.observe(nav);
     return () => {
       window.removeEventListener("resize", measure);

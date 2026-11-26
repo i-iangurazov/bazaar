@@ -100,6 +100,12 @@
     padding-bottom: 0;
   }
 
+  :global(html.native-app.native-ios).nativeWorkspace :global([data-subscription-access-notice="trial"]) {
+    max-height: max(2.875rem, calc(var(--native-available-height, 100dvh) * 0.36));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   :global(html.native-app.native-ios).nativeWorkspace :global([data-native-keyboard-aware]) {
     overflow: hidden;
     overflow: clip;

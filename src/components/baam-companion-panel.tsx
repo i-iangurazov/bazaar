@@ -332,7 +332,7 @@ export function BaamCompanionPanel({
           : "h-[calc(100dvh-16rem)] min-h-[24rem] sm:h-[min(50rem,78dvh)] sm:min-h-[30rem]",
       )}
     >
-      {phone ? <>{toolbar}{conversationControls}</> : null}
+      {phone ? toolbar : null}
       <div
         ref={nativeViewport ? (phone && showHistory ? dialogListRef : scrollRef) : undefined}
         data-baam-scrollport={nativeViewport ? "workspace" : undefined}
@@ -346,6 +346,7 @@ export function BaamCompanionPanel({
       >
         {phone ? (
           <div ref={transcriptRef} className="min-w-0 shrink-0">
+            {conversationControls}
             {localMode}
             {transcript}
           </div>
