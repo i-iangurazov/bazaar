@@ -18,11 +18,16 @@ export async function openMobileBaam(page: Page) {
   if (storeId) {
     assert.equal(new URL(page.url()).searchParams.get("storeId"), storeId);
   }
-  const question = page.locator("[data-baam-workspace] [data-baam-input]");
+  const workspace = page.locator("[data-baam-workspace]");
+  await workspace.locator("[data-baam-phone-layout]").waitFor();
+  const question = workspace.locator("[data-baam-input]");
   await question.waitFor();
   assert.equal(await page.locator("[data-baam-drawer]").count(), 0);
+  assert.equal(await launcher.filter({ visible: true }).count(), 0);
+  assert.equal(await workspace.locator("[data-baam-toolbar]").count(), 1);
+  assert.equal(await workspace.locator("[data-baam-scrollport]").count(), 1);
 
-  await launcher.click();
+  await question.click();
   await page.waitForFunction(
     () => document.activeElement?.matches("[data-baam-workspace] [data-baam-input]") === true,
   );
