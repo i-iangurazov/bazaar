@@ -79,6 +79,18 @@ describe("duplicate public site consolidation", () => {
     expect(new URL(response.headers.get("location")!).origin).toBe("https://www.bazaar.kg");
   });
 
+  it("recognizes the actual host when the server-bound URL uses an internal hostname", async () => {
+    const response = await middleware(new NextRequest("http://127.0.0.1:3149/ru?tag=a&tag=b", {
+      headers: { host: "BazaarPos.App:3149", "x-forwarded-host": "evil.invalid" },
+    }));
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe("https://www.bazaar.kg/ru?tag=a&tag=b");
+    const officialHost = await middleware(new NextRequest("https://bazaarpos.app/ru", {
+      headers: { host: "www.bazaar.kg", "x-forwarded-host": "bazaarpos.app" },
+    }));
+    expect(officialHost.headers.get("location")).toBeNull();
+  });
+
   it.each(["POST", "PUT", "PATCH", "DELETE", "OPTIONS"])("does not redirect a %s payload across domains", async (method) => {
     const response = await middleware(request("/ru", { method }));
     expect(response.headers.get("location")).toBeNull();

@@ -21,8 +21,12 @@ export const hasLegacySiteSessionCookie = (request: NextRequest) =>
   );
 
 export const publicSiteRedirect = (request: NextRequest): URL | undefined => {
+  // Next's server-bound URL can use its internal hostname behind a proxy.
+  // Match the actual HTTP Host, never visitor-supplied forwarded-host headers.
+  const hostname = request.headers.get("host")?.toLowerCase().replace(/:\d+$/, "")
+    ?? request.nextUrl.hostname;
   if (
-    !duplicateHosts.has(request.nextUrl.hostname) ||
+    !duplicateHosts.has(hostname) ||
     (request.method !== "GET" && request.method !== "HEAD")
   ) return undefined;
 
