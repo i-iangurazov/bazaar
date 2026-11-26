@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
-import { CopyIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
+import { CodeIcon, CopyIcon, ImageAddIcon, MailIcon, StoresIcon, ViewIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,13 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 
 type SummaryStatus = "NOT_CONFIGURED" | "DRAFT" | "PUBLISHED";
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
+type IntegrationArtwork =
+  | { src: string; roundCorners?: boolean }
+  | { Icon: typeof StoresIcon; tone: string };
 
 const queryState = (query: {
   error: ComponentProps<typeof QueryErrorState>["error"] | null;
@@ -29,7 +33,7 @@ const queryState = (query: {
 
 const IntegrationTile = ({
   title,
-  logoSrc,
+  artwork,
   description,
   status,
   statusVariant,
@@ -40,7 +44,7 @@ const IntegrationTile = ({
   pending,
 }: {
   title: string;
-  logoSrc?: string;
+  artwork: IntegrationArtwork;
   description: string;
   status: string;
   statusVariant: BadgeVariant;
@@ -56,18 +60,18 @@ const IntegrationTile = ({
       <CardHeader className="px-4 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 gap-3">
-            {logoSrc ? (
+            {"src" in artwork ? (
               <Image
-                src={logoSrc}
+                src={artwork.src}
                 alt=""
                 width={36}
                 height={36}
                 unoptimized
-                className="h-9 w-9 shrink-0 rounded-lg object-contain"
+                className={cn("h-9 w-9 shrink-0 object-contain", artwork.roundCorners !== false && "rounded-lg")}
               />
             ) : (
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
-                <IntegrationsIcon className="h-4 w-4" aria-hidden />
+              <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]", artwork.tone)}>
+                <artwork.Icon size={21} strokeWidth={1.65} aria-hidden />
               </div>
             )}
             <div className="min-w-0 space-y-1">
@@ -278,6 +282,7 @@ const IntegrationsPage = () => {
       <div className="grid max-w-[1500px] gap-4 md:grid-cols-2 xl:grid-cols-3">
         <IntegrationTile
           title={t("bazaarCatalog.title")}
+          artwork={{ Icon: StoresIcon, tone: "bg-[#e9efff] text-[#144dcc] dark:bg-[#20315a] dark:text-[#9cb8ff]" }}
           {...queryState(storesQuery)}
           description={t("bazaarCatalog.description")}
           status={t(`status.${statusLabelKey}`)}
@@ -314,6 +319,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("bazaarApi.title")}
+          artwork={{ Icon: CodeIcon, tone: "bg-[#e1f5f0] text-[#087d74] dark:bg-[#173833] dark:text-[#65ddc6]" }}
           {...queryState(storesQuery.error || storesQuery.isLoading || !defaultStoreId ? storesQuery : apiKeysQuery)}
           description={t("bazaarApi.description")}
           status={activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured")}
@@ -325,6 +331,7 @@ const IntegrationsPage = () => {
         {canManageApiKeys ? (
           <IntegrationTile
             title={t("emailMarketing.title")}
+            artwork={{ Icon: MailIcon, tone: "bg-[#fff1e1] text-[#a44a14] dark:bg-[#412c20] dark:text-[#ffb47c]" }}
             {...queryState(emailMarketingOverviewQuery)}
             description={t("emailMarketing.description")}
             status={
@@ -348,7 +355,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("mMarket.title")}
-          logoSrc="/brand/marketplaces/m-market.png"
+          artwork={{ src: "/brand/marketplaces/m-market.png" }}
           {...queryState(mMarketOverviewQuery)}
           description={t("mMarket.description")}
           status={mMarketStatus}
@@ -369,7 +376,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("bakaiStore.title")}
-          logoSrc="/brand/marketplaces/bakai-store.png"
+          artwork={{ src: "/brand/marketplaces/bakai-store.png" }}
           {...queryState(bakaiStoreOverviewQuery)}
           description={t("bakaiStore.description")}
           status={bakaiStoreStatus}
@@ -390,7 +397,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("oMarket.title")}
-          logoSrc="/brand/marketplaces/o-market.png"
+          artwork={{ src: "/brand/marketplaces/o-market.png" }}
           {...queryState(oMarketOverviewQuery)}
           description={t("oMarket.description")}
           status={oMarketStatus}
@@ -421,6 +428,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("productImageStudio.title")}
+          artwork={{ Icon: ImageAddIcon, tone: "bg-[#f1eaff] text-[#713caf] dark:bg-[#33264a] dark:text-[#c7a5ff]" }}
           {...queryState(productImageStudioOverviewQuery)}
           description={t("productImageStudio.description")}
           status={imageStudioStatus}
@@ -444,7 +452,7 @@ const IntegrationsPage = () => {
         <section aria-label={t("upcoming.status")} className="col-span-full grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <IntegrationTile
             title={t("upcoming.yandexGo.title")}
-            logoSrc="/brand/integrations/yandex-go.png"
+            artwork={{ src: "/brand/integrations/yandex-go.png" }}
             description={t("upcoming.yandexGo.description")}
             status={t("upcoming.status")}
             statusVariant="muted"
@@ -453,7 +461,7 @@ const IntegrationsPage = () => {
           />
           <IntegrationTile
             title={t("upcoming.yandexDelivery.title")}
-            logoSrc="/brand/integrations/yandex-delivery.png"
+            artwork={{ src: "/brand/integrations/yandex-delivery.png" }}
             description={t("upcoming.yandexDelivery.description")}
             status={t("upcoming.status")}
             statusVariant="muted"
@@ -462,7 +470,7 @@ const IntegrationsPage = () => {
           />
           <IntegrationTile
             title={tWhatsApp("title")}
-            logoSrc="/brand/integrations/whatsapp.png"
+            artwork={{ src: "/brand/integrations/whatsapp.png", roundCorners: false }}
             description={tWhatsApp("subtitle")}
             status={t("upcoming.status")}
             statusVariant="muted"

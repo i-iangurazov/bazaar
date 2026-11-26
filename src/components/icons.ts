@@ -23,6 +23,7 @@ import {
   SquareCheck as CheckSquare,
   Clock,
   ClipboardList,
+  CodeXml,
   Coins,
   History as ClockCounterClockwise,
   Copy,
@@ -46,6 +47,7 @@ import {
   House,
   ContactRound as IdentificationCard,
   Image as ImageSquare,
+  ImagePlus,
   LifeBuoy as Lifebuoy,
   Menu as List,
   ListChecks,
@@ -155,6 +157,8 @@ export const ArrowUpIcon = actionIcon(ArrowUp);
 export const ArrowDownIcon = actionIcon(ArrowDown);
 export const GripIcon = actionIcon(DotsSixVertical);
 export const ImagePlusIcon = actionIcon(ImageSquare);
+export const ImageAddIcon = actionIcon(ImagePlus);
+export const CodeIcon = actionIcon(CodeXml);
 export const AdjustIcon = actionIcon(SlidersHorizontal);
 export const PdfIcon = actionIcon(FileText);
 export const PrintIcon = actionIcon(Printer);
