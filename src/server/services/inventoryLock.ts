@@ -3,6 +3,11 @@ import type { InventorySnapshot, Prisma } from "@prisma/client";
 import { AppError } from "@/server/services/errors";
 import { assignProductToStore } from "@/server/services/storeAccess";
 
+/** Serialize absolute warehouse changes and stock counts for the same store. */
+export const lockStoreStockReset = async (tx: Prisma.TransactionClient, storeId: string) => {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`store-stock-reset:${storeId}`}, 0))`;
+};
+
 /** Lock before deriving an absolute correction. Also handles the first stock write. */
 export const lockStockSnapshot = async (
   tx: Prisma.TransactionClient,

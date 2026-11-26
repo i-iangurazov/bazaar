@@ -68,7 +68,7 @@ import { lockAssortment, publishAssortmentChange } from "@/server/services/assor
 import { publishProductChange } from "@/server/services/productChangeEvents";
 import { readProductPriceVersion } from "@/server/services/productPriceVersion";
 import { getLogger } from "@/server/logging";
-import { lockStockSnapshot } from "@/server/services/inventoryLock";
+import { lockStockSnapshot, lockStoreStockReset } from "@/server/services/inventoryLock";
 import { applyStockMovement } from "@/server/services/inventory";
 import {
   OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
@@ -4396,6 +4396,10 @@ export const importProductsTx = async (
   const stockBehavior =
     input.stockBehavior ??
     (input.rows.some((row) => row.stockQty !== undefined) ? "set" : "ignore");
+  if (input.storeId && stockBehavior === "set" && shouldApplyField("stockQty") &&
+      input.rows.some((row) => row.stockQty !== undefined)) {
+    await lockStoreStockReset(tx, input.storeId);
+  }
   const overwriteEmptyValues = emptyValueBehavior === "overwrite";
   const rowDecisionByNumber = new Map(
     (input.rowActions ?? []).map((decision) => [decision.sourceRowNumber, decision]),
@@ -4568,23 +4572,34 @@ export const importProductsTx = async (
       productId,
       organizationId: input.organizationId,
     });
-    const currentOnHand = currentSnapshot?.onHand ?? 0;
-    const qtyDelta = stockBehavior === "set" ? roundQuantity(stockQty - currentOnHand) : stockQty;
-    if (qtyDelta === 0) {
-      return;
+    const qtyDelta = stockBehavior === "set" ? roundQuantity(stockQty - currentSnapshot.onHand) : stockQty;
+    let snapshot = currentSnapshot;
+    if (qtyDelta !== 0) {
+      ({ snapshot } = await applyStockMovement(tx, {
+        storeId: input.storeId,
+        productId,
+        qtyDelta,
+        type: stockBehavior === "add" ? StockMovementType.RECEIVE : StockMovementType.ADJUSTMENT,
+        referenceType: "IMPORT",
+        referenceId: input.batchId,
+        note: stockBehavior === "add" ? "importStockAdd" : "importStockSet",
+        actorId: input.actorId,
+        organizationId: input.organizationId,
+      }));
     }
 
-    await applyStockMovement(tx, {
-      storeId: input.storeId,
-      productId,
-      qtyDelta,
-      type: stockBehavior === "add" ? StockMovementType.RECEIVE : StockMovementType.ADJUSTMENT,
-      referenceType: "IMPORT",
-      referenceId: input.batchId,
-      note: stockBehavior === "add" ? "importStockAdd" : "importStockSet",
-      actorId: input.actorId,
-      organizationId: input.organizationId,
-    });
+    if (stockBehavior === "set") {
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "INVENTORY_IMPORT_SET_ON_HAND",
+        entity: "InventorySnapshot",
+        entityId: snapshot.id,
+        before: toJson(currentSnapshot),
+        after: toJson(snapshot),
+        requestId: input.requestId,
+      });
+    }
   };
 
   let attributeDefinitionsCache: AttributeDefinitionRow[] | null = null;

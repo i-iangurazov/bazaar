@@ -129,6 +129,7 @@ type InlineEditableCellProps<TRow, TValue, TContext> = {
   tTable: (key: string) => string;
   tCommon: (key: string) => string;
   enabled: boolean;
+  cancelBlurCommit?: (nextTarget: EventTarget | null) => boolean;
   executeMutation: (operation: InlineMutationOperation) => Promise<void>;
   onMutationSuccess?: () => void;
   className?: string;
@@ -151,6 +152,7 @@ export const InlineEditableCell = <
   tTable,
   tCommon,
   enabled,
+  cancelBlurCommit,
   executeMutation,
   onMutationSuccess,
   className,
@@ -489,6 +491,11 @@ export const InlineEditableCell = <
             }}
             onKeyDown={onInputKeyDown}
             onBlur={(event) => {
+              if (cancelBlurCommit?.(event.relatedTarget)) {
+                keyboardSessionRef.current = false;
+                closeEditor();
+                return;
+              }
               void commitFromRawValue(event.currentTarget.value, "blur");
             }}
             className="h-8 min-w-[120px]"

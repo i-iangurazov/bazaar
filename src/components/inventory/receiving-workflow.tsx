@@ -245,7 +245,7 @@ export const InventoryReceivingPage = ({
     "inventory.updated": payload => {
       const item = payload && typeof payload === "object" ? payload as { storeId?: string; productId?: string } : null;
       if (!pendingReceivingRef.current && item?.storeId === storeId &&
-          lines.some(line => line.productId === item.productId))
+          (item.productId === "*" || lines.some(line => line.productId === item.productId)))
         setPreviewRevision(current => current + 1);
     },
   });

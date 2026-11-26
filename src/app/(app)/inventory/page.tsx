@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
   type HTMLAttributes,
+  type SetStateAction,
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -133,10 +134,12 @@ import { useToast } from "@/components/ui/toast";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
 import { StockIdentityNotice } from "@/components/inventory/product-stock-candidates";
+import { StoreStockResetDialog } from "@/components/inventory/store-stock-reset-dialog";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const inventoryViewModeSchema = z.enum(["table", "grid"]);
+const emptySelectedIds = new Set<string>();
 const inventoryStockFilterSchema = z.enum([
   "all",
   "lowStock",
@@ -393,9 +396,10 @@ const InventoryPage = () => {
   const stores: StoreRow[] = (storesQuery.data ?? []) as StoreRow[];
   const [expandedReorderId, setExpandedReorderId] = useState<string | null>(null);
   const [expiryWindow, setExpiryWindow] = useState<30 | 60 | 90>(30);
-  const [activeDialog, setActiveDialog] = useState<
-    "adjust" | "transfer" | "minStock" | "bulkOnHand" | "movements" | null
-  >(null);
+  const [dialog, setDialog] = useState<{
+    type: "adjust" | "transfer" | "minStock" | "bulkOnHand" | "movements" | "storeReset";
+    storeId: string;
+  } | null>(null);
   const [bulkOnHandProgress, setBulkOnHandProgress] = useState<{
     processed: number;
     total: number;
@@ -420,7 +424,7 @@ const InventoryPage = () => {
     }[]
   >([]);
   const [poDraftQtyInputByKey, setPoDraftQtyInputByKey] = useState<Record<string, string>>({});
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selection, setSelection] = useState<{ scope: string; ids: Set<string> } | null>(null);
   const [selectingAllResults, setSelectingAllResults] = useState(false);
   const [printSetupOpen, setPrintSetupOpen] = useState(false);
   const [inventoryQuickPrintLoading, setInventoryQuickPrintLoading] = useState(false);
@@ -511,9 +515,40 @@ const InventoryPage = () => {
     parse: parseInventorySavedViews,
   });
   const storeId = inventoryTableState.storeId;
+  const activeStoreIdRef = useRef(storeId);
+  activeStoreIdRef.current = storeId;
+  const storePickerOpenRef = useRef(false);
+  const cancelInlineBlur = useCallback(
+    (nextTarget: EventTarget | null) =>
+      storePickerOpenRef.current ||
+      (nextTarget instanceof Element && nextTarget.id === "inventory-store"),
+    [],
+  );
+  const activeDialog = dialog?.storeId === storeId ? dialog.type : null;
+  const setActiveDialog = useCallback(
+    (type: NonNullable<typeof dialog>["type"] | null) =>
+      setDialog(type ? { type, storeId } : null),
+    [storeId],
+  );
   const search = inventoryTableState.search;
   const viewMode = inventoryTableState.viewMode;
   const stockFilter = inventoryTableState.stockFilter;
+  const selectionScope = JSON.stringify([inventoryTableStorageKey, search, storeId, stockFilter]);
+  const selectionScopeRef = useRef(selectionScope);
+  selectionScopeRef.current = selectionScope;
+  const selectedIds = selection?.scope === selectionScope ? selection.ids : emptySelectedIds;
+  const setSelectedIds = useCallback(
+    (next: SetStateAction<Set<string>>) => {
+      if (selectionScopeRef.current !== selectionScope) return;
+      setSelection((current) => ({
+        scope: selectionScope,
+        ids: typeof next === "function"
+          ? next(current?.scope === selectionScope ? current.ids : emptySelectedIds)
+          : next,
+      }));
+    },
+    [selectionScope],
+  );
   const inventoryPage = inventoryTableState.page;
   const setInventoryPage = useCallback(
     (page: number) => setInventoryTableState((current) => ({ ...current, page })),
@@ -527,12 +562,14 @@ const InventoryPage = () => {
       : inventoryTableState.sort;
   const visibleInventoryColumns = inventoryTableState.visibleColumns;
   const setStoreId = useCallback(
-    (nextValue: string) =>
+    (nextValue: string) => {
+      activeStoreIdRef.current = nextValue;
       setInventoryTableState((current) => ({
         ...current,
         storeId: nextValue,
         page: 1,
-      })),
+      }));
+    },
     [setInventoryTableState],
   );
   const setSearch = useCallback(
@@ -907,11 +944,13 @@ const InventoryPage = () => {
       keepPreviousData: true,
     },
   );
+  const inventoryData = inventoryQuery.data?.storeId === storeId ? inventoryQuery.data : undefined;
+  const inventoryLoading = Boolean(storeId && !inventoryData && !inventoryQuery.isError);
   const inventoryItems = useMemo(
-    () => inventoryQuery.data?.items ?? [],
-    [inventoryQuery.data?.items],
+    () => inventoryData?.items ?? [],
+    [inventoryData?.items],
   );
-  const inventoryTotal = inventoryQuery.data?.total ?? 0;
+  const inventoryTotal = inventoryData?.total ?? 0;
   const inventorySummary = useMemo(
     () => ({
       totalSkus: inventoryTotal,
@@ -951,7 +990,7 @@ const InventoryPage = () => {
           variantId: movementTarget.variantId ?? undefined,
         }
       : { storeId: "", productId: "" },
-    { enabled: Boolean(movementTarget && storeId) },
+    { enabled: Boolean(movementTarget && storeId && activeDialog === "movements") },
   );
 
   type InventoryRow = NonNullable<typeof inventoryItems>[number];
@@ -1010,13 +1049,14 @@ const InventoryPage = () => {
   const selectorItems = useMemo(() => {
     const byKey = new Map<string, InventorySelectorItem>();
     const addItem = (item: InventorySelectorItem) => {
+      if (item.snapshot.storeId !== storeId) return;
       byKey.set(`${item.product.id}:${item.snapshot.variantId ?? "BASE"}`, item);
     };
     inventoryItems.forEach(addItem);
     (adjustProductSearchQuery.data ?? []).forEach(addItem);
     (transferProductSearchQuery.data ?? []).forEach(addItem);
     return Array.from(byKey.values());
-  }, [adjustProductSearchQuery.data, inventoryItems, transferProductSearchQuery.data]);
+  }, [adjustProductSearchQuery.data, inventoryItems, storeId, transferProductSearchQuery.data]);
 
   const productOptions = useMemo<InventoryProductOption[]>(() => {
     return selectorItems.map((item) => {
@@ -1155,7 +1195,7 @@ const InventoryPage = () => {
     if (previousSelectionPage.current !== selectionPageKey && !allResultsSelected)
       setSelectedIds(new Set());
     previousSelectionPage.current = selectionPageKey;
-  }, [selectionPageKey, allResultsSelected]);
+  }, [selectionPageKey, allResultsSelected, setSelectedIds]);
 
   const toggleSelectAll = () => {
     if (!inventoryItems.length) {
@@ -1169,11 +1209,8 @@ const InventoryPage = () => {
     });
   };
 
-  const selectionScope = JSON.stringify([inventoryTableStorageKey, search, storeId, stockFilter]);
-  const selectionScopeRef = useRef(selectionScope);
-  selectionScopeRef.current = selectionScope;
   useEffect(() => {
-    setSelectedIds(new Set());
+    setSelection((current) => current?.scope === selectionScope ? current : null);
   }, [selectionScope]);
   const handleSelectAllResults = async () => {
     const requestScope = selectionScopeRef.current;
@@ -1217,11 +1254,17 @@ const InventoryPage = () => {
       if (!view) {
         return;
       }
+      activeStoreIdRef.current = view.state.storeId;
       setInventoryTableState({ ...view.state, page: 1 });
       setInventorySavedViewsState((current) => ({ ...current, activeViewId: view.id }));
       setSelectedIds(new Set());
     },
-    [inventorySavedViewsState.views, setInventoryTableState, setInventorySavedViewsState],
+    [
+      inventorySavedViewsState.views,
+      setInventoryTableState,
+      setInventorySavedViewsState,
+      setSelectedIds,
+    ],
   );
 
   const saveInventoryView = useCallback(
@@ -1327,8 +1370,13 @@ const InventoryPage = () => {
   }, [poDraftOpen, reorderCandidates]);
 
   useEffect(() => {
-    setSelectedIds(new Set());
-  }, [storeId, search, stockFilter]);
+    setDialog((current) => current?.storeId === storeId ? current : null);
+    adjustForm.reset();
+    transferForm.reset();
+    minStockForm.reset();
+    bulkOnHandForm.reset();
+    setMovementTarget(null);
+  }, [storeId, adjustForm, transferForm, minStockForm, bulkOnHandForm]);
 
   useEffect(() => {
     if (activeDialog !== "adjust") {
@@ -1744,6 +1792,7 @@ const InventoryPage = () => {
 
   const openActionDialog = useCallback(
     (type: "adjust" | "transfer" | "minStock", item?: InventoryRow) => {
+      if (item && item.snapshot.storeId !== activeStoreIdRef.current) return;
       if ((type === "adjust" || type === "transfer") && !canManageStock) {
         return;
       }
@@ -1773,7 +1822,7 @@ const InventoryPage = () => {
         minStockForm.setValue("minStock", item.minStock, { shouldValidate: true });
       }
     },
-    [adjustForm, canManage, canManageStock, minStockForm, transferForm],
+    [adjustForm, canManage, canManageStock, minStockForm, setActiveDialog, transferForm],
   );
 
   useEffect(() => {
@@ -1792,7 +1841,7 @@ const InventoryPage = () => {
       return;
     }
 
-    if (!storeId && !(storesQuery.data?.length ?? 0)) {
+    if (!storeId) {
       return;
     }
 
@@ -1822,7 +1871,6 @@ const InventoryPage = () => {
     router,
     searchParams,
     storeId,
-    storesQuery.data,
   ]);
 
   const openMovements = (item: InventoryRow) => {
@@ -1911,7 +1959,7 @@ const InventoryPage = () => {
   const bulkOnHandBusy = bulkOnHandMutation.isLoading || Boolean(bulkOnHandProgress);
 
   const handleBulkOnHandSubmit = async (values: z.infer<typeof bulkOnHandSchema>) => {
-    if (!storeId || !selectedSnapshotIds.length || bulkOnHandBusy) {
+    if (!storeId || activeStoreIdRef.current !== storeId || !selectedSnapshotIds.length || bulkOnHandBusy) {
       return;
     }
 
@@ -1991,12 +2039,7 @@ const InventoryPage = () => {
   const inlineMinStockMutation = trpc.inventory.setMinStock.useMutation();
 
   const applyInventoryListPatch = useCallback(
-    (
-      productId: string,
-      patch: (
-        item: NonNullable<typeof inventoryQuery.data>["items"][number],
-      ) => NonNullable<typeof inventoryQuery.data>["items"][number],
-    ) => {
+    (productId: string, patch: (item: InventoryRow) => InventoryRow) => {
       trpcUtils.inventory.list.setData(inventoryListInput, (current) => {
         if (!current) {
           return current;
@@ -2009,13 +2052,19 @@ const InventoryPage = () => {
         };
       });
     },
-    [inventoryListInput, inventoryQuery, trpcUtils.inventory.list],
+    [inventoryListInput, trpcUtils.inventory.list],
   );
 
   const inlineOnHandMutation = trpc.inventory.setOnHand.useMutation();
 
   const executeInlineInventoryMutation = useCallback(
     async (operation: InlineMutationOperation) => {
+      if (
+        (operation.route === "inventory.setOnHand" || operation.route === "inventory.setMinStock") &&
+        operation.input.storeId !== activeStoreIdRef.current
+      ) {
+        throw new Error("inventorySelectionInvalid");
+      }
       if (operation.route === "inventory.setOnHand") {
         try {
           await inlineOnHandMutation.mutateAsync(operation.input);
@@ -2272,6 +2321,19 @@ const InventoryPage = () => {
                         {t("createPoDrafts")}
                       </DropdownMenuItem>
                     ) : null}
+                    {isAdmin ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          disabled={!selectedStore || bulkOnHandBusy}
+                          className="text-danger"
+                          onSelect={() => setActiveDialog("storeReset")}
+                        >
+                          <AdjustIcon className="h-4 w-4" aria-hidden />
+                          {t("storeResetTitle")}
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {showPlanning ? <HelpLink articleId="reorder" /> : null}
@@ -2336,7 +2398,11 @@ const InventoryPage = () => {
           disabled={!inventoryTableStateReady}
         />
         <FilterField id="inventory-store" label={tCommon("store")}>
-          <Select value={storeId} onValueChange={setStoreId}>
+          <Select
+            value={storeId}
+            onValueChange={setStoreId}
+            onOpenChange={(open) => { storePickerOpenRef.current = open; }}
+          >
             <SelectTrigger id="inventory-store">
               <SelectValue placeholder={tCommon("selectStore")} />
             </SelectTrigger>
@@ -2561,7 +2627,7 @@ const InventoryPage = () => {
               </TooltipProvider>
             </div>
           ) : null}
-          <ResponsiveDataList
+          {inventoryData ? <ResponsiveDataList
             items={inventoryItems}
             getKey={(item) => item.snapshot.id}
             paginationKey="inventory-overview"
@@ -2574,7 +2640,7 @@ const InventoryPage = () => {
               viewMode === "table" ? (
                 <div className="overflow-x-auto">
                   <TooltipProvider>
-                    <InlineEditTableProvider>
+                    <InlineEditTableProvider key={storeId}>
                       <Table className="min-w-[640px]" sortable={false}>
                         <TableHeader>
                           <TableRow>
@@ -2709,6 +2775,7 @@ const InventoryPage = () => {
                                         tTable={t}
                                         tCommon={tCommon}
                                         enabled={inlineEditingEnabled}
+                                        cancelBlurCommit={cancelInlineBlur}
                                         executeMutation={executeInlineInventoryMutation}
                                       />
                                     </TableCell>
@@ -2727,6 +2794,7 @@ const InventoryPage = () => {
                                         tTable={t}
                                         tCommon={tCommon}
                                         enabled={inlineEditingEnabled}
+                                        cancelBlurCommit={cancelInlineBlur}
                                         executeMutation={executeInlineInventoryMutation}
                                       />
                                     </TableCell>
@@ -3088,9 +3156,9 @@ const InventoryPage = () => {
                 </div>
               );
             }}
-          />
-          {inventoryQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          /> : null}
+          {inventoryLoading ? (
+            <div role="status" className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
@@ -3700,6 +3768,14 @@ const InventoryPage = () => {
         </Modal>
       ) : null}
 
+      {activeDialog === "storeReset" && selectedStore && isAdmin ? (
+        <StoreStockResetDialog
+          key={selectedStore.id}
+          store={selectedStore}
+          onClose={() => setActiveDialog(null)}
+        />
+      ) : null}
+
       <Modal
         open={activeDialog === "bulkOnHand"}
         onOpenChange={(open) => {
@@ -3708,7 +3784,7 @@ const InventoryPage = () => {
           }
         }}
         title={t("bulkOnHandTitle")}
-        subtitle={t("bulkOnHandSubtitle", { count: selectedCount })}
+        subtitle={t("bulkOnHandSubtitle", { count: selectedCount, store: selectedStore?.name ?? "" })}
       >
         <Form {...bulkOnHandForm}>
           <form
@@ -3730,7 +3806,6 @@ const InventoryPage = () => {
                         placeholder={t("qtyPlaceholder")}
                       />
                     </FormControl>
-                    <FormDescription>{t("bulkOnHandHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -3749,6 +3824,10 @@ const InventoryPage = () => {
                 )}
               />
             </FormGrid>
+            <p className="text-sm leading-5 text-muted-foreground">
+              {t("bulkOnHandHint")}
+              {isAdmin ? ` ${t("bulkOnHandStoreResetHint")}` : null}
+            </p>
             {bulkOnHandProgress ? (
               <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
                 {t("bulkOnHandProgress", {
@@ -3803,7 +3882,7 @@ const InventoryPage = () => {
           <form
             className="space-y-4"
             onSubmit={adjustForm.handleSubmit((values) => {
-              if (!storeId) {
+              if (!storeId || activeStoreIdRef.current !== storeId) {
                 return;
               }
               adjustMutation.mutate({
@@ -3995,6 +4074,7 @@ const InventoryPage = () => {
           <form
             className="space-y-4"
             onSubmit={transferForm.handleSubmit((values) => {
+              if (activeStoreIdRef.current !== storeId) return;
               const selectedProduct = transferProduct;
               transferMutation.mutate({
                 fromStoreId: values.fromStoreId,
@@ -4231,7 +4311,7 @@ const InventoryPage = () => {
           <form
             className="space-y-4"
             onSubmit={minStockForm.handleSubmit((values) => {
-              if (!storeId) {
+              if (!storeId || activeStoreIdRef.current !== storeId) {
                 return;
               }
               if (values.applyToAll) {

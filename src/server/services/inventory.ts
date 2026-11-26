@@ -21,7 +21,8 @@ import { runOperationRequest } from "@/server/services/operationRequests";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { transferCancellationLinePosition } from "@/lib/inventory/transferCancellation";
-import { lockStockSnapshot } from "@/server/services/inventoryLock";
+import { lockStockSnapshot, lockStoreStockReset } from "@/server/services/inventoryLock";
+import { zeroSelectedStock } from "@/server/services/inventoryStockReset";
 import { lockAssortmentForSale } from "@/server/services/assortmentPolicy";
 import {
   assertUserCanAccessStore,
@@ -357,18 +358,19 @@ export const setStockOnHand = async (input: {
       key: input.idempotencyKey, route: "inventory.setOnHand", userId: input.actorId,
       request: toJson({ ...input, requestId: undefined, idempotencyKey: undefined }),
     }, async () => {
+      await lockStoreStockReset(tx, input.storeId);
       const before = await lockStockSnapshot(tx, input);
       if (before.version !== input.expectedVersion || before.onHand !== input.expectedOnHand) {
         throw new AppError("inventoryStockConflict", "CONFLICT", 409);
       }
       const qtyDelta = roundQuantity(input.targetOnHand - before.onHand);
-      if (!qtyDelta) return before;
-      const { snapshot } = await applyStockMovement(tx, {
+      if (!qtyDelta && input.targetOnHand !== 0) return before;
+      const { snapshot } = qtyDelta ? await applyStockMovement(tx, {
         ...input, qtyDelta, type: StockMovementType.ADJUSTMENT,
         referenceType: "INLINE_STOCK", referenceId: input.idempotencyKey,
         correctionTargetOnHand: input.targetOnHand,
         note: input.reason, allowNegativeStock: true,
-      });
+      }) : { snapshot: before };
       await writeAuditLog(tx, {
         organizationId: input.organizationId, actorId: input.actorId,
         action: "INVENTORY_SET_ON_HAND", entity: "InventorySnapshot", entityId: snapshot.id,
@@ -417,6 +419,20 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
         classifyDatabaseOperationFailure(error, "inventoryBulkSetOnHandFailed"),
     },
     async (tx) => {
+      await lockStoreStockReset(tx, input.storeId);
+      if (input.targetOnHand === 0) {
+        const { updatedCount } = await zeroSelectedStock(tx, { ...input, snapshotIds });
+        return {
+          response: {
+            requestedCount: snapshotIds.length,
+            updatedCount,
+            unchangedCount: snapshotIds.length - updatedCount,
+            targetOnHand: input.targetOnHand,
+          },
+          responseStatus: 200,
+          resource: { type: "Store", id: input.storeId },
+        };
+      }
       const store = await tx.store.findUnique({
         where: { id: input.storeId },
         select: { id: true, organizationId: true },
@@ -432,10 +448,7 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
           store: { organizationId: input.organizationId },
           product: { organizationId: input.organizationId, isDeleted: false },
         },
-        include: {
-          product: { select: { id: true, organizationId: true, isDeleted: true } },
-        },
-        orderBy: { id: "asc" },
+        orderBy: [{ productId: "asc" }, { variantKey: "asc" }],
       });
 
       if (snapshots.length !== snapshotIds.length) {
@@ -500,6 +513,9 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
   const result = operation.response;
 
   if (!operation.replayed) {
+    if (input.targetOnHand === 0 && result.updatedCount > 0) {
+      eventBus.publish({ type: "inventory.updated", payload: { storeId: input.storeId, productId: "*" } });
+    }
     changedItems.forEach((item) => {
       eventBus.publish({
         type: "inventory.updated",

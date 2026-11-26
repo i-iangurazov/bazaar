@@ -28,17 +28,20 @@ function Fixture({
   value = 12,
   version = 4,
   execute,
+  cancelBlurCommit,
 }: {
   generation?: number;
   value?: number;
   version?: number;
   execute: (operation: InlineMutationOperation) => Promise<void>;
+  cancelBlurCommit?: (nextTarget: EventTarget | null) => boolean;
 }) {
   return (
     <NextIntlClientProvider
       locale="en"
       messages={{ inlineEditing: en.inlineEditing, errors: en.errors }}
     >
+      <button type="button">Change store</button>
       <InlineEditTableProvider>
         <InlineEditableCell
           key={generation}
@@ -57,6 +60,7 @@ function Fixture({
           tTable={(key) => key}
           tCommon={(key) => key}
           enabled
+          cancelBlurCommit={cancelBlurCommit}
           executeMutation={execute}
         />
       </InlineEditTableProvider>
@@ -65,6 +69,20 @@ function Fixture({
 }
 describe("inline stock editor behavior", () => {
   afterEach(cleanup);
+  it("discards the current draft when focus moves to the store selector", () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const storePicker = () => screen.getByRole("button", { name: "Change store" });
+    render(<Fixture execute={execute} cancelBlurCommit={(target) => target === storePicker()} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: /Stock/ }), { key: "Enter" });
+    const editor = screen.getByRole("textbox");
+    fireEvent.change(editor, { target: { value: "0" } });
+    act(() => storePicker().focus());
+    expect(execute).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(document.activeElement).toBe(storePicker());
+    expect(screen.getByText("12")).toBeTruthy();
+  });
+
   it("opens from the keyboard, cancels without saving and restores cell focus", async () => {
     const execute = vi.fn().mockResolvedValue(undefined);
     render(<Fixture execute={execute} />);

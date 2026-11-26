@@ -97,6 +97,7 @@ const StockCountDetailPage = () => {
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const [scanMode, setScanMode] = useState(true);
   const [editingLine, setEditingLine] = useState<CountLine | null>(null);
+  const [staleLineIds, setStaleLineIds] = useState<Set<string>>(() => new Set());
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [movementTarget, setMovementTarget] = useState<{
     productId: string;
@@ -162,7 +163,8 @@ const StockCountDetailPage = () => {
   });
 
   const removeLineMutation = trpc.stockCounts.removeLine.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, { lineId }) => {
+      setStaleLineIds((current) => new Set([...current].filter((id) => id !== lineId)));
       countQuery.refetch();
     },
     onError: (error) => {
@@ -172,10 +174,21 @@ const StockCountDetailPage = () => {
 
   const applyMutation = trpc.stockCounts.applyCount.useMutation({
     onSuccess: () => {
+      setStaleLineIds(new Set());
       toast({ variant: "success", description: t("applySuccess") });
       countQuery.refetch();
     },
     onError: (error) => {
+      if (error.message === "stockCountStaleLines") {
+        const details = error.data?.details as { staleLineIds?: unknown } | undefined;
+        if (Array.isArray(details?.staleLineIds)) {
+          const ids = details.staleLineIds.filter((id): id is string => typeof id === "string");
+          if (ids.length) {
+            setStaleLineIds(new Set(ids));
+            return;
+          }
+        }
+      }
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
@@ -221,6 +234,7 @@ const StockCountDetailPage = () => {
   const shortageLines: CountLine[] = lines.filter((line) => line.deltaQty < 0);
 
   const isLocked = count?.status === "APPLIED" || count?.status === "CANCELLED";
+  const hasStaleLines = !isLocked && lines.some((line) => staleLineIds.has(line.id));
 
   const movementQuery = trpc.inventory.movements.useQuery(
     movementTarget && count?.storeId
@@ -336,7 +350,7 @@ const StockCountDetailPage = () => {
             {canApplyStockCount ? (
               <Button
                 className="w-full sm:w-auto"
-                disabled={!count || isLocked || applyMutation.isLoading}
+                disabled={!count || isLocked || hasStaleLines || applyMutation.isLoading}
                 onClick={async () => {
                   if (!count) {
                     return;
@@ -407,6 +421,12 @@ const StockCountDetailPage = () => {
             <CardTitle>{t("linesTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
+            {hasStaleLines ? (
+              <div role="alert" className="mb-4 space-y-1 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm">
+                <p className="font-semibold text-danger">{tErrors("stockCountStaleLines")}</p>
+                <p className="text-muted-foreground">{t("staleLinesRecovery")}</p>
+              </div>
+            ) : null}
             <ResponsiveDataList
               items={lines}
               getKey={(line) => line.id}
@@ -429,10 +449,13 @@ const StockCountDetailPage = () => {
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((line) => (
-                        <TableRow key={line.id}>
+                        <TableRow key={line.id} className={hasStaleLines && staleLineIds.has(line.id) ? "bg-danger/5" : undefined}>
                           <TableCell className="font-medium">
                             {line.product.name}
                             <div className="text-xs text-muted-foreground">{line.product.sku}</div>
+                            {hasStaleLines && staleLineIds.has(line.id) ? (
+                              <Badge variant="warning" className="mt-1">{t("recountLine")}</Badge>
+                            ) : null}
                           </TableCell>
                           <TableCell className="hidden sm:table-cell">
                             {line.variant?.name ?? tCommon("notAvailable")}
@@ -571,6 +594,9 @@ const StockCountDetailPage = () => {
                           {line.product.name}
                         </p>
                         <p className="text-xs text-muted-foreground">{line.product.sku}</p>
+                        {hasStaleLines && staleLineIds.has(line.id) ? (
+                          <Badge variant="warning" className="my-1">{t("recountLine")}</Badge>
+                        ) : null}
                         <p className="text-xs text-muted-foreground">
                           {line.variant?.name ?? tCommon("notAvailable")}
                         </p>

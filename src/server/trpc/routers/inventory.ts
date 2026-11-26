@@ -36,6 +36,7 @@ import {
   recomputeInventorySnapshots,
   transferStock,
 } from "@/server/services/inventory";
+import { previewStoreStockReset, resetStoreStock } from "@/server/services/inventoryStockReset";
 import {
   editCompletedPosSale,
   editCompletedSaleReturn,
@@ -726,7 +727,7 @@ export const inventoryRouter = router({
     });
     const items = enrichedItems;
 
-    return { items, total, page, pageSize };
+    return { storeId: input.storeId, items, total, page, pageSize };
   }),
 
   listIds: protectedProcedure.input(inventoryListIdsInputSchema).query(async ({ ctx, input }) => {
@@ -1427,6 +1428,44 @@ export const inventoryRouter = router({
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,
           idempotencyKey: input.idempotencyKey,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  previewStoreStockReset: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "inventory-store-reset-preview" }))
+    .input(z.object({ storeId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        return await previewStoreStockReset({
+          storeId: input.storeId,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  resetStoreStock: adminProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "inventory-store-reset" }))
+    .input(z.object({
+      storeId: z.string().min(1),
+      reason: z.string().trim().min(3).max(500),
+      previewToken: z.string().min(1).max(200),
+      idempotencyKey: z.string().min(8).max(191),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        return await resetStoreStock({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
         });
       } catch (error) {
         throw toTRPCError(error);

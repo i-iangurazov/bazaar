@@ -110,11 +110,9 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
     expect(
       (await f.caller.products.lookupScan({ storeId: f.b.id, q: "SHARED-ADAPTER" })).exactMatch,
     ).toBe(false);
-    expect(
-      (await f.caller.inventory.list({ storeId: f.b.id, page: 1, pageSize: 25 })).items.some(
-        (p) => p.product.id === f.product.id,
-      ),
-    ).toBe(true);
+    const inventory = await f.caller.inventory.list({ storeId: f.b.id, page: 1, pageSize: 25 });
+    expect(inventory.storeId).toBe(f.b.id);
+    expect(inventory.items.some((item) => item.product.id === f.product.id)).toBe(true);
     await f.visibility(f.b.id, false);
     expect((await f.visible(f.b.id)).find((p) => p.id === f.product.id)?.hiddenInStore).toBe(false);
     expect(await business()).toEqual(before);
