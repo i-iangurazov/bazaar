@@ -1458,6 +1458,19 @@
     "correction": "Correction"
   },
   "integrations": {
+    "upcoming": {
+      "status": "Coming soon",
+      "connect": "Connect",
+      "plans": "For Business and Enterprise plans.",
+      "yandexGo": {
+        "title": "Yandex Go",
+        "description": "Sync products, prices and stock with Yandex Go. Receive marketplace orders in Bazaar."
+      },
+      "yandexDelivery": {
+        "title": "Yandex Delivery",
+        "description": "Estimate the cost, book a courier and track delivery from a Bazaar order."
+      }
+    },
     "title": "Integrations",
     "subtitle": "Connect external channels and manage publishing.",
     "status": {

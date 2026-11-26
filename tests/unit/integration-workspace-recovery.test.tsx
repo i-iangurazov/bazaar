@@ -335,6 +335,39 @@ describe("integration workspace recovery", () => {
     expect(screen.getAllByText("common.loading").length).toBeGreaterThan(0);
   });
 
+  it("shows announcement tiles with disabled actions and no configuration links", () => {
+    render(<Hub />);
+    const upcoming = [
+      ["integrations.upcoming.yandexGo.title", "/brand/integrations/yandex-go.png"],
+      ["integrations.upcoming.yandexDelivery.title", "/brand/integrations/yandex-delivery.png"],
+      ["whatsappAi.title", "/brand/integrations/whatsapp.png"],
+    ];
+    for (const [title, logo] of upcoming) {
+      const tile = screen.getByRole("heading", { name: title }).closest(".flex-col") as HTMLElement;
+      const { getByText, getByRole, queryByRole } = within(tile);
+      expect(getByText("integrations.upcoming.status")).toBeTruthy();
+      expect(getByRole<HTMLButtonElement>("button", { name: "integrations.upcoming.connect" }).disabled).toBe(true);
+      expect(queryByRole("link")).toBeNull();
+      const image = tile.querySelector("img");
+      expect(image?.getAttribute("src")).toBe(logo);
+      expect(image?.classList.contains("rounded-lg")).toBe(title !== "whatsappAi.title");
+    }
+  });
+
+  it("uses a distinct icon for each Bazaar integration", () => {
+    render(<Hub />);
+    const icons = [
+      ["integrations.bazaarCatalog.title", "store"],
+      ["integrations.bazaarApi.title", "code-xml"],
+      ["integrations.emailMarketing.title", "mail"],
+      ["integrations.productImageStudio.title", "image-plus"],
+    ];
+    for (const [title, icon] of icons) {
+      const tile = screen.getByRole("heading", { name: title }).closest(".flex-col");
+      expect(tile?.querySelector("svg.lucide-" + icon)).toBeTruthy();
+    }
+  });
+
   it("offers a store choice instead of endless loading when the catalog has no stores", () => {
     state.emptyStores = true;
     render(<Catalog />);
