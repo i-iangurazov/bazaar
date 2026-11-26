@@ -23,6 +23,8 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const source = path.join(repo, "src/app/globals.css");
 const engine = process.env.QA_BROWSER_ENGINE ?? "chromium";
 assert(["chromium", "webkit"].includes(engine), "Only isolated Chrome/WebKit are supported");
+const cases = process.env.QA_LAYOUT_CASES ?? "all";
+assert(["all", "pos-trial"].includes(cases), "Only the full fixture or focused POS notice case is supported");
 
 // Confirm the fixture reproduces this installation's actual Radix dependency
 // contract, including its late important rule. Do not disable modal behavior.
@@ -125,6 +127,35 @@ const app = `<main data-bazaar-app class="min-h-screen bg-background">
     <div class="flex min-h-11 items-center">Existing mobile app header</div>
   </header><div class="h-[2500px] p-4">Synthetic product list</div>
 </main>`;
+// Use the actual fullscreen shell marker, Alert classes and existing POS header
+// inset. Only the environment inset is modeled; no real POS/account is mounted.
+const shellFile = "src/components/app-shell.tsx";
+const shellAst = ts.createSourceFile(shellFile, fs.readFileSync(path.join(repo, shellFile), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+let posShell;
+const findPosShell = (node) => {
+  if (ts.isJsxOpeningElement(node) && node.attributes.properties.some((property) => ts.isJsxAttribute(property) && property.name.text === "data-native-pos-shell")) posShell = node;
+  ts.forEachChild(node, findPosShell);
+};
+findPosShell(shellAst);
+let posBranch = posShell?.parent;
+while (posBranch && ts.isParenthesizedExpression(posBranch.parent)) posBranch = posBranch.parent;
+assert(posShell && ts.isConditionalExpression(posBranch.parent) &&
+  posBranch.parent.condition.getText(shellAst) === 'normalizedPath === "/pos/sell"' &&
+  posBranch.parent.whenTrue === posBranch, "The safe-area marker belongs only to fullscreen POS");
+const posShellClass = posShell.attributes.properties.find((property) => property.name?.text === "className").initializer.text;
+const noticeClass = jsxStringProps("src/components/billing/subscription-access-banner.tsx", "SubscriptionAccessNotice").className;
+const alertClass = sourceStrings("src/components/ui/alert.tsx").find((value) => value.startsWith("es-alert "));
+const posStrings = sourceStrings("src/app/(app)/pos/sell/page.tsx");
+const posHeaderClass = posStrings.find((value) => value.startsWith("sticky top-0 z-40 border-b border-border bg-card text-foreground"));
+const posHeaderInset = posStrings.find((value) => value === "calc(0.55rem + env(safe-area-inset-top))")
+  ?.replace("env(safe-area-inset-top)", "var(--mobile-top-safe-area)");
+assert(noticeClass && alertClass && posHeaderClass && posHeaderInset, "Exercise the current notice and already padded POS header");
+const posMarkup = ({ notice = true, marked = true, ordinaryHeader = false } = {}) => `<div data-bazaar-app ${marked ? "data-native-pos-shell" : ""} class="${posShellClass}">
+  ${ordinaryHeader ? '<header class="sticky top-0 z-40 bg-card" style="padding-top:var(--mobile-top-safe-area)"><div class="h-11">Ordinary mobile shell</div></header>' : ""}
+  <main id="workspace-content" tabindex="-1">${notice ? `<div id="pos-notice" data-subscription-access-notice="trial" role="status" data-theme="blue" class="${alertClass} ${noticeClass}">
+    <p id="pos-notice-title" class="es-alert__title">Пробный период: 7 дней</p><p class="es-alert__description">Существующее предупреждение о сроке доступа</p><button id="pos-billing" class="h-11" type="button">Выбрать тариф</button></div>` : ""}
+    <div class="min-h-[100dvh] bg-background"><header id="pos-header" class="${posHeaderClass}"><div id="pos-header-controls" style="padding-top:${posHeaderInset}"><button id="pos-back" class="h-11" type="button">Назад</button></div></header><div class="h-[1800px]">Synthetic POS catalog</div></div>
+  </main></div>`;
 // Reproduce the actual default size-md DialogContent / DialogHeader and the
 // account-deletion form's overflow-auto body, with real Russian copy. This
 // fixture never wires a deletion mutation and must not submit anything.
@@ -174,7 +205,7 @@ const reportDates = (variant = "populated") => `<section id="date-card" class="m
         ${variant === "disabled" ? "disabled" : ""} /></label>`).join("")}
   </div><input id="date-height-reference" type="text" class="${inputClasses}" tabindex="-1" aria-hidden="true"
     style="position:absolute;visibility:hidden;pointer-events:none" ${variant === "disabled" ? "disabled" : ""} /></section>`;
-const allMarkup = app + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd + reportDates() + plainNativeFields + horizontalShell + horizontalSurfaces.map(([, markup]) => markup).join("");
+const allMarkup = app + posMarkup() + fullscreen("journal") + fullscreen("primitive") + ordinarySheet + ordinaryDialog + centeredMd + reportDates() + plainNativeFields + horizontalShell + horizontalSurfaces.map(([, markup]) => markup).join("");
 const anchoredSources = ["tests/e2e/fixtures/native-safe-area-anchors.tsx", "src/components/ui/select.tsx", "src/components/ui/dropdown-menu.tsx", "src/components/ui/popover.tsx", "src/components/ui/tooltip.tsx"]
   .map((file) => ({ raw: fs.readFileSync(path.join(repo, file), "utf8"), extension: "tsx" }));
 const compiled = await postcss([
@@ -184,6 +215,15 @@ const compiled = await postcss([
 const workspaceRule = postcss.parse(fs.readFileSync(path.join(repo, "src/components/baam-native-workspace.module.css"), "utf8")).nodes.find((node) => node.type === "rule" && node.selector === ".workspace");
 assert(workspaceRule, "Use the actual Baam workspace box without a second horizontal inset");
 const currentCss = compiled.css + `\n.fixture-baam-workspace {${workspaceRule.nodes.map((node) => node.toString()).join(";")}}`;
+const beforePosNotice = postcss.parse(currentCss);
+let posNoticeRulesRemoved = 0;
+beforePosNotice.walkRules((rule) => {
+  if (rule.selector.startsWith("html.native-ios [data-native-pos-shell] > main")) {
+    rule.remove(); posNoticeRulesRemoved += 1;
+  }
+});
+assert.equal(posNoticeRulesRemoved, 3, "The POS negative case removes only the three notice-safe-area rules");
+const beforePosNoticeCss = beforePosNotice.toString();
 const beforeNativeEntryFont = postcss.parse(currentCss);
 const nativeEntrySelectors = new Set(["html.native-ios input", "html.native-ios select", "html.native-ios textarea"]);
 let nativeEntryRulesRemoved = 0;
@@ -319,6 +359,61 @@ try {
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
+  const { default: sharp } = await import("sharp");
+  const loadPos = async (options = {}) => {
+    await load(page, { ...options, appMarkup: posMarkup(options) });
+    await page.evaluate(() => scrollTo(0, 0)); await frame(page);
+  };
+  const posBounds = () => page.evaluate(() => {
+    const notice = document.getElementById("pos-notice"), header = document.getElementById("pos-header");
+    const cover = notice ? getComputedStyle(notice, "::before") : null;
+    return { noticeTop: notice?.getBoundingClientRect().top ?? null, headerTop: header.getBoundingClientRect().top,
+      controlsPadding: getComputedStyle(document.getElementById("pos-header-controls")).paddingTop,
+      cover: cover ? { content: cover.content, position: cover.position, height: cover.height, pointerEvents: cover.pointerEvents } : null };
+  });
+  const statusStripIsBackground = async () => {
+    const rgb = await page.locator("[data-bazaar-app]").evaluate((element) => getComputedStyle(element).backgroundColor.match(/[\d.]+/g).slice(0, 3).map(Number));
+    const bytes = await sharp(await page.screenshot({ clip: { x: 100, y: 1, width: 1, height: 57 } })).removeAlpha().raw().toBuffer();
+    return bytes.every((value, index) => value === rgb[index % 3]);
+  };
+  await loadPos({ css: beforePosNoticeCss });
+  assert((await posBounds()).noticeTop < 59 && !await statusStripIsBackground(), "Before fix the trial banner paints beneath the modeled status bar");
+  await page.screenshot({ path: path.join(outputDir, `${engine}-pos-trial-before.png`) });
+  check("fullscreen POS notice reproduces the unprotected status area before correction");
+  for (const viewport of [{ width: 320, height: 844 }, { width: 393, height: 844 }, { width: 852, height: 393 }]) {
+    await loadPos(viewport);
+    assert.equal((await posBounds()).noticeTop, 59, "Reserve one top inset before the standalone notice");
+    assert(await page.locator('[role="status"]').isVisible());
+    assert(await statusStripIsBackground(), "First paint keeps the status strip opaque");
+    const cover = (await posBounds()).cover;
+    assert.deepEqual(cover, { content: '""', position: "fixed", height: "59px", pointerEvents: "none" });
+    const billing = await page.locator("#pos-billing").boundingBox();
+    assert(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.id === "pos-billing", { x: billing.x + billing.width / 2, y: billing.y + billing.height / 2 }), "Safe-area paint never intercepts the billing control");
+    for (const y of [25, 480]) {
+      await page.evaluate((value) => scrollTo(0, value), y); await frame(page);
+      assert(await statusStripIsBackground(), "Scrolled banner text cannot repaint beneath the status bar");
+    }
+    if (viewport.width < 768) {
+      assert.equal((await posBounds()).headerTop, 0, "Existing POS header remains viewport-sticky");
+      assert((await page.locator("#pos-back").boundingBox()).y >= 59, "Existing header controls keep their own inset");
+    }
+    if (viewport.width === 393) await page.screenshot({ path: path.join(outputDir, `${engine}-pos-trial-scroll-after.png`) });
+    check(`native fullscreen POS notice stays safe on first paint and partial/full scroll at ${viewport.width}`);
+  }
+  for (const options of [
+    { platform: "ios", notice: false },
+    { platform: "ios", marked: false, ordinaryHeader: true },
+    { platform: "web" },
+    { platform: "android" },
+    { platform: "web", width: 1024 },
+  ]) {
+    await loadPos({ ...options, css: beforePosNoticeCss }); const before = await posBounds();
+    await loadPos(options); const after = await posBounds();
+    assert.deepEqual(after, before, "No extra gap or cover outside the native fullscreen notice");
+    check(`${options.platform} ${options.notice === false ? "no-notice POS" : options.ordinaryHeader ? "ordinary shell" : "POS notice"} geometry remains unchanged at ${options.width ?? 393}`);
+  }
+
+  if (cases === "all") {
   // A regression test must reproduce the demonstrated failure before the fix.
   await load(page, { css: beforeCss });
   await page.evaluate(() => scrollTo(0, 480));
@@ -658,11 +753,12 @@ try {
     assert((await safeBox("#anchor-trigger")).x < asymmetrical[0].left, "Other platforms retain their original viewport boundary");
     check(`${platform} ${kind} retains existing portal behavior without native side bounds`);
   }
+  }
   assert.deepEqual(pageErrors, [], "Real primitives must not introduce browser runtime errors");
 
   fs.writeFileSync(path.join(outputDir, `${engine}.json`), JSON.stringify({
-    result: "PASS", engine, networkBlocked: blockedNetwork, pageErrors, checks: results,
-    scope: "Offline layout/scroll fixture plus real anchored Radix interactions with explicit asymmetric CSS inset overrides; not actual WKWebView, iOS keyboard or payment evidence",
+    result: "PASS", engine, cases, networkBlocked: blockedNetwork, pageErrors, checks: results,
+    scope: cases === "pos-trial" ? "Focused offline fullscreen POS notice geometry/paint/scroll with an explicit CSS notch; not actual WKWebView or POS transactions" : "Offline layout/scroll fixture plus real anchored Radix interactions with explicit asymmetric CSS inset overrides; not actual WKWebView, iOS keyboard or payment evidence",
   }, null, 2), { mode: 0o600 });
   console.log(`PASS: ${results.length} isolated ${engine} overlay layout/scroll checks`);
   await context.close();

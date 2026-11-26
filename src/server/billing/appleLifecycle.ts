@@ -168,9 +168,10 @@ async function reconcileAppleChain(id: string) {
       processingToken: null, processingUntil: null, lastCheckedAt: now, lastIssue: null,
       nextCheckAt: new Date(Date.now() + 15 * 60_000) } });
   } catch (error) {
-    await prisma.appleSubscriptionChain.updateMany({ where: { id, processingToken: token }, data: {
+    const retry = await prisma.appleSubscriptionChain.updateMany({ where: { id, processingToken: token }, data: {
       processingToken: null, processingUntil: null, lastIssue: error instanceof AppError ? error.message : "appleReconciliationUnavailable",
       nextCheckAt: new Date(Date.now() + 5 * 60_000) } });
+    return retry.count;
   }
 }
 async function reconcileAppleTransaction(id: string) {
@@ -187,9 +188,10 @@ async function reconcileAppleTransaction(id: string) {
     await prisma.appleTransaction.updateMany({ where: { id, processingToken: token }, data: {
       processingToken: null, processingUntil: null, nextCheckAt: new Date(Date.now() + 86_400_000) } });
   } catch (error) {
-    await prisma.appleTransaction.updateMany({ where: { id, processingToken: token }, data: {
+    const retry = await prisma.appleTransaction.updateMany({ where: { id, processingToken: token }, data: {
       processingToken: null, processingUntil: null, nextCheckAt: new Date(Date.now() + 15 * 60_000),
       lastIssue: error instanceof AppError ? error.message : "appleReconciliationUnavailable" } });
+    return retry.count;
   }
 }
 export async function reconcileAppleBilling() {
@@ -200,10 +202,24 @@ export async function reconcileAppleBilling() {
   await prisma.applePurchaseIntent.updateMany({ where: { status: "PENDING", authorizedAt: { not: null }, expiresAt: { lte: now } },
     data: { status: "REVIEW", pendingSlot: null, lastIssue: "applePurchasePendingVerification" } });
   await prisma.applePurchaseIntent.updateMany({ where: { status: "PENDING", expiresAt: { lte: now } }, data: { status: "EXPIRED", pendingSlot: null } });
-  if (!appleBillingConfig().apiReady) return { notifications: notifications.length, chains: 0, transactions: 0, consumption, apiReady: false };
-  const chains = await prisma.appleSubscriptionChain.findMany({ where: { nextCheckAt: { lte: now } }, orderBy: { nextCheckAt: "asc" }, take: 10 });
-  for (const chain of chains) await reconcileAppleChain(chain.id);
-  const transactions = await prisma.appleTransaction.findMany({ where: { nextCheckAt: { lte: now } }, orderBy: { nextCheckAt: "asc" }, take: 20 });
-  for (const row of transactions) await reconcileAppleTransaction(row.id);
-  return { notifications: notifications.length, chains: chains.length, transactions: transactions.length, consumption, apiReady: true };
+  const { apiReady, mode } = appleBillingConfig();
+  const result = { notifications: notifications.length, consumption, apiReady };
+  const due = { nextCheckAt: { lte: now } };
+  if (!apiReady) {
+    // Disabling checkout leaves earned Apple obligations recoverable.
+    const claimable = {
+      where: { ...due, OR: [{ processingUntil: null }, { processingUntil: { lte: now } }] },
+      select: { id: true },
+    };
+    const apiUnavailable = mode !== "off" || Boolean(
+      await prisma.appleSubscriptionChain.findFirst(claimable) ?? await prisma.appleTransaction.findFirst(claimable),
+    );
+    return { ...result, chains: 0, transactions: 0, apiUnavailable, retryCount: 0 };
+  }
+  let retryCount = 0;
+  const chains = await prisma.appleSubscriptionChain.findMany({ where: due, orderBy: { nextCheckAt: "asc" }, take: 10 });
+  for (const chain of chains) retryCount += (await reconcileAppleChain(chain.id)) ?? 0;
+  const transactions = await prisma.appleTransaction.findMany({ where: due, orderBy: { nextCheckAt: "asc" }, take: 20 });
+  for (const row of transactions) retryCount += (await reconcileAppleTransaction(row.id)) ?? 0;
+  return { ...result, chains: chains.length, transactions: transactions.length, apiUnavailable: false, retryCount };
 }

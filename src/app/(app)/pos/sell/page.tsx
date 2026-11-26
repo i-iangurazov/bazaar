@@ -6614,7 +6614,7 @@ const PosSellPage = () => {
       const renderMobileHeader = () => (
         <header className="sticky top-0 z-40 border-b border-border bg-card text-foreground md:hidden">
           <div
-            className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_40px_58px] items-end gap-2 px-3 pb-3"
+            className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_40px_58px] items-center gap-2 px-3 pb-3"
             style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
           >
             <button
@@ -7031,9 +7031,9 @@ const PosSellPage = () => {
               {translateError(tErrors, saleQuery.error)}
             </div>
           ) : null}
-          {renderOrderSection()}
-          {renderMobileLines()}
           {renderAddProductsBar()}
+          {renderMobileLines()}
+          {renderOrderSection()}
           {renderPropertiesSection()}
           {renderCounterpartiesSection()}
           {renderCommentBar()}
@@ -7041,11 +7041,11 @@ const PosSellPage = () => {
             <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
               <button
                 type="button"
-                className="min-h-[48px] w-full rounded-lg bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-none"
+                className="flex min-h-[48px] w-full items-center justify-between gap-3 rounded-lg bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-none"
                 onClick={() => setMobileSaleTab("payment")}
-                aria-label={t("sell.openCart")}
               >
-                {t("sell.mobile.goToPayment")}
+                <span className="min-w-0 text-left">{t("sell.mobile.goToPayment")}</span>
+                <span className="shrink-0 tabular-nums">{formatSaleMoney(cartTotalKgs)}</span>
               </button>
             </div>
           ) : null}
@@ -7053,14 +7053,7 @@ const PosSellPage = () => {
       );
 
       const renderPaymentTab = () => (
-        <section
-          className={cn(
-            "min-h-[calc(100dvh-176px)]",
-            hasCartLines
-              ? "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]"
-              : "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]",
-          )}
-        >
+        <section className="min-h-[calc(100dvh-176px)] pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]">
           {lastCompletedSale ? (
             <div className="grid min-h-[calc(100dvh-224px)] place-items-start px-4 pt-9">
               <section className="w-full border border-success/30 bg-success/10 p-4 text-center">
@@ -7113,8 +7106,6 @@ const PosSellPage = () => {
             </>
           ) : (
             <div className="space-y-3 pt-3">
-              {renderOrderSection()}
-              <div className="px-3">{saleOptions}</div>
               <section className="border-y border-border bg-card px-3 py-3">
                 <h2 className="text-[15px] font-semibold leading-none text-primary">
                   {t("sell.mobile.paymentSummary")}
@@ -7188,6 +7179,9 @@ const PosSellPage = () => {
                   </>
                 )}
               </section>
+
+              <div className="px-3">{saleOptions}</div>
+              {renderOrderSection()}
 
               <div className={cn("fixed inset-x-0 bottom-0 z-30 grid gap-2 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden", !isCompletedSaleEdit && "grid-cols-2")}>
                 {!isCompletedSaleEdit ? (
