@@ -15,6 +15,34 @@
   margin-bottom: 0;
 }
 
+@media (max-width: 767px) {
+  /* The chat already reserves the bottom navigation and keyboard space.
+     Keep its shell from allocating that space a second time. */
+  :global(html.native-app.native-ios).nativeWorkspace,
+  :global(html.native-app.native-ios).nativeWorkspace :global(body) {
+    overflow: hidden;
+    overflow: clip;
+  }
+
+  :global(html.native-app.native-ios[data-mobile-keyboard-open]).nativeWorkspace :global(body)::after {
+    content: none;
+  }
+
+  :global(html.native-app.native-ios).nativeWorkspace :global([data-sidebar-wrapper]) {
+    min-height: 0;
+  }
+
+  :global(html.native-app.native-ios).nativeWorkspace :global(#workspace-content) {
+    padding-bottom: 0;
+  }
+
+  :global(html.native-app.native-ios).nativeWorkspace :global([data-native-keyboard-aware]) {
+    overflow: hidden;
+    overflow: clip;
+    padding-bottom: 0 !important;
+  }
+}
+
 .surface {
   flex: 1 1 0%;
   min-height: 0;

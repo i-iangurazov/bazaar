@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { ChevronDownIcon } from "@/components/icons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CURRENT_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 
 type AccessNoticeState = {
   billingCatalogVersion: string;
@@ -62,39 +64,57 @@ export function SubscriptionAccessNotice({
     trialEnd &&
     Number.isFinite(trialEnd.getTime()) &&
     trialEnd.getTime() <= Date.now();
+  const title = activeTrial
+    ? trial("remaining", { count: remaining })
+    : t(grace ? "graceTitle" : expiredTrial ? "trialExpiredTitle" : "expiredTitle");
+  const description = activeTrial
+    ? trial("deadline", { date: formatDateTime(trialEnd!, locale) })
+    : grace
+      ? t("graceDescription", { date: formatDateTime(state.access.graceEndsAt!, locale) })
+      : t(expiredTrial ? "trialExpiredDescription" : "expiredDescription");
+  const details = (
+    <>
+      <AlertDescription>{description}</AlertDescription>
+      {activeTrial && showTrialScope ? (
+        <p className="text-sm text-muted-foreground">{trial("scope")}</p>
+      ) : null}
+      {!canManage ? <p className="text-sm">{t("askOwner")}</p> : null}
+    </>
+  );
+  const billingLink = canManage && showBillingLink ? (
+    <Button asChild variant="secondary" className="min-h-11 w-full shrink-0 sm:w-auto">
+      <Link href="/billing">{activeTrial ? trial("choose") : t("renew")}</Link>
+    </Button>
+  ) : null;
+
   return (
     <Alert
       variant={grace || (activeTrial && remaining <= 1) ? "warning" : "info"}
-      className={className}
+      className={cn(className, activeTrial && "p-0")}
       data-subscription-access-notice={
         activeTrial ? "trial" : grace ? "grace" : expiredTrial ? "trial-expired" : "read-only"
       }
     >
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <AlertTitle>
-            {activeTrial
-              ? trial("remaining", { count: remaining })
-              : t(grace ? "graceTitle" : expiredTrial ? "trialExpiredTitle" : "expiredTitle")}
-          </AlertTitle>
-          <AlertDescription>
-            {activeTrial
-              ? trial("deadline", { date: formatDateTime(trialEnd!, locale) })
-              : grace
-                ? t("graceDescription", { date: formatDateTime(state.access.graceEndsAt!, locale) })
-                : t(expiredTrial ? "trialExpiredDescription" : "expiredDescription")}
-          </AlertDescription>
-          {activeTrial && showTrialScope ? (
-            <p className="text-sm text-muted-foreground">{trial("scope")}</p>
-          ) : null}
-          {!canManage ? <p className="text-sm">{t("askOwner")}</p> : null}
+      {activeTrial ? (
+        <details className="group">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0">{title}</span>
+            <ChevronDownIcon className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden />
+          </summary>
+          <div className="flex min-w-0 flex-col gap-3 border-t border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">{details}</div>
+            {billingLink}
+          </div>
+        </details>
+      ) : (
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <AlertTitle>{title}</AlertTitle>
+            {details}
+          </div>
+          {billingLink}
         </div>
-        {canManage && showBillingLink ? (
-          <Button asChild variant="secondary" className="min-h-11 w-full shrink-0 sm:w-auto">
-            <Link href="/billing">{activeTrial ? trial("choose") : t("renew")}</Link>
-          </Button>
-        ) : null}
-      </div>
+      )}
     </Alert>
   );
 }
@@ -114,5 +134,11 @@ export function SubscriptionAccessBanner({ canManage }: { canManage: boolean }) 
   });
   // Loading/outage must never replace the current workspace or infer paid state.
   if (onBilling || query.isLoading || query.isError) return null;
-  return <SubscriptionAccessNotice state={query.data} canManage={canManage} className="mb-6" />;
+  return (
+    <SubscriptionAccessNotice
+      state={query.data}
+      canManage={canManage}
+      className="mb-6 max-md:data-[subscription-access-notice=trial]:mb-3"
+    />
+  );
 }

@@ -94,6 +94,27 @@ describe("non-blocking subscription grace and viewing notices", () => {
       expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
     },
   );
+  it.each(["/dashboard", "/baam", "/pos/sell"])("keeps the active trial compact with details reachable at %s", (path) => {
+    const trialEndsAt = new Date(Date.now() + 6 * 86_400_000);
+    const data = {
+      ...modern,
+      trialActive: true,
+      trialEndsAt,
+      trialOffer: { days: 7, previewPlan: "BUSINESS" },
+      access: { ...modern.access, inGrace: false },
+    };
+    state.query.mockReturnValue({ isLoading: false, isError: false, data });
+    state.path = path;
+    const root = document.createElement("div");
+    root.innerHTML = renderToStaticMarkup(<SubscriptionAccessBanner canManage />);
+
+    const disclosure = root.querySelector("details");
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure?.querySelector("summary")?.textContent).toContain("6 дней");
+    expect(disclosure?.textContent).toContain(formatDateTime(trialEndsAt, "ru"));
+    expect(disclosure?.textContent).toContain(ru.billing.trial.scope);
+    expect(disclosure?.querySelector('a[href="/billing"]')).not.toBeNull();
+  });
   it.each(["ru", "kg", "en"] as const)(
     "explains the current trial and exact end in %s",
     (locale) => {
@@ -107,6 +128,7 @@ describe("non-blocking subscription grace and viewing notices", () => {
       };
       const root = renderNotice(value);
       expect(root.querySelector('[data-subscription-access-notice="trial"]')).not.toBeNull();
+      expect(root.querySelector("details")?.open).toBe(false);
       expect(root.textContent).toContain(formatDateTime(value.trialEndsAt, locale));
       expect(root.textContent).toContain({ ru, kg, en }[locale].billing.trial.scope);
       expect(root.textContent).not.toMatch(/undefined|\{count|\{date/);
@@ -119,6 +141,7 @@ describe("non-blocking subscription grace and viewing notices", () => {
       state.locale = locale;
       const root = renderNotice();
       expect(root.querySelector('[data-subscription-access-notice="grace"]')).not.toBeNull();
+      expect(root.querySelector("details")).toBeNull();
       expect(root.querySelector('[role="status"]')).not.toBeNull();
       expect(root.textContent).toContain(formatDateTime(graceEndsAt, locale));
       expect(root.querySelector('a[href="/billing"]')).not.toBeNull();

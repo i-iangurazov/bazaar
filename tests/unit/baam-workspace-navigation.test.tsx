@@ -7,6 +7,7 @@ import en from "../../messages/en.json";
 import ru from "../../messages/ru.json";
 import kg from "../../messages/kg.json";
 import BaamPage from "@/app/(app)/baam/page";
+import styles from "@/components/baam-native-workspace.module.css";
 import { baamPathname, baamWorkspaceHref, baamWorkspaceReturnHref } from "@/lib/baam/workspaceNavigation";
 
 const native = vi.hoisted(() => ({ ios: true, search: "" }));
@@ -167,6 +168,29 @@ describe("native BAAM workspace navigation", () => {
     });
     expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("");
     expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).toBe("");
+  });
+
+  it("does not grow the iPhone chat if keyboard focus briefly scrolls the document", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    vi.stubGlobal("scrollY", 0);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return new DOMRect(0, this.hasAttribute("data-baam-workspace") ? 96 - window.scrollY : 0, 390, 0);
+    });
+    const view = render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
+    const workspace = screen.getByTestId("baam-page");
+    const draft = screen.getByRole("textbox", { name: "Workspace draft" });
+    expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("96px");
+    expect(document.documentElement.classList.contains(styles.nativeWorkspace)).toBe(true);
+
+    fireEvent.change(draft, { target: { value: "Unsent question" } });
+    draft.focus();
+    vi.stubGlobal("scrollY", 48);
+    fireEvent.scroll(window);
+    expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("96px");
+    expect((draft as HTMLInputElement).value).toBe("Unsent question");
+    expect(document.activeElement).toBe(draft);
+    view.unmount();
+    expect(document.documentElement.classList.contains(styles.nativeWorkspace)).toBe(false);
   });
 
   it("moves real title/back navigation into short native content without replacing the focused draft", async () => {

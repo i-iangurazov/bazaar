@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { Capacitor } from "@capacitor/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
@@ -155,7 +156,10 @@ beforeEach(() => {
     return { data: saved };
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("BAAM persistent companion workspace", () => {
   it("preserves the open launcher subtree while the client session resolves", () => {
@@ -545,6 +549,18 @@ describe("BAAM persistent companion workspace", () => {
     expect(draft.rows).toBe(2);
     expect(document.activeElement).toBe(draft);
     expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("explains unavailable transcription in the iOS composer", () => {
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("ios");
+    const configured = capabilities();
+    mocks.capabilities.mockReturnValue({
+      ...configured,
+      data: { ...configured.data, voiceConfigured: false },
+    });
+    render(shell(true, true, true));
+    expect((screen.getByRole("button", { name: "Record a voice message" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Voice input is currently unavailable.")).toBeTruthy();
+    expect(screen.queryByText(/sent automatically after recording/)).toBeNull();
   });
   it("retains short native return navigation while the session is still loading", () => {
     mocks.session.mockReturnValue({ status: "loading", data: null });

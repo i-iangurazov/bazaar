@@ -122,6 +122,21 @@ const copy = {
     "Microphone access is blocked. Allow it in browser settings or type your message.",
     "Микрофонго уруксат жок. Браузердин жөндөөлөрүнөн уруксат бериңиз же билдирүү жазыңыз.",
   ],
+  micDeniedIOS: [
+    "Проверьте разрешение на микрофон для приложения в системных настройках и попробуйте ещё раз.",
+    "Check the app’s microphone permission in Settings and try again.",
+    "Түзмөктүн жөндөөлөрүнөн колдонмонун микрофонго уруксатын текшерип, кайра аракет кылыңыз.",
+  ],
+  micUnavailableIOS: [
+    "Не удалось начать запись. Попробуйте ещё раз или напишите сообщение.",
+    "Could not start recording. Try again or type your message.",
+    "Үн жаздыруу башталган жок. Кайра аракет кылыңыз же билдирүү жазыңыз.",
+  ],
+  voiceUnavailableHere: [
+    "Голосовой ввод сейчас недоступен.",
+    "Voice input is currently unavailable.",
+    "Үн менен киргизүү азыр жеткиликсиз.",
+  ],
   micTimeout: [
     "Не удалось получить доступ к микрофону. Проверьте разрешение браузера или введите текст.",
     "Microphone access timed out. Check browser permissions or type your message.",

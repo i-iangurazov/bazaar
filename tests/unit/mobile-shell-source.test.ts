@@ -31,6 +31,13 @@ describe("mobile app shell source", () => {
     expect(mediaHookSource).toContain('mobileShellMediaQuery = "(max-width: 767px)"');
   });
 
+  it("keeps More at a fixed viewport height with separate iOS scrolling", () => {
+    expect(mobileShellSource).toContain("data-mobile-more-sheet");
+    expect(mobileShellSource).toContain("data-mobile-more-scroll aria-label={title}");
+    expect(globalsSource).toMatch(/\[data-mobile-more-sheet\]\s*\{\s*height:\s*85vh;\s*height:\s*85svh;/);
+    expect(globalsSource).toMatch(/\[data-mobile-more-scroll\]\s*\{\s*-webkit-overflow-scrolling:\s*touch;\s*overflow-anchor:\s*none;/);
+  });
+
   it("keeps desktop chrome at md and wider while routing mobile bottom tabs", () => {
     expect(appShellSource).toContain("<SidebarProvider");
     expect(appShellSource).toMatch(/<Sidebar\s+className=/);

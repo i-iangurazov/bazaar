@@ -167,6 +167,10 @@ html.native-ios [data-native-pos-shell] > main > [data-subscription-access-notic
     margin-bottom: 0.25rem;
   }
 
+  [data-native-pos-shell] > main > [data-subscription-access-notice="trial"] {
+    margin-inline: 0.75rem;
+  }
+
   [data-native-pos-shell]:has(> main > [data-pos-mobile-scanner]) {
     display: flex;
     min-height: var(--native-available-height, 100dvh);
@@ -216,6 +220,18 @@ html.native-ios [data-native-pos-shell] > main > [data-subscription-access-notic
 html.native-ios [data-native-bottom-nav] {
   left: var(--native-safe-area-left, 0px);
   right: var(--native-safe-area-right, 0px);
+}
+
+/* Expanding navigation sections changes only the scrollable list. */
+[data-mobile-more-sheet] {
+  height: 85vh;
+  height: 85svh;
+  max-height: max(0px, calc(100dvh - var(--mobile-top-safe-area) - 0.5rem));
+}
+
+[data-mobile-more-scroll] {
+  -webkit-overflow-scrolling: touch;
+  overflow-anchor: none;
 }
 
 html.native-ios .bazaar-doc-mobile-actions {

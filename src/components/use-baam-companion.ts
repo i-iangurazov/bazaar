@@ -1,5 +1,5 @@
 "use client";
-import { uploadBaamImage } from "@/lib/baam/mediaClient";
+import { uploadBaamAudio, uploadBaamImage } from "@/lib/baam/mediaClient";
 import type { WorkflowCommand } from "@/lib/baam/workflows";
 import { flushBaamWorkflowForms } from "@/lib/baam/workflowFlush";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -433,45 +433,22 @@ export function useBaamCompanion(identity: BaamIdentity) {
         }
         return image;
       }
-      const form = new FormData();
-      form.append("conversationId", id);
-      form.append("locale", locale);
-      form.append("kind", kind);
-      form.append("file", file, name);
-      const response = await fetch("/api/baam/media", {
-        method: "POST",
-        body: form,
-        signal: AbortSignal.timeout(115000),
-      });
-      const result = (await response.json()) as {
-        id: string;
-        text?: string;
-        url?: string;
-        name?: string;
-        message?: string;
-      };
-      if (!response.ok) throw new Error(result.message ?? "network");
+      const result = await uploadBaamAudio(file, name, id, locale);
       if (identityRef.current !== id) return;
-      if (kind === "audio") {
-        const text = [questionRef.current.trim(), result.text?.trim()].filter(Boolean).join("\n");
-        setQuestion(text);
-        setVoiceId(result.id);
-        setVoiceBlob(undefined);
-        const current = await utils.baam.conversation.fetch({ id });
-        if (identityRef.current !== id) return;
-        setUploadSlot((old) => (old === id || old === originalSlot ? undefined : old));
-        if (current.conversation.revision === originalRevision && text.trim()) {
-          await askRef.current(text, undefined, undefined, { id: result.id, conversationId: id });
-        } else {
-          setVoiceId(undefined);
-          setNotice(t("voiceScopeChanged"));
-          inputRef.current?.focus();
-        }
-      } else if (result.url)
-        setAttachments((previous) => [
-          ...previous,
-          { id: result.id, url: result.url!, name: result.name ?? name },
-        ]);
+      const text = [questionRef.current.trim(), result.text?.trim()].filter(Boolean).join("\n");
+      setQuestion(text);
+      setVoiceId(result.id);
+      setVoiceBlob(undefined);
+      const current = await utils.baam.conversation.fetch({ id });
+      if (identityRef.current !== id) return;
+      setUploadSlot((old) => (old === id || old === originalSlot ? undefined : old));
+      if (current.conversation.revision === originalRevision && text.trim()) {
+        await askRef.current(text, undefined, undefined, { id: result.id, conversationId: id });
+      } else {
+        setVoiceId(undefined);
+        setNotice(t("voiceScopeChanged"));
+        inputRef.current?.focus();
+      }
     } catch (e) {
       if (identityRef.current === uploadId || slotRef.current === originalSlot) {
         if (kind === "audio") setVoiceBlob(file);

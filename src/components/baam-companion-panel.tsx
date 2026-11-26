@@ -198,7 +198,7 @@ export function BaamCompanionPanel({
           {c.t("localMode")}
         </p>
       ) : null}
-      {compactViewport ? <p data-baam-voice-hint className="shrink-0 border-b border-border/60 px-4 py-2 text-[10px] leading-4 text-muted-foreground">
+      {compactViewport && c.capabilities.data?.voiceConfigured ? <p data-baam-voice-hint className="shrink-0 border-b border-border/60 px-4 py-2 text-[10px] leading-4 text-muted-foreground">
         {c.t("voiceSupport")}
       </p> : null}
       {c.showHistory ? (
