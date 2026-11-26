@@ -16,6 +16,7 @@ import { baamActions } from "./baamBusiness";
 import { workflowFieldAt, workflowFields } from "./baamWorkflowCatalog";
 import { AppError } from "./errors";
 import { asksBaamAboutPersonalHealth, asksForBaamInstructions } from "./baamOperationalHelp";
+import { baamIosHealthQuestion, baamIosHelpText } from "./baamIosPolicy";
 
 export type BaamIntent = {
   kind:
@@ -316,8 +317,11 @@ export async function understandBaamIntent(input: {
   page?: string;
   recentRecords?: Array<{ kind: string; resourceId: string; name?: string }>;
   images?: string[];
+  iosBusinessHelpOnly?: boolean;
   record: (details: { ms: number; bytes: number; model: string; status: number }) => void;
 }): Promise<BaamIntent> {
+  if (input.iosBusinessHelpOnly && baamIosHealthQuestion(input.text))
+    return command("answer", { reply: baamIosHelpText(input.locale) });
   const config = resolveTextAiConfig(
     input.images?.length ? "vision" : "baam",
     process.env.BAAM_INTENT_MODEL ||
@@ -358,8 +362,12 @@ export async function understandBaamIntent(input: {
             "Questions about actual catalog products, prices, SKUs, units, stock, stock receipts/оприходования, movements, transfers, write-offs, customers, suppliers, sales, orders or counts MUST use analytics or records/search, never a general answer. 'Tell me about this product' on its record page asks to READ its actual fields; it is not a how-to. The unified reader can combine datasets and choose latest/new/current filters. Only questions about HOW to operate the interface use answer/help. For a previous business answer, explain/reformat/shorten/table/list follow-ups also MUST use analytics so facts are read again.",
           conversationRule:
             "For an ordinary person-to-person question or greeting, give a natural, useful answer in the person's language. Do not redirect an unrelated question into business tools, actions, or menus. Speak plainly and reply to the actual question. If asked to prepare instructions, write steps ready to share and ask only for details needed for a correct guide. Never claim to have sent, purchased, or modified anything.",
-          personalHealthRule:
-            "For personal or medical questions, use answer and give cautious educational information, never diagnose or prescribe treatment, dosage, or a change in medication. Ask only necessary questions. Recommend professional care when individual assessment is needed, and prompt emergency care for apparent immediate danger. Do not use business data, claim current external knowledge, or invent medical facts.",
+          personalHealthRule: input.iosBusinessHelpOnly
+            ? `For health or medical requests, even if implied by a follow-up or an image, use answer and reply only with this sentence: ${baamIosHelpText(input.locale)}`
+            : "For personal or medical questions, use answer and give cautious educational information, never diagnose or prescribe treatment, dosage, or a change in medication. Ask only necessary questions. Recommend professional care when individual assessment is needed, and prompt emergency care for apparent immediate danger. Do not use business data, claim current external knowledge, or invent medical facts.",
+          photoScope: input.iosBusinessHelpOnly && input.images?.length
+            ? "Read photos and documents for store work only, including product labels, invoices, and receipts. Extract legible names, codes, quantities and prices, including for medical products. Do not interpret health records, symptoms, prescriptions or lab results. Apply personalHealthRule to those requests."
+            : undefined,
           personalHealth,
           instructionRequest,
           currentPageRecord: !personalHealth && /^\/products\/([A-Za-z0-9_-]+)$/.test(input.page ?? "")

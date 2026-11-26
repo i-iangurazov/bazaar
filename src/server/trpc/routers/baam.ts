@@ -29,6 +29,7 @@ import {
 } from "@/server/services/baamCompanion";
 import { cancelBaamAction, executeBaamAction } from "@/server/services/baamActions";
 import { withSubscriptionUsage } from "@/server/billing/subscriptionUsage";
+import { baamIosHealthQuestion } from "@/server/services/baamIosPolicy";
 
 const companion = managerProcedure;
 const handle = async <T>(run: () => Promise<T>) => {
@@ -119,9 +120,12 @@ export const baamRouter = router({
     .input(baamAskSchema)
     .mutation(async ({ ctx, input }) => {
       try {
+        const request = { ...input, actorId: ctx.user.id };
+        if (ctx.nativeIosBaam && baamIosHealthQuestion(input.question))
+          return await askBaam(request, { summary: false, iosBusinessHelp: true });
         return await withSubscriptionUsage({ organizationId: ctx.user.organizationId,
           resource: "ai", operationKey: `baam-ask:${ctx.user.id}:${ctx.requestId}` },
-          () => askBaam({ ...input, actorId: ctx.user.id }));
+          () => askBaam(request));
       } catch (error) {
         throw toTRPCError(error);
       }

@@ -423,7 +423,7 @@ const metricPresentation = (plan: SalesPlan, current: Metrics, previous: Metrics
   };
 };
 
-export const askBaam = async (input: z.input<typeof baamAskSchema> & { actorId: string }, options?: { summary: boolean }) => {
+export const askBaam = async (input: z.input<typeof baamAskSchema> & { actorId: string }, options?: { summary: boolean; iosBusinessHelp?: boolean }) => {
   const { actorId, ...request } = input;
   const parsed = baamAskSchema.parse(request);
   // Reject invalid client control state before any provider or reporting work.
@@ -500,6 +500,9 @@ export const askBaam = async (input: z.input<typeof baamAskSchema> & { actorId: 
     contextToken: status === "answer" && sameControls && context ? parsed.contextToken! : null,
     followUps: [...copy[parsed.locale].next],
   });
+  if (options?.iosBusinessHelp) return localReply(
+    baamLocalCopy[parsed.locale].unsupported, suggestBaamDestinations(navigationContext), "unsupported",
+  );
   let navigation = matchBaamNavigationIntent({ ...navigationContext, message: parsed.question });
   if (!navigation.length) {
     const navigationScope = resolveBaamQuestionScope({

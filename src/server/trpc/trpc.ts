@@ -25,6 +25,7 @@ import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
 import { withAiPrivacyIdentity } from "@/server/services/aiPrivacy";
 import { getAuthTokenFromCookieHeader } from "@/server/auth/token";
+import { isBaamIosRequest } from "@/server/services/baamIosPolicy";
 
 export type AuthUser = {
   id: string;
@@ -113,6 +114,7 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
     impersonationSessionId: impersonation?.impersonationSessionId ?? null,
     ip,
     requestId,
+    nativeIosBaam: isBaamIosRequest(req),
     logger: getLogger(requestId),
     acquisition:
       req.headers.get("dnt") === "1" || req.headers.get("sec-gpc") === "1"
@@ -121,8 +123,9 @@ export const createContext = async ({ req }: FetchCreateContextFnOptions) => {
   };
 };
 
-export type Context = Omit<Awaited<ReturnType<typeof createContext>>, "acquisition"> & {
+export type Context = Omit<Awaited<ReturnType<typeof createContext>>, "acquisition" | "nativeIosBaam"> & {
   acquisition?: Acquisition;
+  nativeIosBaam?: boolean;
 };
 
 const t = initTRPC.context<Context>().create({
