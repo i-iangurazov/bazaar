@@ -110,6 +110,7 @@ export function ApplePayments({
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [refundFeedback, setRefundFeedback] = useState<{ key: string; message: string } | null>(null);
   const [recoveringPurchase, setRecoveringPurchase] = useState<RecoveringPurchase | null>(null);
   const [checkingPurchase, setCheckingPurchase] = useState(false);
   const recoveringRef = useRef<RecoveringPurchase | null>(null);
@@ -255,8 +256,11 @@ export function ApplePayments({
   }, [selectionKey, catalog.data?.organization.id, purchaseUnresolved]);
 
   useEffect(() => {
-    setNotice(""); setConsentOpen(false); setAccepted(false);
-  }, [catalog.data?.organization.id]);
+    setNotice("");
+    setRefundFeedback(null);
+    setConsentOpen(false);
+    setAccepted(false);
+  }, [catalog.data?.organization.id, catalog.data?.environment]);
 
   useEffect(() => {
     if (recoveredTransaction && recoveredTransaction.status !== "REVIEW" &&
@@ -374,7 +378,7 @@ export function ApplePayments({
       document.removeEventListener("visibilitychange", resume);
     };
   }, [recoveryForCurrentOrganization, purchaseUnresolved, checkRecoveringPurchase]);
-  const run = async (operation: () => Promise<void>) => {
+  const run = async (operation: () => Promise<void>, reportError: (message: string) => void = setNotice) => {
     if (running.current) return;
     running.current = true;
     setBusy(true);
@@ -384,11 +388,29 @@ export function ApplePayments({
       await operation();
     } catch (error) {
       if (mounted.current && currentScope.current.organizationId === scope.organizationId &&
-        currentScope.current.environment === scope.environment) setNotice(messageFor(error));
+        currentScope.current.environment === scope.environment) reportError(messageFor(error));
     } finally {
       running.current = false;
       setBusy(false);
     }
+  };
+
+  const requestRefund = (transactionId: string, transactionEnvironment: string) => {
+    const { organizationId, environment } = currentScope.current;
+    if (!organizationId || !environment) return;
+    const scope = { organizationId, environment };
+    const key = `${organizationId}:${transactionEnvironment}:${transactionId}`;
+    const report = (message: string) => {
+      if (isCurrentPurchase(scope)) setRefundFeedback({ key, message });
+    };
+
+    void run(async () => {
+      report(t("refundOpening"));
+      const result = await requestAppleRefund(transactionId);
+      // StoreKit can report success when the system sheet closes after a connection error.
+      report(t(result.status === "submitted" ? "refundStatus" : "refundCancelled"));
+      if (isCurrentPurchase(scope)) await refresh(scope);
+    }, report);
   };
   const buy = () =>
     run(async () => {
@@ -703,7 +725,7 @@ export function ApplePayments({
               </p>
             ) : null}
             {catalog.data.environment === "Sandbox" ? (
-              <Badge variant="warning">{t("sandbox")}</Badge>
+              <Badge variant="warning" className="whitespace-normal text-left">{t("sandbox")}</Badge>
             ) : null}
             {catalog.data.pendingIntent ? (
               <p role="status" className="rounded-md bg-warning/10 p-3 text-sm">
@@ -973,7 +995,11 @@ export function ApplePayments({
                           </p>
                         ) : null}
                         {transaction.environment === "Sandbox" ? (
-                          <Badge variant="warning">{t("sandbox")}</Badge>
+                          <Badge variant="warning" className="whitespace-normal text-left">{t("sandbox")}</Badge>
+                        ) : null}
+                        {transaction.status !== "REVOKED" &&
+                        refundFeedback?.key === `${catalog.data.organization.id}:${transaction.environment}:${transaction.transactionId}` ? (
+                          <p role="status" className="text-sm text-muted-foreground">{refundFeedback.message}</p>
                         ) : null}
                         <AppleConsumptionConsent
                           key={`${catalog.data.organization.id}:${transaction.environment}:${transaction.transactionId}`}
@@ -991,19 +1017,7 @@ export function ApplePayments({
                           label={t("refund")}
                           variant="ghost"
                           disabled={busy || !nativeReady}
-                          onClick={() =>
-                            void run(async () => {
-                              const result = await requestAppleRefund(transaction.transactionId);
-                              setNotice(
-                                t(
-                                  result.status === "submitted"
-                                    ? "refundSubmitted"
-                                    : "refundCancelled",
-                                ),
-                              );
-                              await refresh();
-                            })
-                          }
+                          onClick={() => requestRefund(transaction.transactionId, transaction.environment)}
                         />
                       ) : null}
                     </div>

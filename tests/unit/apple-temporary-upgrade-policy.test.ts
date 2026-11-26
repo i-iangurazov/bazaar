@@ -168,12 +168,15 @@ describe("approved upward rounding without a retained balance", () => {
   });
   it("keeps the server file opt-in, bounded to its version and separate from arbitrary JSON", () => {
     const config = { APPLE_BILLING_TEMPORARY_UPGRADES_CATALOG: "KGZ_UP_2026_11_13_V1" };
+    const approved = { ...config, APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "true" };
+    const expiry = new Date(upCatalog.policy.validUntil);
     expect(temporaryUpgradePolicy(config, now).ready).toBe(false);
-    expect(temporaryUpgradePolicy({ ...config, APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "true",
+    expect(temporaryUpgradePolicy({ ...approved, APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "false" }, now).ready).toBe(false);
+    expect(temporaryUpgradePolicy(approved, now)).toEqual({ ready: true, policy: upCatalog.policy });
+    expect(temporaryUpgradePolicy({ ...approved,
       APPLE_BILLING_TEMPORARY_UPGRADES_JSON: JSON.stringify(policy()) }, now).ready).toBe(false);
-    expect(temporaryUpgradePolicy({ ...config, APPLE_BILLING_TEMPORARY_UPGRADES_CATALOG: "../../private.json",
-      APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "true" }, now).ready).toBe(false);
-    expect(temporaryUpgradePolicy({ ...config, APPLE_BILLING_TEMPORARY_UPGRADES_APPROVED: "true" },
-      new Date("2026-12-14T00:00:00Z")).ready).toBe(false);
+    expect(temporaryUpgradePolicy({ ...approved, APPLE_BILLING_TEMPORARY_UPGRADES_CATALOG: "../../private.json" }, now).ready).toBe(false);
+    expect(temporaryUpgradePolicy(approved, new Date(expiry.getTime() - 1)).ready).toBe(true);
+    expect(temporaryUpgradePolicy(approved, expiry).ready).toBe(false);
   });
 });

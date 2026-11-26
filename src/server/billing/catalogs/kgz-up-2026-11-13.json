@@ -1,6 +1,8 @@
 {
-  "registrationVerified": false,
-  "verificationStatus": "DRAFT_REGISTRATION_PENDING_NOT_AVAILABLE",
+  "registrationVerified": true,
+  "verificationStatus": "DRAFT_REGISTRATION_VERIFIED",
+  "verifiedBindingExportSha256": "0703ab5463ac68dcbcab51ebba91b0077e85b5f7435590557b630d13f7a7284d",
+  "registrationVerificationSha256": "5719d1d03c74e7b6b2fed63fe1f02dd86d5bf102ac56b31df573e134cce31388",
   "sourceApprovalSha256": "3c3169592ddc1339d78fd66459587e96109d366ee988369e2ce4cf9f7a2abf53",
   "sourcePlanSha256": "ddb1d7c28ed179051239272df6e2c70dd413fdc80b68137fa181c90a421541da",
   "policy": {

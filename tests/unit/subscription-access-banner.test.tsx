@@ -11,9 +11,11 @@ import { formatDateTime } from "@/lib/i18nFormat";
 const state = vi.hoisted(() => ({
   locale: "ru" as "ru" | "kg" | "en",
   path: "/pos",
+  platform: "web" as "ios" | "android" | "web",
   query: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
+vi.mock("@/lib/native/useNativePlatform", () => ({ useNativePlatform: () => state.platform }));
 vi.mock("next-intl", async (importOriginal) => {
   const { createTranslator } = await importOriginal<typeof NextIntlModule>();
   return {
@@ -64,6 +66,7 @@ const renderNotice = (
 beforeEach(() => {
   state.locale = "ru";
   state.path = "/pos";
+  state.platform = "web";
   state.query.mockReset();
 });
 describe("non-blocking subscription grace and viewing notices", () => {
@@ -94,6 +97,34 @@ describe("non-blocking subscription grace and viewing notices", () => {
       expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
     },
   );
+  it("collapses an active iOS checkout trial while keeping its full details reachable", () => {
+    const trialEndsAt = new Date(Date.now() + 6 * 86_400_000);
+    const data = {
+      ...modern,
+      trialActive: true,
+      trialEndsAt,
+      trialOffer: { days: 7, previewPlan: "BUSINESS" },
+      access: { ...modern.access, inGrace: false },
+    };
+    state.query.mockReturnValue({ isLoading: false, isError: false, data });
+    state.path = "/pos/sell";
+    state.platform = "ios";
+    const root = document.createElement("div");
+    const renderBanner = () => { root.innerHTML = renderToStaticMarkup(<SubscriptionAccessBanner canManage />); };
+
+    renderBanner();
+    const disclosure = root.querySelector("details");
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure?.querySelector("summary")?.textContent).toContain("6 дней");
+    expect(disclosure?.textContent).toContain(formatDateTime(trialEndsAt, "ru"));
+    expect(disclosure?.textContent).toContain(ru.billing.trial.scope);
+    expect(disclosure?.querySelector('a[href="/billing"]')).not.toBeNull();
+
+    state.platform = "web";
+    renderBanner();
+    expect(root.querySelector("details")).toBeNull();
+    expect(root.textContent).toContain(ru.billing.trial.scope);
+  });
   it.each(["ru", "kg", "en"] as const)(
     "explains the current trial and exact end in %s",
     (locale) => {
