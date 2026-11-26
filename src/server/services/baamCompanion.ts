@@ -21,6 +21,7 @@ import {
   baamAccess,
   claimBaamTurn,
   readBaamConversation,
+  readBaamIosHealthTurns,
 } from "./baamConversations";
 import { baamActions, businessCaller } from "./baamBusiness";
 import { baamHelp, baamSearch, baamInspect } from "./baamReadTools";
@@ -55,6 +56,7 @@ import {
   baamOperationalTopic,
   readBaamPrinterDetails,
 } from "./baamOperationalHelp";
+import { baamIosHealthAnswer, baamIosHelpText } from "./baamIosPolicy";
 export { baamToolSchema, baamOptionalValues } from "./baamToolContract";
 const controllers = new Map<string, AbortController>();
 export const abortBaamGeneration = (turnId: string) => controllers.get(turnId)?.abort();
@@ -103,6 +105,11 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
   const timeout = setTimeout(() => controller.abort(), 45000);
   let usageLease: UsageLease = null;
   try {
+    if (claimed.iosLocalHelp) {
+      await finishBaamTurn(ctx, turn.id, "COMPLETED", baamIosHelpText(input.locale), []);
+      return { turnId: turn.id, status: "COMPLETED", replayed: false,
+        data: await readBaamConversation(ctx, conversation.id) };
+    }
     // claimBaamTurn already validated and consumed this exact transcription
     // for this conversation. Its successful transcript used one shared unit.
     if (!input.transcriptionId) {
@@ -203,7 +210,12 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
         }),
       ]);
       controller.signal.throwIfAborted();
-      const dialogue = history.reverse().map((m) => ({
+      const iosHealthTurns = ctx.nativeIosBaam
+        ? await readBaamIosHealthTurns(conversation.id, [...new Set(history.flatMap((m) => m.turnId ? [m.turnId] : []))])
+        : undefined;
+      const visibleHistory = iosHealthTurns ? history.filter((m) =>
+        !(m.turnId && iosHealthTurns.has(m.turnId)) && !baamIosHealthAnswer(m.text)) : history;
+      const dialogue = visibleHistory.reverse().map((m) => ({
         role: m.role,
         // The model gets explanations and task context, never authoritative
         // sales totals or record contents from the server's read results.
@@ -218,7 +230,7 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
             ? "[The application displayed authorized business data; use the supplied analytical context for follow-ups.]"
             : m.text.slice(0, 1200),
       }));
-      const previousRead = history
+      const previousRead = visibleHistory
         .flatMap((m) =>
           Array.isArray(m.parts) ? (m.parts as Array<{ type?: string; plan?: unknown }>) : [],
         )
@@ -245,6 +257,7 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
         page: input.page?.path,
         recentRecords,
         images,
+        iosBusinessHelpOnly: ctx.nativeIosBaam,
         signal: controller.signal,
         record: (details) => {
           modelCalls++;
@@ -628,6 +641,10 @@ async function sendBudgetedBaamMessage(ctx: Context, input: BaamSend) {
         ];
     }
     await assertBaamTurnActive(ctx, turn.id);
+    if (ctx.nativeIosBaam && baamIosHealthAnswer(text)) {
+      text = baamIosHelpText(input.locale);
+      parts = [];
+    }
     await finishBaamTurn(ctx, turn.id, "COMPLETED", text, parts, usageLease);
     const reportExecution = async (completed: Awaited<ReturnType<typeof submitBaamWorkflow>>) => {
       const message =

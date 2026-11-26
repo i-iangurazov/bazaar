@@ -6,6 +6,7 @@ import { AppError } from "./errors";
 import { getBaamAccessScope } from "./baamMetrics";
 import { baamText, type BaamSend, type BaamPart } from "@/lib/baam/companion";
 import { baamAttachmentHref } from "./baamPrivateMedia";
+import { baamIosHasHealthPrompt, baamIosHealthAnswer, baamIosHealthQuestion, baamIosHelpText, baamIosNeedsLocalHelp } from "./baamIosPolicy";
 
 export const baamJson = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -82,7 +83,8 @@ export async function listBaamConversations(ctx: Context, before?: string) {
   return {
     items: items
       .slice(0, 30)
-      .filter((item) => item.scopeStoreIds.every((id) => scope.storeIds.includes(id))),
+      .filter((item) => item.scopeStoreIds.every((id) => scope.storeIds.includes(id)))
+      .map((item) => ctx.nativeIosBaam && baamIosHealthQuestion(item.title) ? { ...item, title: "Baam" } : item),
     next: items.length > 30 ? items[29].id : null,
   };
 }
@@ -105,6 +107,17 @@ export async function createBaamConversation(
   });
 }
 
+export async function readBaamIosHealthTurns(conversationId: string, turnIds: string[]) {
+  if (!turnIds.length) return new Map<string, string>();
+  // Fetch the prompt even when the current page starts with its answer.
+  const prompts = await prisma.baamMessage.findMany({
+    where: { conversationId, turnId: { in: turnIds }, role: "user" },
+    select: { turnId: true, text: true, parts: true, turn: { select: { locale: true } } },
+  });
+  return new Map<string, string>(prompts.flatMap((prompt) => prompt.turnId && baamIosHasHealthPrompt(prompt)
+    ? [[prompt.turnId, prompt.turn?.locale ?? "ru"] as const] : []));
+}
+
 export async function readBaamConversation(ctx: Context, id: string, before?: number) {
   const { conversation } = await ownBaamConversation(ctx, id);
   if (conversation.activeTurnId) await expireBaamTurn(id);
@@ -120,7 +133,7 @@ export async function readBaamConversation(ctx: Context, id: string, before?: nu
     }),
   ]);
   const turnIds = [...new Set(messages.flatMap((m) => (m.turnId ? [m.turnId] : [])))];
-  const [actions, workflows] = await Promise.all([
+  const [actions, workflows, iosHealthTurns] = await Promise.all([
     prisma.baamAction.findMany({
       where: {
         conversationId: id,
@@ -150,10 +163,18 @@ export async function readBaamConversation(ctx: Context, id: string, before?: nu
       orderBy: { createdAt: "desc" },
       take: 60,
     }),
+    ctx.nativeIosBaam ? readBaamIosHealthTurns(id, turnIds) : undefined,
   ]);
+  const page = messages.slice(0, 40).reverse();
   return {
-    conversation,
-    messages: messages.slice(0, 40).reverse(),
+    conversation: ctx.nativeIosBaam && baamIosHealthQuestion(conversation.title)
+      ? { ...conversation, title: "Baam" } : conversation,
+    messages: iosHealthTurns ? page.map((message) => {
+      if (message.role !== "assistant") return message;
+      const locale = message.turnId ? iosHealthTurns.get(message.turnId) : undefined;
+      return (locale || baamIosHealthAnswer(message.text))
+        ? { ...message, text: baamIosHelpText(locale ?? "ru"), parts: [] } : message;
+    }) : page,
     actions: actions.map((action) => ({
       ...action,
       canRecover: action.status === "RUNNING" && action.updatedAt.getTime() < Date.now() - 90_000,
@@ -295,7 +316,7 @@ export async function claimBaamTurn(ctx: Context, input: BaamSend) {
     if (previous) {
       if (previous.requestHash !== requestHash)
         throw new AppError("idempotencyConflict", "CONFLICT", 409);
-      return { turn: previous, fresh: false, conversation };
+      return { turn: previous, fresh: false, conversation, iosLocalHelp: false };
     }
     if (conversation.deletedAt || conversation.revision !== input.revision)
       throw new AppError("baamScopeChanged", "CONFLICT", 409);
@@ -330,11 +351,14 @@ export async function claimBaamTurn(ctx: Context, input: BaamSend) {
       if (!voice) throw new AppError("baamAudioNotFound", "NOT_FOUND", 404);
       if (voice.usedTurnId) throw new AppError("baamAudioAlreadySent", "CONFLICT", 409);
     }
-    // A correction supersedes any unexecuted review. Successful actions stay immutable.
-    await tx.baamAction.updateMany({
-      where: { conversationId: conversation.id, status: { in: ["PROPOSED", "FAILED"] } },
-      data: { status: "SUPERSEDED" },
-    });
+    const iosLocalHelp = Boolean(ctx.nativeIosBaam && baamIosNeedsLocalHelp(input, voice?.text));
+    if (!iosLocalHelp) {
+      // A correction supersedes any unexecuted review. Successful actions stay immutable.
+      await tx.baamAction.updateMany({
+        where: { conversationId: conversation.id, status: { in: ["PROPOSED", "FAILED"] } },
+        data: { status: "SUPERSEDED" },
+      });
+    }
     const turn = await tx.baamTurn.create({
       data: {
         conversationId: conversation.id,
@@ -377,7 +401,7 @@ export async function claimBaamTurn(ctx: Context, input: BaamSend) {
           : []),
       ],
     });
-    return { turn, fresh: true, conversation };
+    return { turn, fresh: true, conversation, iosLocalHelp };
   });
 }
 

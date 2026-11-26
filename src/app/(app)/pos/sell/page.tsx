@@ -6952,9 +6952,9 @@ const PosSellPage = () => {
               {translateError(tErrors, saleQuery.error)}
             </div>
           ) : null}
-          {renderOrderSection()}
-          {renderMobileLines()}
           {renderAddProductsBar()}
+          {renderMobileLines()}
+          {renderOrderSection()}
           {renderPropertiesSection()}
           {renderCounterpartiesSection()}
           {renderCommentBar()}
@@ -6962,11 +6962,11 @@ const PosSellPage = () => {
             <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
               <button
                 type="button"
-                className="min-h-[48px] w-full rounded-lg bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-none"
+                className="flex min-h-[48px] w-full items-center justify-between gap-3 rounded-lg bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-none"
                 onClick={() => setMobileSaleTab("payment")}
-                aria-label={t("sell.openCart")}
               >
-                {t("sell.mobile.goToPayment")}
+                <span className="min-w-0 text-left">{t("sell.mobile.goToPayment")}</span>
+                <span className="shrink-0 tabular-nums">{formatSaleMoney(cartTotalKgs)}</span>
               </button>
             </div>
           ) : null}
@@ -6974,14 +6974,7 @@ const PosSellPage = () => {
       );
 
       const renderPaymentTab = () => (
-        <section
-          className={cn(
-            "min-h-[calc(100dvh-176px)]",
-            hasCartLines
-              ? "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]"
-              : "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]",
-          )}
-        >
+        <section className="min-h-[calc(100dvh-176px)] pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]">
           {lastCompletedSale ? (
             <div className="grid min-h-[calc(100dvh-224px)] place-items-start px-4 pt-9">
               <section className="w-full border border-success/30 bg-success/10 p-4 text-center">

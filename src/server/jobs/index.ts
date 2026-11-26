@@ -250,7 +250,12 @@ const jobs: Record<string, JobDefinition> = {
     handler: async () => {
       const { reconcileAppleBilling } = await import("@/server/billing/appleLifecycle");
       const details = await reconcileAppleBilling();
-      return { job: "apple-billing-reconcile", status: "ok" as const, details };
+      const failed = details.apiUnavailable || details.retryCount > 0;
+      return {
+        job: "apple-billing-reconcile",
+        status: failed ? "skipped" : "ok",
+        details: failed ? { ...details, reason: "failed" } : details,
+      };
     },
     maxAttempts: 1,
   },

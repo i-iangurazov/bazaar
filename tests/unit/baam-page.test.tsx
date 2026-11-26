@@ -551,7 +551,7 @@ describe("BAAM persistent companion workspace", () => {
       scrollHeight: { configurable: true, value: 1500 },
       clientHeight: { configurable: true, get: () => viewportHeight },
     });
-    expect(screen.getByRole("combobox")).toBeTruthy();
+    expect(transcript.contains(screen.getByRole("combobox"))).toBe(true);
     const draft = input();
     draft.focus();
     fireEvent.change(draft, { target: { value: "My unfinished question" } });

@@ -138,12 +138,16 @@ function createKeyboardViewport(root: HTMLElement, native: boolean) {
     if (editing) {
       const overlap = window.innerHeight - (controlsBottom - available.top);
       root.style.setProperty(scrollRoomProperty, `${Math.max(0, overlap)}px`);
-      root.style.setProperty(bottomInsetProperty, `${Math.max(0, window.innerHeight - controlsBottom)}px`);
-      root.style.setProperty(accessoryProperty, `${accessory}px`);
+      if (!native) {
+        root.style.setProperty(bottomInsetProperty, `${Math.max(0, window.innerHeight - controlsBottom)}px`);
+        root.style.setProperty(accessoryProperty, `${accessory}px`);
+      }
     } else {
       root.style.removeProperty(scrollRoomProperty);
-      root.style.removeProperty(bottomInsetProperty);
-      root.style.removeProperty(accessoryProperty);
+      if (!native) {
+        root.style.removeProperty(bottomInsetProperty);
+        root.style.removeProperty(accessoryProperty);
+      }
     }
     root.toggleAttribute(keyboardAttribute, editing);
     if (native || editing) {
@@ -199,8 +203,10 @@ function createKeyboardViewport(root: HTMLElement, native: boolean) {
       document.removeEventListener("focusout", scheduleReveal);
       root.removeAttribute(keyboardAttribute);
       root.style.removeProperty(scrollRoomProperty);
-      root.style.removeProperty(bottomInsetProperty);
-      root.style.removeProperty(accessoryProperty);
+      if (!native) {
+        root.style.removeProperty(bottomInsetProperty);
+        root.style.removeProperty(accessoryProperty);
+      }
       root.style.removeProperty("--native-available-height");
       root.style.removeProperty("--native-viewport-offset-top");
     },

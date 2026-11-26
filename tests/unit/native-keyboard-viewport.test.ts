@@ -86,6 +86,8 @@ describe("native keyboard visible viewport", () => {
     viewport = createNativeKeyboardViewport(document.documentElement);
     first.focus(); viewport.show(300); flush();
     expect(form.scrollTop).toBe(168);
+    expect(document.documentElement.style.getPropertyValue("--mobile-keyboard-browser-chrome")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--mobile-keyboard-bottom-inset")).toBe("");
     expect(first.value).toBe("retained");
     second.focus(); flush();
     expect(form.scrollTop).toBe(468);
