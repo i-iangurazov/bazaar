@@ -1,7 +1,7 @@
 import { productPhotoSearchMaxBytes, validProductPhotoRegion, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "@/server/services/errors";
 import { findPhotoCandidates, preparedPhotoSearchProgress, presentPreparedPhotoCandidates, presentPhotoCandidates } from "@/server/services/productPhotoSearch";
-import { photoSearchConfigured, checkPhotoSearchEngine } from "@/server/services/productPhotoSearchEngine";
+import { photoSearchConfigured, photoSearchIndexEnabled, checkPhotoSearchEngine } from "@/server/services/productPhotoSearchEngine";
 import { assertPhotoOrigin, consumePhotoRate, photoFailure, photoJson, photoSearchUser, readPhotoBody } from "@/server/services/productPhotoSearchHttp";
 import { assertPhotoStore, loadPhotoSearchScope } from "@/server/services/productPhotoSearchScope";
 
@@ -13,9 +13,13 @@ export async function GET(request: Request) {
   try {
     const user = await photoSearchUser(request);
     await consumePhotoRate(user, "status");
-    const storeId = new URL(request.url).searchParams.get("storeId") ?? "";
+    const { searchParams } = new URL(request.url);
+    const storeId = searchParams.get("storeId") ?? "";
     await assertPhotoStore(user, storeId);
     const configured = photoSearchConfigured();
+    if (photoSearchIndexEnabled() && searchParams.get("availability") === "1") {
+      return photoJson({ configured });
+    }
     const progress = configured ? await preparedPhotoSearchProgress(user, storeId, request.signal) : null;
     if (configured && !progress) await checkPhotoSearchEngine(request.signal);
     const current = await photoSearchUser(request);

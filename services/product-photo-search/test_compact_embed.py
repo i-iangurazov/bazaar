@@ -2,7 +2,7 @@ from types import SimpleNamespace
 import sys
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from compact_server import EmbedWorker
 
@@ -55,3 +55,28 @@ class EmbedWorkerTest(unittest.TestCase):
         second = self.embed('second')
         self.assertEqual(second['image'], 'second')
         self.assertNotEqual(second['pid'], first['pid'])
+
+
+class LocalPhotoInferenceTest(unittest.TestCase):
+    def test_releases_visual_weights_before_ranking_and_ocr_weights_after_failure(self):
+        from local_photo_inference import LocalPhotoInference
+
+        args = SimpleNamespace(model_dir=None, vision_model_dir=None, threads=1)
+        reader = Mock()
+        analysis = {'lines': []}
+        reader.read.side_effect = [RuntimeError('failed read'), analysis]
+        with (patch('local_photo_inference.CompactDetector'),
+              patch('local_photo_inference.CompactEncoder'),
+              patch('local_photo_inference.rank_stream'),
+              patch('local_photo_inference.request_rgb'),
+              patch('compact_vision.compact_text_reader', return_value=reader) as make_reader):
+            inference = LocalPhotoInference(args)
+            inference.rank(None, 0, [])
+            self.assertIsNone(inference.detector)
+            self.assertIsNone(inference.encoder)
+            with self.assertRaisesRegex(RuntimeError, 'failed read'):
+                inference.read_text({}, None, 'full')
+            reader.ocr.slot.clear.assert_called_once()
+            self.assertEqual(inference.read_text({}, None, 'full'), analysis)
+            make_reader.assert_called_once()
+            self.assertEqual(reader.ocr.slot.clear.call_count, 2)

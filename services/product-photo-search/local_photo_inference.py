@@ -17,6 +17,7 @@ class LocalPhotoInference:
         cv2.setNumThreads(args.threads)
         faiss.omp_set_num_threads(args.threads)
         self.detector = self.encoder = None
+        self.text_reader = None
         self.start_visual()
 
     def release_unused_memory(self):
@@ -48,6 +49,8 @@ class LocalPhotoInference:
         return {'regions': regions, 'queries': queries}
 
     def rank(self, reader, count, queries):
+        # The descriptors are complete. Release visual weights before reading the gallery.
+        self.close()
         # The small Faiss blocks need less workspace when ranked by one thread.
         faiss.omp_set_num_threads(1)
         result = rank_stream(reader, count, queries)
@@ -55,15 +58,15 @@ class LocalPhotoInference:
         return result
 
     def read_text(self, request, box, source):
-        self.close()
         from compact_vision import compact_text_reader
 
-        reader = None
         try:
-            reader = compact_text_reader(self.args.vision_model_dir, self.args.threads)
-            return reader.read(request_rgb(request), box, source)
+            if self.text_reader is None:
+                self.text_reader = compact_text_reader(self.args.vision_model_dir, self.args.threads)
+            return self.text_reader.read(request_rgb(request), box, source)
         finally:
-            reader = None
+            # Keep preprocessing and the OCR dictionary. Only one set of native weights fits.
+            if self.text_reader is not None:
+                self.text_reader.ocr.slot.clear()
             gc.collect()
             self.release_unused_memory()
-            self.start_visual()

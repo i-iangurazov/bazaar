@@ -5,7 +5,7 @@ import { productPhotoSearchMaxBytes, productPhotoSearchMinScore, productPhotoSea
   type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
 import { prepareProductStudioSource } from "./productImageSourceUpload";
-import { checkPreparedPhotoIndex, photoSearchIndexEnabled, photoSearchStreamingEnabled, photoSearchVectorPage,
+import { checkPreparedPhotoIndex, photoSearchConfigured, photoSearchIndexEnabled, photoSearchStreamingEnabled, photoSearchVectorPage,
   queryPreparedProductPhoto, queryProductPhoto, queryProductPhotoStream, type PreparedPhotoIndex } from "./productPhotoSearchEngine";
 import { productPhotoIndexRevision } from "./productPhotoIndexRevision";
 import { matchProductPhotoLabel } from "./productPhotoLabel";
@@ -79,6 +79,10 @@ export async function preparedPhotoSearchProgress(user: StoreAccessUser, storeId
 }
 
 export async function findPhotoCandidates(input: PhotoQueryInput) {
+  if (!photoSearchConfigured()) {
+    await assertPhotoStore(input.user, input.storeId);
+    throw new AppError("photoSearchNotConfigured", "INTERNAL_SERVER_ERROR", 503);
+  }
   let query: Awaited<ReturnType<typeof photoQuery>> | undefined;
   if (photoSearchIndexEnabled()) {
     await assertPhotoStore(input.user, input.storeId);

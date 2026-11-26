@@ -94,8 +94,8 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
   const controller = useRef<AbortController | null>(null);
   const epoch = useRef(0);
   const useReady = useRef(false);
-  const preparedIndex = useRef(false);
   const currentStore = stores.find((store) => store.id === selectedStore);
+  const canSearch = !!file && !!selectedStore && !busy && status !== "unconfigured";
   const cancel = () => { epoch.current += 1; controller.current?.abort(); setBusy(false); setPhase(null); };
 
   useEffect(() => () => { epoch.current += 1; controller.current?.abort(); }, []);
@@ -112,21 +112,22 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
     setBusy(false); setPhase(null);
     setError(null);
     setProgress(null);
-    preparedIndex.current = false;
     setResult(null); setSelectedId(null);
     if (!open || !selectedStore) { setStatus(null); return; }
     const active = new AbortController();
     controller.current = active;
     const sequence = epoch.current;
     setStatus("loading");
-    void requestJson(`/api/products/photo-search?storeId=${encodeURIComponent(selectedStore)}`, {}, active.signal)
+    void requestJson(`/api/products/photo-search?storeId=${encodeURIComponent(selectedStore)}&availability=1`, {}, active.signal)
       .then((body) => {
         if (active.signal.aborted || sequence !== epoch.current) return;
         setStatus(body.configured ? "ready" : "unconfigured");
-        setProgress(body.progress);
-        preparedIndex.current = body.preparedIndex === true && body.progress?.pending === 0;
+        setProgress(body.progress ?? null);
       }).catch((cause) => {
-        if (!active.signal.aborted && sequence === epoch.current) { setStatus(null); setError(cause instanceof Error ? cause.message : "photoSearchUnavailable"); }
+        if (!active.signal.aborted && sequence === epoch.current) {
+          if (cause instanceof Error && cause.message === "photoSearchNotConfigured") setStatus("unconfigured");
+          else { setStatus(null); setError(cause instanceof Error ? cause.message : "photoSearchUnavailable"); }
+        }
       });
     return () => active.abort();
   }, [open, selectedStore, reload]);
@@ -140,8 +141,9 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
     setFile(value); setResult(null); setSelectedId(null); setError(null); setManualRegion(null); setAutomaticRegion(true); setEditingRegion(false);
   };
   const search = async (retryFailed = false, partial = false) => {
-    if (!file || !selectedStore || busy || status !== "ready") return;
+    if (!canSearch || !file) return;
     cancel();
+    if (status === "loading") setStatus(null);
     const active = new AbortController();
     controller.current = active;
     const sequence = epoch.current;
@@ -154,7 +156,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
       if (!prepared.ok) throw new Error(prepared.code);
       if (!valid()) return;
       const deadline = Date.now() + 180_000;
-      let prepare = retryFailed || !preparedIndex.current;
+      let prepare = retryFailed || (!partial && (progress?.pending ?? 0) > 0);
       for (let changed = 0; changed < 3; changed += 1) {
         if (prepare) {
           setPhase("catalog");
@@ -190,15 +192,18 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
             throw cause;
           }
         }
-        if (!body) { preparedIndex.current = false; continue; }
+        if (!body) continue;
         if (!valid()) return;
         if (body.storeId !== selectedStore || !Array.isArray(body.items)) throw new Error("photoSearchUnavailable");
-        setResult(body); setProgress(body.progress);
+        setResult(body); setProgress(body.progress); setStatus("ready");
         return;
       }
       throw new Error("photoSearchPreparingLong");
     } catch (cause) {
-      if (valid()) setError(cause instanceof Error ? cause.message : "photoSearchUnavailable");
+      if (valid()) {
+        if (cause instanceof Error && cause.message === "photoSearchNotConfigured") setStatus("unconfigured");
+        else setError(cause instanceof Error ? cause.message : "photoSearchUnavailable");
+      }
     } finally { if (valid()) { setBusy(false); setPhase(null); } }
   };
   const errorText = error ? errors.has(error) ? errors(error) : errors("genericMessage") : null;
@@ -289,7 +294,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
           <p className="text-xs leading-relaxed text-muted-foreground">{t("photoHelp")}</p>
           {status === "loading" ? <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status"><Spinner className="h-3.5 w-3.5 motion-reduce:animate-none" />{common("loading")}</p> : null}
           <div className="space-y-2">
-            <Button type="button" className="h-11 w-full" disabled={!file || !selectedStore || status !== "ready" || busy} onClick={() => void search()}>
+            <Button type="button" className="h-11 w-full" disabled={!canSearch} onClick={() => void search()}>
               {busy ? <Spinner className="h-4 w-4 text-current motion-reduce:animate-none" /> : <ScanLine className="h-4 w-4" aria-hidden />}
               {busy ? t("searchingShort") : t("search")}
             </Button>
@@ -317,7 +322,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
             <Button type="button" variant="secondary" className="mt-2" onClick={() => setReload((value) => value + 1)}>{common("tryAgain")}</Button>
           </Alert> : null}
           {errorText ? <Alert variant="destructive" role="alert"><p>{errorText}</p>
-            <Button type="button" variant="secondary" className="mt-2" onClick={() => status === "ready" && file ? void search(true) : setReload((value) => value + 1)}>{common("tryAgain")}</Button>
+            <Button type="button" variant="secondary" className="mt-2" onClick={() => canSearch ? void search(error === "photoSearchImagesFailed") : setReload((value) => value + 1)}>{common("tryAgain")}</Button>
           </Alert> : null}
 
           {busy ? <div className={styles.enter + " space-y-4"}>
