@@ -688,6 +688,8 @@ export const ProductForm = ({
     staleTime: 60_000,
   });
   const canConfigureBundles = Boolean(billing.data?.featureFlags.bundles);
+  const canUseAssortments = Boolean(billing.data?.featureFlags.assortments);
+  const canPrepareExistingProduct = !productId && Boolean(categoryStoreId) && canUseAssortments;
   const locale = useLocale();
   const { toast } = useToast();
   const productUtils = trpc.useUtils();
@@ -1566,7 +1568,7 @@ export const ProductForm = ({
         readOnly || isSubmitting || diagnosticsPending || duplicateDiagnosticsQuery.isFetching
       }
       onReuse={
-        !productId && categoryStoreId && match.canReuse
+        canPrepareExistingProduct && match.canReuse
           ? () => setReuseProduct({ id: match.id, name: match.name, sku: match.sku })
           : undefined
       }
@@ -4438,7 +4440,9 @@ export const ProductForm = ({
             </div>
           ) : null}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{t("duplicateAssortmentHint")}</p>
+        {canUseAssortments ? (
+          <p className="mt-2 text-xs text-muted-foreground">{t("duplicateAssortmentHint")}</p>
+        ) : null}
         <div className="mt-3 space-y-2">
           {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
             <div className="rounded-md border border-danger/30 bg-background p-3">
@@ -4473,8 +4477,7 @@ export const ProductForm = ({
                 ) : (
                   <span>{t("duplicateAccessHint")}</span>
                 )}
-                {!productId &&
-                categoryStoreId &&
+                {canPrepareExistingProduct &&
                 duplicateDiagnosticsQuery.data.exactSkuMatch.canReuse ? (
                   <Button
                     type="button"
@@ -4520,7 +4523,7 @@ export const ProductForm = ({
                   >
                     {t("duplicateOpenProduct")}
                   </Link>
-                  {!productId && categoryStoreId && match.canReuse ? (
+                  {canPrepareExistingProduct && match.canReuse ? (
                     <Button
                       type="button"
                       size="sm"
