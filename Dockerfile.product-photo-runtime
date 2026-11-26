@@ -1,6 +1,8 @@
 FROM node:22.23.4-bookworm-slim AS node-dependencies
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable && corepack prepare pnpm@10.13.1 --activate
 COPY package.json pnpm-lock.yaml tsconfig.json ./
 COPY vendor ./vendor
 COPY prisma ./prisma
@@ -16,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY services/product-photo-search/requirements-compact-linux-x86_64.lock.txt ./requirements.txt
 RUN python -m pip install --no-cache-dir --no-deps --only-binary=:all: --require-hashes -r requirements.txt
 COPY services/product-photo-search ./services/product-photo-search
-COPY models ./models
+COPY --chown=10001:10001 models ./models
 RUN cd services/product-photo-search && python -m unittest test_readiness test_prepared_index test_stream_rank test_compact_embed test_pipeline test_retrieval test_vision
 COPY --from=node-dependencies /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-dependencies /app/node_modules /app/node_modules
@@ -28,6 +30,7 @@ ENV NODE_ENV=production PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp \
     XDG_CONFIG_HOME=/tmp/caddy-config XDG_DATA_HOME=/tmp/caddy-data \
     PRODUCT_PHOTO_WORKER_ENABLED=0 PRODUCT_PHOTO_WORKER_HEALTH_FILE=/tmp/product-photo-worker.json
 USER bazaar
+RUN test -r /app/models/encoder.onnx && test -r /app/models/vision/ocr/PP-OCRv6_rec_medium.onnx
 EXPOSE 10000
 STOPSIGNAL SIGTERM
 CMD ["/usr/bin/supervisord", "-c", "/app/services/product-photo-search/runtime/supervisord.conf"]
