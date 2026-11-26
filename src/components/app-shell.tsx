@@ -950,7 +950,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       <BaamAssistantProvider>
         <DisplayScaleProvider enabled={!normalizedPath.startsWith("/printing/")}>
         {normalizedPath === "/pos/sell" ? (
-          <div data-bazaar-app className="min-h-screen bg-background">
+          <div data-bazaar-app data-native-pos-shell className="min-h-screen bg-background">
             {impersonation ? (
               <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
                 <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
@@ -1173,7 +1173,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   className="min-w-0 flex-1 px-4 py-4 outline-none sm:px-5 lg:px-6 lg:py-5"
                 >
                   <MobilePageContainer>
-                    <div className="mx-auto max-w-[1500px] 2xl:max-w-[112.5rem]">{children}</div>
+                    <div data-app-page className="mx-auto max-w-[1500px] 2xl:max-w-[112.5rem]">{children}</div>
                   </MobilePageContainer>
                 </main>
               </SidebarInset>

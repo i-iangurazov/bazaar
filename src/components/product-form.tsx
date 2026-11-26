@@ -6050,7 +6050,7 @@ export const ProductForm = ({
             </FormActions>
           ) : null}
           {!readOnly && !hideActions ? (
-            <div className="sticky bottom-3 z-30 mt-4 rounded-lg border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.12)] md:hidden">
+            <div data-mobile-keyboard-actions="product" className="sticky bottom-3 z-30 mt-4 rounded-lg border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.12)] md:hidden">
               <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <Spinner className="h-4 w-4" />
@@ -7745,7 +7745,7 @@ export const ProductForm = ({
           </FormActions>
         ) : null}
         {!readOnly && !hideActions ? (
-          <div className="mt-4 rounded-md border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] md:hidden">
+          <div data-mobile-keyboard-actions="product" className="mt-4 rounded-md border border-border bg-background p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] md:hidden">
             <Button type="submit" className="min-h-11 w-full" disabled={isSubmitting}>
               {isSubmitting ? (
                 <Spinner className="h-4 w-4" />

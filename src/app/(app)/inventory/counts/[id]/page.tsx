@@ -763,7 +763,7 @@ const StockCountDetailPage = () => {
                 <FormItem>
                   <FormLabel>{t("counted")}</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" inputMode="decimal" />
+                    <Input {...field} type="number" inputMode="decimal" enterKeyHint="done" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -780,6 +780,7 @@ const StockCountDetailPage = () => {
               </Button>
               <Button
                 type="submit"
+                data-mobile-keyboard-submit
                 className="w-full sm:w-auto"
                 disabled={setQtyMutation.isLoading}
               >

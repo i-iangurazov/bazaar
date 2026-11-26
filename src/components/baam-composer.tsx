@@ -18,7 +18,7 @@ const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
 export function BaamComposer({ c, inlineControls = false }: { c: BaamController; inlineControls?: boolean }) {
   const platform = useNativePlatform();
-  const voiceUnavailable = platform === "ios" && c.available && c.capabilities.data?.voiceConfigured === false;
+  const voiceUnavailable = (inlineControls || platform === "ios") && c.available && c.capabilities.data?.voiceConfigured === false;
   const fileRef = useRef<HTMLInputElement>(null);
   const attachInput = useCallback((input: HTMLTextAreaElement | null) => {
     c.inputRef.current = input;
@@ -35,6 +35,13 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
       w.id === c.data?.conversation.activeWorkflowId &&
       ["EDITING", "FAILED", "RECEIPT"].includes(w.status),
   );
+  const mediaProgress = c.mediaPending ? (
+    <span className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+      <Spinner />
+      {c.t(c.mediaKind === "image" ? "loading" : "transcribing")}
+      {c.mediaKind === "image" ? ` ${c.uploadProgress}%` : null}
+    </span>
+  ) : null;
   return (
     <AiPrivacyConsent>
     <div data-baam-composer-content className="shrink-0 border-t border-border/70 bg-card p-3 sm:p-4">
@@ -123,6 +130,7 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
           ))}
         </div>
       ) : null}
+      {inlineControls && mediaProgress ? <div className="mb-2">{mediaProgress}</div> : null}
       {c.voice.recording || c.voice.requesting ? (
         <div
           className="flex min-h-20 items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3"
@@ -168,6 +176,7 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
             placeholder={c.t(inlineControls ? "compactPlaceholder" : "placeholder")}
             value={c.question}
             rows={inlineControls || editingForm ? 1 : 2}
+            enterKeyHint={inlineControls ? "send" : undefined}
             maxLength={6000}
             onChange={(e) => c.setQuestion(e.target.value)}
             onKeyDown={(e) => {
@@ -210,15 +219,7 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
             >
               <Microphone size={21} />
             </button>
-            <span className="min-w-0 flex-1 text-xs text-muted-foreground" role="status">
-              {c.mediaPending ? (
-                <span className="flex items-center gap-2">
-                  <Spinner />
-                  {c.t(c.mediaKind === "image" ? "loading" : "transcribing")}{" "}
-                  {c.mediaKind === "image" ? `${c.uploadProgress}%` : ""}
-                </span>
-              ) : null}
-            </span>
+            {!inlineControls ? <div className="min-w-0 flex-1">{mediaProgress}</div> : null}
             {c.data?.activeTurn && !c.executing ? (
               <button
                 type="button"

@@ -158,6 +158,7 @@ export const MobileTopBar = ({
   search,
 }: MobileTopBarProps) => (
   <header
+    data-mobile-app-header
     className="sticky top-0 z-40 border-b border-border/80 bg-card px-4 pb-2 pt-2 shadow-none md:hidden"
     style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
   >
