@@ -80,6 +80,9 @@ const buildProductListWhere = (
   scopedStoreIds?: string[],
 ): Prisma.ProductWhereInput => {
   const filters: Prisma.ProductWhereInput[] = [];
+  if (input?.productId) {
+    filters.push({ id: input.productId });
+  }
   if (input?.search) {
     const normalizedScanSearch = normalizeScanValue(input.search);
     const barcodeSearch = normalizedScanSearch || input.search;
@@ -409,6 +412,9 @@ export const buildProductSqlBase = ({
   accessibleStoreIds?: string[];
 }) => {
   const conditions: Prisma.Sql[] = [Prisma.sql`p."organizationId" = ${organizationId}`];
+  if (input?.productId) {
+    conditions.push(Prisma.sql`p.id = ${input.productId}`);
+  }
   if (!input?.includeArchived) {
     conditions.push(Prisma.sql`p."isDeleted" = false`);
   }

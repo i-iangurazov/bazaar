@@ -30,6 +30,22 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe("store photo search interaction", () => {
+  it("searches a prepared index immediately and prepares only after the catalog changes", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(Response.json({ configured: true }))
+      .mockResolvedValueOnce(Response.json({ message: "photoSearchPreparing" }, { status: 409 }))
+      .mockResolvedValueOnce(Response.json({ progress }))
+      .mockResolvedValueOnce(Response.json(result));
+    const view = render(screen());
+    await select(view);
+    fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+    await view.findByText("Red cup");
+    expect(vi.mocked(fetch).mock.calls.map(([path]) => path)).toEqual([
+      "/api/products/photo-search?storeId=s1&availability=1", "/api/products/photo-search",
+      "/api/products/photo-search/prepare", "/api/products/photo-search",
+    ]);
+  });
+
   it("prepares the existing upload, shows real candidate fields and requires an explicit choice", async () => {
     const view = render(screen()); await select(view);
     expect(view.getByLabelText("Take a photo").getAttribute("capture")).toBe("environment");
@@ -81,13 +97,49 @@ it("supports a read-only selection in POS without navigating or mutating a sale"
   expect(vi.mocked(fetch).mock.calls.every(([url]) => String(url).startsWith("/api/products/photo-search"))).toBe(true);
 });
 
-it("does not cancel the initial availability check when a photo is chosen immediately", async () => {
-  let status!: (response: Response) => void;
-  vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { status = resolve; }));
-  const view = render(screen()); fireEvent.click(view.getByRole("button", { name: "Search by photo" }));
-  fireEvent.change(view.getByLabelText("Upload a photo"), { target: { files: [new File(["jpeg"], "quick.jpg", { type: "image/jpeg" })] } });
-  await act(async () => status(Response.json({ configured: true, progress })));
-  await waitFor(() => expect((view.getByRole("button", { name: "Find similar" }) as HTMLButtonElement).disabled).toBe(false));
+it("passes the explicitly chosen product to the checkout and closes the dialog", async () => {
+  const onSelectProduct = vi.fn();
+  const view = render(<NextIntlClientProvider locale="en" messages={messages}>
+    <ProductPhotoSearchButton identityKey="cashier-org" storeId="s1"
+      stores={[{ id: "s1", name: "Shop" }]} onSelectProduct={onSelectProduct} />
+  </NextIntlClientProvider>);
+  await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup");
+  expect(onSelectProduct).not.toHaveBeenCalled();
+  fireEvent.click(view.getByRole("button", { name: "Choose product Red cup" }));
+  expect(onSelectProduct).toHaveBeenCalledExactlyOnceWith("p1");
+  expect(view.queryByRole("dialog")).toBeNull();
+  expect(boundary.push).not.toHaveBeenCalled();
+});
+
+it("finds a product without waiting for the status request and ignores its late reply", async () => {
+  let finishStatus!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { finishStatus = resolve; }));
+  const view = render(screen());
+  await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup");
+  expect(vi.mocked(fetch).mock.calls.map(([path]) => path)).toEqual([
+    "/api/products/photo-search?storeId=s1&availability=1", "/api/products/photo-search",
+  ]);
+  expect(vi.mocked(fetch).mock.calls[0][1]?.signal?.aborted).toBe(true);
+  await act(async () => finishStatus(Response.json({ configured: false })));
+  expect(view.queryByText(messages.productPhotoSearch.notConnected)).toBeNull();
+  expect(view.getByText("Red cup")).toBeTruthy();
+});
+
+it("shows the connection message if search starts before status returns and search is unconfigured", async () => {
+  vi.mocked(fetch)
+    .mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    }))
+    .mockResolvedValueOnce(Response.json({ message: "photoSearchNotConfigured" }, { status: 503 }));
+  const view = render(screen());
+  await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText(messages.productPhotoSearch.notConnected);
+  expect((view.getByRole("button", { name: "Find similar" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("shows distinct lookalike SKUs and requires choosing the intended candidate", async () => {
@@ -103,14 +155,36 @@ it("shows distinct lookalike SKUs and requires choosing the intended candidate",
   expect(boundary.push).toHaveBeenCalledWith(expect.stringContaining("/products/p2?storeId=s1"));
 });
 
-it("reports real catalog progress only, and cancel removes loading feedback", async () => {
+it("searches ready photos immediately while other photos are pending", async () => {
   const pending = { ...progress, total: 10, ready: 3, failed: 1, pending: 6 };
-  const original = vi.mocked(fetch).getMockImplementation()!;
-  vi.mocked(fetch).mockImplementation((url, init) => String(url).endsWith("/prepare") ? Promise.resolve(Response.json({ progress: pending })) : original(url, init));
-  const view = render(screen()); await select(view); fireEvent.click(view.getByRole("button", { name: "Find similar" }));
-  const bar = await view.findByRole("progressbar"); expect(bar.getAttribute("aria-valuenow")).toBe("4"); expect(bar.getAttribute("aria-valuemax")).toBe("10");
-  fireEvent.click(view.getByRole("button", { name: "Cancel" }));
-  expect(view.queryByRole("progressbar")).toBeNull(); expect(view.queryByText(messages.productPhotoSearch.searching)).toBeNull();
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ configured: true, progress: pending }))
+    .mockResolvedValueOnce(Response.json({ ...result, progress: pending, partial: true }));
+  const view = render(screen()); await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup");
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+  const [url, request] = vi.mocked(fetch).mock.calls[1];
+  expect(url).toBe("/api/products/photo-search");
+  expect((request?.body as FormData).get("allowPartial")).toBe("1");
+  expect(view.getByText("Searched a subset of photos: 3 of 10. Failed to process: 1.")).toBeTruthy();
+});
+
+it("queues a new catalog once and releases the form while photos prepare in the background", async () => {
+  const pending = { ...progress, ready: 0, pending: 1 };
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(Response.json({ configured: true }))
+    .mockResolvedValueOnce(Response.json({ message: "photoSearchPreparing" }, { status: 409 }))
+    .mockResolvedValueOnce(Response.json({ progress: pending }))
+    .mockResolvedValueOnce(Response.json(result));
+  const view = render(screen()); await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText(messages.productPhotoSearch.backgroundPreparation);
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+  expect(view.queryByRole("progressbar")).toBeNull();
+  expect(view.getByText("cup.jpg")).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup");
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(4);
 });
 
 it("keeps incomplete results explicit and does not manufacture a confidence percentage", async () => {
