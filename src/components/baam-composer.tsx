@@ -165,7 +165,7 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
             ref={attachInput}
             data-baam-input
             aria-label={c.t("placeholder")}
-            placeholder={c.t("placeholder")}
+            placeholder={c.t(inlineControls ? "compactPlaceholder" : "placeholder")}
             value={c.question}
             rows={inlineControls || editingForm ? 1 : 2}
             maxLength={6000}

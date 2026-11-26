@@ -64,6 +64,7 @@ const copy = {
     "Describe a task or ask a question…",
     "Тапшырма жазыңыз же суроо бериңиз…",
   ],
+  compactPlaceholder: ["Сообщение", "Message", "Билдирүү"],
   send: ["Отправить сообщение", "Send message", "Билдирүүнү жөнөтүү"],
   sending: ["Отправляю запрос…", "Sending your request…", "Сурооңуз жөнөтүлүүдө…"],
   stop: ["Остановить ответ", "Stop response", "Жоопту токтотуу"],
