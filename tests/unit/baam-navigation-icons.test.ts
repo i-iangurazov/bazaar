@@ -210,7 +210,11 @@ describe("BAAM and left navigation icon identity", () => {
 
   it("uses the same BAAM glyph in the sidebar, mobile menu, command palette and circular launcher", () => {
     const desktop = objectIcon(shell, "key", "baam");
-    const mobile = objectIcon(shell, "key", "mobile-baam");
+    // Mobile projects the shared navigation items with their original icons.
+    const mobileEntry = declaration(shell, "toMobileMoreEntry");
+    const mobileIcons = all(mobileEntry, ts.isObjectLiteralExpression)
+      .flatMap((entry) => property(entry, "icon")?.getText(shell) ?? []);
+    expect(mobileIcons).toEqual(["item.icon"]);
     const palette = objectIcon(load("src/components/command-palette.tsx"), "id", "open-baam");
     const launcher = load(resolve(dirname(shell.fileName), "baam-launcher.tsx"));
     const buttons = all(launcher, ts.isJsxElement).filter((node) =>
@@ -225,7 +229,7 @@ describe("BAAM and left navigation icon identity", () => {
       if (!icon) throw new Error("Launcher button has no primary icon");
       return icon;
     });
-    for (const entry of [mobile, palette, ...launcherIcons])
+    for (const entry of [palette, ...launcherIcons])
       expect(geometry(entry)).toBe(geometry(desktop));
   });
 });
