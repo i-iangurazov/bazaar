@@ -1,8 +1,13 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isIOS } from "@/lib/native/platform";
 
 type Recording = { media: MediaRecorder; audio: MediaStream; cancelled: boolean };
 const release = (audio?: MediaStream) => audio?.getTracks().forEach((track) => track.stop());
+
+const webFormats = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"];
+// AAC in MP4 is supported by WebKit across the app's iOS deployment range.
+const iosFormats = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
 
 export function useBaamVoice(
   onRecorded: (blob: Blob) => Promise<void>,
@@ -34,8 +39,10 @@ export function useBaamVoice(
   }, []);
   const start = useCallback(async () => {
     if (acquiring.current || recorder.current) return;
+    const nativeIOS = isIOS();
+    const unsupported = nativeIOS ? "micUnavailableIOS" : "micUnsupported";
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      failure.current("micUnsupported");
+      failure.current(unsupported);
       return;
     }
     const attempt = ++generation.current;
@@ -62,10 +69,10 @@ export function useBaamVoice(
         release(audio);
         return;
       }
-      const mimeType = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"].find((m) =>
+      const mimeType = (nativeIOS ? iosFormats : webFormats).find((m) =>
         MediaRecorder.isTypeSupported(m),
       );
-      if (!mimeType) throw new Error("micUnsupported");
+      if (!mimeType) throw new Error(unsupported);
       const media = new MediaRecorder(audio, { mimeType, audioBitsPerSecond: 64000 });
       const current: Recording = { media, audio, cancelled: false };
       recorder.current = current;
@@ -93,7 +100,13 @@ export function useBaamVoice(
           recorder.current = undefined;
           setRecording(false);
         }
-        if (!current.cancelled) void callback.current(new Blob(chunks, { type: mimeType }));
+        if (current.cancelled) return;
+        if (!size) {
+          failure.current("baamAudioEmpty");
+          return;
+        }
+        const type = nativeIOS ? chunks.find((chunk) => chunk.type)?.type || mimeType : mimeType;
+        void callback.current(new Blob(chunks, { type }));
       };
       media.start(250);
       setSeconds(0);
@@ -102,13 +115,18 @@ export function useBaamVoice(
       release(audio);
       if (generation.current !== attempt) return;
       recorder.current = undefined;
-      failure.current(
-        error instanceof DOMException && ["NotAllowedError", "SecurityError"].includes(error.name)
-          ? "micDenied"
-          : error instanceof Error && ["micTimeout", "micUnsupported"].includes(error.message)
-            ? error.message
-            : "micMissing",
-      );
+      let code = nativeIOS ? "micUnavailableIOS" : "micMissing";
+      if (error instanceof DOMException) {
+        if (["NotAllowedError", "SecurityError"].includes(error.name)) {
+          code = nativeIOS ? "micDeniedIOS" : "micDenied";
+        } else if (error.name === "NotFoundError") {
+          code = "micMissing";
+        }
+      } else if (error instanceof Error) {
+        if (error.message === "micTimeout") code = nativeIOS ? "micDeniedIOS" : "micTimeout";
+        if (error.message === unsupported) code = unsupported;
+      }
+      failure.current(code);
       generation.current++; // Release any permission request that resolves after the timeout.
       acquiring.current = false;
       setRequesting(false);

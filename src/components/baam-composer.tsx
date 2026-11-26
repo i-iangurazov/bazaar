@@ -11,11 +11,14 @@ import {
 import { Spinner } from "./ui/spinner";
 import type { BaamController } from "./use-baam-companion";
 import { productPhotoAccept } from "@/lib/productImageUpload";
+import { useNativePlatform } from "@/lib/native/useNativePlatform";
 import { AiPrivacyConsent } from "./ai-privacy-consent";
 
 const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
 export function BaamComposer({ c, inlineControls = false }: { c: BaamController; inlineControls?: boolean }) {
+  const platform = useNativePlatform();
+  const voiceUnavailable = platform === "ios" && c.available && c.capabilities.data?.voiceConfigured === false;
   const fileRef = useRef<HTMLInputElement>(null);
   const attachInput = useCallback((input: HTMLTextAreaElement | null) => {
     c.inputRef.current = input;
@@ -239,7 +242,9 @@ export function BaamComposer({ c, inlineControls = false }: { c: BaamController;
           </div>
         </form>
       )}
-      {!inlineControls ? <p className="mt-2 text-center text-[10px] leading-4 text-muted-foreground">
+      {voiceUnavailable ? <p className="mt-2 text-xs text-muted-foreground" role="status">
+        {c.t("voiceUnavailableHere")}
+      </p> : !inlineControls ? <p className="mt-2 text-center text-[10px] leading-4 text-muted-foreground">
         {c.t("voiceSupport")}
       </p> : null}
     </div>

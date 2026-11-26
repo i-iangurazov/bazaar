@@ -11,11 +11,9 @@ import { formatDateTime } from "@/lib/i18nFormat";
 const state = vi.hoisted(() => ({
   locale: "ru" as "ru" | "kg" | "en",
   path: "/pos",
-  platform: "web" as "ios" | "android" | "web",
   query: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
-vi.mock("@/lib/native/useNativePlatform", () => ({ useNativePlatform: () => state.platform }));
 vi.mock("next-intl", async (importOriginal) => {
   const { createTranslator } = await importOriginal<typeof NextIntlModule>();
   return {
@@ -66,7 +64,6 @@ const renderNotice = (
 beforeEach(() => {
   state.locale = "ru";
   state.path = "/pos";
-  state.platform = "web";
   state.query.mockReset();
 });
 describe("non-blocking subscription grace and viewing notices", () => {
@@ -97,7 +94,7 @@ describe("non-blocking subscription grace and viewing notices", () => {
       expect(root.querySelector('a[href="/billing"]')).not.toBeNull();
     },
   );
-  it("collapses an active iOS checkout trial while keeping its full details reachable", () => {
+  it.each(["/dashboard", "/baam", "/pos/sell"])("keeps the active trial compact with details reachable at %s", (path) => {
     const trialEndsAt = new Date(Date.now() + 6 * 86_400_000);
     const data = {
       ...modern,
@@ -107,23 +104,16 @@ describe("non-blocking subscription grace and viewing notices", () => {
       access: { ...modern.access, inGrace: false },
     };
     state.query.mockReturnValue({ isLoading: false, isError: false, data });
-    state.path = "/pos/sell";
-    state.platform = "ios";
+    state.path = path;
     const root = document.createElement("div");
-    const renderBanner = () => { root.innerHTML = renderToStaticMarkup(<SubscriptionAccessBanner canManage />); };
+    root.innerHTML = renderToStaticMarkup(<SubscriptionAccessBanner canManage />);
 
-    renderBanner();
     const disclosure = root.querySelector("details");
     expect(disclosure?.open).toBe(false);
     expect(disclosure?.querySelector("summary")?.textContent).toContain("6 дней");
     expect(disclosure?.textContent).toContain(formatDateTime(trialEndsAt, "ru"));
     expect(disclosure?.textContent).toContain(ru.billing.trial.scope);
     expect(disclosure?.querySelector('a[href="/billing"]')).not.toBeNull();
-
-    state.platform = "web";
-    renderBanner();
-    expect(root.querySelector("details")).toBeNull();
-    expect(root.textContent).toContain(ru.billing.trial.scope);
   });
   it.each(["ru", "kg", "en"] as const)(
     "explains the current trial and exact end in %s",
@@ -138,6 +128,7 @@ describe("non-blocking subscription grace and viewing notices", () => {
       };
       const root = renderNotice(value);
       expect(root.querySelector('[data-subscription-access-notice="trial"]')).not.toBeNull();
+      expect(root.querySelector("details")?.open).toBe(false);
       expect(root.textContent).toContain(formatDateTime(value.trialEndsAt, locale));
       expect(root.textContent).toContain({ ru, kg, en }[locale].billing.trial.scope);
       expect(root.textContent).not.toMatch(/undefined|\{count|\{date/);
@@ -150,6 +141,7 @@ describe("non-blocking subscription grace and viewing notices", () => {
       state.locale = locale;
       const root = renderNotice();
       expect(root.querySelector('[data-subscription-access-notice="grace"]')).not.toBeNull();
+      expect(root.querySelector("details")).toBeNull();
       expect(root.querySelector('[role="status"]')).not.toBeNull();
       expect(root.textContent).toContain(formatDateTime(graceEndsAt, locale));
       expect(root.querySelector('a[href="/billing"]')).not.toBeNull();

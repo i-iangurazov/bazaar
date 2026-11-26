@@ -1,7 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import React, { useId, useRef, useState, type ComponentType, type ReactNode } from "react";
+import React, { useId, useLayoutEffect, useRef, useState, type ComponentType, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
@@ -305,6 +305,31 @@ const MobileMoreNavigation = ({
   const [expandedKey, setExpandedKey] = useState(
     () => items.find((item) => "children" in item && item.active)?.key,
   );
+  const scrollAnchor = useRef<{ button: HTMLButtonElement; list: HTMLElement; offset: number } | null>(null);
+
+  const toggleSection = (event: MouseEvent<HTMLButtonElement>, key: string) => {
+    const button = event.currentTarget;
+    const list = button.closest<HTMLElement>("[data-mobile-more-scroll]");
+    if (list) {
+      scrollAnchor.current = {
+        button,
+        list,
+        offset: button.getBoundingClientRect().top - list.getBoundingClientRect().top,
+      };
+    }
+    setExpandedKey(expandedKey === key ? undefined : key);
+  };
+
+  useLayoutEffect(() => {
+    const anchor = scrollAnchor.current;
+    scrollAnchor.current = null;
+    if (anchor && anchor.list.contains(anchor.button)) {
+      // A different branch can collapse above this button. Keep it in view before paint.
+      const offset = anchor.button.getBoundingClientRect().top - anchor.list.getBoundingClientRect().top;
+      const shift = offset - anchor.offset;
+      if (shift !== 0) anchor.list.scrollTop += shift;
+    }
+  }, [expandedKey]);
 
   return (
     <ul className="grid gap-1">
@@ -321,7 +346,7 @@ const MobileMoreNavigation = ({
               type="button"
               aria-expanded={expanded}
               aria-controls={contentId}
-              onClick={() => setExpandedKey(expanded ? undefined : item.key)}
+              onClick={(event) => toggleSection(event, item.key)}
               className={cn(
                 moreRowClass,
                 "font-medium",
@@ -368,7 +393,8 @@ export const MobileMoreMenu = ({
         <DialogPrimitive.Overlay className="fixed inset-0 z-[1000] bg-black/30 data-[state=closed]:opacity-0 data-[state=open]:opacity-100 md:hidden" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-[1001] flex max-h-[85dvh] flex-col overflow-hidden rounded-t-xl border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden"
+          data-mobile-more-sheet
+          className="fixed inset-x-0 bottom-0 z-[1001] flex flex-col overflow-hidden rounded-t-xl border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden"
           onOpenAutoFocus={() => {
             previouslyFocusedRef.current =
               document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -379,7 +405,7 @@ export const MobileMoreMenu = ({
             previouslyFocusedRef.current = null;
             queueMicrotask(() => {
               if (previouslyFocused?.isConnected) {
-                previouslyFocused.focus();
+                previouslyFocused.focus({ preventScroll: true });
               }
             });
           }}
@@ -395,7 +421,7 @@ export const MobileMoreMenu = ({
             </DialogPrimitive.Close>
           </div>
 
-          <nav aria-label={title} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+          <nav data-mobile-more-scroll aria-label={title} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
             <MobileMoreNavigation items={sections} onNavigate={onClose} />
             {profileItem ? (
               <div className="mt-2 border-t border-border pt-2">
@@ -405,7 +431,7 @@ export const MobileMoreMenu = ({
           </nav>
 
           <div
-            className="space-y-2 border-t border-border/70 bg-muted/25 px-4 pt-2"
+            className="shrink-0 space-y-2 border-t border-border/70 bg-muted/25 px-4 pt-2"
             style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
           >
             <div className="flex min-h-11 items-center justify-center">

@@ -11,7 +11,7 @@ import { BackIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { baamWorkspaceReturnHref } from "@/lib/baam/workspaceNavigation";
 import { isIOS } from "@/lib/native/platform";
-import { phoneWorkspaceMediaQuery } from "@/hooks/useIsMobile";
+import { mobileShellMediaQuery, phoneWorkspaceMediaQuery } from "@/hooks/useIsMobile";
 import { cn } from "@/lib/utils";
 import styles from "@/components/baam-native-workspace.module.css";
 
@@ -41,10 +41,15 @@ export default function BaamPage() {
     if (!viewportMode || !element) return;
     const root = document.documentElement;
     const viewport = window.visualViewport;
+    const nativePhone = nativeIOS ? window.matchMedia?.(mobileShellMediaQuery) : undefined;
     const nav = document.querySelector<HTMLElement>("[data-native-bottom-nav]");
+    if (nativeIOS) root.classList.add(styles.nativeWorkspace);
     const measure = () => {
       const viewportTop = nativeIOS ? 0 : viewport?.offsetTop ?? 0;
-      const top = Math.max(0, element.getBoundingClientRect().top - viewportTop);
+      // The iOS phone shell fits one viewport. Its height must not grow if
+      // WebKit briefly moves the document while focusing or returning to chat.
+      const documentOffset = nativePhone?.matches ? window.scrollY : 0;
+      const top = Math.max(0, element.getBoundingClientRect().top + documentOffset - viewportTop);
       const navBounds = nav?.getBoundingClientRect();
       const height = viewport?.height ?? window.innerHeight;
       const navHeight = nativeIOS
@@ -77,6 +82,7 @@ export default function BaamPage() {
       viewport?.removeEventListener("scroll", measure);
       mutations.disconnect();
       resize?.disconnect();
+      if (nativeIOS) root.classList.remove(styles.nativeWorkspace);
       element.style.removeProperty("--baam-visible-height");
       element.style.removeProperty("--baam-workspace-top");
       element.style.removeProperty("--baam-workspace-bottom");

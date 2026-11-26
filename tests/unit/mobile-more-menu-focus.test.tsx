@@ -139,4 +139,45 @@ describe("MobileMoreMenu sections", () => {
     await user.click(billing);
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("keeps the pressed section in view when a section above it collapses", async () => {
+    const user = userEvent.setup();
+    render(
+      <MobileMoreMenu
+        open
+        title="Ещё"
+        closeLabel="Закрыть"
+        onClose={vi.fn()}
+        sections={[
+          {
+            key: "core", label: "Основное", icon: ItemIcon, active: true,
+            children: [{ key: "stores", label: "Магазины", href: "/stores", icon: ItemIcon }],
+          },
+          {
+            key: "operations", label: "Операции", icon: ItemIcon,
+            children: [{ key: "imports", label: "Импорт", href: "/settings/import", icon: ItemIcon }],
+          },
+        ]}
+      />,
+    );
+    const sheet = screen.getByRole("dialog", { name: "Ещё" });
+    const list = screen.getByRole("navigation", { name: "Ещё" });
+    const operations = screen.getByRole("button", { name: "Операции" });
+    const bounds = vi.spyOn(operations, "getBoundingClientRect").mockImplementation(() =>
+      new DOMRect(0, screen.queryByRole("link", { name: "Магазины" }) ? 180 : 120, 180, 44),
+    );
+    list.scrollTop = 150;
+
+    await user.click(operations);
+
+    expect(list.scrollTop).toBe(90);
+    expect(screen.getByRole("dialog", { name: "Ещё" })).toBe(sheet);
+    expect(screen.getByRole("navigation", { name: "Ещё" })).toBe(list);
+    expect(screen.getByRole("link", { name: "Импорт" })).toBeDefined();
+
+    await user.click(operations);
+    expect(list.scrollTop).toBe(90);
+    expect(operations.getAttribute("aria-expanded")).toBe("false");
+    bounds.mockRestore();
+  });
 });

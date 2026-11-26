@@ -1,5 +1,34 @@
 import { prepareManagedProductImageForUpload } from "@/lib/productImageClientUpload";
 export type BaamImage = { id: string; url: string; name: string };
+
+export async function uploadBaamAudio(
+  file: Blob,
+  name: string,
+  conversationId: string,
+  locale: string,
+) {
+  const form = new FormData();
+  form.append("conversationId", conversationId);
+  form.append("locale", locale);
+  form.append("kind", "audio");
+  form.append("file", file, name);
+  // AbortSignal.timeout was added in iOS 16. Keep the same limit on iOS 15.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 115_000);
+  try {
+    const response = await fetch("/api/baam/media", {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    });
+    const result = (await response.json()) as { id: string; text?: string; message?: string };
+    if (!response.ok) throw new Error(result.message ?? "network");
+    return result;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function uploadBaamImage(
   file: File,
   conversationId: string,

@@ -8,7 +8,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CURRENT_CATALOG_VERSION } from "@/lib/billing/subscriptionPricing";
 import { formatDateTime } from "@/lib/i18nFormat";
-import { useNativePlatform } from "@/lib/native/useNativePlatform";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
@@ -27,14 +26,12 @@ export function SubscriptionAccessNotice({
   canManage,
   showBillingLink = true,
   showTrialScope = true,
-  compactTrial = false,
   className,
 }: {
   state: AccessNoticeState | null | undefined;
   canManage: boolean;
   showBillingLink?: boolean;
   showTrialScope?: boolean;
-  compactTrial?: boolean;
   className?: string;
 }) {
   const t = useTranslations("billing.accessNotice");
@@ -67,7 +64,6 @@ export function SubscriptionAccessNotice({
     trialEnd &&
     Number.isFinite(trialEnd.getTime()) &&
     trialEnd.getTime() <= Date.now();
-  const compact = Boolean(activeTrial && compactTrial);
   const title = activeTrial
     ? trial("remaining", { count: remaining })
     : t(grace ? "graceTitle" : expiredTrial ? "trialExpiredTitle" : "expiredTitle");
@@ -94,19 +90,19 @@ export function SubscriptionAccessNotice({
   return (
     <Alert
       variant={grace || (activeTrial && remaining <= 1) ? "warning" : "info"}
-      className={cn(className, compact && "mx-3 mb-1 p-0")}
+      className={cn(className, activeTrial && "p-0")}
       data-subscription-access-notice={
         activeTrial ? "trial" : grace ? "grace" : expiredTrial ? "trial-expired" : "read-only"
       }
     >
-      {compact ? (
+      {activeTrial ? (
         <details className="group">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
-            {title}
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0">{title}</span>
             <ChevronDownIcon className="h-4 w-4 shrink-0 group-open:rotate-180" aria-hidden />
           </summary>
-          <div className="space-y-2 border-t border-border px-3 py-3">
-            {details}
+          <div className="flex min-w-0 flex-col gap-3 border-t border-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">{details}</div>
             {billingLink}
           </div>
         </details>
@@ -124,9 +120,7 @@ export function SubscriptionAccessNotice({
 }
 
 export function SubscriptionAccessBanner({ canManage }: { canManage: boolean }) {
-  const pathname = usePathname();
-  const onBilling = pathname === "/billing";
-  const platform = useNativePlatform();
+  const onBilling = usePathname() === "/billing";
   const query = trpc.billing.features.useQuery(undefined, {
     enabled: !onBilling,
     staleTime: 60_000,
@@ -144,8 +138,7 @@ export function SubscriptionAccessBanner({ canManage }: { canManage: boolean }) 
     <SubscriptionAccessNotice
       state={query.data}
       canManage={canManage}
-      compactTrial={platform === "ios" && pathname === "/pos/sell"}
-      className="mb-6"
+      className="mb-6 max-md:data-[subscription-access-notice=trial]:mb-3"
     />
   );
 }
