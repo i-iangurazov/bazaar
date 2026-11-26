@@ -1,7 +1,7 @@
 import { AppStoreServerAPIClient, APIException, Environment, type ConsumptionRequest } from "@apple/app-store-server-library";
 import fetch, { Response } from "node-fetch";
 import { z } from "zod";
-import { APPLE_BUNDLE_ID, appleBillingConfig } from "./appleConfig";
+import { APPLE_BUNDLE_ID, appleBillingConfig, canWriteAppleBillingEnvironment } from "./appleConfig";
 
 export class AppleConsumptionTransportError extends Error {
   constructor(public readonly code: string, public readonly status?: number) { super(code); }
@@ -41,7 +41,7 @@ export class AppleConsumptionClient extends AppStoreServerAPIClient {
 
 export async function sendAppleConsumptionInformation(environment: "Production" | "Sandbox", transactionId: string, payload: ConsumptionRequest) {
   const config = appleBillingConfig();
-  if (!config.apiReady) throw new AppleConsumptionTransportError("appleConsumptionReportingDisabled");
+  if (!canWriteAppleBillingEnvironment(environment) || !config.apiReady) throw new AppleConsumptionTransportError("appleConsumptionReportingDisabled");
   try {
     await new AppleConsumptionClient(config.privateKey, config.keyId, config.issuerId, environment).sendConsumptionInformation(transactionId, payload);
   } catch (e) {

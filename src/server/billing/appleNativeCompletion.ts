@@ -5,6 +5,7 @@ import { appleCompletionChallengeInputSchema, appleCompletionSubmitInputSchema, 
   mintAppleCompletionChallenge, readAppleCompletionChallenge, verifyAppleCompletionSignature } from "./appleCompletionCrypto";
 import { lockAppleOrganization } from "./appleConcurrency";
 import { applyAppleDeferredOutcomeInTransaction, type AppleDeferredOutcomeAck } from "./appleDeferredOutcome";
+import { assertAppleBillingEnvironmentWritable } from "./appleConfig";
 import { appleReceiptVerifier, verifyAppleTransaction } from "./appleVerification";
 
 const unavailable = () => new AppError("appleCompletionUnavailable", "CONFLICT", 409);
@@ -46,6 +47,7 @@ export async function completeAppleNativeOutcome(raw: z.infer<typeof appleComple
       return { acknowledged: true, kind: "RECORDED", recorded: true, status: review ? "REVIEW" : "COMPLETED", reason: review?.lastIssue ?? null };
     }
     if (claims.outcome === "RECORDED_ONLY") return { acknowledged: false, kind: "PENDING", recorded: false };
+    assertAppleBillingEnvironmentWritable(intent.environment);
     let completion = await db.appleNativeCompletion.findUnique({ where: { intentId: intent.id } });
     if (completion && (completion.nativeAttemptId !== claims.attemptId || completion.keyFingerprint !== claims.keyFingerprint ||
       completion.origin !== origin || completion.outcome !== claims.outcome || completion.transactionDigest !== claims.transactionDigest || completion.renewalDigest !== claims.renewalDigest))

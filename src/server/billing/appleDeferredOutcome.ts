@@ -7,6 +7,7 @@ import { assertAppleBillingActor, type AppleBillingActor } from "./applePayments
 import { lockAppleOrganization } from "./appleConcurrency";
 import { appleDeferredOutcomeInputSchema, readAppleDeferredSource } from "./appleDeferredEvidence";
 import { applyAppleRenewalInTransaction } from "./appleLifecycle";
+import { assertAppleBillingEnvironmentWritable } from "./appleConfig";
 import { appleReceiptVerifier, assertVerifiedAppleRenewal, assertVerifiedAppleTransaction, verifyAppleTransaction,
   type VerifiedAppleRenewal, type VerifiedAppleTransaction } from "./appleVerification";
 
@@ -60,6 +61,7 @@ export async function applyAppleDeferredOutcomeInTransaction(db: Prisma.Transact
       if (!completion) throw new AppError("appleCompletionUnavailable", "CONFLICT", 409);
     } else if (intent.completionPublicKey) throw new AppError("appleCompletionRequired", "CONFLICT", 409);
     const d = transaction.data, renewal = verifiedRenewal.data, source = readAppleDeferredSource(intent.offerSnapshot);
+    assertAppleBillingEnvironmentWritable(intent.environment);
     if (!source || intent.scope !== "SUBSCRIPTION" || intent.action !== "CHANGE" || intent.productType !== "AUTO_RENEWABLE" ||
       intent.purchaseAppAccountToken || transaction.productType !== "AUTO_RENEWABLE" || d.productId === intent.productId ||
       d.transactionId !== source.transactionId || d.originalTransactionId !== source.originalTransactionId || d.productId !== source.productId ||

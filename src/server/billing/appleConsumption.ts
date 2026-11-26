@@ -4,7 +4,7 @@ import type { Prisma, AppleConsumptionConsent, AppleConsumptionRequest, AppleSer
 import { z } from "zod";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
-import { appleBillingConfig } from "./appleConfig";
+import { appleBillingConfig, appleBillingWritableScope, assertAppleBillingEnvironmentWritable, canWriteAppleBillingEnvironment } from "./appleConfig";
 import { lockAppleOrganization } from "./appleConcurrency";
 import { assertVerifiedAppleTransaction, type VerifiedAppleTransaction } from "./appleVerification";
 import type { AppleBillingActor } from "./applePayments";
@@ -53,6 +53,7 @@ export function presentAppleConsumptionConsent(actorId: string, originalBuyerId:
 /** A voluntary answer is never a prerequisite for requesting a refund or access. */
 export async function setAppleConsumptionConsent(actor: AppleBillingActor, input: ConsentInput) {
   if (input.expectedOrganizationId !== actor.organizationId) throw new AppError("forbidden", "FORBIDDEN", 403);
+  if (input.consented) assertAppleBillingEnvironmentWritable(input.environment);
   if (input.consented && input.policyVersion !== APPLE_CONSUMPTION_POLICY_VERSION) throw new AppError("appleConsumptionPolicyChanged", "CONFLICT", 409);
   return prisma.$transaction(async db => {
     await lockAppleOrganization(db, actor.organizationId);
@@ -62,6 +63,7 @@ export async function setAppleConsumptionConsent(actor: AppleBillingActor, input
     if (!transaction || transaction.organizationId !== actor.organizationId || transaction.intent?.createdById !== actor.id || (input.consented && user.role !== "ADMIN"))
       throw new AppError("forbidden", "FORBIDDEN", 403);
     const prior = transaction.consumptionConsent;
+    if (!prior) assertAppleBillingEnvironmentWritable(transaction.environment);
     const deliveryStatus = input.consented ? input.deliveryStatus ?? null : prior?.deliveryStatus ?? null;
     const sampleContentProvided = input.consented ? input.sampleContentProvided ?? null : prior?.sampleContentProvided ?? null;
     if (input.consented && deliveryStatus === "DELIVERED" && !await hasAppleDeliveryEvidence(db, transaction.id))
@@ -76,11 +78,12 @@ export async function setAppleConsumptionConsent(actor: AppleBillingActor, input
         ...data, organizationId: actor.organizationId, appleTransactionId: transaction.id, purchaserId: actor.id } });
       await db.appleConsumptionConsentEvent.create({ data: { consentId: consent.id, organizationId: actor.organizationId, actorId: actor.id, revision,
         policyVersion: data.policyVersion, consented: input.consented, deliveryStatus, sampleContentProvided } });
-      await db.appleConsumptionRequest.updateMany({ where: { appleTransactionId: transaction.id, status: { notIn: terminal } }, data: { nextAttemptAt: now } });
+      await db.appleConsumptionRequest.updateMany({ where: { ...appleBillingWritableScope(), appleTransactionId: transaction.id,
+        status: { notIn: terminal } }, data: { nextAttemptAt: now } });
     }
     const request = await db.appleConsumptionRequest.findFirst({ where: { appleTransactionId: transaction.id }, orderBy: { receivedAt: "desc" } });
     return { transactionId: transaction.transactionId, environment: transaction.environment as "Sandbox" | "Production", organizationId: actor.organizationId,
-      consumptionConsent: presentAppleConsumptionConsent(actor.id, actor.id, consent, request, user.role === "ADMIN") };
+      consumptionConsent: presentAppleConsumptionConsent(actor.id, actor.id, consent, request, user.role === "ADMIN" && canWriteAppleBillingEnvironment(transaction.environment)) };
   });
 }
 
@@ -106,7 +109,8 @@ export async function revokePersonalAppleConsumptionConsent(actor: AppleBillingA
     await db.appleConsumptionConsent.update({ where: { id: consent.id }, data: { consented: false, revokedAt: now, revision } });
     await db.appleConsumptionConsentEvent.create({ data: { consentId: consent.id, organizationId: consent.organizationId, actorId: actor.id,
       revision, policyVersion: consent.policyVersion, consented: false, deliveryStatus: consent.deliveryStatus, sampleContentProvided: consent.sampleContentProvided } });
-    await db.appleConsumptionRequest.updateMany({ where: { appleTransactionId: consent.appleTransactionId, status: { notIn: terminal } }, data: { nextAttemptAt: now } });
+    await db.appleConsumptionRequest.updateMany({ where: { ...appleBillingWritableScope(), appleTransactionId: consent.appleTransactionId,
+      status: { notIn: terminal } }, data: { nextAttemptAt: now } });
   });
   return getPersonalAppleConsumptionConsents(actor);
 }
@@ -136,6 +140,7 @@ export async function enqueueAppleConsumptionRequest(notification: AppleServerNo
   if (notification.notificationType !== "CONSUMPTION_REQUEST" || notification.environment !== receipt.data.environment)
     throw new AppError("applePurchaseBindingMismatch", "CONFLICT", 409);
   const d = receipt.data;
+  assertAppleBillingEnvironmentWritable(d.environment);
   const prior = await prisma.appleConsumptionRequest.upsert({ where: { id: notification.id }, update: {}, create: {
     id: notification.id, environment: d.environment, transactionId: d.transactionId, originalTransactionId: d.originalTransactionId,
     productId: d.productId, appAccountToken: d.appAccountToken, signedTransactionInfo: receipt.signedTransactionInfo,
@@ -173,15 +178,16 @@ async function bindRequest(id: string, token: string) {
 /** Lease recovery retries only the same frozen informational PUT, never a grant. */
 export async function processAppleConsumptionRequests(options: { sender?: Sender; limit?: number } = {}) {
   const now = new Date();
-  await prisma.appleConsumptionRequest.updateMany({ where: { status: { notIn: terminal }, deadlineAt: { lte: now },
+  const writable = appleBillingWritableScope();
+  await prisma.appleConsumptionRequest.updateMany({ where: { ...writable, status: { notIn: terminal }, deadlineAt: { lte: now },
     OR: [{ processingUntil: null }, { processingUntil: { lte: now } }] }, data: { status: "EXPIRED", lastIssue: "appleConsumptionDeadlineExpired", processingToken: null, processingUntil: null } });
-  const rows = await prisma.appleConsumptionRequest.findMany({ where: { status: { notIn: terminal }, deadlineAt: { gt: now }, nextAttemptAt: { lte: now },
+  const rows = await prisma.appleConsumptionRequest.findMany({ where: { ...writable, status: { notIn: terminal }, deadlineAt: { gt: now }, nextAttemptAt: { lte: now },
     OR: [{ processingUntil: null }, { processingUntil: { lte: now } }] }, orderBy: { deadlineAt: "asc" }, take: Math.min(options.limit ?? 20, 50) });
   let sent = 0, attempted = 0;
   for (const seed of rows) {
     if (attempted >= 3) break;
     const token = randomUUID();
-    const claimed = await prisma.appleConsumptionRequest.updateMany({ where: { id: seed.id, status: { notIn: terminal },
+    const claimed = await prisma.appleConsumptionRequest.updateMany({ where: { ...writable, id: seed.id, status: { notIn: terminal },
       OR: [{ processingUntil: null }, { processingUntil: { lte: new Date() } }] }, data: { processingToken: token, processingUntil: new Date(Date.now() + 120_000) } });
     if (!claimed.count) continue;
     try {
@@ -224,7 +230,7 @@ async function prepareResponse(db: Prisma.TransactionClient, id: string, token: 
   await db.$executeRaw`SET LOCAL lock_timeout = '3s'`;
   await lockAppleOrganization(db, organizationId);
   const request = await db.appleConsumptionRequest.findUniqueOrThrow({ where: { id } });
-  if (request.processingToken !== token || terminal.includes(request.status)) return null;
+  if (request.processingToken !== token || terminal.includes(request.status) || !canWriteAppleBillingEnvironment(request.environment)) return null;
   const stop = async (status: string, lastIssue: string) => {
     await db.appleConsumptionRequest.update({ where: { id }, data: { status, lastIssue, nextAttemptAt: reviewAfter(new Date()), processingToken: null, processingUntil: null } }); return null;
   };

@@ -219,9 +219,42 @@ const assertDatabaseUrlSafeForProduction = (
   }
 };
 
-const databaseNameFromUrl = (databaseUrl: string) => {
-  const pathname = new URL(databaseUrl).pathname.replace(/^\/+/, "");
-  return decodeURIComponent(pathname);
+const assertHardeningPreviewDatabase = (configuredUrl: string, expectedName: string, expectedHost: string) => {
+  assertPresent(
+    expectedName,
+    "HARDENING_PREVIEW_EXPECTED_DATABASE_NAME is required.",
+  );
+  assertPresent(
+    expectedHost,
+    "HARDENING_PREVIEW_EXPECTED_DATABASE_HOST is required.",
+  );
+  const databaseUrl = new URL(configuredUrl);
+  if (databaseUrl.protocol !== "postgresql:" && databaseUrl.protocol !== "postgres:") {
+    throw new Error("DATABASE_URL must use PostgreSQL in hardening Preview.");
+  }
+  const databaseName = decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, ""));
+  if (databaseName !== expectedName) {
+    throw new Error("DATABASE_URL does not match the approved hardening Preview database.");
+  }
+  if (databaseUrl.hostname.toLowerCase() !== expectedHost) {
+    throw new Error("DATABASE_URL host does not match the approved hardening Preview host.");
+  }
+};
+
+const matchesHardeningPreviewProject = (projectId: string, expectedProjectId: string) =>
+  /^prj_[A-Za-z0-9]+$/.test(expectedProjectId) && projectId === expectedProjectId;
+
+export const isHardeningPreviewDatabasePinned = (env: Readonly<Record<string, string | undefined>>) => {
+  if (env.VERCEL_ENV !== "preview" || !parseBool(env.HARDENING_PREVIEW_GUARD)) return false;
+  const expectedProject = env.HARDENING_PREVIEW_EXPECTED_PROJECT_ID?.trim();
+  if (expectedProject && !matchesHardeningPreviewProject(env.VERCEL_PROJECT_ID?.trim() ?? "", expectedProject)) return false;
+  try {
+    assertHardeningPreviewDatabase(env.DATABASE_URL?.trim() ?? "", env.HARDENING_PREVIEW_EXPECTED_DATABASE_NAME?.trim() ?? "",
+      env.HARDENING_PREVIEW_EXPECTED_DATABASE_HOST?.trim().toLowerCase() ?? "");
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const assertHardeningPreviewEnv = (env: RuntimeEnv) => {
@@ -231,22 +264,7 @@ const assertHardeningPreviewEnv = (env: RuntimeEnv) => {
   if (env.vercelEnv !== "preview") {
     throw new Error("HARDENING_PREVIEW_GUARD requires VERCEL_ENV=preview.");
   }
-  assertPresent(
-    env.hardeningPreviewExpectedDatabaseName,
-    "HARDENING_PREVIEW_EXPECTED_DATABASE_NAME is required.",
-  );
-  assertPresent(
-    env.hardeningPreviewExpectedDatabaseHost,
-    "HARDENING_PREVIEW_EXPECTED_DATABASE_HOST is required.",
-  );
-  const databaseUrl = new URL(env.databaseUrl);
-  const databaseName = databaseNameFromUrl(env.databaseUrl);
-  if (databaseName !== env.hardeningPreviewExpectedDatabaseName) {
-    throw new Error("DATABASE_URL does not match the approved hardening Preview database.");
-  }
-  if (databaseUrl.hostname.toLowerCase() !== env.hardeningPreviewExpectedDatabaseHost) {
-    throw new Error("DATABASE_URL host does not match the approved hardening Preview host.");
-  }
+  assertHardeningPreviewDatabase(env.databaseUrl, env.hardeningPreviewExpectedDatabaseName, env.hardeningPreviewExpectedDatabaseHost);
   if (env.runDbTests || env.allowTestDbReset) {
     throw new Error("Destructive DB test flags must be disabled in hardening Preview runtime.");
   }
@@ -269,8 +287,7 @@ const assertHardeningPreviewEnv = (env: RuntimeEnv) => {
     if (env.imageStorageProvider !== "vercel-blob" || env.exportStorageProvider !== "vercel-blob") {
       throw new Error("Hardening Preview Blob storage requires explicit image and export providers.");
     }
-    if (!/^prj_[A-Za-z0-9]+$/.test(env.hardeningPreviewExpectedProjectId) ||
-        env.vercelProjectId !== env.hardeningPreviewExpectedProjectId) {
+    if (!matchesHardeningPreviewProject(env.vercelProjectId, env.hardeningPreviewExpectedProjectId)) {
       throw new Error("Blob storage does not match the approved hardening Preview project.");
     }
     if (!/^store_[A-Za-z0-9]+$/.test(env.hardeningPreviewExpectedImageStoreId) ||

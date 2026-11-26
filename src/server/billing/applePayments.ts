@@ -10,7 +10,8 @@ import { calculateSubscriptionQuote } from "./subscriptionQuotes";
 import { extendSubscriptionMonths } from "./paymentMath";
 import { readPurchaseSnapshot, signPurchaseQuote, verifyPurchaseQuote, type PurchaseSnapshot } from "./purchaseSnapshot";
 import { appleSubscriptionOffer, listAppleSubscriptionOffers, listAppleWhatsAppOffers } from "./appleOfferCatalog";
-import { APPLE_MANAGEMENT_URL, APPLE_WHATSAPP_OFFER_VERSION, appleBillingConfig, appleEnvironmentForOrganization, type AppleProductMapping } from "./appleConfig";
+import { APPLE_MANAGEMENT_URL, APPLE_WHATSAPP_OFFER_VERSION, appleBillingConfig, appleBillingWritableScope, appleEnvironmentForOrganization,
+  assertAppleBillingEnvironmentWritable, canWriteAppleBillingEnvironment, type AppleProductMapping } from "./appleConfig";
 import { assertNoApplePurchaseConflict, lockAppleOrganization, type ApplePurchaseScope } from "./appleConcurrency";
 import { assertVerifiedAppleTransaction, verifyAppleTransaction, type VerifiedAppleTransaction } from "./appleVerification";
 import { assertSubscriptionSelectionReady } from "./subscriptionPreparation";
@@ -65,7 +66,7 @@ export async function getAppleBillingState(actor: AppleBillingActor) {
   const config = appleBillingConfig();
   const { org, offers } = await offersFor(actor.organizationId);
   const environment = appleEnvironmentForOrganization(org.id, config);
-  const environmentAllowed = environment !== "Sandbox" || config.sandboxOrganizations.has(org.id);
+  const environmentAllowed = canWriteAppleBillingEnvironment(environment) && (environment !== "Sandbox" || config.sandboxOrganizations.has(org.id));
   const ready = config.ready && environmentAllowed;
   const unavailableReason = !environmentAllowed ? "appleSandboxNotAllowed" : config.unavailableReason;
   const now = new Date();
@@ -120,7 +121,8 @@ export async function getAppleBillingState(actor: AppleBillingActor) {
     recentTransactions: transactions.map((t) => ({ transactionId: t.transactionId, originalTransactionId: t.originalTransactionId, intentId: t.intentId,
       productId: t.productId, status: t.status, reason: t.lastIssue, purchaseDate: t.purchaseDate.toISOString(), expiresDate: t.expiresDate?.toISOString() ?? null,
       priceMillis: t.priceMillis?.toString() ?? null, currency: t.currency, environment: t.environment, refundable: t.status !== "REVOKED",
-      consumptionConsent: presentAppleConsumptionConsent(actor.id, t.intent?.createdById ?? null, t.consumptionConsent, t.consumptionRequests[0]) })),
+      consumptionConsent: presentAppleConsumptionConsent(actor.id, t.intent?.createdById ?? null, t.consumptionConsent, t.consumptionRequests[0],
+        canWriteAppleBillingEnvironment(t.environment)) })),
     temporaryUpgrades: temporaryPeriods.map((period) => ({ id: period.id, sourcePeriodId: period.parentPeriodId!,
       startsAt: period.startsAt.toISOString(), endsAt: period.endsAt.toISOString(), plan: period.plan,
       extras: readPurchaseSnapshot(period.purchaseSnapshot)?.extras,
@@ -167,6 +169,7 @@ export async function createApplePurchaseIntent(actor: AppleBillingActor, raw: z
   if (input.expectedOrganizationId !== actor.organizationId) throw new AppError("applePurchaseOrganizationMismatch", "CONFLICT", 409);
   const config = appleBillingConfig();
   const environment = appleEnvironmentForOrganization(actor.organizationId, config);
+  assertAppleBillingEnvironmentWritable(environment);
   const temporary = input.action === "CHANGE" && input.offerKey.startsWith("temporary-upgrade:");
   if (!(temporary ? config.foundationReady : config.ready)) throw new AppError("appleUnavailable", "CONFLICT", 409);
   if (input.termsVersion !== config.termsVersion) throw new AppError("billingTermsChanged", "CONFLICT", 409);
@@ -282,12 +285,14 @@ export async function authorizeApplePurchase(actor: AppleBillingActor, intentId:
     throw new AppError("appleCompletionKeyInvalid", "BAD_REQUEST", 400);
   const config = appleBillingConfig();
   const environment = appleEnvironmentForOrganization(actor.organizationId, config);
+  assertAppleBillingEnvironmentWritable(environment);
   if (!config.foundationReady) throw new AppError("appleUnavailable", "CONFLICT", 409);
   return prisma.$transaction(async (db) => {
     await lockAppleOrganization(db, actor.organizationId);
     await assertAppleBillingActor(actor, db);
     const intent = await db.applePurchaseIntent.findFirst({ where: { id: intentId, organizationId: actor.organizationId, createdById: actor.id } });
     if (environment === "Sandbox" && !config.sandboxOrganizations.has(actor.organizationId)) throw new AppError("appleSandboxNotAllowed", "FORBIDDEN", 403);
+    if (intent) assertAppleBillingEnvironmentWritable(intent.environment);
     if (intent?.authorizedAt && ["PENDING", "REVIEW"].includes(intent.status))
       throw new AppError("applePurchasePendingVerification", "CONFLICT", 409);
     if (!intent || intent.status !== "PENDING" || intent.expiresAt <= new Date()) throw new AppError("appleIntentExpired", "CONFLICT", 409);
@@ -337,6 +342,7 @@ export async function applyAppleTransaction(receipt: VerifiedAppleTransaction, i
 }): Promise<AppleConfirmation> {
   assertVerifiedAppleTransaction(receipt);
   const d = receipt.data;
+  assertAppleBillingEnvironmentWritable(d.environment);
   const tokenIntent = await prisma.applePurchaseIntent.findUnique({ where: { purchaseAppAccountToken: d.appAccountToken } });
   const account = tokenIntent ? await prisma.appleBillingAccount.findUnique({ where: { organizationId: tokenIntent.organizationId } }) :
     await prisma.appleBillingAccount.findUnique({ where: { appAccountToken: d.appAccountToken } });
@@ -588,7 +594,7 @@ async function grantAppleWhatsApp(db: Prisma.TransactionClient, row: AppleTransa
 }
 export async function recomputeAppleCoverage(db: Prisma.TransactionClient, organizationId: string) {
   const org = await db.organization.findUniqueOrThrow({ where: { id: organizationId }, include: { subscriptionContract: true } });
-  const chains = await db.appleSubscriptionChain.findMany({ where: { organizationId } });
+  const chains = await db.appleSubscriptionChain.findMany({ where: { organizationId, ...appleBillingWritableScope() } });
   for (const chain of chains) {
     const eligible = await db.subscriptionPeriod.findFirst({ where: { organizationId, revokedAt: null, dependencyRevokedAt: null,
       appleTransaction: { environment: chain.environment, originalTransactionId: chain.originalTransactionId } },
@@ -660,7 +666,10 @@ export async function cancelApplePurchaseIntent(actor: AppleBillingActor, intent
     if (intent.authorizedAt && (!intent.nativeAttemptId || !attemptId || intent.nativeAttemptId !== attemptId.toLowerCase()))
       throw new AppError("applePurchaseAttemptMismatch", "CONFLICT", 409);
     const cancellable = !recorded && (intent.status === "PENDING" || (intent.status === "EXPIRED" && !intent.authorizedAt) || (intent.status === "REVIEW" && intent.lastIssue === "applePurchasePendingVerification"));
-    if (cancellable) await db.applePurchaseIntent.update({ where: { id: intent.id }, data: { status: "CANCELED", pendingSlot: null, lastIssue: null } });
+    if (cancellable) {
+      assertAppleBillingEnvironmentWritable(intent.environment);
+      await db.applePurchaseIntent.update({ where: { id: intent.id }, data: { status: "CANCELED", pendingSlot: null, lastIssue: null } });
+    }
     return { canceled: !recorded && (cancellable || intent.status === "CANCELED"), recorded: recorded > 0 };
   });
 }

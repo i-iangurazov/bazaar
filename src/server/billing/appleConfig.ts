@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { LEGAL_TERMS_VERSION } from "@/lib/legalPublication";
 import { applePurchaseLegalPublication, APPLE_PURCHASE_TERMS_REVISION, APPLE_PURCHASE_TERMS_URL } from "@/lib/applePurchaseLegal";
+import { isHardeningPreviewDatabasePinned } from "@/server/config/runtime";
+import { AppError } from "@/server/services/errors";
 
 export const APPLE_BUNDLE_ID = "kg.bazaar.app";
 export const APPLE_MANAGEMENT_URL = "https://apps.apple.com/account/subscriptions";
@@ -17,6 +19,22 @@ export const appleProductMappingSchema = z.object({
   appleOfferVersion: z.literal(APPLE_WHATSAPP_OFFER_VERSION).optional(),
 }).strict();
 export type AppleProductMapping = z.infer<typeof appleProductMappingSchema>;
+
+export function canWriteAppleBillingEnvironment(environment: string, env: Record<string, string | undefined> = process.env) {
+  if (environment !== "Sandbox") return environment === "Production";
+  if (env.VERCEL_ENV === "preview") return isHardeningPreviewDatabasePinned(env);
+  if (env.VERCEL_ENV) return env.VERCEL_ENV === "development";
+  // A hosted runtime or production build without deployment metadata cannot prove isolation.
+  return env.VERCEL !== "1" && env.NODE_ENV !== "production";
+}
+
+export function assertAppleBillingEnvironmentWritable(environment: string) {
+  if (!canWriteAppleBillingEnvironment(environment)) throw new AppError("appleSandboxNotAllowed", "FORBIDDEN", 403);
+}
+
+export function appleBillingWritableScope() {
+  return canWriteAppleBillingEnvironment("Sandbox") ? {} : { environment: "Production" as const };
+}
 
 /** A fail-closed, reviewed mapping. Catalog values are service valuations, never Apple prices. */
 export function appleBillingConfig(env: Record<string, string | undefined> = process.env) {
@@ -43,7 +61,7 @@ export function appleBillingConfig(env: Record<string, string | undefined> = pro
   const scopedTermsPublished = applePurchaseLegalPublication(env).published;
   const termsUrl = scopedTermsPublished ? APPLE_PURCHASE_TERMS_URL : "https://www.bazaar.kg/legal/offer";
   const termsReady = termsVersion === LEGAL_TERMS_VERSION && env.APPLE_BILLING_TERMS_APPROVED === "true";
-  const foundationReady = mode !== "off" && apiReady && termsReady && env.APPLE_BILLING_SALES_APPROVED === "true";
+  const foundationReady = mode !== "off" && canWriteAppleBillingEnvironment(environment, env) && apiReady && termsReady && env.APPLE_BILLING_SALES_APPROVED === "true";
   const ready = foundationReady && catalogValid;
   return { mode, environment, catalog: catalogValid ? catalog : [], catalogValid, appAppleId: appId,
     keyId, issuerId, privateKey, apiReady, termsVersion, termsUrl,
@@ -54,8 +72,8 @@ export function appleBillingConfig(env: Record<string, string | undefined> = pro
 }
 
 
-/** Deployment-owned synthetic/review organizations can use Apple's sandbox on
- * the live app. Never infer this choice from client fields or an unverified JWS. */
+/** Deployment-owned synthetic/review organizations retain their Sandbox designation.
+ * An unavailable Sandbox is never rerouted to Production. */
 export function appleEnvironmentForOrganization(organizationId: string,
   config: ReturnType<typeof appleBillingConfig> = appleBillingConfig()): "Production" | "Sandbox" {
   return config.mode === "sandbox" || config.sandboxOrganizations.has(organizationId) ? "Sandbox" : "Production";

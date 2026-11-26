@@ -1,7 +1,8 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { appReviewDestination } from "@/server/auth/appReviewRouting";
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { SubscriptionFeatureBoundary } from "@/components/billing/subscription-feature-boundary";
@@ -17,6 +18,11 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
 
   const cookieStore = await cookies();
   const impersonationId = cookieStore.get("impersonation_session")?.value ?? "";
+  const reviewDestination = appReviewDestination(token, await headers(), Boolean(impersonationId));
+  if (reviewDestination) {
+    redirect(reviewDestination);
+  }
+
   let role = String(token.role ?? "STAFF");
   let displayName = token.name ?? null;
   let displayEmail = token.email ?? null;

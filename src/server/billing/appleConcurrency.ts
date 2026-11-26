@@ -1,21 +1,24 @@
 import type { Prisma } from "@prisma/client";
 import { AppError } from "@/server/services/errors";
+import { appleBillingWritableScope } from "./appleConfig";
 
 export type ApplePurchaseScope = "SUBSCRIPTION" | "WHATSAPP_PACK";
 /** Caller holds Organization FOR UPDATE. Expiry releases the reservation, never erases the durable intent. */
 export async function assertNoApplePurchaseConflict(db: Prisma.TransactionClient, organizationId: string,
   scope: ApplePurchaseScope, now = new Date(), ownIntentId?: string, allowAppleChange = false) {
+  const writable = appleBillingWritableScope();
   await db.applePurchaseIntent.updateMany({
-    where: { organizationId, scope, status: "PENDING", authorizedAt: { not: null }, expiresAt: { lte: now } },
+    where: { ...writable, organizationId, scope, status: "PENDING", authorizedAt: { not: null }, expiresAt: { lte: now } },
     data: { status: "REVIEW", pendingSlot: null, lastIssue: "applePurchasePendingVerification" },
   });
   await db.applePurchaseIntent.updateMany({
-    where: { organizationId, scope, status: "PENDING", expiresAt: { lte: now } },
+    where: { ...writable, organizationId, scope, status: "PENDING", expiresAt: { lte: now } },
     data: { status: "EXPIRED", pendingSlot: null },
   });
   const pending = await db.applePurchaseIntent.findFirst({ where: { organizationId, scope,
     ...(ownIntentId ? { id: { not: ownIntentId } } : {}),
-    OR: [{ pendingSlot: `${scope}:${organizationId}` }, { status: "REVIEW" }],
+    OR: [{ pendingSlot: `${scope}:${organizationId}`, expiresAt: { gt: now } },
+      { pendingSlot: `${scope}:${organizationId}`, authorizedAt: { not: null } }, { status: "REVIEW" }],
   } });
   if (pending) throw new AppError(pending.status === "REVIEW" ? "applePaymentNeedsReview" : "applePurchasePending", "CONFLICT", 409);
   const unresolvedReceipt = await db.appleTransaction.findFirst({ where: { organizationId, status: "REVIEW",

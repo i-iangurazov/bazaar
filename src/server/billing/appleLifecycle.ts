@@ -3,17 +3,18 @@ import { Prisma, type AppleServerNotification } from "@prisma/client";
 import { AutoRenewStatus, GetTransactionHistoryVersion, Order } from "@apple/app-store-server-library";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
-import { appleBillingConfig } from "./appleConfig";
+import { APPLE_BUNDLE_ID, appleBillingConfig, appleBillingWritableScope, assertAppleBillingEnvironmentWritable,
+  canWriteAppleBillingEnvironment } from "./appleConfig";
 import { appleApiClient, appleReceiptVerifier, assertVerifiedAppleRenewal, type AppleReceiptVerifier, type VerifiedAppleRenewal } from "./appleVerification";
 import { applyAppleTransaction, appleManagedOffer, recomputeAppleCoverage } from "./applePayments";
 import { lockAppleOrganization } from "./appleConcurrency";
 import { auditAppleSupportEvidence, type AppleSupportOperator } from "./appleSupportAuth";
 import { enqueueAppleConsumptionRequest, processAppleConsumptionRequests } from "./appleConsumption";
-import { APPLE_BUNDLE_ID } from "./appleConfig";
 
 /** Renewal state is accepted only after the official verifier checks its JWS. */
 export async function applyAppleSignedRenewal(signedRenewalInfo: string, verifier: AppleReceiptVerifier, operator?: AppleSupportOperator) {
   const verified = await verifier.verifiedRenewal(signedRenewalInfo), renewal = verified.data;
+  assertAppleBillingEnvironmentWritable(renewal.environment);
   const seed = await prisma.appleSubscriptionChain.findUnique({ where: { environment_originalTransactionId: {
     environment: String(renewal.environment), originalTransactionId: renewal.originalTransactionId! } } });
   if (!seed) throw new AppError("appleIntentMissing", "CONFLICT", 409);
@@ -27,6 +28,7 @@ export async function applyAppleSignedRenewal(signedRenewalInfo: string, verifie
 export async function applyAppleRenewalInTransaction(db: Prisma.TransactionClient, verified: VerifiedAppleRenewal, chainId: string) {
     assertVerifiedAppleRenewal(verified);
     const renewal = verified.data;
+    assertAppleBillingEnvironmentWritable(renewal.environment);
     const chain = await db.appleSubscriptionChain.findUniqueOrThrow({ where: { id: chainId } });
     if (chain.originalTransactionId !== renewal.originalTransactionId || chain.environment !== renewal.environment)
       throw new AppError("applePurchaseBindingMismatch", "CONFLICT", 409);
@@ -59,6 +61,7 @@ export async function applyAppleRenewalInTransaction(db: Prisma.TransactionClien
 export async function acceptAppleServerNotification(signedPayload: string) {
   const receivedAt = new Date();
   for (const environment of ["Production", "Sandbox"] as const) {
+    if (!canWriteAppleBillingEnvironment(environment)) continue;
     let decoded;
     try { decoded = await appleReceiptVerifier(environment).notification(signedPayload); } catch { continue; }
     const notification = await prisma.appleServerNotification.upsert({ where: { id: decoded.notificationUUID! }, update: {}, create: {
@@ -78,7 +81,7 @@ export async function acceptAppleServerNotification(signedPayload: string) {
   throw new AppError("appleInvalidTransaction", "BAD_REQUEST", 400);
 }
 async function processAppleServerNotification(seed: AppleServerNotification) {
-  if (seed.status === "PROCESSED") return;
+  if (seed.status === "PROCESSED" || !canWriteAppleBillingEnvironment(seed.environment)) return;
   const token = randomUUID();
   const now = new Date();
   const claim = await prisma.appleServerNotification.updateMany({ where: { id: seed.id, status: { not: "PROCESSED" },
@@ -196,15 +199,16 @@ async function reconcileAppleTransaction(id: string) {
 }
 export async function reconcileAppleBilling() {
   const now = new Date();
-  const notifications = await prisma.appleServerNotification.findMany({ where: { status: "PENDING", nextAttemptAt: { lte: now } }, orderBy: { nextAttemptAt: "asc" }, take: 30 });
+  const writable = appleBillingWritableScope();
+  const notifications = await prisma.appleServerNotification.findMany({ where: { ...writable, status: "PENDING", nextAttemptAt: { lte: now } }, orderBy: { nextAttemptAt: "asc" }, take: 30 });
   for (const notification of notifications) await processAppleServerNotification(notification);
   const consumption = await processAppleConsumptionRequests();
-  await prisma.applePurchaseIntent.updateMany({ where: { status: "PENDING", authorizedAt: { not: null }, expiresAt: { lte: now } },
+  await prisma.applePurchaseIntent.updateMany({ where: { ...writable, status: "PENDING", authorizedAt: { not: null }, expiresAt: { lte: now } },
     data: { status: "REVIEW", pendingSlot: null, lastIssue: "applePurchasePendingVerification" } });
-  await prisma.applePurchaseIntent.updateMany({ where: { status: "PENDING", expiresAt: { lte: now } }, data: { status: "EXPIRED", pendingSlot: null } });
+  await prisma.applePurchaseIntent.updateMany({ where: { ...writable, status: "PENDING", expiresAt: { lte: now } }, data: { status: "EXPIRED", pendingSlot: null } });
   const { apiReady, mode } = appleBillingConfig();
   const result = { notifications: notifications.length, consumption, apiReady };
-  const due = { nextCheckAt: { lte: now } };
+  const due = { ...writable, nextCheckAt: { lte: now } };
   if (!apiReady) {
     // Disabling checkout leaves earned Apple obligations recoverable.
     const claimable = {

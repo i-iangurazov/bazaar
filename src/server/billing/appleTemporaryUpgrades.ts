@@ -5,7 +5,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { getOrganizationPlan } from "@/server/services/planLimits";
 import { subscriptionSelectionSchema } from "@/lib/billing/subscriptionPricing";
-import { appleBillingConfig, appleEnvironmentForOrganization } from "./appleConfig";
+import { appleBillingConfig, appleEnvironmentForOrganization, canWriteAppleBillingEnvironment } from "./appleConfig";
 import { calculateTemporaryUpgradeBaseQuote } from "./subscriptionQuotes";
 import { readPurchaseSnapshot, signPurchaseQuote, type PurchaseSnapshot } from "./purchaseSnapshot";
 import { subscriptionUsageContext } from "./subscriptionUsage";
@@ -26,7 +26,7 @@ async function assertActor(actor: Actor, db: Prisma.TransactionClient) {
 export function temporaryUpgradeReadiness(organizationId: string) {
   const config = appleBillingConfig(), commercial = temporaryUpgradePolicy();
   const environment = appleEnvironmentForOrganization(organizationId, config);
-  const environmentAllowed = environment !== "Sandbox" || config.sandboxOrganizations.has(organizationId);
+  const environmentAllowed = canWriteAppleBillingEnvironment(environment) && (environment !== "Sandbox" || config.sandboxOrganizations.has(organizationId));
   const overlap = commercial.policy?.bands.some((band) => config.catalog.some((entry) => entry.productId === band.productId));
   return { config, policy: commercial.policy, environment,
     ready: config.foundationReady && commercial.ready && environmentAllowed && !overlap,
