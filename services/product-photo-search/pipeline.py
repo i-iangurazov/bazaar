@@ -4,25 +4,28 @@ The published SystemPredictor recognizes every proposed foreground box plus the
 whole image. Bazaar returns candidate products for explicit user selection, keeping
 the existing similarity threshold in Node. No shared store index or query cache.
 """
-from vision import crop_region, fallback_analysis
+from geometry import crop_region, fallback_analysis
 
 
-def search_views(rgb, encoder, searcher, matrix, groups, vision=None, region=None, automatic=True, min_score=0.68):
+def describe_views(rgb, encoder, propose=None, region=None, automatic=True):
     # At most five detector proposals plus the full image; manual choice bypasses
     # both detection and the full image so it cannot silently broaden the query.
     regions = [region] if region else [None]
-    if not region and automatic and vision:
-        regions += [proposal for _, proposal in vision.propose(rgb)[:5]]
+    if not region and automatic and propose:
+        regions += [proposal for _, proposal in propose(rgb)[:5]]
     queries = [encoder.encode_rgb(crop_region(rgb, box) if box else rgb).tolist() for box in regions]
-    batches = searcher.search_many(matrix, groups, queries)
+    return regions, queries
+
+
+def select_views(regions, batches, region, min_score):
     if len(batches) != len(regions):
         raise ValueError('invalidSearch')
     grouped = {}
     for matches in batches:
         for match in matches:
-            group = groups[match['index']]
+            group = match['group']
             if group not in grouped or match['score'] > grouped[group]['score']:
-                grouped[group] = match
+                grouped[group] = {'index': match['index'], 'score': match['score']}
     # Recognition evidence selects the relevant proposal, rather than the detector's
     # most confident object (which may be a hand/person). Ties retain the full view.
     selected = max(range(len(batches)), key=lambda index: batches[index][0]['score'] if batches[index] else -1.01)
@@ -32,5 +35,13 @@ def search_views(rgb, encoder, searcher, matrix, groups, vision=None, region=Non
         selected = 0
     box = regions[selected]
     source = 'manual' if region else 'auto' if box else 'full'
+    return sorted(grouped.values(), key=lambda match: (-match['score'], match['index']))[:8], box, source
+
+
+def search_views(rgb, encoder, searcher, matrix, groups, vision=None, region=None, automatic=True, min_score=0.68):
+    regions, queries = describe_views(rgb, encoder, vision.propose if vision else None, region, automatic)
+    batches = searcher.search_many(matrix, groups, queries)
+    hits = [[{**match, 'group': groups[match['index']]} for match in batch] for batch in batches]
+    matches, box, source = select_views(regions, hits, region, min_score)
     analysis = vision.read(rgb, box, source) if vision else fallback_analysis(region)
-    return {'matches': sorted(grouped.values(), key=lambda match: (-match['score'], match['index']))[:8], 'analysis': analysis}
+    return {'matches': matches, 'analysis': analysis}

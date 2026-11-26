@@ -12,37 +12,39 @@ import re
 from pathlib import Path
 import cv2
 import numpy as np
-import paddle.inference as inference
+from geometry import crop_region, fallback_analysis, valid_region
 
 
-def valid_region(region):
-    if not isinstance(region, dict) or set(region) != {'x', 'y', 'width', 'height'}:
-        return False
-    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in region.values()):
-        return False
-    return (0 <= region['x'] < 1 and 0 <= region['y'] < 1 and 0 < region['width'] <= 1 and 0 < region['height'] <= 1
-            and region['x']+region['width'] <= 1.000001 and region['y']+region['height'] <= 1.000001)
+def detector_input(rgb):
+    h, w = rgb.shape[:2]
+    pixels = cv2.resize(rgb, (640, 640), interpolation=cv2.INTER_CUBIC).astype(np.float32) / 255
+    pixels = (pixels - np.array([0.485, 0.456, 0.406], np.float32)) / np.array([0.229, 0.224, 0.225], np.float32)
+    return {'image': np.ascontiguousarray(pixels.transpose(2, 0, 1)[None]),
+            'im_shape': np.array([[640, 640]], np.float32),
+            'scale_factor': np.array([[640 / h, 640 / w]], np.float32)}
 
 
-def crop_region(image, region):
-    if not valid_region(region):
-        raise ValueError('invalidRegion')
-    h, w = image.shape[:2]
-    x, y = int(region['x']*w), int(region['y']*h)
-    right = min(w, math.ceil((region['x']+region['width'])*w))
-    bottom = min(h, math.ceil((region['y']+region['height'])*h))
-    if right-x < 4 or bottom-y < 4:
-        raise ValueError('invalidRegion')
-    return image[y:bottom, x:right].copy()
-
-
-def fallback_analysis(region=None):
-    return {'regionSource': 'manual' if region else 'full', 'region': region,
-            'ocrStatus': 'unavailable', 'lines': []}
+def proposal_regions(boxes, width, height):
+    if boxes.ndim != 2 or boxes.shape[1] != 6:
+        raise ValueError('invalidDetection')
+    regions = []
+    for label, score, left, top, right, bottom in boxes:
+        # PaddleClas inference_general.yaml proposes at most five boxes at threshold .2.
+        if label != 0 or not np.isfinite([score, left, top, right, bottom]).all() or score < 0.2:
+            continue
+        pad_x, pad_y = (right-left)*0.03, (bottom-top)*0.03
+        left, top = max(0, left-pad_x), max(0, top-pad_y)
+        right, bottom = min(width, right+pad_x), min(height, bottom+pad_y)
+        region = {'x': float(left/width), 'y': float(top/height),
+                  'width': float((right-left)/width), 'height': float((bottom-top)/height)}
+        if valid_region(region) and right-left >= 4 and bottom-top >= 4 and region['width']*region['height'] < 0.95:
+            regions.append((float(score), region))
+    return sorted(regions, key=lambda item: -item[0])[:5]
 
 
 class Detector:
     def __init__(self, directory, threads):
+        import paddle.inference as inference
         config = inference.Config(str(directory/'inference.pdmodel'), str(directory/'inference.pdiparams'))
         config.disable_gpu()
         config.disable_mkldnn()
@@ -54,45 +56,29 @@ class Detector:
         self.predictor = inference.create_predictor(config)
 
     def detect(self, rgb):
-        h, w = rgb.shape[:2]
-        pixels = cv2.resize(rgb, (640, 640), interpolation=cv2.INTER_CUBIC).astype(np.float32)/255
-        pixels = (pixels-np.array([0.485, 0.456, 0.406], np.float32))/np.array([0.229, 0.224, 0.225], np.float32)
-        values = {'image': np.ascontiguousarray(pixels.transpose(2, 0, 1)[None]),
-                  'im_shape': np.array([[640, 640]], np.float32),
-                  'scale_factor': np.array([[640/h, 640/w]], np.float32)}
+        values = detector_input(rgb)
         for name in self.predictor.get_input_names():
             self.predictor.get_input_handle(name).copy_from_cpu(values[name])
         self.predictor.run()
         boxes = self.predictor.get_output_handle(self.predictor.get_output_names()[0]).copy_to_cpu()
-        if boxes.ndim != 2 or boxes.shape[1] != 6:
-            raise ValueError('invalidDetection')
-        regions = []
-        for label, score, left, top, right, bottom in boxes:
-            # Published PaddleClas inference_general.yaml: threshold .2, top five.
-            # Detection confidence is not a SKU similarity score.
-            if label != 0 or not np.isfinite([score, left, top, right, bottom]).all() or score < 0.2:
-                continue
-            # Small context margin; never synthesize a different view or change colors.
-            pad_x, pad_y = (right-left)*0.03, (bottom-top)*0.03
-            left, top = max(0, left-pad_x), max(0, top-pad_y)
-            right, bottom = min(w, right+pad_x), min(h, bottom+pad_y)
-            region = {'x': float(left/w), 'y': float(top/h), 'width': float((right-left)/w), 'height': float((bottom-top)/h)}
-            if valid_region(region) and right-left >= 4 and bottom-top >= 4 and region['width']*region['height'] < 0.95:
-                regions.append((float(score), region))
-        return sorted(regions, key=lambda item: -item[0])[:5]
+        return proposal_regions(boxes, rgb.shape[1], rgb.shape[0])
 
 
-class Vision:
-    def __init__(self, root: Path, threads):
-        registry = json.loads(Path(__file__).with_name('vision-models.json').read_text())
-        for name, expected in registry['files'].items():
-            path = root/name
-            with path.open('rb') as stream:
+def verify_vision_weights(root, prefixes=('',)):
+    registry = json.loads(Path(__file__).with_name('vision-models.json').read_text())
+    for name, expected in registry['files'].items():
+        if name.startswith(prefixes):
+            with (root/name).open('rb') as stream:
                 if hashlib.file_digest(stream, 'sha256').hexdigest() != expected:
                     raise ValueError('unexpectedVisionWeights')
-        self.detector = Detector(root/registry['detectorDirectory'], threads)
+    return registry
+
+
+class PhotoTextReader:
+    def __init__(self, root: Path, threads, registry=None, ocr_factory=None):
+        registry = registry or verify_vision_weights(root, ('ocr/',))
         from rapidocr import RapidOCR, ModelType
-        self.ocr = RapidOCR(params={
+        self.ocr = (ocr_factory or RapidOCR)(params={
             'Global.log_level': 'error', 'Global.max_side_len': 1600,
             'Det.max_candidates': 200,
             'EngineConfig.onnxruntime.intra_op_num_threads': threads,
@@ -102,12 +88,6 @@ class Vision:
             'Rec.model_type': ModelType.MEDIUM,
             'Cls.model_path': str(root/'ocr/ch_ppocr_mobile_v2.0_cls_mobile.onnx'),
         })
-
-    def propose(self, rgb):
-        try:
-            return self.detector.detect(rgb)
-        except Exception:
-            return []  # Full-image visual search still works; do not invent boxes.
 
     def read(self, rgb, region=None, source='full'):
         """Bounded OCR; an automatic crop may recover in-region text at full scale.
@@ -136,6 +116,7 @@ class Vision:
             analysis.update(ocrStatus='ready', lines=contained)
         return analysis
 
+
     def _read_once(self, rgb, region=None, source='full'):
         selected = crop_region(rgb, region) if region else rgb
         analysis = {'regionSource': source, 'region': region, 'ocrStatus': 'unavailable', 'lines': []}
@@ -158,3 +139,16 @@ class Vision:
         except Exception:
             pass  # Explicit unavailable state; OCR never silently confirms a product.
         return analysis
+
+
+class Vision(PhotoTextReader):
+    def __init__(self, root: Path, threads):
+        registry = verify_vision_weights(root)
+        self.detector = Detector(root/registry['detectorDirectory'], threads)
+        super().__init__(root, threads, registry)
+
+    def propose(self, rgb):
+        try:
+            return self.detector.detect(rgb)
+        except Exception:
+            return []  # Full-image visual search still works; do not invent boxes.
