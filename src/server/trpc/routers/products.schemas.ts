@@ -112,6 +112,7 @@ export const productVariantInputSchema = z.object({
 
 export const productListInputSchema = z
   .object({
+    productId: z.string().trim().min(1).optional(),
     search: z.string().optional(),
     category: z.string().optional(),
     type: productTypeFilterEnum.optional(),
@@ -140,6 +141,7 @@ export const productBootstrapInputSchema = productListInputSchema
 
 export const productListIdsInputSchema = z
   .object({
+    productId: z.string().trim().min(1).optional(),
     search: z.string().optional(),
     category: z.string().optional(),
     type: productTypeFilterEnum.optional(),

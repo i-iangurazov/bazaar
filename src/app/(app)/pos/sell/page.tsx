@@ -53,6 +53,7 @@ import {
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { SearchInput } from "@/components/search-input";
 import { ScanInput } from "@/components/ScanInput";
+import { ProductPhotoSearchButton } from "@/components/products/product-photo-search";
 import { PosPaymentMethodControl } from "@/components/pos/payment-method-control";
 import { PosReturnQuantityInput } from "@/components/pos/return-quantity-input";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -2335,6 +2336,37 @@ const PosSellPage = () => {
     [handleAddLine, t, toast, trackCartSyncPromise],
   );
 
+  const handlePhotoProductSelect = async (productId: string) => {
+    if (!activeStoreId || !hasOpenShift || cartPriceSyncRef.current) return;
+
+    const cartSessionVersion = cartSessionVersionRef.current;
+    try {
+      const catalog = await trpcUtils.products.list.fetch({
+        productId,
+        storeId: activeStoreId,
+        priceMode: posToolsQuery.data?.priceTypesEnabled ? priceMode : undefined,
+        pageSize: 1,
+      });
+      if (cartSessionVersionRef.current !== cartSessionVersion) return;
+      const product = catalog.items.find((item) => item.id === productId);
+      if (!product) {
+        toast({ variant: "info", description: t("sell.noSearchResults") });
+        return;
+      }
+      const added = await trackCartSyncPromise(
+        handleAddLine(productId, product, { refocusSearch: true }),
+      );
+      if (added && isPhoneScreen && cartSessionVersionRef.current === cartSessionVersion) {
+        setMobileScreen("sale");
+        setMobileSaleTab("document");
+      }
+    } catch {
+      if (cartSessionVersionRef.current === cartSessionVersion) {
+        toast({ variant: "error", description: tErrors("unexpectedError") });
+      }
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (keyboardScanResetTimerRef.current !== null) {
@@ -2377,6 +2409,10 @@ const PosSellPage = () => {
         return;
       }
       if (document.activeElement === lineSearchInputRef.current) {
+        return;
+      }
+      if (document.activeElement?.closest('[role="dialog"]')) {
+        resetKeyboardScanBuffer();
         return;
       }
       if (isEditableElement(event.target)) {
@@ -5108,6 +5144,16 @@ const PosSellPage = () => {
       {posToolsQuery.data.canTransfer ? <Button variant="secondary" className="h-11 min-w-11 shrink-0 px-2" aria-label={t("tools.transferTitle")} title={t("tools.transferTitle")} disabled={!hasOpenShift || Boolean(cartPriceSync)} onClick={()=>setTransferOpen(true)}><TransferIcon className="h-5 w-5" aria-hidden /></Button> : null}
     </div>
   ) : null;
+  const photoSearch = activeStoreId && shiftQuery.data && session?.user ? (
+    <ProductPhotoSearchButton
+      identityKey={`${session.user.organizationId}:${session.user.id}:${shiftQuery.data.id}`}
+      storeId={activeStoreId}
+      stores={[{ id: activeStoreId, name: shiftQuery.data.store.name }]}
+      disabled={!hasOpenShift || isLineBusy || completeMutation.isLoading || Boolean(cartPriceSync)}
+      onSelectProduct={(productId) => void handlePhotoProductSelect(productId)}
+      iconOnly
+    />
+  ) : null;
   const PosToolsDialogs = () => <>
     <Modal open={Boolean(variantChoice)} onOpenChange={open => { if (!open) { setVariantChoice(null); focusLineSearchInput(); } }} title={t("tools.chooseVariant")}>
       <div className="grid gap-2">
@@ -5295,6 +5341,7 @@ const PosSellPage = () => {
             className="min-w-0 flex-1"
             inputClassName="h-12 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
           />
+          {photoSearch}
           {PosHeaderTools()}
         </div>
 
@@ -7227,6 +7274,7 @@ const PosSellPage = () => {
                 className="min-w-0 flex-1"
                 inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
               />
+              {photoSearch}
               {PosHeaderTools()}
             </div>
 
@@ -7790,6 +7838,7 @@ const PosSellPage = () => {
               className="min-w-0 flex-1"
               inputClassName="h-11 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
             />
+            {photoSearch}
           </div>
         </header>
 

@@ -81,6 +81,22 @@ it("supports a read-only selection in POS without navigating or mutating a sale"
   expect(vi.mocked(fetch).mock.calls.every(([url]) => String(url).startsWith("/api/products/photo-search"))).toBe(true);
 });
 
+it("passes the explicitly chosen product to the checkout and closes the dialog", async () => {
+  const onSelectProduct = vi.fn();
+  const view = render(<NextIntlClientProvider locale="en" messages={messages}>
+    <ProductPhotoSearchButton identityKey="cashier-org" storeId="s1"
+      stores={[{ id: "s1", name: "Shop" }]} onSelectProduct={onSelectProduct} />
+  </NextIntlClientProvider>);
+  await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup");
+  expect(onSelectProduct).not.toHaveBeenCalled();
+  fireEvent.click(view.getByRole("button", { name: "Choose product Red cup" }));
+  expect(onSelectProduct).toHaveBeenCalledExactlyOnceWith("p1");
+  expect(view.queryByRole("dialog")).toBeNull();
+  expect(boundary.push).not.toHaveBeenCalled();
+});
+
 it("does not cancel the initial availability check when a photo is chosen immediately", async () => {
   let status!: (response: Response) => void;
   vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { status = resolve; }));

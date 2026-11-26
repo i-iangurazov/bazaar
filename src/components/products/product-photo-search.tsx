@@ -24,7 +24,8 @@ import { formatCurrency, formatNumber } from "@/lib/i18nFormat";
 import { cn } from "@/lib/utils";
 
 type Props = { identityKey: string; storeId: string; stores: { id: string; name: string }[]; disabled?: boolean; selectionMode?: "card" | "preview";
-  iconOnly?: boolean; iconOnMobile?: boolean; loadingStores?: boolean; storeError?: boolean; onRetryStores?: () => void };
+  iconOnly?: boolean; iconOnMobile?: boolean; loadingStores?: boolean; storeError?: boolean; onRetryStores?: () => void;
+  onSelectProduct?: (productId: string) => void };
 
 function Photo({ src, alt, className, onDimensions }: { src: string | null; alt: string; className: string; onDimensions?: (size: { width: number; height: number }) => void }) {
   const [failed, setFailed] = useState(false);
@@ -66,7 +67,7 @@ export function ProductPhotoSearchButton(props: Props) {
   return <Workspace key={`${props.identityKey}:${props.storeId}`} {...props} />;
 }
 
-function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly, iconOnMobile, loadingStores, storeError, onRetryStores }: Props) {
+function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly, iconOnMobile, loadingStores, storeError, onRetryStores, onSelectProduct }: Props) {
   const t = useTranslations("productPhotoSearch");
   const common = useTranslations("common");
   const errors = useTranslations("errors");
@@ -365,7 +366,20 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
                           <p className="mt-0.5 text-[11px] text-muted-foreground">{t("onHand", { count: formatNumber(item.onHand, locale) })}</p>
                         </div>
                         {!selectedId ? <Tooltip><TooltipTrigger asChild><Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" aria-label={t("choose", { name: item.name })}
-                          onClick={() => { if (selectionMode === "preview") { setSelectedId(item.id); return; } const returnTo = window.location.pathname + window.location.search; changeOpen(false); router.push("/products/" + encodeURIComponent(item.id) + "?" + new URLSearchParams({ storeId: selectedStore, returnTo })); }}>
+                          onClick={() => {
+                            if (onSelectProduct) {
+                              changeOpen(false);
+                              onSelectProduct(item.id);
+                              return;
+                            }
+                            if (selectionMode === "preview") {
+                              setSelectedId(item.id);
+                              return;
+                            }
+                            const returnTo = window.location.pathname + window.location.search;
+                            changeOpen(false);
+                            router.push("/products/" + encodeURIComponent(item.id) + "?" + new URLSearchParams({ storeId: selectedStore, returnTo }));
+                          }}>
                           <ViewIcon className="h-4 w-4" aria-hidden />
                         </Button></TooltipTrigger><TooltipContent>{t("choose", { name: item.name })}</TooltipContent></Tooltip> : null}
                       </div>
