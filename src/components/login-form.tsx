@@ -273,7 +273,7 @@ export const LoginForm = () => {
               {verificationError ? <p className="text-sm text-danger">{translateError(tErrors, verificationError)}</p> : null}
             </div>
           ) : null}
-          <Button className="min-h-12 w-full rounded-lg text-base font-semibold" type="submit" disabled={!hydrated || isLoading}>
+          <Button data-mobile-keyboard-submit className="min-h-12 w-full rounded-lg text-base font-semibold" type="submit" disabled={!hydrated || isLoading}>
             {isLoading ? <Spinner className="size-4" /> : null}
             {isLoading ? t("signingIn") : t("signIn")}
           </Button>

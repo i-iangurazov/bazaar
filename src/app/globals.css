@@ -377,7 +377,50 @@ html[data-mobile-keyboard-open] body:not([data-scroll-locked])::after {
 /* Mobile Safari shrinks the visual viewport rather than the fixed layout. */
 html[data-mobile-keyboard-open]:not(.native-ios) {
   --web-keyboard-top: max(var(--native-viewport-offset-top), var(--mobile-top-safe-area));
-  --web-keyboard-height: max(0px, calc(var(--native-available-height) - var(--web-keyboard-top)));
+  --web-keyboard-height: max(0px, calc(var(--native-available-height) - var(--web-keyboard-top) - var(--mobile-keyboard-browser-chrome, 0px)));
+}
+
+@media (max-width: 767px) {
+  html[data-mobile-keyboard-open]:not(.native-app) [data-native-bottom-nav] {
+    display: none;
+  }
+
+  html[data-mobile-keyboard-open]:not(.native-app) [data-mobile-keyboard-actions] {
+    bottom: calc(var(--mobile-keyboard-bottom-inset, 0px) + 0.5rem);
+  }
+
+  html[data-mobile-keyboard-open]:not(.native-app) [data-mobile-keyboard-actions="product"] {
+    position: fixed;
+    inset-inline: 1rem;
+    z-index: 45;
+    margin-top: 0;
+  }
+
+  html[data-mobile-keyboard-open]:not(.native-app) [role="dialog"] [data-mobile-keyboard-actions="product"] {
+    position: sticky;
+    inset-inline: auto;
+    bottom: 0.25rem;
+  }
+
+  html:not(.native-app) [data-toast-viewport] {
+    top: calc(max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) + 0.75rem);
+    bottom: auto;
+    left: calc(var(--native-safe-area-left) + 0.75rem);
+    right: calc(var(--native-safe-area-right) + 0.75rem);
+    width: auto;
+    max-width: 24rem;
+    max-height: max(0px, calc(var(--native-available-height) - max(var(--mobile-top-safe-area), var(--native-viewport-offset-top)) - var(--mobile-bottom-safe-area) - 1.5rem));
+    margin-inline: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: none;
+    pointer-events: none;
+  }
+
+  html:not(.native-app) [data-toast-viewport] .es-toast__close {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
 }
 
 html[data-mobile-keyboard-open]:not(.native-ios) [role="dialog"][class~="top-1/2"] {
@@ -386,7 +429,7 @@ html[data-mobile-keyboard-open]:not(.native-ios) [role="dialog"][class~="top-1/2
 }
 
 html[data-mobile-keyboard-open]:not(.native-ios) [role="dialog"][class~="bottom-0"] {
-  bottom: max(0px, calc(100dvh - var(--native-available-height))) !important;
+  bottom: var(--mobile-keyboard-bottom-inset, 0px) !important;
   max-height: max(0px, calc(var(--web-keyboard-height) - 0.5rem)) !important;
 }
 

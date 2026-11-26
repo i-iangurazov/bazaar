@@ -441,6 +441,7 @@ const StockCountsPage = () => {
               </Button>
               <Button
                 type="submit"
+                data-mobile-keyboard-submit
                 className="w-full sm:w-auto"
                 disabled={createMutation.isLoading}
               >

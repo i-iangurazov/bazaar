@@ -1,11 +1,10 @@
-/* Native uses the bridge's visible height. Mobile web measures VisualViewport
-   so the conversation and composer fit above the on-screen keyboard. */
+/* The native workspace keeps the bridge's insets and bottom navigation. */
 .workspace {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  height: max(0px, calc(var(--baam-visible-height, var(--native-available-height, 100dvh)) - var(--baam-workspace-top, 0px) - var(--baam-workspace-bottom, 8px)));
+  height: max(0px, calc(var(--native-available-height, 100dvh) - var(--baam-workspace-top, 0px) - var(--baam-workspace-bottom, 8px)));
   min-height: 0;
   overflow: hidden;
 }
@@ -13,6 +12,65 @@
 .workspace > :global([data-page-header]) {
   flex: 0 0 auto;
   margin-bottom: 0;
+}
+
+.webWorkspace,
+.webWorkspace :global(body) {
+  overflow: hidden;
+  overflow: clip;
+}
+
+.webWorkspace :global(body)::after {
+  content: none !important;
+}
+
+.webWorkspace :global([data-mobile-app-header]),
+.webWorkspace :global([data-app-header]),
+.webWorkspace :global([data-module-dock]),
+.webWorkspace :global([data-native-bottom-nav]) {
+  display: none;
+}
+
+.webWorkspace :global(#workspace-content) {
+  position: fixed;
+  inset-inline: 0;
+  top: var(--baam-web-top, 0px);
+  height: var(--baam-web-height, 100dvh);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: max(0.5rem, calc(var(--mobile-top-safe-area) - var(--baam-web-top, 0px)))
+    max(0.5rem, var(--native-safe-area-right)) max(0.5rem, var(--mobile-bottom-safe-area))
+    max(0.5rem, var(--native-safe-area-left));
+  background: hsl(var(--background));
+}
+
+.webWorkspace:global([data-mobile-keyboard-open]) :global(#workspace-content) {
+  padding-bottom: calc(0.25rem + var(--mobile-keyboard-browser-chrome, 0px));
+}
+
+.webWorkspace :global([data-native-keyboard-aware]),
+.webWorkspace :global([data-app-page]) {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  padding-bottom: 0 !important;
+}
+
+.webWorkspace :global([data-subscription-access-notice]) {
+  flex: 0 0 auto;
+  max-height: max(2.875rem, 36%);
+  margin-bottom: 0.5rem;
+  overflow-y: auto;
+}
+
+.webPhone {
+  flex: 1 1 0%;
+  width: 100%;
+  max-width: none;
+  height: auto;
 }
 
 @media (max-width: 767px) {
@@ -123,4 +181,13 @@
   flex: 0 0 auto;
   max-width: 100%;
   margin-left: auto;
+}
+
+.webPhone :global([data-baam-phone-layout]) :global([data-baam-compose-form]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.webPhone :global([data-baam-input]) {
+  font-size: 1rem;
 }

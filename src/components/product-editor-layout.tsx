@@ -62,6 +62,7 @@ export const ProductEditorSaveBar = ({
 }) => (
   <div
     data-baam-obstacle
+    data-mobile-keyboard-actions
     className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-30 rounded-lg border border-border bg-card p-2 text-card-foreground shadow-md md:static md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none"
   >
     <div className="flex min-h-10 w-full items-center justify-between gap-3 md:min-h-8">

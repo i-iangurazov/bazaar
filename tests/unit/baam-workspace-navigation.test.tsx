@@ -15,9 +15,9 @@ vi.mock("@/lib/native/platform", () => ({ isIOS: () => native.ios }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/baam", useSearchParams: () => new URLSearchParams(native.search) }));
 vi.mock("next/link", () => ({ default: ({ href, replace, prefetch: _prefetch, ...props }: ComponentProps<"a"> & { href: string; replace?: boolean; prefetch?: boolean }) =>
   <a {...props} href={href} data-replaces-route={replace ? "true" : undefined} /> }));
-vi.mock("@/components/baam-assistant", () => ({ BaamAssistant: function Assistant({ nativeViewport, workspaceHeader }: { nativeViewport?: boolean; workspaceHeader?: ReactNode }) {
+vi.mock("@/components/baam-assistant", () => ({ BaamAssistant: function Assistant({ nativeViewport, phoneLayout, workspaceHeader }: { nativeViewport?: boolean; phoneLayout?: string; workspaceHeader?: ReactNode }) {
   const [draft, setDraft] = useState("");
-  return <div data-testid="existing-baam-assistant" data-native-viewport={nativeViewport ? "true" : "false"}>
+  return <div data-testid="existing-baam-assistant" data-native-viewport={nativeViewport ? "true" : "false"} data-phone-layout={phoneLayout}>
     {workspaceHeader}
     Existing history/composer surface
     <input aria-label="Workspace draft" value={draft} onChange={(event) => setDraft(event.target.value)} />
@@ -30,6 +30,7 @@ afterEach(() => {
   cleanup();
   document.querySelectorAll("[data-native-bottom-nav]").forEach(element => element.remove());
   delete document.documentElement.dataset.nativeKeyboard;
+  document.documentElement.removeAttribute("data-mobile-keyboard-open");
   document.documentElement.style.removeProperty("--native-available-height");
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -81,7 +82,7 @@ describe("native BAAM workspace navigation", () => {
     expect(screen.getByTestId("baam-page").style.getPropertyValue("--baam-workspace-top")).toBe("");
   });
 
-  it("fits a mobile browser's keyboard viewport and keeps its typed draft focused", () => {
+  it("fits a mobile browser's keyboard viewport and keeps its typed draft focused", async () => {
     native.ios = false;
     let height = 844;
     let top = 0;
@@ -94,30 +95,28 @@ describe("native BAAM workspace navigation", () => {
     vi.stubGlobal("matchMedia", () => ({
       matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn(),
     }));
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      if (this.hasAttribute("data-native-bottom-nav")) return new DOMRect(0, 780, 390, 64);
-      return new DOMRect(0, 96, 390, 0);
-    });
-    const nav = document.createElement("nav");
-    nav.setAttribute("data-native-bottom-nav", "");
-    document.body.append(nav);
-    render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
-    const workspace = screen.getByTestId("baam-page");
+    const view = render(<NextIntlClientProvider locale="en" messages={en}><BaamPage /></NextIntlClientProvider>);
+    const root = document.documentElement;
     const draft = screen.getByRole("textbox", { name: "Workspace draft" });
-    expect(workspace.style.getPropertyValue("--baam-visible-height")).toBe("844px");
-    expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).toBe("72px");
+    expect(root.classList.contains(styles.webWorkspace)).toBe(true);
+    expect(root.style.getPropertyValue("--baam-web-height")).toBe("844px");
+    expect(screen.getByTestId("existing-baam-assistant").getAttribute("data-phone-layout")).toBe("normal");
     fireEvent.change(draft, { target: { value: "Mobile draft" } });
     draft.focus();
-    act(() => {
+    await act(async () => {
       height = 360;
       top = 30;
+      root.setAttribute("data-mobile-keyboard-open", "");
       viewport.dispatchEvent(new Event("resize"));
     });
-    expect(workspace.style.getPropertyValue("--baam-visible-height")).toBe("360px");
-    expect(workspace.style.getPropertyValue("--baam-workspace-top")).toBe("66px");
-    expect(workspace.style.getPropertyValue("--baam-workspace-bottom")).not.toBe("72px");
+    expect(root.style.getPropertyValue("--baam-web-height")).toBe("360px");
+    expect(root.style.getPropertyValue("--baam-web-top")).toBe("30px");
+    expect(screen.getByTestId("existing-baam-assistant").getAttribute("data-phone-layout")).toBe("keyboard");
     expect(document.activeElement).toBe(draft);
     expect((draft as HTMLInputElement).value).toBe("Mobile draft");
+    view.unmount();
+    expect(root.classList.contains(styles.webWorkspace)).toBe(false);
+    expect(root.style.getPropertyValue("--baam-web-height")).toBe("");
   });
 
   it("shows the in-app return from a mobile web workspace opened by the launcher", () => {

@@ -22,6 +22,7 @@ export default function BaamPage() {
   const search = useSearchParams();
   const [viewportMode, setViewportMode] = useState<"native" | "mobile">();
   const nativeIOS = viewportMode === "native";
+  const webPhone = viewportMode === "mobile";
   const [shortViewport, setShortViewport] = useState(false);
   const [phoneLayout, setPhoneLayout] = useState<BaamPhoneLayout>();
   const workspace = useRef<HTMLDivElement>(null);
@@ -45,23 +46,23 @@ export default function BaamPage() {
     const nativePhone = nativeIOS ? window.matchMedia?.(mobileShellMediaQuery) : undefined;
     const nav = document.querySelector<HTMLElement>("[data-native-bottom-nav]");
     if (nativeIOS) root.classList.add(styles.nativeWorkspace);
+    if (webPhone) root.classList.add(styles.webWorkspace);
     const measure = () => {
       const isNativePhone = nativePhone?.matches;
       const keyboardVisible = root.dataset.nativeKeyboard === "visible" ||
-        Boolean(isNativePhone && root.hasAttribute("data-mobile-keyboard-open"));
-      setPhoneLayout(isNativePhone ? (keyboardVisible ? "keyboard" : "normal") : undefined);
-      const viewportTop = nativeIOS ? 0 : viewport?.offsetTop ?? 0;
+        Boolean((isNativePhone || webPhone) && root.hasAttribute("data-mobile-keyboard-open"));
+      setPhoneLayout(isNativePhone || webPhone ? (keyboardVisible ? "keyboard" : "normal") : undefined);
+      if (webPhone) {
+        const visibleTop = Math.max(0, viewport?.offsetTop ?? 0);
+        root.style.setProperty("--baam-web-top", `${visibleTop}px`);
+        root.style.setProperty("--baam-web-height", `${viewport?.height ?? window.innerHeight}px`);
+        return;
+      }
       // The iOS phone shell fits one viewport. Its height must not grow if
       // WebKit briefly moves the document while focusing or returning to chat.
       const documentOffset = isNativePhone ? window.scrollY : 0;
-      const top = Math.max(0, element.getBoundingClientRect().top + documentOffset - viewportTop);
-      const navBounds = nav?.getBoundingClientRect();
-      const height = viewport?.height ?? window.innerHeight;
-      const navHeight = nativeIOS
-        ? (isNativePhone && keyboardVisible ? 0 : navBounds?.height ?? 0)
-        : navBounds ? Math.max(0, Math.min(navBounds.bottom, viewportTop + height) -
-          Math.max(navBounds.top, viewportTop)) : 0;
-      if (!nativeIOS) element.style.setProperty("--baam-visible-height", `${height}px`);
+      const top = Math.max(0, element.getBoundingClientRect().top + documentOffset);
+      const navHeight = isNativePhone && keyboardVisible ? 0 : nav?.getBoundingClientRect().height ?? 0;
       element.style.setProperty("--baam-workspace-top", `${top}px`);
       element.style.setProperty("--baam-workspace-bottom", navHeight > 0 ? `${navHeight + 8}px`
         : keyboardVisible ? "8px" : "max(8px, env(safe-area-inset-bottom))");
@@ -76,8 +77,10 @@ export default function BaamPage() {
     viewport?.addEventListener("resize", measure, { passive: true });
     viewport?.addEventListener("scroll", measure, { passive: true });
     const mutations = new MutationObserver(measure);
-    mutations.observe(root, { attributes: true, attributeFilter: ["data-native-keyboard", "data-mobile-keyboard-open", "style", "class"] });
-    const resize = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : undefined;
+    mutations.observe(root, { attributes: true, attributeFilter: webPhone
+      ? ["data-mobile-keyboard-open"]
+      : ["data-native-keyboard", "data-mobile-keyboard-open", "style", "class"] });
+    const resize = nativeIOS && typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : undefined;
     if (element.parentElement) resize?.observe(element.parentElement);
     if (nav) resize?.observe(nav);
     return () => {
@@ -88,20 +91,24 @@ export default function BaamPage() {
       mutations.disconnect();
       resize?.disconnect();
       if (nativeIOS) root.classList.remove(styles.nativeWorkspace);
-      element.style.removeProperty("--baam-visible-height");
+      if (webPhone) {
+        root.classList.remove(styles.webWorkspace);
+        root.style.removeProperty("--baam-web-top");
+        root.style.removeProperty("--baam-web-height");
+      }
       element.style.removeProperty("--baam-workspace-top");
       element.style.removeProperty("--baam-workspace-bottom");
     };
-  }, [nativeIOS, viewportMode]);
+  }, [nativeIOS, viewportMode, webPhone]);
   const returnTo = search.get("returnTo");
-  const back = nativeIOS || (viewportMode === "mobile" && returnTo) ? (
+  const back = viewportMode ? (
       <Button asChild variant={phoneLayout ? "ghost" : "secondary"} size="icon" className={phoneLayout || shortViewport ? "h-11 w-11 shrink-0" : undefined} aria-label={common("back")} title={common("back")}>
         <Link href={baamWorkspaceReturnHref(returnTo)} replace prefetch={false}>
           <BackIcon aria-hidden />
         </Link>
       </Button>
   ) : undefined;
-  const compact = Boolean(viewportMode) && (shortViewport || phoneLayout === "keyboard");
+  const compact = Boolean(viewportMode) && ((!webPhone && shortViewport) || phoneLayout === "keyboard");
   const workspaceHeader = phoneLayout ? <div data-baam-phone-heading className="flex min-w-0 items-center gap-1">
     {back}
     <h1 className="truncate text-sm font-semibold text-primary">{t("title")}</h1>
@@ -109,7 +116,7 @@ export default function BaamPage() {
     <h1 className="text-base font-semibold text-foreground">{t("title")}</h1>
     {back}
   </header> : undefined;
-  return <div ref={workspace} className={cn("mx-auto min-w-0 max-w-4xl", viewportMode ? styles.workspace : "space-y-5")} data-testid="baam-page" data-baam-workspace data-baam-short-viewport={compact ? "true" : undefined} tabIndex={-1}>
+  return <div ref={workspace} className={cn("mx-auto min-w-0 max-w-4xl", viewportMode ? styles.workspace : "space-y-5", webPhone && styles.webPhone)} data-testid="baam-page" data-baam-workspace data-baam-short-viewport={compact ? "true" : undefined} tabIndex={-1}>
     {!compact && !phoneLayout ? (
       <PageHeader
         title={t("title")}

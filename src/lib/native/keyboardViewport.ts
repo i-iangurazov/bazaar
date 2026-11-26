@@ -25,6 +25,7 @@ export function nativeAvailableViewport(metrics: ViewportMetrics) {
 const textInputTypes = new Set(["text", "search", "email", "tel", "url", "password", "number"]);
 const focusMargin = 8;
 const minimumKeyboardOverlap = 80;
+const iosBrowserKeyboardAccessory = 44;
 
 function focusedKeyboardField() {
   const focused = document.activeElement;
@@ -34,13 +35,18 @@ function focusedKeyboardField() {
   return focused instanceof HTMLTextAreaElement || focused.isContentEditable ? focused : null;
 }
 
-function revealInScroller(container: Element, field: HTMLElement, top: number, bottom: number) {
+function revealInScroller(container: Element, field: HTMLElement, top: number, bottom: number, action?: HTMLElement | null) {
   const visibleTop = top + focusMargin;
   const visibleBottom = bottom - focusMargin;
   if (visibleBottom <= visibleTop) return;
   const bounds = field.getBoundingClientRect();
+  const actionBounds = action && container.contains(action) && action.getClientRects().length
+    ? action.getBoundingClientRect()
+    : null;
+  const actionBottom = actionBounds && actionBounds.top >= bounds.bottom &&
+    actionBounds.bottom - bounds.top <= visibleBottom - visibleTop ? actionBounds.bottom : bounds.bottom;
   const delta = bounds.top < visibleTop ? bounds.top - visibleTop
-    : bounds.bottom > visibleBottom ? bounds.bottom - visibleBottom : 0;
+    : actionBottom > visibleBottom ? actionBottom - visibleBottom : 0;
   if (delta === 0) return;
   const nextTop = Math.max(0, Math.min(container.scrollHeight - container.clientHeight,
     container.scrollTop + delta));
@@ -50,12 +56,24 @@ function revealInScroller(container: Element, field: HTMLElement, top: number, b
 }
 
 /** Reveal an editable control without moving focus, changing its value, or scrolling a locked page. */
-function revealKeyboardFocus(bottom: number, top: number) {
+function revealKeyboardFocus(bottom: number, top: number, native: boolean) {
   const focused = focusedKeyboardField();
   if (!focused) return;
   const dialog = focused.closest<HTMLElement>('[role="dialog"], [role="alertdialog"]');
   const dialogBounds = dialog?.getBoundingClientRect();
   const page = document.scrollingElement ?? document.documentElement;
+  const form = focused.closest("form");
+  const action = !native && focused.getAttribute("enterkeyhint") !== "next"
+    ? form?.querySelector<HTMLElement>("[data-mobile-keyboard-submit]")
+    : null;
+  if (!native) {
+    const actions = dialog?.querySelector<HTMLElement>("[data-mobile-keyboard-actions]") ??
+      (!dialog ? document.querySelector<HTMLElement>("[data-mobile-keyboard-actions]") : null);
+    if (actions && actions.getClientRects().length) {
+      const bounds = actions.getBoundingClientRect();
+      if (bounds.top > top + 2 * focusMargin && bounds.top < bottom && bounds.bottom > top) bottom = bounds.top;
+    }
+  }
   for (let container = focused.parentElement; container && container !== page &&
     container !== document.body; container = container.parentElement) {
     const isScrollable = /^(auto|scroll)$/.test(getComputedStyle(container).overflowY) &&
@@ -68,13 +86,13 @@ function revealKeyboardFocus(bottom: number, top: number) {
       const visibleBottom = Math.min(bottom, containerBottom);
       // An outer scroller may still need to move the whole pane into view.
       if (visibleBottom - visibleTop > 2 * focusMargin)
-        revealInScroller(container, focused, visibleTop, visibleBottom);
-      else revealInScroller(container, focused, containerTop, containerBottom);
+        revealInScroller(container, focused, visibleTop, visibleBottom, action);
+      else revealInScroller(container, focused, containerTop, containerBottom, action);
     }
     if (container === dialog) break;
   }
   if (!dialog && !document.body.hasAttribute("data-scroll-locked")) {
-    revealInScroller(page, focused, top, bottom);
+    revealInScroller(page, focused, top, bottom, action);
   }
 }
 
@@ -87,13 +105,21 @@ function createKeyboardViewport(root: HTMLElement, native: boolean) {
   let revealOnUpdate = false;
   let active = true;
   const visual = window.visualViewport;
+  // In an iOS browser tab the address pill can float over the reported
+  // VisualViewport above the keyboard. Installed PWAs have no address pill.
+  const hasBrowserKeyboardAccessory = !native && /iPhone|iPad|iPod/.test(navigator.userAgent) &&
+    !(navigator as Navigator & { standalone?: boolean }).standalone &&
+    !window.matchMedia?.("(display-mode: standalone)").matches;
   const keyboardAttribute = "data-mobile-keyboard-open";
   const scrollRoomProperty = "--mobile-keyboard-scroll-room";
+  const bottomInsetProperty = "--mobile-keyboard-bottom-inset";
+  const accessoryProperty = "--mobile-keyboard-browser-chrome";
   const update = () => {
     frame = undefined;
     if (!active) return;
     const focused = focusedKeyboardField();
-    if (width !== window.innerWidth || (keyboardHeight === 0 && !focused)) {
+    const wasEditing = root.hasAttribute(keyboardAttribute);
+    if (width !== window.innerWidth || (keyboardHeight === 0 && !focused && (native || !wasEditing))) {
       closedHeight = window.innerHeight;
       width = window.innerWidth;
     }
@@ -103,12 +129,26 @@ function createKeyboardViewport(root: HTMLElement, native: boolean) {
     const unscaledHeight = visual ? visual.height * (visual.scale || 1) : window.innerHeight;
     const keyboardVisible = keyboardHeight > 0 ||
       Math.min(window.innerHeight, unscaledHeight) < closedHeight - minimumKeyboardOverlap;
-    const editing = Boolean(focused && keyboardVisible);
+    // The viewport may still exclude the keyboard after a field blurs to a button.
+    const editing = keyboardVisible && Boolean(focused || (!native && wasEditing));
+    const accessory = editing && hasBrowserKeyboardAccessory
+      ? Math.min(iosBrowserKeyboardAccessory, (available.bottom - available.top) / 5) : 0;
+    const controlsBottom = available.bottom - accessory;
 
     if (editing) {
-      const overlap = window.innerHeight - (available.bottom - available.top);
+      const overlap = window.innerHeight - (controlsBottom - available.top);
       root.style.setProperty(scrollRoomProperty, `${Math.max(0, overlap)}px`);
-    } else root.style.removeProperty(scrollRoomProperty);
+      if (!native) {
+        root.style.setProperty(bottomInsetProperty, `${Math.max(0, window.innerHeight - controlsBottom)}px`);
+        root.style.setProperty(accessoryProperty, `${accessory}px`);
+      }
+    } else {
+      root.style.removeProperty(scrollRoomProperty);
+      if (!native) {
+        root.style.removeProperty(bottomInsetProperty);
+        root.style.removeProperty(accessoryProperty);
+      }
+    }
     root.toggleAttribute(keyboardAttribute, editing);
     if (native || editing) {
       root.style.setProperty("--native-available-height", `${available.bottom}px`);
@@ -124,7 +164,7 @@ function createKeyboardViewport(root: HTMLElement, native: boolean) {
       // Let the constrained form lay out before revealing its focused control.
       if (editing) focusFrame = requestAnimationFrame(() => {
         focusFrame = undefined;
-        if (active) revealKeyboardFocus(available.bottom, available.top);
+        if (active) revealKeyboardFocus(controlsBottom, available.top, native);
       });
     }
     revealOnUpdate = false;
@@ -163,6 +203,10 @@ function createKeyboardViewport(root: HTMLElement, native: boolean) {
       document.removeEventListener("focusout", scheduleReveal);
       root.removeAttribute(keyboardAttribute);
       root.style.removeProperty(scrollRoomProperty);
+      if (!native) {
+        root.style.removeProperty(bottomInsetProperty);
+        root.style.removeProperty(accessoryProperty);
+      }
       root.style.removeProperty("--native-available-height");
       root.style.removeProperty("--native-viewport-offset-top");
     },

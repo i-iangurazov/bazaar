@@ -1173,7 +1173,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   className="min-w-0 flex-1 px-4 py-4 outline-none sm:px-5 lg:px-6 lg:py-5"
                 >
                   <MobilePageContainer>
-                    <div className="mx-auto max-w-[1500px] 2xl:max-w-[112.5rem]">{children}</div>
+                    <div data-app-page className="mx-auto max-w-[1500px] 2xl:max-w-[112.5rem]">{children}</div>
                   </MobilePageContainer>
                 </main>
               </SidebarInset>

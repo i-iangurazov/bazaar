@@ -348,7 +348,7 @@ const SignupPage = () => {
                     <p className="text-xs font-medium text-danger">{requestFieldErrors.orgName}</p>
                   ) : null}
                 </div>
-                <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
+                <Button type="submit" data-mobile-keyboard-submit className="w-full" disabled={requestMutation.isLoading}>
                   {requestMutation.isLoading ? tCommon("loading") : t("requestAccess")}
                 </Button>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -468,7 +468,7 @@ const SignupPage = () => {
                     </p>
                   ) : null}
                 </div>
-                <Button type="submit" className="w-full" disabled={!hydrated || signupMutation.isLoading}>
+                <Button type="submit" data-mobile-keyboard-submit className="w-full" disabled={!hydrated || signupMutation.isLoading}>
                   {signupMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                   {signupMutation.isLoading ? tCommon("loading") : t("createAccount")}
                 </Button>

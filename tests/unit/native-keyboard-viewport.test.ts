@@ -86,6 +86,8 @@ describe("native keyboard visible viewport", () => {
     viewport = createNativeKeyboardViewport(document.documentElement);
     first.focus(); viewport.show(300); flush();
     expect(form.scrollTop).toBe(168);
+    expect(document.documentElement.style.getPropertyValue("--mobile-keyboard-browser-chrome")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--mobile-keyboard-bottom-inset")).toBe("");
     expect(first.value).toBe("retained");
     second.focus(); flush();
     expect(form.scrollTop).toBe(468);
@@ -145,6 +147,38 @@ describe("native keyboard visible viewport", () => {
     expect(document.activeElement).toBe(field);
   });
 
+  it("reveals the final field and its submit button and retains the inset until the keyboard closes", () => {
+    document.body.innerHTML = '<form><input enterkeyhint="done" value="kept" /><button data-mobile-keyboard-submit>Save</button></form>';
+    const field = document.querySelector("input")!;
+    const button = document.querySelector("button")!;
+    const page = document.documentElement;
+    vi.spyOn(page, "clientHeight", "get").mockReturnValue(844);
+    vi.spyOn(page, "scrollHeight", "get").mockReturnValue(1300);
+    vi.spyOn(field, "getBoundingClientRect").mockImplementation(() => rect(540 - page.scrollTop, 40));
+    vi.spyOn(button, "getBoundingClientRect").mockImplementation(() => rect(600 - page.scrollTop, 44));
+    vi.spyOn(button, "getClientRects").mockReturnValue([rect(600, 44)] as unknown as DOMRectList);
+    viewport = createWebKeyboardViewport(page);
+    field.focus();
+    visual.height = 510;
+    visual.dispatchEvent(new Event("resize"));
+    flush();
+    expect(page.scrollTop).toBe(142);
+    expect(field.value).toBe("kept");
+    expect(document.activeElement).toBe(field);
+    expect(button.getBoundingClientRect().bottom).toBe(502);
+    expect(page.style.getPropertyValue("--mobile-keyboard-bottom-inset")).toBe("334px");
+
+    button.focus();
+    flush();
+    expect(page.hasAttribute("data-mobile-keyboard-open")).toBe(true);
+    visual.height = 844;
+    visual.dispatchEvent(new Event("resize"));
+    flush();
+    expect(page.hasAttribute("data-mobile-keyboard-open")).toBe(false);
+    expect(page.style.getPropertyValue("--mobile-keyboard-bottom-inset")).toBe("");
+    page.scrollTop = 0;
+  });
+
   it("does not treat pinch zoom or a scanner-only field as a software keyboard", () => {
     document.body.innerHTML = '<input id="text" /><input id="scanner" inputmode="none" />';
     const [textInput, scanner] = document.querySelectorAll("input");
@@ -163,5 +197,19 @@ describe("native keyboard visible viewport", () => {
     flush();
     expect(page.hasAttribute("data-mobile-keyboard-open")).toBe(false);
     expect(document.activeElement).toBe(scanner);
+  });
+
+  it.each([false, true])("accounts for the iOS address pill only in a browser tab (installed: %s)", (standalone) => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPhone)");
+    vi.stubGlobal("matchMedia", () => ({ matches: standalone }));
+    document.body.innerHTML = "<input />";
+    const root = document.documentElement;
+    viewport = createWebKeyboardViewport(root);
+    document.querySelector("input")!.focus();
+    visual.height = 500;
+    visual.dispatchEvent(new Event("resize"));
+    flush();
+    expect(root.style.getPropertyValue("--mobile-keyboard-browser-chrome")).toBe(standalone ? "0px" : "44px");
+    expect(root.style.getPropertyValue("--mobile-keyboard-bottom-inset")).toBe(standalone ? "344px" : "388px");
   });
 });
