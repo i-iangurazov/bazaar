@@ -18,6 +18,7 @@ import {
   marketingLocaleHeader,
 } from "./lib/marketingSeo";
 import { marketingSolutionPath, parseMarketingSolutionPath } from "./lib/marketingSolutions";
+import { hasLegacySiteSessionCookie, publicSiteRedirect } from "./lib/publicSiteRedirect";
 import {
   acquisitionCookieName,
   acquisitionFromSearch,
@@ -69,7 +70,7 @@ const resolveLocale = (request: NextRequest): Locale => {
   return headerLocale ?? defaultLocale;
 };
 
-export const middleware = async (request: NextRequest) => {
+const routeRequest = async (request: NextRequest) => {
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   const { pathname } = request.nextUrl;
   // A page-level notFound can be streamed with HTTP 200 by the App Router.
@@ -202,6 +203,25 @@ export const middleware = async (request: NextRequest) => {
     response.cookies.set("NEXT_LOCALE", resolvedLocale, localeCookieOptions);
   }
   response.headers.set("x-request-id", requestId);
+  return response;
+};
+
+export const middleware = async (request: NextRequest) => {
+  const destination = publicSiteRedirect(request);
+  if (!destination) return routeRequest(request);
+
+  // Keep session revalidation and the existing signed-in home/dashboard flow
+  // on the original host. A cookie here never grants access to an app route.
+  const response = hasLegacySiteSessionCookie(request)
+    ? await routeRequest(request)
+    : NextResponse.redirect(destination, 308);
+  if (!response.headers.has("x-request-id")) {
+    response.headers.set("x-request-id", request.headers.get("x-request-id") ?? crypto.randomUUID());
+  }
+  // Neither side of this cookie-dependent decision may enter a shared cache
+  // or leave a permanent browser redirect that later moves a signed-in user.
+  response.headers.set("cache-control", "private, no-store");
+  response.headers.append("vary", "Cookie");
   return response;
 };
 
