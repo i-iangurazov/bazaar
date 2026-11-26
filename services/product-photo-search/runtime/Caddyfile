@@ -1,0 +1,16 @@
+{
+  admin off
+  auto_https off
+}
+
+:{$PORT:10000} {
+  header -Server
+  header X-Content-Type-Options nosniff
+  reverse_proxy 127.0.0.1:3150 {
+    transport http {
+      dial_timeout 3s
+      response_header_timeout 25s
+      max_conns_per_host 32
+    }
+  }
+}
