@@ -96,6 +96,8 @@ export type ApplyStockMovementInput = {
   movementDate?: Date | null;
   expiryDate?: Date | null;
   stockLotId?: string | null;
+  /** An edit removes a line already posted on both sides of this transfer. */
+  removesPostedTransferLine?: boolean;
   /** Absolute inline correction: validate the resulting balance, including legacy fractions. */
   correctionTargetOnHand?: number;
 };
@@ -106,10 +108,11 @@ export const applyStockMovement = async (
   tx: Prisma.TransactionClient,
   input: ApplyStockMovementInput,
 ): Promise<{ snapshot: InventorySnapshot; movementId: string }> => {
-  const isTransferCancellation =
+  const isTransferReversal =
     input.referenceType === "TRANSFER" &&
-    input.linePosition === transferCancellationLinePosition &&
-    (input.type === StockMovementType.TRANSFER_OUT || input.type === StockMovementType.TRANSFER_IN);
+    (input.linePosition === transferCancellationLinePosition || input.removesPostedTransferLine === true) &&
+    ((input.type === StockMovementType.TRANSFER_OUT && input.qtyDelta > 0) ||
+      (input.type === StockMovementType.TRANSFER_IN && input.qtyDelta < 0));
   if (!isValidQuantity(input.qtyDelta)) {
     throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
   }
@@ -128,7 +131,7 @@ export const applyStockMovement = async (
     FOR SHARE
   `;
   const product = await tx.product.findUnique({ where: { id: input.productId }, include: { baseUnit: true } });
-  if (!product || (product.isDeleted && !isTransferCancellation)) {
+  if (!product || (product.isDeleted && !isTransferReversal)) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
   if (product.organizationId !== store.organizationId ||
@@ -142,7 +145,7 @@ export const applyStockMovement = async (
   if (!isValidQuantity(absoluteCorrection ? input.correctionTargetOnHand! : input.qtyDelta,
     product.baseUnit.quantityPrecision))
     throw new AppError("wholeQuantityRequired", "BAD_REQUEST", 400);
-  if (!isTransferCancellation) {
+  if (!isTransferReversal) {
     await assignProductToStore(tx, {
       organizationId: input.organizationId ?? store.organizationId,
       storeId: input.storeId,
@@ -159,7 +162,7 @@ export const applyStockMovement = async (
     if (
       !variant ||
       variant.productId !== input.productId ||
-      (!variant.isActive && !isTransferCancellation)
+      (!variant.isActive && !isTransferReversal)
     ) {
       throw new AppError("variantNotFound", "NOT_FOUND", 404);
     }
@@ -2162,6 +2165,8 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           if (!destinationStoreId || !oldDestinationStoreId) {
             throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
           }
+          // Undo the historical legs even if the removed item was archived later.
+          const removesPostedTransferLine = Boolean(beforeLine && !desiredLine);
           if (sourceStoreId !== oldSourceStoreId || destinationStoreId !== oldDestinationStoreId) {
             if (oldQuantity !== 0) {
               const reversedOut = await applyStockMovement(tx, {
@@ -2174,6 +2179,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition,
+                removesPostedTransferLine,
                 unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
                 lineTotalKgs: -oldLineTotal,
                 note: reason,
@@ -2191,6 +2197,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition,
+                removesPostedTransferLine,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2269,6 +2276,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
               referenceType: input.referenceType,
               referenceId: input.referenceId,
               linePosition: transferLinePosition,
+              removesPostedTransferLine,
               unitCostKgs,
               lineTotalKgs: lineTotalDelta,
               note: reason,
@@ -2296,6 +2304,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition: transferLinePosition,
+                removesPostedTransferLine,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,

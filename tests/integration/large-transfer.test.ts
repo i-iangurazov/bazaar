@@ -226,4 +226,155 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
       await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS test_slow_transfer_edit()");
     }
   }, 30_000);
+
+  it.each(["same destination", "corrected destination"])(
+    "removes unavailable historical lines while saving the active transfer lines with the %s",
+    async (destinationMode) => {
+      const f = await seedBase({ plan: "ENTERPRISE" });
+      const originalDestination = await prisma.store.create({
+        data: { organizationId: f.org.id, name: "Original destination", code: "ORIGINAL" },
+      });
+      const destination =
+        destinationMode === "same destination"
+          ? originalDestination
+          : await prisma.store.create({
+              data: { organizationId: f.org.id, name: "Corrected destination", code: "CORRECTED" },
+            });
+      const productData = {
+        organizationId: f.org.id,
+        unit: f.baseUnit.code,
+        baseUnitId: f.baseUnit.id,
+      };
+      const archived = await prisma.product.create({
+        data: { ...productData, name: "Archived transfer item", sku: "ARCHIVED-TRANSFER" },
+      });
+      const variant = await prisma.productVariant.create({
+        data: {
+          name: "Unavailable size",
+          attributes: {},
+          product: {
+            create: { ...productData, name: "Transfer item with size", sku: "TRANSFER-SIZE" },
+          },
+        },
+      });
+      const archivedLine = { productId: archived.id, variantId: null, qty: 3 };
+      const inactiveLine = { productId: variant.productId, variantId: variant.id, qty: 4 };
+      const originalLines = [
+        { productId: f.product.id, variantId: null, qty: 5 },
+        archivedLine,
+        inactiveLine,
+      ];
+      await prisma.storeProduct.createMany({
+        data: [archived.id, variant.productId].map((productId) => ({
+          organizationId: f.org.id,
+          storeId: f.store.id,
+          productId,
+        })),
+      });
+      await prisma.inventorySnapshot.createMany({
+        data: originalLines.map(({ productId, variantId }) => ({
+          storeId: f.store.id,
+          productId,
+          variantId,
+          variantKey: variantId ?? "BASE",
+          onHand: 100,
+        })),
+      });
+
+      const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+      const transfer = await caller.inventory.transfer({
+        fromStoreId: f.store.id,
+        toStoreId: originalDestination.id,
+        lines: originalLines,
+        idempotencyKey: randomUUID(),
+      });
+      const documentKey = `TRANSFER:TRANSFER:${transfer.transferId}`;
+      await caller.products.archive({ productId: archived.id });
+      await prisma.productVariant.update({
+        where: { id: variant.id },
+        data: { isActive: false },
+      });
+      await prisma.storeProduct.updateMany({
+        where: { organizationId: f.org.id, productId: archived.id },
+        data: { isActive: false },
+      });
+
+      const edit = {
+        documentKey,
+        destinationStoreId: destination.id,
+        lines: [{ productId: f.product.id, quantity: 7, unitCostKgs: 2.5 }],
+        idempotencyKey: randomUUID(),
+      };
+      await expect(caller.inventory.editProductMovementDocument({
+        ...edit,
+        lines: [...edit.lines, { productId: archived.id, quantity: archivedLine.qty + 1, unitCostKgs: 0 }],
+        idempotencyKey: randomUUID(),
+      })).rejects.toMatchObject({ code: "FORBIDDEN", message: "invalidProducts" });
+      await expect(caller.inventory.editProductMovementDocument(edit)).resolves.toMatchObject({
+        lineCount: 1,
+        totalQuantity: 7,
+        totalAmountKgs: 17.5,
+      });
+      const count = () => prisma.stockMovement.count({ where: { referenceId: transfer.transferId } });
+      const movementCount = await count();
+      await expect(caller.inventory.editProductMovementDocument(edit)).resolves.toMatchObject({
+        lineCount: 1,
+        totalQuantity: 7,
+      });
+      expect(await count()).toBe(movementCount);
+
+      const snapshots = await prisma.inventorySnapshot.findMany({
+        where: { productId: { in: originalLines.map((line) => line.productId) } },
+      });
+      const onHand = (storeId: string, line: { productId: string; variantId: string | null }) =>
+        snapshots.find(
+          (snapshot) =>
+            snapshot.storeId === storeId &&
+            snapshot.productId === line.productId &&
+            snapshot.variantId === line.variantId,
+        )?.onHand ?? 0;
+      const activeLine = originalLines[0]!;
+      expect(onHand(f.store.id, activeLine)).toBe(93);
+      expect(onHand(destination.id, activeLine)).toBe(7);
+      if (destination.id !== originalDestination.id) {
+        expect(onHand(originalDestination.id, activeLine)).toBe(0);
+      }
+      for (const historicalLine of [archivedLine, inactiveLine]) {
+        const movements = await prisma.stockMovement.findMany({
+          where: {
+            referenceId: transfer.transferId,
+            productId: historicalLine.productId,
+            variantId: historicalLine.variantId,
+          },
+        });
+        expect(movements).toHaveLength(4);
+        expect(movements).toEqual(expect.arrayContaining([
+          expect.objectContaining({ type: "TRANSFER_OUT", storeId: f.store.id, qtyDelta: historicalLine.qty }),
+          expect.objectContaining({ type: "TRANSFER_IN", storeId: originalDestination.id, qtyDelta: -historicalLine.qty }),
+        ]));
+        expect(onHand(f.store.id, historicalLine)).toBe(100);
+        expect(onHand(originalDestination.id, historicalLine)).toBe(0);
+        expect(onHand(destination.id, historicalLine)).toBe(0);
+      }
+      expect(await prisma.storeProduct.count({
+        where: { organizationId: f.org.id, productId: archived.id, isActive: true },
+      })).toBe(0);
+      expect(await prisma.product.findUnique({ where: { id: archived.id } })).toMatchObject({
+        isDeleted: true,
+      });
+      expect(await prisma.productVariant.findUnique({ where: { id: variant.id } })).toMatchObject({
+        isActive: false,
+      });
+      // The print route reads the same movement document as the detail page.
+      const document = await caller.inventory.productMovementDocument({ documentKey });
+      expect(document).toMatchObject({
+        positionsCount: 1,
+        totalQuantity: 7,
+        totalAmount: 17.5,
+        sourceStoreId: f.store.id,
+        destinationStoreId: destination.id,
+        lines: [{ productId: f.product.id }],
+      });
+    },
+  );
 });
