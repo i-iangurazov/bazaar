@@ -9737,6 +9737,7 @@
     "remove": "Remove photo",
     "preparing": "Preparing product photos: {ready} of {total}",
     "searching": "Finding similar products…",
+    "backgroundPreparation": "Product photos are being prepared in the background. Try finding similar products again in a moment.",
     "preparingHelp": "You can cancel the first preparation; store photo processing will continue.",
     "search": "Find similar",
     "useReady": "Search ready photos",

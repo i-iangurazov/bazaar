@@ -5,6 +5,8 @@ export const productPhotoSearchMinScore = 0.68;
 export const productPhotoSearchMaxBytes = 3 * 1024 * 1024;
 // Technical prototype bounds, identical on every plan.
 export const productPhotoSearchMaxImages = 10_000;
+export const productPhotoSearchStreamMaxImages = 65_536;
+export const productPhotoSearchGalleryProtocol = "packed-f32-v1";
 
 export type ProductPhotoRegion = { x: number; y: number; width: number; height: number };
 export function validProductPhotoRegion(value: unknown): value is ProductPhotoRegion {
