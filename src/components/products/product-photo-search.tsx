@@ -93,7 +93,6 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
   const upload = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
   const epoch = useRef(0);
-  const useReady = useRef(false);
   const currentStore = stores.find((store) => store.id === selectedStore);
   const canSearch = !!file && !!selectedStore && !busy && status !== "unconfigured";
   const cancel = () => { epoch.current += 1; controller.current?.abort(); setBusy(false); setPhase(null); };
@@ -140,7 +139,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
     if (!value) return;
     setFile(value); setResult(null); setSelectedId(null); setError(null); setManualRegion(null); setAutomaticRegion(true); setEditingRegion(false);
   };
-  const search = async (retryFailed = false, partial = false) => {
+  const search = async (retryFailed = false) => {
     if (!canSearch || !file) return;
     cancel();
     if (status === "loading") setStatus(null);
@@ -148,39 +147,31 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
     controller.current = active;
     const sequence = epoch.current;
     const valid = () => !active.signal.aborted && sequence === epoch.current;
-    useReady.current = partial;
     setBusy(true); setPhase("photo"); setError(null); setResult(null); setSelectedId(null);
     try {
       const prepared = await prepareManagedProductImageForUpload({ file, maxImageBytes: productPhotoSearchMaxBytes,
         maxInputImageBytes: 32 * 1024 * 1024, serverConversionMaxBytes: productPhotoSearchMaxBytes });
       if (!prepared.ok) throw new Error(prepared.code);
       if (!valid()) return;
-      const deadline = Date.now() + 180_000;
-      let prepare = retryFailed || (!partial && (progress?.pending ?? 0) > 0);
+      let prepare = retryFailed;
       for (let changed = 0; changed < 3; changed += 1) {
         if (prepare) {
           setPhase("catalog");
-          let first = true;
-          while (valid()) {
-            const body = await requestJson("/api/products/photo-search/prepare", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ storeId: selectedStore, retryFailed: retryFailed && first }),
-            }, active.signal);
-            if (!valid()) return;
-            first = false;
-            setProgress(body.progress);
-            if (!body.progress.pending || (useReady.current && body.progress.ready > 0)) break;
-            if (Date.now() > deadline) throw new Error("photoSearchPreparingLong");
-            await pause(active.signal);
-          }
+          const body = await requestJson("/api/products/photo-search/prepare", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ storeId: selectedStore, retryFailed: retryFailed && changed === 0 }),
+          }, active.signal);
+          if (!valid()) return;
+          setProgress(body.progress);
+          if (body.progress.pending > 0 && body.progress.ready === 0) return;
         }
-        prepare = true; // A changed catalog gets the normal preparation and retry on the next pass.
+        prepare = true;
         if (!valid()) return;
         setPhase("search");
         const form = new FormData();
         form.append("file", prepared.file);
         form.append("storeId", selectedStore);
-        form.append("allowPartial", useReady.current ? "1" : "0");
+        form.append("allowPartial", "1");
         if (manualRegion) form.append("region", JSON.stringify(manualRegion));
         if (!automaticRegion) form.append("autoRegion", "0");
         let body: ProductPhotoSearchResult | undefined;
@@ -208,10 +199,9 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
   };
   const errorText = error ? errors.has(error) ? errors(error) : errors("genericMessage") : null;
 
-  const stageText = phase === "photo" ? t("readingPhoto") :
-    phase === "catalog" && progress?.pending ? t("preparing", { ready: progress.ready, total: progress.total }) : t("searching");
-  const processed = progress ? progress.ready + progress.failed : 0;
-  const hasProgress = busy && phase === "catalog" && progress && progress.total > 0 && progress.pending > 0;
+  const stageText = phase === "photo" ? t("readingPhoto") : t("searching");
+  const waitingForPhotos = file && !busy && !result && !error &&
+    status !== "unconfigured" && progress?.ready === 0 && progress.pending > 0;
   const shownRegion = manualRegion ?? result?.recognition?.region ?? null;
 
   return <>
@@ -299,8 +289,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
               {busy ? t("searchingShort") : t("search")}
             </Button>
             {busy ? <Button type="button" variant="outline" className="h-11 w-full" onClick={cancel}>{common("cancel")}</Button> : null}
-            {progress && progress.pending > 0 && progress.ready > 0 ? <Button type="button" variant="outline" className="h-auto min-h-11 w-full whitespace-normal"
-              onClick={() => { if (busy) useReady.current = true; else void search(false, true); }}>{t("useReady")}</Button> : null}
+
           </div>
           {progress?.withoutPhoto ? <p className="text-xs leading-relaxed text-muted-foreground">{t("withoutPhoto", { count: progress.withoutPhoto })}</p> : null}
         </section> : null}
@@ -325,17 +314,14 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
             <Button type="button" variant="secondary" className="mt-2" onClick={() => canSearch ? void search(error === "photoSearchImagesFailed") : setReload((value) => value + 1)}>{common("tryAgain")}</Button>
           </Alert> : null}
 
+          {waitingForPhotos ? <Alert variant="warning" role="status">
+            <p>{t("backgroundPreparation")}</p>
+          </Alert> : null}
+
           {busy ? <div className={styles.enter + " space-y-4"}>
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-4" role="status" aria-live="polite">
               <p className="flex items-center gap-2 text-sm font-medium"><Spinner className="h-4 w-4 text-primary motion-reduce:animate-none" />{stageText}</p>
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{t("preparingHelp")}</p>
-              {hasProgress ? <div className="mt-3 space-y-1.5">
-                <div role="progressbar" aria-label={t("catalogProgress")} aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={processed}
-                  className="h-1.5 overflow-hidden rounded-full bg-primary/10">
-                  <div className="h-full rounded-full bg-primary transition-[width] duration-200 motion-reduce:transition-none" style={{ width: (processed / progress.total * 100) + "%" }} />
-                </div>
-                <p className="text-xs text-muted-foreground">{t("progressDetail", { ready: progress.ready, failed: progress.failed, total: progress.total })}</p>
-              </div> : null}
+
             </div>
             <div className="grid grid-cols-2 gap-3" aria-hidden>
               {[0, 1, 2, 3].map((number) => <div key={number} className="space-y-3 rounded-xl border border-border p-3">
@@ -405,7 +391,7 @@ function Workspace({ storeId, stores, disabled, selectionMode = "card", iconOnly
             </div>}
           </div> : null}
 
-          {!result && !busy && !error && status !== "unconfigured" ? <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-6 py-8 text-center md:min-h-80">
+          {!result && !busy && !error && !waitingForPhotos && status !== "unconfigured" ? <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-6 py-8 text-center md:min-h-80">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary"><ScanLine className="h-6 w-6 text-muted-foreground" aria-hidden /></div>
             <p className="max-w-xs text-sm font-medium">{t("readyToSearch")}</p>
             <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">{t("resultsHelp")}</p>

@@ -63,6 +63,6 @@ export async function POST(request: Request) {
     if (currentUser.id !== user.id || currentUser.organizationId !== user.organizationId)
       throw new AppError("forbidden", "FORBIDDEN", 403);
     return photoJson(result.prepared ? await presentPreparedPhotoCandidates(currentUser, storeId, result.prepared)
-      : await presentPhotoCandidates(currentUser, storeId, result.candidates, allowPartial, result.analysis));
+      : await presentPhotoCandidates(currentUser, storeId, result.candidates, allowPartial, result.progress, result.analysis));
   } catch (error) { return photoFailure(error); }
 }

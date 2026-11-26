@@ -239,12 +239,14 @@ suite("internal photo search: isolated PostgreSQL, Redis and authentication", ()
     });
     expect((await query(await cookie(f.staffUser))).status).toBe(403);
   });
-  it("does not use stale photos and requires explicit partial results", async () => {
+  it("keeps stale photos out and reports preparation when no photo is ready", async () => {
     await ready();
     await prisma.product.update({ where: { id: f.product.id }, data: { photoUrl: "/uploads/replacement.jpg" } });
     expect((await query(await cookie())).status).toBe(409);
     expect(transport).not.toHaveBeenCalled();
-    expect(await (await query(await cookie(), { partial: true })).json()).toMatchObject({ items: [], partial: true, progress: { pending: 1, ready: 0 } });
+    const partial = await query(await cookie(), { partial: true });
+    expect(partial.status).toBe(409);
+    expect(await partial.json()).toMatchObject({ message: "photoSearchPreparing" });
     expect(transport).not.toHaveBeenCalled();
     const [a,b] = await Promise.all([preparePhotoSearch({ ...f.adminUser, organizationId: f.org.id }, f.store.id, false), preparePhotoSearch({ ...f.adminUser, organizationId: f.org.id }, f.store.id, false)]);
     expect(a.total).toBe(1); expect(b.total).toBe(1); expect(await prisma.productPhotoFeature.count()).toBe(2);

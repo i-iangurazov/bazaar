@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { productPhotoSearchMaxBytes, productPhotoSearchMinScore, productPhotoSearchModel,
-  type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion } from "@/lib/productPhotoSearch";
+  type ProductPhotoSearchResult, type ProductPhotoAnalysis, type ProductPhotoRegion, type ProductPhotoProgress } from "@/lib/productPhotoSearch";
 import { AppError } from "./errors";
 import { prepareProductStudioSource } from "./productImageSourceUpload";
 import { checkPreparedPhotoIndex, photoSearchConfigured, photoSearchIndexEnabled, photoSearchStreamingEnabled, photoSearchVectorPage,
@@ -95,14 +95,14 @@ export async function findPhotoCandidates(input: PhotoQueryInput) {
     if (prepared && prepared.index.revision === revision) return { prepared };
   }
   const scope = await loadPhotoSearchScope(input.user, input.storeId);
-  if (scope.progress.pending && !input.allowPartial) throw new AppError("photoSearchPreparing", "CONFLICT", 409);
+  if (scope.progress.pending && (!input.allowPartial || !scope.progress.ready)) throw new AppError("photoSearchPreparing", "CONFLICT", 409);
   if (!scope.progress.ready && scope.progress.failed) throw new AppError("photoSearchImagesFailed", "INTERNAL_SERVER_ERROR", 503);
   const current = new Map(scope.sources.map((source) => [source.sourceKey, source]));
   const features = scope.features.filter((feature) => feature.status === "READY");
   const { jpeg, options } = query ?? await photoQuery(input);
   if (photoSearchStreamingEnabled()) {
     const { matches, analysis } = await queryProductPhotoStream(jpeg, features.length, readyVectorPages(input, features), input.signal, options);
-    return { candidates: matches.filter((match) => match.score >= productPhotoSearchMinScore).map((match) => features[match.index]), analysis };
+    return { candidates: matches.filter((match) => match.score >= productPhotoSearchMinScore).map((match) => features[match.index]), progress: scope.progress, analysis };
   }
   const rows = features.length ? await prisma.productPhotoFeature.findMany({ where: {
     organizationId: input.user.organizationId, id: { in: features.map((feature) => feature.id) }, status: "READY",
@@ -110,14 +110,14 @@ export async function findPhotoCandidates(input: PhotoQueryInput) {
   const scopedRows = rows.filter((row) => current.get(row.sourceKey)?.productId === row.productId);
   const { matches, analysis } = await queryProductPhoto(jpeg, scopedRows, input.signal, options);
   // Experimental laboratory calibration. This ranks candidates, never proves SKU identity.
-  return { candidates: matches.filter((match) => match.score >= productPhotoSearchMinScore).map((match) => scopedRows[match.index]), analysis };
+  return { candidates: matches.filter((match) => match.score >= productPhotoSearchMinScore).map((match) => scopedRows[match.index]), progress: scope.progress, analysis };
 }
 
 /** Called after revalidating the session again, after inference. No stale prices or grants. */
-export async function presentPhotoCandidates(user: StoreAccessUser, storeId: string, candidates: { productId: string; sourceKey: string }[], allowPartial: boolean, analysis?: ProductPhotoAnalysis): Promise<ProductPhotoSearchResult> {
+export async function presentPhotoCandidates(user: StoreAccessUser, storeId: string, candidates: { productId: string; sourceKey: string }[], allowPartial: boolean, progress: ProductPhotoProgress, analysis?: ProductPhotoAnalysis): Promise<ProductPhotoSearchResult> {
   const scope = await loadPhotoSearchScope(user, storeId);
-  if (scope.progress.pending && !allowPartial) throw new AppError("photoSearchPreparing", "CONFLICT", 409);
-  return presentPhotoItems(prisma, user, storeId, scope, candidates, (productId) => {
+  if (scope.progress.pending && (!allowPartial || !scope.progress.ready)) throw new AppError("photoSearchPreparing", "CONFLICT", 409);
+  return presentPhotoItems(prisma, user, storeId, { ...scope, progress }, candidates, (productId) => {
     const ready = new Set(scope.features.filter((feature) => feature.status === "READY").map((feature) => feature.sourceKey));
     return scope.sources.find((source) => source.productId === productId && ready.has(source.sourceKey));
   }, analysis);

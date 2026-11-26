@@ -155,17 +155,36 @@ it("shows distinct lookalike SKUs and requires choosing the intended candidate",
   expect(boundary.push).toHaveBeenCalledWith(expect.stringContaining("/products/p2?storeId=s1"));
 });
 
-it("reports real catalog progress only, and cancel removes loading feedback", async () => {
+it("searches ready photos immediately while other photos are pending", async () => {
   const pending = { ...progress, total: 10, ready: 3, failed: 1, pending: 6 };
-  vi.mocked(fetch).mockImplementation(async (url, init) => {
-    if (!init?.method) return Response.json({ configured: true });
-    return String(url).endsWith("/prepare") ? Response.json({ progress: pending })
-      : Response.json({ message: "photoSearchPreparing" }, { status: 409 });
-  });
-  const view = render(screen()); await select(view); fireEvent.click(view.getByRole("button", { name: "Find similar" }));
-  const bar = await view.findByRole("progressbar"); expect(bar.getAttribute("aria-valuenow")).toBe("4"); expect(bar.getAttribute("aria-valuemax")).toBe("10");
-  fireEvent.click(view.getByRole("button", { name: "Cancel" }));
-  expect(view.queryByRole("progressbar")).toBeNull(); expect(view.queryByText(messages.productPhotoSearch.searching)).toBeNull();
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ configured: true, progress: pending }))
+    .mockResolvedValueOnce(Response.json({ ...result, progress: pending, partial: true }));
+  const view = render(screen()); await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup");
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+  const [url, request] = vi.mocked(fetch).mock.calls[1];
+  expect(url).toBe("/api/products/photo-search");
+  expect((request?.body as FormData).get("allowPartial")).toBe("1");
+  expect(view.getByText("Searched a subset of photos: 3 of 10. Failed to process: 1.")).toBeTruthy();
+});
+
+it("queues a new catalog once and releases the form while photos prepare in the background", async () => {
+  const pending = { ...progress, ready: 0, pending: 1 };
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(Response.json({ configured: true }))
+    .mockResolvedValueOnce(Response.json({ message: "photoSearchPreparing" }, { status: 409 }))
+    .mockResolvedValueOnce(Response.json({ progress: pending }))
+    .mockResolvedValueOnce(Response.json(result));
+  const view = render(screen()); await select(view);
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText(messages.productPhotoSearch.backgroundPreparation);
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+  expect(view.queryByRole("progressbar")).toBeNull();
+  expect(view.getByText("cup.jpg")).toBeTruthy();
+  fireEvent.click(view.getByRole("button", { name: "Find similar" }));
+  await view.findByText("Red cup");
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(4);
 });
 
 it("keeps incomplete results explicit and does not manufacture a confidence percentage", async () => {
