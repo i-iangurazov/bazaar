@@ -54,8 +54,8 @@ export async function verifyImportConnections(
   }[];
   await api("products.archive", { productId: products[1].id }, true);
   const csv = [
-    "SKU,Название,Ед. измерения,Цена продажи,Себестоимость,Минимальный остаток,Остаток",
-    ...products.map((product) => `${product.sku},Название из файла,${unit.code},225,1,7,5`),
+    "SKU,Название,Ед. измерения,Цена продажи,Себестоимость,Остаток",
+    ...products.map((product) => `${product.sku},Название из файла,${unit.code},225,1,5`),
   ].join("\n");
   const checks: string[] = [];
   for (const width of [1440, 390, 320]) {
@@ -144,10 +144,13 @@ export async function verifyImportConnections(
       search: `CONNECT-${nonce}`,
       pageSize: 200,
     })) as {
-      items: { product: { id: string }; snapshot: { onHand: number } }[];
+      items: { product: { id: string }; snapshot: { onHand: number }; minStock: number }[];
     };
     assert.equal(inventory.items.length, 59);
-    for (const item of inventory.items) assert.equal(item.snapshot.onHand, quantity);
+    for (const item of inventory.items) {
+      assert.equal(item.snapshot.onHand, quantity);
+      assert.equal(item.minStock, 0, "The quantity column must not set a minimum stock policy");
+    }
   }
   checks.push(
     "Import: preview retry recovers; 59 existing cards connect in one action without duplicates or source-stock changes",

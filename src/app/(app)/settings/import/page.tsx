@@ -541,9 +541,9 @@ const detectColumn = (
   }
   const containsMatch = headers.find((header) => {
     const normalized = normalizeHeader(header);
-    return normalizedCandidates.some(
-      (candidate) => normalized.includes(candidate) || candidate.includes(normalized),
-    );
+    // A short header such as "Остаток" or "Цена" must not match a more
+    // specific field such as minimum stock or purchase price.
+    return normalizedCandidates.some((candidate) => normalized.includes(candidate));
   });
   return containsMatch ?? "";
 };
