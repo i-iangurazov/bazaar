@@ -99,6 +99,8 @@ export type ApplyStockMovementInput = {
   stockLotId?: string | null;
   /** An edit removes a line already posted on both sides of this transfer. */
   removesPostedTransferLine?: boolean;
+  /** Stock restored by cancelling part of an already-posted sale line. */
+  restoresPostedSaleStock?: boolean;
   /** Absolute inline correction: validate the resulting balance, including legacy fractions. */
   correctionTargetOnHand?: number;
 };
@@ -114,6 +116,9 @@ export const applyStockMovement = async (
     (input.linePosition === transferCancellationLinePosition || input.removesPostedTransferLine === true) &&
     ((input.type === StockMovementType.TRANSFER_OUT && input.qtyDelta > 0) ||
       (input.type === StockMovementType.TRANSFER_IN && input.qtyDelta < 0));
+  const isStockRestoration = isTransferReversal ||
+    (input.restoresPostedSaleStock === true && input.referenceType === "CustomerOrder" &&
+      input.type === StockMovementType.SALE && input.qtyDelta > 0);
   if (!isValidQuantity(input.qtyDelta)) {
     throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
   }
@@ -132,7 +137,7 @@ export const applyStockMovement = async (
     FOR SHARE
   `;
   const product = await tx.product.findUnique({ where: { id: input.productId }, include: { baseUnit: true } });
-  if (!product || (product.isDeleted && !isTransferReversal)) {
+  if (!product || (product.isDeleted && !isStockRestoration)) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
   if (product.organizationId !== store.organizationId ||
@@ -146,7 +151,7 @@ export const applyStockMovement = async (
   if (!isValidQuantity(absoluteCorrection ? input.correctionTargetOnHand! : input.qtyDelta,
     product.baseUnit.quantityPrecision))
     throw new AppError("wholeQuantityRequired", "BAD_REQUEST", 400);
-  if (!isTransferReversal) {
+  if (!isStockRestoration) {
     await assignProductToStore(tx, {
       organizationId: input.organizationId ?? store.organizationId,
       storeId: input.storeId,
@@ -163,7 +168,7 @@ export const applyStockMovement = async (
     if (
       !variant ||
       variant.productId !== input.productId ||
-      (!variant.isActive && !isTransferReversal)
+      (!variant.isActive && !isStockRestoration)
     ) {
       throw new AppError("variantNotFound", "NOT_FOUND", 404);
     }

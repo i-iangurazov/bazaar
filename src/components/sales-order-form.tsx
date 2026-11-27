@@ -96,7 +96,7 @@ export const SalesOrderForm = ({
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const userId = session?.user?.id;
   const organizationId = session?.user?.organizationId;
   const owner = useMemo(
@@ -120,6 +120,13 @@ export const SalesOrderForm = ({
     { customerOrderId: orderId ?? "" },
     { enabled: isEdit, retry: false },
   );
+  const isCompletedEdit = isEdit && orderQuery.data?.status === CustomerOrderStatus.COMPLETED;
+  const paymentInfoQuery = trpc.salesOrders.paymentInfo.useQuery(
+    { customerOrderId: orderId ?? "" },
+    { enabled: isCompletedEdit && canPostSale, retry: false },
+  );
+  const canAmendCompleted = isCompletedEdit && canPostSale &&
+    !paymentInfoQuery.isError && paymentInfoQuery.data?.canAppendUnpaidLine === true;
   const [priceMode, setPriceMode] = useState<"RETAIL" | "WHOLESALE">("RETAIL");
   const [expectedUpdatedAt, setExpectedUpdatedAt] = useState<string | null>(null);
   const [orderLoaded, setOrderLoaded] = useState(false);
@@ -597,12 +604,13 @@ export const SalesOrderForm = ({
       await Promise.all([
         utils.salesOrders.list.invalidate(),
         utils.salesOrders.getById.invalidate({ customerOrderId: order.id }),
+        ...(isCompletedEdit ? [utils.salesOrders.paymentInfo.invalidate({ customerOrderId: order.id })] : []),
       ]);
       toast({ variant: "success", description: t("workspace.updateSuccess") });
       router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
     },
     onError: (error) => {
-      const stale = error.message.includes("salesOrderStale");
+      const stale = error.message.includes("salesOrderStale") || error.message.includes("salesOrderAmendmentStale");
       if (stale) setStaleConflict(true);
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -1010,6 +1018,7 @@ export const SalesOrderForm = ({
   const handleUpdate = async () => {
     if (!isEdit || !orderId || !expectedUpdatedAt) return;
     if (submissionRef.current || isSaving) return;
+    if (isCompletedEdit && (!canAmendCompleted || !draftLines.length)) return;
     if (!storeId) {
       toast({ variant: "error", description: t("storeRequired") });
       return;
@@ -1051,6 +1060,7 @@ export const SalesOrderForm = ({
     const payload = {
       customerOrderId: orderId,
       expectedUpdatedAt,
+      ...(isCompletedEdit ? { amendCompleted: true as const } : {}),
       storeId,
       priceMode,
       customerId: selectedCustomer?.id ?? null,
@@ -1147,16 +1157,39 @@ export const SalesOrderForm = ({
       <QueryErrorState error={orderQuery.error} onRetry={() => void orderQuery.refetch()} />
     );
   }
+  if (isCompletedEdit && (sessionStatus === "loading" || (canPostSale && paymentInfoQuery.isLoading))) {
+    return (
+      <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground" role="status">
+        <Spinner className="h-4 w-4" />
+        {tCommon("loading")}
+      </div>
+    );
+  }
+  if (isCompletedEdit && paymentInfoQuery.error) {
+    return (
+      <QueryErrorState error={paymentInfoQuery.error} onRetry={() => void paymentInfoQuery.refetch()} />
+    );
+  }
   if (
     isEdit &&
     orderQuery.data &&
     orderQuery.data.status !== CustomerOrderStatus.DRAFT &&
-    orderQuery.data.status !== CustomerOrderStatus.CONFIRMED
+    orderQuery.data.status !== CustomerOrderStatus.CONFIRMED &&
+    !canAmendCompleted
   ) {
     return (
-      <p role="alert" className="mt-4 rounded-md border border-danger/30 p-4 text-sm text-danger">
-        {t("workspace.notEditable")}
-      </p>
+      <div className="mt-4 space-y-3">
+        <p role="alert" className="rounded-md border border-danger/30 p-4 text-sm text-danger">
+          {t("workspace.notEditable")}
+        </p>
+        <Button
+          variant="secondary"
+          type="button"
+          onClick={() => router.push(`/sales/orders/${encodeURIComponent(orderId ?? "")}?returnTo=${encodeURIComponent(returnTo)}`)}
+        >
+          {tCommon("back")}
+        </Button>
+      </div>
     );
   }
 
@@ -1180,7 +1213,7 @@ export const SalesOrderForm = ({
             ? t("workspace.editTitle", { number: orderQuery.data?.number ?? "" })
             : t("workspace.title")
         }
-        subtitle={isEdit ? t("workspace.editSubtitle") : t("workspace.subtitle")}
+        subtitle={t(isCompletedEdit ? "workspace.editUnpaidSubtitle" : isEdit ? "workspace.editSubtitle" : "workspace.subtitle")}
         action={
           isEdit ? (
             <Button
@@ -1677,7 +1710,7 @@ export const SalesOrderForm = ({
               onClick={() => void handleSubmit(false)}
               disabled={
                 isSaving || isRefreshingPrices || isAddingLine || pricingFailed ||
-                (isEdit ? !storeId : !selectedStore)
+                (isEdit ? !storeId : !selectedStore) || (isCompletedEdit && !draftLines.length)
               }
               data-testid="sales-order-save"
             >

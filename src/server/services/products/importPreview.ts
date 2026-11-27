@@ -2,6 +2,8 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import type { Logger } from "pino";
 
 import { logProfileSection } from "@/server/profiling/perf";
+import { AppError } from "@/server/services/errors";
+import { resolveImportedConnectionPrices } from "@/server/services/productPriceTypes";
 import { decimalToNumber } from "@/server/services/products/serializers";
 import type { ProductDuplicateMatch } from "@/server/services/products/diagnostics";
 import {
@@ -434,6 +436,18 @@ export const previewProductImport = async ({
   const existingBaseCostByProductId = new Map<string, number | null>();
   const existingMinStockByProductId = new Map<string, number | null>();
   let retailWholesaleEnabled: boolean | undefined;
+  const priceTypesEnabled = async () =>
+    (retailWholesaleEnabled ??= (
+      await prisma.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { retailWholesaleEnabled: true },
+      })
+    ).retailWholesaleEnabled);
+  if (shouldApplyImportField(mode, updateMask, "wholesalePriceKgs") &&
+      rows.some((row) => row.wholesalePriceKgs !== undefined)) {
+    if (!storeId) throw new AppError("storeRequired", "BAD_REQUEST", 400);
+    if (!(await priceTypesEnabled())) throw new AppError("retailWholesaleDisabled", "CONFLICT", 409);
+  }
   const scopedStores = storeId
     ? [{ id: storeId }]
     : await prisma.store.findMany({
@@ -586,26 +600,22 @@ export const previewProductImport = async ({
       }
       const changes: ImportPreviewChange[] = [];
       if (existing && matchingStoreId) {
-        if (retailWholesaleEnabled === undefined) {
-          retailWholesaleEnabled =
-            (
-              await prisma.organization.findUnique({
-                where: { id: organizationId },
-                select: { retailWholesaleEnabled: true },
-              })
-            )?.retailWholesaleEnabled ?? false;
-        }
-        const [price, policy, snapshot, extraPrice] = await Promise.all([
-          prisma.storePrice.findUnique({
-            where: {
-              organizationId_storeId_productId_variantKey: {
-                organizationId,
-                storeId: matchingStoreId,
-                productId: existing.id,
-                variantKey: "BASE",
-              },
-            },
-          }),
+        const targetPrices = {
+          retailPriceKgs: shouldApplyImportField(mode, updateMask, "basePriceKgs")
+            ? row.basePriceKgs : undefined,
+          wholesalePriceKgs: shouldApplyImportField(mode, updateMask, "wholesalePriceKgs")
+            ? row.wholesalePriceKgs : undefined,
+        };
+        const showPrices = targetPrices.retailPriceKgs !== undefined ||
+          targetPrices.wholesalePriceKgs !== undefined;
+        const [prices, policy, snapshot] = await Promise.all([
+          showPrices ? resolveImportedConnectionPrices(
+            prisma,
+            { organizationId, storeId: matchingStoreId, productId: existing.id },
+            targetPrices,
+            existingBehavior === "skip",
+            await priceTypesEnabled(),
+          ) : null,
           prisma.reorderPolicy.findUnique({
             where: {
               storeId_productId: {
@@ -623,34 +633,22 @@ export const previewProductImport = async ({
               },
             },
           }),
-          retailWholesaleEnabled
-            ? prisma.storePriceTypes.findUnique({
-                where: {
-                  organizationId_storeId_productId_variantKey: {
-                    organizationId,
-                    storeId: matchingStoreId,
-                    productId: existing.id,
-                    variantKey: "BASE",
-                  },
-                },
-              })
-            : null,
         ]);
-        if (
-          shouldApplyImportField(mode, updateMask, "basePriceKgs") &&
-          row.basePriceKgs !== undefined
-        )
+        if (prices?.retailPriceKgs !== undefined) {
           addChange(
             changes,
             "basePriceKgs",
-            (extraPrice?.retailPriceKgs ?? extraPrice?.wholesalePriceKgs) != null
-              ? decimalToNumber(extraPrice?.retailPriceKgs ?? extraPrice?.wholesalePriceKgs)
-              : price?.priceKgs == null
-                ? decimalToNumber(existing.basePriceKgs)
-                : decimalToNumber(price.priceKgs),
-            row.basePriceKgs,
+            decimalToNumber(prices.retailBefore ?? existing.basePriceKgs),
+            prices.retailPriceKgs,
           );
-        if (shouldApplyImportField(mode, updateMask, "minStock") && row.minStock !== undefined)
+        }
+        if (prices?.wholesalePriceKgs !== undefined) {
+          addChange(
+            changes, "wholesalePriceKgs", decimalToNumber(prices.wholesaleBefore), prices.wholesalePriceKgs,
+          );
+        }
+        if (shouldApplyImportField(mode, updateMask, "minStock") && row.minStock !== undefined &&
+            (existingBehavior !== "skip" || !policy))
           addChange(changes, "minStock", policy?.minStock ?? null, row.minStock);
         if (
           shouldApplyImportField(mode, updateMask, "stockQty") &&
@@ -840,6 +838,21 @@ export const previewProductImport = async ({
       }
 
       if (
+        matchingStoreId && shouldApplyImportField(mode, updateMask, "wholesalePriceKgs") &&
+        row.wholesalePriceKgs !== undefined
+      ) {
+        const current = await prisma.storePriceTypes.findUnique({
+          where: {
+            organizationId_storeId_productId_variantKey: {
+              organizationId, storeId: matchingStoreId, productId: existing.id, variantKey: "BASE",
+            },
+          },
+          select: { wholesalePriceKgs: true },
+        });
+        addChange(changes, "wholesalePriceKgs", decimalToNumber(current?.wholesalePriceKgs), row.wholesalePriceKgs);
+      }
+
+      if (
         (shouldApplyImportField(mode, updateMask, "avgCostKgs") ||
           shouldApplyImportField(mode, updateMask, "purchasePriceKgs")) &&
         (row.avgCostKgs !== undefined || row.purchasePriceKgs !== undefined)
@@ -861,7 +874,7 @@ export const previewProductImport = async ({
           row.minStock,
         );
       }
-      if (shouldApplyImportField(mode, updateMask, "stockQty") && row.stockQty !== undefined) {
+      if (shouldApplyImportField(mode, updateMask, "stockQty") && stockBehavior !== "ignore" && row.stockQty !== undefined) {
         addChange(changes, "stockQty", null, row.stockQty);
       }
     } else {
@@ -894,6 +907,9 @@ export const previewProductImport = async ({
       if (row.basePriceKgs !== undefined) {
         changes.push({ field: "basePriceKgs", before: null, after: row.basePriceKgs });
       }
+      if (row.wholesalePriceKgs !== undefined) {
+        changes.push({ field: "wholesalePriceKgs", before: null, after: row.wholesalePriceKgs });
+      }
       if (row.avgCostKgs !== undefined || row.purchasePriceKgs !== undefined) {
         changes.push({
           field: row.avgCostKgs !== undefined ? "avgCostKgs" : "purchasePriceKgs",
@@ -904,7 +920,7 @@ export const previewProductImport = async ({
       if (row.minStock !== undefined) {
         changes.push({ field: "minStock", before: null, after: row.minStock });
       }
-      if (row.stockQty !== undefined) {
+      if (stockBehavior !== "ignore" && row.stockQty !== undefined) {
         changes.push({ field: "stockQty", before: null, after: row.stockQty });
       }
     }
@@ -932,7 +948,7 @@ export const previewProductImport = async ({
         acc.updates += 1;
       } else if (row.action === "connect") {
         acc.connected += 1;
-      } else {
+      } else if (!row.hasBlockingWarnings) {
         acc.skipped += 1;
       }
       acc.warningCount += row.warnings.filter((warning) => warning.severity === "warning").length;
@@ -986,6 +1002,15 @@ export const previewProductImport = async ({
 
   return {
     rows: responseRows,
+    connectionCandidates: previewRows.flatMap((row) =>
+      row.canConnect && row.existingProduct && !rowDecisionByNumber.has(row.sourceRowNumber)
+        ? [{
+            sourceRowNumber: row.sourceRowNumber,
+            existingProductId: row.existingProduct.id,
+            isArchived: row.existingProduct.isDeleted,
+          }]
+        : [],
+    ),
     summary,
   };
 };

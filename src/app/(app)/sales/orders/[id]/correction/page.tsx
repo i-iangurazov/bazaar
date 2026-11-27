@@ -10,6 +10,7 @@ import { DeleteIcon, EmptyIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { QueryErrorState } from "@/components/query-error-state";
+import { SalesOrderReturnRedirect } from "@/components/sales-order-return-redirect";
 import { ScanInput } from "@/components/ScanInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,7 +69,7 @@ export default function SalesOrderCorrectionPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const orderId = String(params.id ?? "");
@@ -99,6 +100,15 @@ export default function SalesOrderCorrectionPage() {
   const [adding, setAdding] = useState(false);
   const idempotencyRef = useRef<{ payload: string; key: string } | null>(null);
   const order = orderQuery.data;
+  const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const checkAmendment = canFinalize && order?.status === "COMPLETED" && order.source === "MANUAL";
+  const paymentInfoQuery = trpc.salesOrders.paymentInfo.useQuery(
+    { customerOrderId: orderId },
+    { enabled: checkAmendment, retry: false },
+  );
+  const checkingAmendment = checkAmendment && paymentInfoQuery.isLoading;
+  const useOrderEditor = checkAmendment && !paymentInfoQuery.isError &&
+    paymentInfoQuery.data?.canAppendUnpaidLine === true;
   const effectivePriceMode: "RETAIL" | "WHOLESALE" =
     priceMode ?? (order?.priceMode === "WHOLESALE" ? "WHOLESALE" : "RETAIL");
   const currency = order ? currencySourceWithFallback(order, order.store) : undefined;
@@ -138,7 +148,7 @@ export default function SalesOrderCorrectionPage() {
       returns: returnLines,
       additions: additionLines,
     },
-    { enabled: Boolean(order) && !hasErrors, keepPreviousData: true, retry: false },
+    { enabled: Boolean(order) && !hasErrors && !checkingAmendment && !useOrderEditor, keepPreviousData: true, retry: false },
   );
   const quote = quoteQuery.data;
 
@@ -356,7 +366,7 @@ export default function SalesOrderCorrectionPage() {
     await correctMutation.mutateAsync({ ...payload, idempotencyKey: key }).catch(() => {});
   };
 
-  if (orderQuery.isLoading) {
+  if (orderQuery.isLoading || sessionStatus === "loading" || checkingAmendment) {
     return (
       <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground" role="status">
         <Spinner className="h-4 w-4" />
@@ -374,11 +384,19 @@ export default function SalesOrderCorrectionPage() {
       </p>
     );
   }
-  if (session?.user?.role !== "ADMIN" && session?.user?.role !== "MANAGER") {
+  if (!canFinalize) {
     return (
       <p role="alert" className="mt-4 rounded-md border border-danger/30 p-4 text-sm text-danger">
         {t("correctionPage.forbidden")}
       </p>
+    );
+  }
+  if (useOrderEditor) {
+    return (
+      <SalesOrderReturnRedirect
+        href={`/sales/orders/${encodeURIComponent(orderId)}/edit?returnTo=${encodeURIComponent(returnTo)}`}
+        label={tCommon("loading")}
+      />
     );
   }
 

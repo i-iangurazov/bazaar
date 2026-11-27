@@ -291,6 +291,7 @@ const productExportColumnKeys = [
   "categories",
   "description",
   "basePriceKgs",
+  "wholesalePriceKgs",
   "purchasePriceKgs",
   "avgCostKgs",
   "minStock",
@@ -837,11 +838,12 @@ const ProductsPage = () => {
     () =>
       productExportColumnKeys
         .filter((key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key))
+        .filter((key) => key !== "wholesalePriceKgs" || Boolean(storeId && wholesalePricesEnabled))
         .map((key) => ({
           key,
           label: t(`exportColumns.${key}`),
         })),
-    [t, canManageProducts],
+    [t, canManageProducts, storeId, wholesalePricesEnabled],
   );
   const selectedExportColumnSet = useMemo(
     () => new Set(selectedExportColumns),
@@ -3202,9 +3204,9 @@ const ProductsPage = () => {
   };
 
   const handleExport = async () => {
-    const selectedColumns = productExportColumnKeys.filter((key) =>
-      selectedExportColumnSet.has(key),
-    );
+    const selectedColumns = productExportColumns
+      .filter(({ key }) => selectedExportColumnSet.has(key))
+      .map(({ key }) => key);
     if (!selectedColumns.length) {
       toast({ variant: "error", description: t("exportSelectColumnsRequired") });
       return;
@@ -3221,9 +3223,7 @@ const ProductsPage = () => {
       readiness: readiness === "all" ? undefined : readiness,
       includeArchived: showArchived,
       storeId: storeId || undefined,
-      columns: selectedColumns.filter(
-        (key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key),
-      ),
+      columns: selectedColumns,
       ids: selectedIds.size && !allResultsSelected ? Array.from(selectedIds) : undefined,
     };
     for (const [name, value] of Object.entries({
@@ -5429,7 +5429,7 @@ const ProductsPage = () => {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setSelectedExportColumns([...productExportColumnKeys])}
+                  onClick={() => setSelectedExportColumns(productExportColumns.map(({ key }) => key))}
                 >
                   {t("selectAll")}
                 </Button>
@@ -5459,7 +5459,7 @@ const ProductsPage = () => {
                 </label>
               ))}
             </div>
-            {!selectedExportColumns.length ? (
+            {!productExportColumns.some(({ key }) => selectedExportColumnSet.has(key)) ? (
               <p className="text-sm text-danger">{t("exportSelectColumnsRequired")}</p>
             ) : null}
           </div>
@@ -5471,7 +5471,7 @@ const ProductsPage = () => {
             <Button
               type="button"
               onClick={() => void handleExport()}
-              disabled={!selectedExportColumns.length}
+              disabled={!productExportColumns.some(({ key }) => selectedExportColumnSet.has(key))}
             >
               <DownloadIcon className="h-4 w-4" aria-hidden />
               {selectedIds.size

@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type Role } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as EmailMarketing from "@/server/services/emailMarketing";
+import type * as InventoryService from "@/server/services/inventory";
+import type * as OrderEmails from "@/server/services/orderEmails";
 
 const effects = vi.hoisted(() => ({
   publish: vi.fn(),
@@ -12,16 +15,16 @@ const effects = vi.hoisted(() => ({
 }));
 vi.mock("@/server/events/eventBus", () => ({ eventBus: { publish: effects.publish } }));
 vi.mock("@/server/services/orderEmails", async (original) => ({
-  ...(await original<typeof import("@/server/services/orderEmails")>()),
+  ...(await original<typeof OrderEmails>()),
   sendOrderConfirmationEmail: effects.confirmEmail,
   sendOrderCancellationEmail: effects.cancelEmail,
 }));
 vi.mock("@/server/services/emailMarketing", async (original) => ({
-  ...(await original<typeof import("@/server/services/emailMarketing")>()),
+  ...(await original<typeof EmailMarketing>()),
   processEmailAutomationTrigger: effects.automation,
 }));
 vi.mock("@/server/services/inventory", async (original) => {
-  const actual = await original<typeof import("@/server/services/inventory")>();
+  const actual = await original<typeof InventoryService>();
   const { AppError } = await import("@/server/services/errors");
   return {
     ...actual,
@@ -308,6 +311,109 @@ describeDb("immediate ordinary sales and explicit declined-item corrections", ()
     await expect(manager.salesOrders.appendUnpaidLine({
       ...request, idempotencyKey: randomUUID(), expectedUpdatedAt: updated.updatedAt.toISOString(),
     })).rejects.toMatchObject({ message: "duplicateLineItem" });
+  });
+
+  it("edits the same unpaid posted sale and reconciles quantities and lots exactly once", async () => {
+    const f = await fixture();
+    await f.api.stores.updatePolicy({ storeId: f.store.id, allowNegativeStock: false, trackExpiryLots: true });
+    const variant = await prisma.productVariant.create({
+      data: { productId: f.product.id, name: "Replacement variant", attributes: {} },
+    });
+    await adjustStock({
+      organizationId: f.org.id, actorId: f.adminUser.id, storeId: f.store.id,
+      productId: f.product.id, variantId: variant.id, qtyDelta: 5, reason: "replacement fixture",
+      idempotencyKey: randomUUID(), requestId: randomUUID(),
+    });
+    const sale = await f.api.salesOrders.createSale({
+      ...orderInput(f),
+      lines: [{ productId: f.product.id, qty: 12, unitPriceKgs: 75 }, { productId: f.second.id, qty: 3 }],
+    });
+    const original = await savedOrder(sale.id);
+    const originalLine = original.lines.find((line) => line.productId === f.product.id)!;
+    const removedAssignment = await prisma.storeProduct.update({
+      where: { storeId_productId: { storeId: f.store.id, productId: f.second.id } },
+      data: { isActive: false, isHidden: true },
+    });
+    const newCustomer = await prisma.customer.create({
+      data: { organizationId: f.org.id, storeId: f.store.id, name: "Updated customer" },
+    });
+    const request = {
+      customerOrderId: sale.id, storeId: f.store.id, expectedUpdatedAt: original.updatedAt.toISOString(),
+      idempotencyKey: randomUUID(), customerId: newCustomer.id,
+      lines: [
+        { lineId: originalLine.id, productId: f.product.id, qty: 7, unitPriceKgs: 95 },
+        { productId: f.product.id, variantId: variant.id, qty: 2, unitPriceKgs: 50 },
+      ],
+    };
+    const amendment = { ...request, amendCompleted: true as const };
+    await expect(f.api.salesOrders.update(request)).rejects.toMatchObject({ message: "salesOrderNotEditable" });
+    const staff = createTestCaller(asUser(f.staffUser));
+    await expect(staff.salesOrders.update(amendment)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await f.api.salesOrders.paymentInfo({ customerOrderId: sale.id })).toMatchObject({ canAppendUnpaidLine: true });
+
+    effects.publish.mockClear();
+    const manager = createTestCaller(asUser(f.managerUser));
+    const [updated, retry] = await Promise.all([
+      manager.salesOrders.update(amendment),
+      manager.salesOrders.update(amendment),
+    ]);
+    expect(retry).toEqual(updated);
+    expect(updated).toMatchObject({ id: sale.id, number: original.number, status: "COMPLETED", totalKgs: 765 });
+    const saved = await savedOrder(sale.id);
+    expect(saved).toMatchObject({
+      completedAt: original.completedAt, completedEventId: original.completedEventId,
+      customerId: newCustomer.id, customerName: newCustomer.name, shiftId: null,
+    });
+    expect(saved.lines).toHaveLength(2);
+    expect(saved.lines.find((line) => line.id === originalLine.id)).toMatchObject({
+      qty: 7, unitPriceKgs: new Prisma.Decimal(95),
+      unitCostKgs: originalLine.unitCostKgs, lineCostTotalKgs: new Prisma.Decimal(280),
+    });
+    expect(await manager.inventory.productMovementDocument({
+      documentKey: `SALE:CustomerOrder:${sale.id}`,
+    })).toMatchObject({
+      documentNumber: original.number, positionsCount: 2, totalQuantity: 9, totalAmount: 765,
+    });
+    for (const [productId, variantId, onHand] of [
+      [f.product.id, null, 13], [f.second.id, null, 20], [f.product.id, variant.id, 3],
+    ] as const) {
+      const scope = { storeId: f.store.id, productId, variantId };
+      expect(await prisma.inventorySnapshot.findFirstOrThrow({ where: scope })).toMatchObject({ onHand });
+      expect((await prisma.stockLot.aggregate({ where: scope, _sum: { onHandQty: true } }))._sum.onHandQty).toBe(onHand);
+    }
+    const restored = await prisma.stockMovement.findFirstOrThrow({
+      where: { referenceId: sale.id, productId: f.second.id, qtyDelta: 3 },
+    });
+    expect(restored).toMatchObject({ type: "SALE", referenceType: "CustomerOrder" });
+    expect(restored.stockLotId).toBe((await prisma.stockMovement.findFirstOrThrow({
+      where: { referenceId: sale.id, productId: f.second.id, qtyDelta: -3 },
+    })).stockLotId);
+    expect(await prisma.storeProduct.findUniqueOrThrow({ where: { id: removedAssignment.id } })).toEqual(removedAssignment);
+    expect(await prisma.stockMovement.count({ where: { referenceId: sale.id } })).toBe(5);
+    expect(await prisma.customerOrder.count()).toBe(1);
+    expect(await prisma.salePayment.count()).toBe(0);
+    expect(await prisma.saleReturn.count()).toBe(0);
+    expect(await prisma.fiscalReceipt.count()).toBe(0);
+    expect(await prisma.registerShift.count()).toBe(0);
+    expect(await prisma.auditLog.count({ where: { entityId: sale.id, action: "SALES_ORDER_UNPAID_UPDATE" } })).toBe(1);
+    expect(effects.publish).toHaveBeenCalledExactlyOnceWith({
+      type: "inventory.updated", payload: { storeId: f.store.id, productId: "*" },
+    });
+    expect(await f.api.salesOrders.paymentInfo({ customerOrderId: sale.id })).toMatchObject({
+      canAppendUnpaidLine: true, hasEvidence: false, remainingKgs: 765,
+    });
+    await expect(manager.salesOrders.update({ ...amendment, idempotencyKey: randomUUID() }))
+      .rejects.toMatchObject({ message: "salesOrderAmendmentStale" });
+
+    const { shift } = await openShift(f);
+    await f.api.salesOrders.recordPayment({
+      customerOrderId: sale.id, shiftId: shift.id, amountKgs: 1, method: "CASH", idempotencyKey: randomUUID(),
+    });
+    const paidAccounting = await accounting(f);
+    await expect(manager.salesOrders.update({
+      ...amendment, expectedUpdatedAt: saved.updatedAt.toISOString(), idempotencyKey: randomUUID(),
+    })).rejects.toMatchObject({ message: "salesOrderAmendmentRequiresReturn" });
+    expect(await accounting(f)).toEqual(paidAccounting);
   });
 
   it("denies append for staff, revoked stores, paid sales and closed periods without changing accounting", async () => {

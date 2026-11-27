@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     store,
     order,
     mode: "edit" as "edit" | "create",
+    canAmendCompleted: false,
     userId: "user-1",
     toast: vi.fn(),
     push: vi.fn(),
@@ -59,6 +60,7 @@ const mocks = vi.hoisted(() => {
       salesOrders: {
         list: { invalidate: vi.fn() },
         getById: { invalidate: vi.fn() },
+        paymentInfo: { invalidate: vi.fn() },
         linePrice: {
           fetch: vi.fn(async () => ({
             hasConfiguredPrice: false,
@@ -159,6 +161,14 @@ vi.mock("@/lib/trpc", () => ({
           refetch: vi.fn(),
         }),
       },
+      paymentInfo: {
+        useQuery: () => ({
+          data: { canAppendUnpaidLine: mocks.canAmendCompleted },
+          error: null,
+          isLoading: false,
+          isError: false,
+        }),
+      },
       quotePriceMode: {
         useMutation: () => ({ mutateAsync: vi.fn(), isLoading: false }),
       },
@@ -194,6 +204,8 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.userId = "user-1";
+  mocks.order.status = "DRAFT";
+  mocks.canAmendCompleted = false;
   window.sessionStorage.clear();
 });
 

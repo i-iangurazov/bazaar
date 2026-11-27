@@ -289,6 +289,85 @@ const syncAlreadyDeductedOrderStock = async (
   }
 };
 
+type OrderStockLine = { productId: string; variantId: string | null; variantKey: string; qty: number };
+
+const syncCompletedUnpaidOrderStock = async (
+  tx: Prisma.TransactionClient,
+  order: { id: string; number: string; storeId: string; organizationId: string; lines: OrderStockLine[] },
+  lines: OrderStockLine[],
+  actorId: string,
+  movementDate: Date,
+) => {
+  const lineKey = (line: Pick<OrderStockLine, "productId" | "variantKey">) =>
+    `${line.productId}:${line.variantKey}`;
+  const deltas = new Map(order.lines.map((line) => [lineKey(line), { ...line, qtyDelta: line.qty }]));
+  for (const line of lines) {
+    const key = lineKey(line);
+    deltas.set(key, { ...line, qtyDelta: roundQuantity((deltas.get(key)?.qtyDelta ?? 0) - line.qty) });
+  }
+
+  const changes = [...deltas.entries()].filter(([, line]) => line.qtyDelta !== 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  const restoredProductIds = changes.filter(([, line]) => line.qtyDelta > 0)
+    .map(([, line]) => line.productId);
+  const soldLots = restoredProductIds.length ? await tx.stockMovement.groupBy({
+    by: ["productId", "variantId", "stockLotId"],
+    where: {
+      referenceType: "CustomerOrder",
+      referenceId: order.id,
+      storeId: order.storeId,
+      type: StockMovementType.SALE,
+      productId: { in: restoredProductIds },
+    },
+    _sum: { qtyDelta: true },
+    orderBy: { stockLotId: "asc" },
+  }) : [];
+  const lotsByLine = new Map<string, typeof soldLots>();
+  for (const lot of soldLots) {
+    const key = lineKey({ productId: lot.productId, variantKey: variantKeyFrom(lot.variantId) });
+    const lots = lotsByLine.get(key) ?? [];
+    lots.push(lot);
+    lotsByLine.set(key, lots);
+  }
+
+  for (const [key, line] of changes) {
+    const movement = {
+      organizationId: order.organizationId,
+      storeId: order.storeId,
+      productId: line.productId,
+      variantId: line.variantId,
+      type: StockMovementType.SALE,
+      referenceType: "CustomerOrder",
+      referenceId: order.id,
+      note: order.number,
+      actorId,
+      movementDate,
+    };
+    if (line.qtyDelta < 0) {
+      await applyStockMovement(tx, { ...movement, qtyDelta: line.qtyDelta });
+      continue;
+    }
+
+    // Restore from quantities still outstanding on this sale's original lots.
+    // The physical balance and movement history are updated together.
+    let remaining = line.qtyDelta;
+    for (const lot of lotsByLine.get(key) ?? []) {
+      const quantity = Math.min(remaining, Math.max(0, roundQuantity(-(lot._sum.qtyDelta ?? 0))));
+      if (quantity === 0) continue;
+      await applyStockMovement(tx, {
+        ...movement,
+        qtyDelta: quantity,
+        stockLotId: lot.stockLotId,
+        restoresPostedSaleStock: true,
+      });
+      remaining = roundQuantity(remaining - quantity);
+      if (remaining === 0) break;
+    }
+    if (remaining !== 0) throw new AppError("salesOrderAmendmentStockMismatch", "CONFLICT", 409);
+  }
+  return changes.length > 0;
+};
+
 export const nextSalesOrderNumber = async (
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -1489,6 +1568,7 @@ export const updateCustomerOrder = async (input: {
   organizationId: string;
   customerOrderId: string;
   expectedUpdatedAt: string;
+  amendCompleted?: true;
   storeId: string;
   priceMode?: StorePriceMode | null;
   customerId?: string | null;
@@ -1506,12 +1586,19 @@ export const updateCustomerOrder = async (input: {
   if (!Number.isFinite(expectedUpdatedAt.getTime())) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
+  let changedStockStoreId: string | undefined;
   const operation = await prisma.$transaction(async (tx) => {
+    let amendmentActor: StoreAccessUser | undefined;
+    if (input.amendCompleted) {
+      await lockAssortmentForSale(tx, input.organizationId);
+      const identity = await getOrdinaryOrderIdentityTx(tx, input);
+      amendmentActor = await assertSalesManagerStoreAccessTx(tx, { ...input, storeId: identity.storeId });
+    }
     return withIdempotency(
       tx,
       {
         key: input.idempotencyKey,
-        route: "salesOrders.update.v1",
+        route: input.amendCompleted ? "salesOrders.amendUnpaidCompleted.v1" : "salesOrders.update.v1",
         userId: input.actorId,
         request: {
           customerOrderId: input.customerOrderId,
@@ -1539,7 +1626,7 @@ export const updateCustomerOrder = async (input: {
           include: { lines: { orderBy: { id: "asc" } } },
         });
         if (!order) throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
-        const actor = await assertOrderActorStoreAccessTx(tx, {
+        const actor = amendmentActor ?? await assertOrderActorStoreAccessTx(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
           storeId: order.storeId,
@@ -1547,20 +1634,40 @@ export const updateCustomerOrder = async (input: {
         if (input.storeId !== order.storeId) {
           throw new AppError("salesOrderStoreChangeUnsupported", "CONFLICT", 409);
         }
-        assertEditable(order.status);
-        if (order.isHeld) throw new AppError("salesOrderNotEditable", "CONFLICT", 409);
-        if (order.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
-          throw new AppError("salesOrderStale", "CONFLICT", 409);
+        if (!input.amendCompleted) {
+          assertEditable(order.status);
+          if (order.isHeld) throw new AppError("salesOrderNotEditable", "CONFLICT", 409);
         }
-        const [payment, saleReturn, refund, fiscal, marking] = await Promise.all([
-          tx.salePayment.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
-          tx.saleReturn.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
-          tx.refundRequest.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
-          tx.fiscalReceipt.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
-          tx.markingCodeCapture.findFirst({ where: { saleId: order.id }, select: { id: true } }),
-        ]);
-        if (payment || saleReturn || refund || fiscal || marking) {
-          throw new AppError("salesOrderUpdateRequiresCorrection", "CONFLICT", 409);
+        if (order.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+          throw new AppError(input.amendCompleted ? "salesOrderAmendmentStale" : "salesOrderStale", "CONFLICT", 409);
+        }
+        let amendmentDate: Date | undefined;
+        if (input.amendCompleted) {
+          if (!input.lines.length) throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`sales-period:${input.organizationId}:${order.storeId}`}, 0))`;
+          amendmentDate = new Date();
+          const blocker = await getAppendUnpaidSaleBlocker(tx, order, amendmentDate);
+          if (blocker) throw new AppError(blocker, "CONFLICT", 409);
+          const previousQuantities = new Map(order.lines.map((line) => [
+            `${line.productId}:${line.variantKey}`, line.qty,
+          ]));
+          const addedProductIds = input.lines
+            .filter((line) => line.qty > (previousQuantities.get(`${line.productId}:${variantKeyFrom(line.variantId)}`) ?? 0))
+            .map((line) => line.productId);
+          if (addedProductIds.length) {
+            await assertSaleAssortment(tx, input.organizationId, order.storeId, addedProductIds);
+          }
+        } else {
+          const [payment, saleReturn, refund, fiscal, marking] = await Promise.all([
+            tx.salePayment.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+            tx.saleReturn.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
+            tx.refundRequest.findFirst({ where: { originalSaleId: order.id }, select: { id: true } }),
+            tx.fiscalReceipt.findFirst({ where: { customerOrderId: order.id }, select: { id: true } }),
+            tx.markingCodeCapture.findFirst({ where: { saleId: order.id }, select: { id: true } }),
+          ]);
+          if (payment || saleReturn || refund || fiscal || marking) {
+            throw new AppError("salesOrderUpdateRequiresCorrection", "CONFLICT", 409);
+          }
         }
 
         const customer =
@@ -1613,10 +1720,10 @@ export const updateCustomerOrder = async (input: {
           (!input.priceMode ||
             normalizeOrderPriceMode(input.priceMode) ===
               normalizeOrderPriceMode(order.priceMode));
-        if (!linesUnchanged) {
+        if (!input.amendCompleted && !linesUnchanged) {
           await releaseLoyaltyForOrder(tx, { customerOrderId: order.id });
         }
-        const editableLines = linesUnchanged
+        const editableLines = input.amendCompleted || linesUnchanged
           ? order.lines
           : await tx.customerOrderLine.findMany({
               where: { customerOrderId: order.id },
@@ -1847,15 +1954,19 @@ export const updateCustomerOrder = async (input: {
             customerAddress,
           });
         }
-        // API orders may already have deducted stock before this edit. Apply
-        // only the difference between the old and new lines, exactly as the
-        // existing line-level edit paths do.
-        await syncAlreadyDeductedOrderStock(tx, order, input.actorId);
+        if (amendmentDate) {
+          if (await syncCompletedUnpaidOrderStock(tx, order, lineOps, input.actorId, amendmentDate)) {
+            changedStockStoreId = order.storeId;
+          }
+        } else {
+          // API orders can already have deducted stock before a draft edit.
+          await syncAlreadyDeductedOrderStock(tx, order, input.actorId);
+        }
         const updated = await recomputeTotals(tx, order.id, input.actorId);
         await writeAuditLog(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
-          action: "SALES_ORDER_UPDATE",
+          action: input.amendCompleted ? "SALES_ORDER_UNPAID_UPDATE" : "SALES_ORDER_UPDATE",
           entity: "CustomerOrder",
           entityId: order.id,
           before: toJson({
@@ -1896,8 +2007,13 @@ export const updateCustomerOrder = async (input: {
         };
       },
     );
-  });
-  return operation.result;
+  }, input.amendCompleted ? FAST_SALE_TRANSACTION_OPTIONS : undefined);
+  if (!operation.replayed && changedStockStoreId) {
+    eventBus.publish({ type: "inventory.updated", payload: { storeId: changedStockStoreId, productId: "*" } });
+  }
+  return input.amendCompleted
+    ? { ...operation.result, updatedAt: new Date(operation.result.updatedAt) }
+    : operation.result;
 };
 
 export const updateCustomerOrderTracking = async (input: {
@@ -2708,6 +2824,7 @@ const saleAmendmentStockMatches = async (
     const key = `${movement.productId}:${movement.variantId ?? "BASE"}`;
     net.set(key, (net.get(key) ?? 0) + movement.qtyDelta);
   }
+  for (const [key, qty] of net) if (Math.abs(qty) <= 0.000001) net.delete(key);
   return net.size === lines.length && lines.every((line) =>
     Math.abs((net.get(`${line.productId}:${line.variantKey}`) ?? 0) + line.qty) <= 0.000001,
   );

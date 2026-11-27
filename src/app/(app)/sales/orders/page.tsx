@@ -273,6 +273,17 @@ const SalesOrdersPageContent = () => {
     status === CustomerOrderStatus.CONFIRMED ||
     status === CustomerOrderStatus.READY;
 
+  const canOfferUnpaidEdit = (order: (typeof items)[number]) =>
+    canFinalize &&
+    order.status === CustomerOrderStatus.COMPLETED &&
+    order.source === "MANUAL" &&
+    !order.archivedAt &&
+    !order.externalOrderId &&
+    !order.registerId &&
+    !order.shiftId &&
+    !order.isDebt &&
+    !order.receivedPayments?.length;
+
   const orderActions = (order: (typeof items)[number]) => [
     {
       key: "view",
@@ -281,7 +292,8 @@ const SalesOrdersPageContent = () => {
       href: orderHref(order.id),
     },
     ...(order.status === CustomerOrderStatus.DRAFT ||
-    order.status === CustomerOrderStatus.CONFIRMED
+    order.status === CustomerOrderStatus.CONFIRMED ||
+    canOfferUnpaidEdit(order)
       ? [
           {
             key: "edit",
@@ -291,7 +303,7 @@ const SalesOrdersPageContent = () => {
           },
         ]
       : []),
-    ...(canFinalize && order.status === CustomerOrderStatus.COMPLETED
+    ...(canFinalize && order.status === CustomerOrderStatus.COMPLETED && !canOfferUnpaidEdit(order)
       ? [
           {
             key: "correct",

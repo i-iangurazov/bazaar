@@ -72,6 +72,7 @@ const createOrderInputSchema = z.object({
 const updateOrderInputSchema = z.object({
   customerOrderId: z.string().min(1),
   expectedUpdatedAt: z.string().datetime({ offset: true }),
+  amendCompleted: z.literal(true).optional(),
   storeId: z.string().min(1),
   idempotencyKey: z.string().min(8),
   priceMode: orderPriceModeSchema.optional(),

@@ -71,6 +71,7 @@ type ImportPreviewRow = {
       | "variants"
       | "barcodes"
       | "basePriceKgs"
+      | "wholesalePriceKgs"
       | "purchasePriceKgs"
       | "avgCostKgs"
       | "minStock"
@@ -130,8 +131,15 @@ type ImportPreviewRow = {
   hasBlockingWarnings: boolean;
 };
 
+type ImportConnectionCandidate = {
+  sourceRowNumber: number;
+  existingProductId: string;
+  isArchived: boolean;
+};
+
 export type ImportDryRunPreviewData = {
   rows: ImportPreviewRow[];
+  connectionCandidates: ImportConnectionCandidate[];
   summary: {
     creates: number;
     updates: number;
@@ -161,6 +169,7 @@ type ImportDryRunPreviewProps = {
     action: "create" | "update" | "skip" | "connect",
     existingProductId?: string,
   ) => void;
+  onBulkConnect?: (candidates: ImportConnectionCandidate[]) => void;
   disabled?: boolean;
 };
 
@@ -178,6 +187,7 @@ export const ImportDryRunPreview = ({
   preview,
   rowActions,
   onRowActionChange,
+  onBulkConnect,
   disabled = false,
 }: ImportDryRunPreviewProps) => {
   const t = useTranslations("imports");
@@ -309,6 +319,8 @@ export const ImportDryRunPreview = ({
         return t("fieldBarcodes");
       case "basePriceKgs":
         return t("fieldBasePrice");
+      case "wholesalePriceKgs":
+        return t("fieldWholesalePrice");
       case "purchasePriceKgs":
         return t("fieldPurchasePrice");
       case "avgCostKgs":
@@ -416,10 +428,12 @@ export const ImportDryRunPreview = ({
       <span className="text-xs text-muted-foreground">{t("dryRunWarningsEmpty")}</span>
     );
 
-  const connectableRows = preview.rows.filter(
-    (row) => row.canConnect && row.existingProduct && !rowActions?.[row.sourceRowNumber],
+  const connectionCandidates = preview.connectionCandidates.filter(
+    (candidate) => !rowActions?.[candidate.sourceRowNumber],
   );
-  const hasConnections = preview.rows.some((row) => row.canConnect || row.action === "connect");
+  const hasConnections = connectionCandidates.length > 0 || Boolean(preview.summary.connected);
+  const hasUnshownCandidates = connectionCandidates.length >
+    preview.rows.filter((row) => row.canConnect && !rowActions?.[row.sourceRowNumber]).length;
 
   return (
     <div className="space-y-4">
@@ -427,22 +441,20 @@ export const ImportDryRunPreview = ({
         <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
           <p className="font-medium">{t("dryRunConnectTitle")}</p>
           <p className="text-xs text-muted-foreground">{t("dryRunConnectHint")}</p>
-          {preview.rows.some((row) => row.canConnect && row.existingProduct?.isDeleted) ? (
+          {connectionCandidates.some((candidate) => candidate.isArchived) ? (
             <p className="text-xs text-warning-foreground">{t("dryRunConnectArchiveHint")}</p>
           ) : null}
-          {connectableRows.length && onRowActionChange ? (
+          {connectionCandidates.length && onBulkConnect ? (
             <Button
               type="button"
               size="sm"
               variant="secondary"
               disabled={disabled}
-              onClick={() =>
-                connectableRows.forEach((row) =>
-                  onRowActionChange(row.sourceRowNumber, "connect", row.existingProduct?.id),
-                )
-              }
+              onClick={() => onBulkConnect(connectionCandidates)}
             >
-              {t("dryRunConnectShown", { count: connectableRows.length })}
+              {t(hasUnshownCandidates ? "dryRunConnectAll" : "dryRunConnectShown", {
+                count: connectionCandidates.length,
+              })}
             </Button>
           ) : null}
         </div>

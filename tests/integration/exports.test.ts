@@ -159,6 +159,50 @@ describeDb("exports", () => {
     );
   });
 
+  it("nets the original sale and its stock restoration without exporting the restoration as a receipt", async () => {
+    const { org, store, product, adminUser } = await seedBase({ plan: "ENTERPRISE" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+    const createdAt = new Date("2025-01-09T12:00:00Z");
+    const rows = {
+      storeId: store.id, productId: product.id, type: "SALE" as const,
+      referenceType: "CustomerOrder", referenceId: "unpaid-sale-amendment-fixture",
+      createdAt, createdById: adminUser.id,
+    };
+    const original = await prisma.stockMovement.create({ data: { ...rows, qtyDelta: -48 } });
+    await prisma.stockMovement.create({ data: { ...rows, qtyDelta: 18 } });
+    const exportRows = async (type: ExportType) => {
+      const created = await caller.exports.create({
+        storeId: store.id,
+        type,
+        format: "csv",
+        periodStart: new Date("2025-01-09T00:00:00Z"),
+        periodEnd: new Date("2025-01-09T23:59:59Z"),
+      });
+      await runJob("export-job", { jobId: created.id });
+      const job = await caller.exports.get({ jobId: created.id });
+      expect(job?.status).toBe("DONE");
+      if (!job?.storagePath) throw new Error("export job missing");
+      try {
+        const csv = await fs.readFile(job.storagePath, "utf8");
+        return csv.replace(/^\ufeff/, "").trim().split(/\r?\n/).slice(1).map((row) => row.split(";"));
+      } finally {
+        await fs.unlink(job.storagePath);
+      }
+    };
+    const sales = await exportRows(ExportType.SALES_SUMMARY);
+    expect(sales).toHaveLength(1);
+    expect(sales[0]?.slice(-2)).toEqual(["30", "2"]);
+    const receipts = await exportRows(ExportType.RECEIPTS_FOR_KKM);
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]?.[0]).toBe(original.id);
+    expect(receipts[0]?.at(-1)).toBe("48");
+  });
+
   it("drains a queued export after its concurrent runner loses the global lock", async () => {
     const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({

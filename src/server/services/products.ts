@@ -13,6 +13,7 @@ import { withAiOperationBudget } from "@/server/billing/aiOperationBudget";
 import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
 import { defaultUnitPrecision, isValidQuantity, roundQuantity } from "@/lib/quantity";
 import {
+  resolveImportedConnectionPrices,
   saveProductPriceTypes,
   syncExistingRetailPrice,
   type ProductPriceTypeValues,
@@ -4095,6 +4096,7 @@ export type ImportProductRow = {
   variants?: CreateProductInput["variants"];
   barcodes?: string[];
   basePriceKgs?: number;
+  wholesalePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
   minStock?: number;
@@ -4112,6 +4114,7 @@ export type ImportUpdateField =
   | "variants"
   | "barcodes"
   | "basePriceKgs"
+  | "wholesalePriceKgs"
   | "purchasePriceKgs"
   | "avgCostKgs"
   | "minStock"
@@ -4404,6 +4407,18 @@ export const importProductsTx = async (
   const rowDecisionByNumber = new Map(
     (input.rowActions ?? []).map((decision) => [decision.sourceRowNumber, decision]),
   );
+  let retailWholesaleEnabled: boolean | undefined;
+  const priceTypesEnabled = async () =>
+    (retailWholesaleEnabled ??= (
+      await tx.organization.findUniqueOrThrow({
+        where: { id: input.organizationId },
+        select: { retailWholesaleEnabled: true },
+      })
+    ).retailWholesaleEnabled);
+  if (shouldApplyField("wholesalePriceKgs") && input.rows.some((row) => row.wholesalePriceKgs !== undefined)) {
+    if (!input.storeId) throw new AppError("storeRequired", "BAD_REQUEST", 400);
+    if (!(await priceTypesEnabled())) throw new AppError("retailWholesaleDisabled", "CONFLICT", 409);
+  }
   const orgStores = input.storeId
     ? []
     : await tx.store.findMany({
@@ -4523,6 +4538,26 @@ export const importProductsTx = async (
       priceKgs,
       actorId: input.actorId,
     });
+  };
+
+  const saveImportedStorePrices = async (
+    productId: string,
+    values: { retailPriceKgs?: number; wholesalePriceKgs?: number },
+    connect = false,
+  ) => {
+    if (values.retailPriceKgs === undefined && values.wholesalePriceKgs === undefined) return;
+    if (values.wholesalePriceKgs !== undefined || (connect && (await priceTypesEnabled()))) {
+      await saveProductPriceTypes(tx, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        actorId: input.actorId,
+        requestId: input.requestId,
+        productId,
+        prices: [values],
+      });
+    } else if (values.retailPriceKgs !== undefined) {
+      await upsertStoreBasePrice(productId, values.retailPriceKgs);
+    }
   };
 
   const upsertMinStock = async (productId: string, minStock?: number) => {
@@ -4751,6 +4786,9 @@ export const importProductsTx = async (
     const basePriceKgs = shouldApplyField("basePriceKgs")
       ? resolveOptionalPrice(row.basePriceKgs)
       : undefined;
+    const wholesalePriceKgs = shouldApplyField("wholesalePriceKgs")
+      ? resolveOptionalPrice(row.wholesalePriceKgs)
+      : undefined;
     const avgCostKgs = shouldApplyField("avgCostKgs")
       ? resolveOptionalPrice(row.avgCostKgs)
       : undefined;
@@ -4816,25 +4854,26 @@ export const importProductsTx = async (
         product.id,
         stores.filter((store) => store.id === input.storeId),
       );
-      if (basePriceKgs !== undefined) {
-        const organization = await tx.organization.findUniqueOrThrow({
-          where: { id: input.organizationId },
-          select: { retailWholesaleEnabled: true },
-        });
-        if (organization.retailWholesaleEnabled) {
-          await saveProductPriceTypes(tx, {
-            organizationId: input.organizationId,
-            storeId: input.storeId,
-            actorId: input.actorId,
-            requestId: input.requestId,
-            productId: product.id,
-            prices: [{ retailPriceKgs: basePriceKgs }],
-          });
-        } else {
-          await upsertStoreBasePrice(product.id, basePriceKgs);
-        }
+      const importedPrices = { retailPriceKgs: basePriceKgs, wholesalePriceKgs };
+      if (basePriceKgs !== undefined || wholesalePriceKgs !== undefined) {
+        const prices = existingBehavior === "skip"
+          ? await resolveImportedConnectionPrices(
+              tx,
+              { organizationId: input.organizationId, storeId: input.storeId, productId: product.id },
+              importedPrices,
+              true,
+              await priceTypesEnabled(),
+            )
+          : importedPrices;
+        await saveImportedStorePrices(product.id, prices, true);
       }
-      await upsertMinStock(product.id, minStock);
+      if (minStock !== undefined) {
+        const hasPolicy = existingBehavior === "skip" && await tx.reorderPolicy.findUnique({
+          where: { storeId_productId: { storeId: input.storeId, productId: product.id } },
+          select: { id: true },
+        });
+        if (!hasPolicy) await upsertMinStock(product.id, minStock);
+      }
       await applyImportedStock(product.id, stockQty);
       await writeAuditLog(tx, {
         organizationId: input.organizationId,
@@ -5003,9 +5042,7 @@ export const importProductsTx = async (
         });
       }
       await ensureBaseSnapshots(tx, input.organizationId, existing.id, stores);
-      if (shouldApplyField("basePriceKgs") && basePriceKgs !== undefined) {
-        await upsertStoreBasePrice(existing.id, basePriceKgs);
-      }
+      await saveImportedStorePrices(existing.id, { retailPriceKgs: basePriceKgs, wholesalePriceKgs });
       if (
         (shouldApplyField("avgCostKgs") || shouldApplyField("purchasePriceKgs")) &&
         resolvedBaseCost !== undefined
@@ -5093,9 +5130,7 @@ export const importProductsTx = async (
         });
       }
       await ensureBaseSnapshots(tx, input.organizationId, product.id, stores);
-      if (basePriceKgs !== undefined) {
-        await upsertStoreBasePrice(product.id, basePriceKgs);
-      }
+      await saveImportedStorePrices(product.id, { retailPriceKgs: basePriceKgs, wholesalePriceKgs });
       if (resolvedBaseCost !== undefined) {
         await setBaseCost(product.id, resolvedBaseCost);
       }

@@ -62,6 +62,7 @@ type ImportRow = {
   }[];
   barcodes?: string[];
   basePriceKgs?: number;
+  wholesalePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
   minStock?: number;
@@ -82,6 +83,7 @@ type MappingKey =
   | "options"
   | "barcodes"
   | "basePriceKgs"
+  | "wholesalePriceKgs"
   | "purchasePriceKgs"
   | "avgCostKgs"
   | "minStock"
@@ -116,6 +118,7 @@ type ImportUpdateField =
   | "variants"
   | "barcodes"
   | "basePriceKgs"
+  | "wholesalePriceKgs"
   | "purchasePriceKgs"
   | "avgCostKgs"
   | "minStock"
@@ -602,7 +605,15 @@ const detectSource = (headers: string[]): ImportSource => {
   return "csv";
 };
 
+const isBazaarExport = (headers: string[]) =>
+  headers.some((header) => normalizeHeader(header) === normalizeHeader("Магазин / сумма остатков"));
+
 const buildDefaultMapping = (headers: string[]): MappingState => ({
+  wholesalePriceKgs: detectColumn(
+    headers,
+    ["wholesaleprice", "оптоваяцена", "ценаопта", "баадүң", "дүңбаа"],
+    { allowContains: true },
+  ),
   sku: detectColumn(headers, ["sku", "артикул", "код", "code"]),
   name: detectColumn(headers, ["name", "наименование", "название", "товар"]),
   unit: detectColumn(headers, [
@@ -619,10 +630,13 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
   color: detectColumn(headers, ["color", "colour", "цвет", "цветтовара", "түс"]),
   description: detectColumn(headers, ["description", "описание"]),
   basePriceKgs: detectColumn(
-    headers,
+    headers.filter((header) => !/wholesale|purchase|buyprice|оптов|ценазакуп|закупоч|баадүң|дүңбаа/.test(normalizeHeader(header))),
     [
       "saleprice",
       "sale price",
+      "retailprice",
+      "розничнаяцена",
+      "ценарозницы",
       "baseprice",
       "base price",
       "price",
@@ -662,7 +676,7 @@ const buildDefaultMapping = (headers: string[]): MappingState => ({
     { allowContains: true },
   ),
   stockQty: detectColumn(
-    headers,
+    headers.filter((header) => !/minimumstock|minstock|minsafety|минимальн|миностат|минкалдык|суммаостат/.test(normalizeHeader(header))),
     [
       "stock",
       "quantity",
@@ -860,8 +874,11 @@ const splitRowsForTransport = (
   base: ImportTransportBase,
 ): ImportTransportPayload[] => {
   const chunks: ImportTransportPayload[] = [];
-  const baseBytes = jsonByteLength({ ...base, rows: [] });
+  const { rowActions = [], ...settings } = base;
+  const decisionByRow = new Map(rowActions.map((decision) => [decision.sourceRowNumber, decision]));
+  const baseBytes = jsonByteLength({ ...settings, rows: [], rowActions: [] });
   let chunkRows: ImportRow[] = [];
+  let chunkDecisions: ProductImportRowDecision[] = [];
   let chunkBytes = baseBytes;
   let chunkImages = 0;
 
@@ -869,14 +886,16 @@ const splitRowsForTransport = (
     if (!chunkRows.length) {
       return;
     }
-    chunks.push({ ...base, rows: chunkRows });
+    chunks.push({ ...settings, rows: chunkRows, rowActions: chunkDecisions });
     chunkRows = [];
+    chunkDecisions = [];
     chunkBytes = baseBytes;
     chunkImages = 0;
   };
 
   rows.forEach((row) => {
-    const rowBytes = jsonByteLength(row) + 2;
+    const decision = decisionByRow.get(row.sourceRowNumber);
+    const rowBytes = jsonByteLength(row) + 2 + (decision ? jsonByteLength(decision) + 1 : 0);
     const rowImages = countImportRowImages(row);
     const wouldExceedRows = chunkRows.length >= MAX_IMPORT_TRANSPORT_ROWS;
     const wouldExceedImages =
@@ -887,6 +906,7 @@ const splitRowsForTransport = (
       flushChunk();
     }
     chunkRows.push(row);
+    if (decision) chunkDecisions.push(decision);
     chunkBytes += rowBytes;
     chunkImages += rowImages;
   });
@@ -945,6 +965,7 @@ const mergeDryRunPreview = (
 
   return {
     rows,
+    connectionCandidates: [...current.connectionCandidates, ...next.connectionCandidates],
     summary: {
       creates: current.summary.creates + next.summary.creates,
       updates: current.summary.updates + next.summary.updates,
@@ -980,6 +1001,7 @@ const resetImportFormState = (setters: {
     color: "",
     description: "",
     basePriceKgs: "",
+    wholesalePriceKgs: "",
     purchasePriceKgs: "",
     avgCostKgs: "",
     minStock: "",
@@ -1001,6 +1023,7 @@ const PRODUCT_TEMPLATE_HEADERS = [
   "Категория",
   "Описание",
   "Цена",
+  "Оптовая цена",
   "Себестоимость",
   "В наличии",
   "Минимальный остаток",
@@ -1017,6 +1040,7 @@ const PRODUCT_TEMPLATE_EXAMPLE = [
   "Тестовая категория",
   "Описание тестового товара",
   100,
+  "",
   70,
   15,
   3,
@@ -1623,6 +1647,7 @@ const ImportPage = () => {
     color: "",
     description: "",
     basePriceKgs: "",
+    wholesalePriceKgs: "",
     purchasePriceKgs: "",
     avgCostKgs: "",
     minStock: "",
@@ -1641,6 +1666,7 @@ const ImportPage = () => {
   >({});
   const [selectedUpdateFields, setSelectedUpdateFields] = useState<ImportUpdateField[]>([
     "basePriceKgs",
+    "wholesalePriceKgs",
     "purchasePriceKgs",
     "avgCostKgs",
     "minStock",
@@ -1762,6 +1788,7 @@ const ImportPage = () => {
       { key: "color" as const, label: t("fieldColor"), required: false },
       { key: "description" as const, label: t("fieldDescription"), required: false },
       { key: "basePriceKgs" as const, label: t("fieldBasePrice"), required: false },
+      { key: "wholesalePriceKgs" as const, label: t("fieldWholesalePrice"), required: false },
       { key: "purchasePriceKgs" as const, label: t("fieldPurchasePrice"), required: false },
       { key: "avgCostKgs" as const, label: t("fieldAvgCost"), required: false },
       { key: "minStock" as const, label: t("fieldMinStock"), required: false },
@@ -1904,6 +1931,10 @@ const ImportPage = () => {
         shouldApply("basePriceKgs") && mapping.basePriceKgs
           ? normalizeValue(row[mapping.basePriceKgs])
           : "";
+      const wholesalePriceCandidate =
+        shouldApply("wholesalePriceKgs") && mapping.wholesalePriceKgs
+          ? normalizeValue(row[mapping.wholesalePriceKgs])
+          : "";
       const purchasePriceCandidate =
         shouldApply("purchasePriceKgs") && mapping.purchasePriceKgs
           ? normalizeValue(row[mapping.purchasePriceKgs])
@@ -1944,6 +1975,7 @@ const ImportPage = () => {
         ? applyColorToVariants(variantsWithOptions, color)
         : variantsWithOptions;
       const basePriceResult = parseOptionalNumericValue(basePriceCandidate);
+      const wholesalePriceResult = parseOptionalNumericValue(wholesalePriceCandidate);
       const purchasePriceResult = parseOptionalNumericValue(purchasePriceCandidate);
       const avgCostResult = parseOptionalNumericValue(avgCostCandidate);
       const minStockResult = parseOptionalIntegerValue(minStockCandidate);
@@ -1955,6 +1987,15 @@ const ImportPage = () => {
           message: t("rowInvalidNumber", { row: rowNumber, field: t("fieldBasePrice") }),
           code: "invalidNumber",
           value: "basePriceKgs",
+        });
+        return;
+      }
+      if (wholesalePriceResult.invalid) {
+        errors.push({
+          row: rowNumber,
+          message: t("rowInvalidNumber", { row: rowNumber, field: t("fieldWholesalePrice") }),
+          code: "invalidNumber",
+          value: "wholesalePriceKgs",
         });
         return;
       }
@@ -2062,6 +2103,7 @@ const ImportPage = () => {
             ? normalizeValue(row[mapping.description]) || undefined
             : undefined,
         basePriceKgs: basePriceResult.value,
+        wholesalePriceKgs: wholesalePriceResult.value,
         purchasePriceKgs: purchasePriceResult.value,
         avgCostKgs: avgCostResult.value,
         minStock: minStockResult.value,
@@ -2155,6 +2197,7 @@ const ImportPage = () => {
       void (async () => {
         let merged: ImportDryRunPreviewData = {
           rows: [],
+          connectionCandidates: [],
           summary: createEmptyDryRunSummary(),
         };
 
@@ -2193,7 +2236,10 @@ const ImportPage = () => {
   const applyDetectedProductMapping = (nextHeaders: string[]) => {
     const nextMapping = buildDefaultMapping(nextHeaders);
     setMapping(nextMapping);
-    if (nextMapping.stockQty) {
+    if (isBazaarExport(nextHeaders)) {
+      setStockBehavior("ignore");
+      setExistingBehavior("skip");
+    } else if (nextMapping.stockQty) {
       setStockBehavior("set");
     }
   };
@@ -2211,6 +2257,7 @@ const ImportPage = () => {
       color: "",
       description: "",
       basePriceKgs: "",
+      wholesalePriceKgs: "",
       purchasePriceKgs: "",
       avgCostKgs: "",
       minStock: "",
@@ -2449,7 +2496,7 @@ const ImportPage = () => {
 
   const applyUpdatePreset = (preset: "prices" | "minStock" | "all" | "none") => {
     if (preset === "prices") {
-      setSelectedUpdateFields(["basePriceKgs", "purchasePriceKgs", "avgCostKgs"]);
+      setSelectedUpdateFields(["basePriceKgs", "wholesalePriceKgs", "purchasePriceKgs", "avgCostKgs"]);
       return;
     }
     if (preset === "minStock") {
@@ -2535,7 +2582,12 @@ const ImportPage = () => {
       ? pendingCounts.map((count) => {
           const rows = validation.rows.slice(offset, offset + count);
           offset += count;
-          return { ...transportBase, rows };
+          const rowNumbers = new Set(rows.map((row) => row.sourceRowNumber));
+          return {
+            ...transportBase,
+            rows,
+            rowActions: transportBase.rowActions.filter((decision) => rowNumbers.has(decision.sourceRowNumber)),
+          };
         })
       : splitRowsForTransport(validation.rows, transportBase);
     if (chunks.some((chunk) => jsonByteLength(chunk) > MAX_IMPORT_TRANSPORT_BYTES)) {
@@ -3106,6 +3158,7 @@ const ImportPage = () => {
               <div>
                 <p className="text-sm font-medium text-foreground">{t("dryRunTitle")}</p>
                 <p className="text-xs text-muted-foreground">{t("dryRunSubtitle")}</p>
+                <p className="text-xs text-muted-foreground">{t("costColumnsHint")}</p>
               </div>
               <Button
                 type="button"
@@ -3129,6 +3182,15 @@ const ImportPage = () => {
                   preview={dryRunPreview}
                   rowActions={productRowActions}
                   onRowActionChange={handleProductRowActionChange}
+                  onBulkConnect={(candidates) =>
+                    setProductRowActions((current) => {
+                      const decisions = { ...current };
+                      for (const { sourceRowNumber, existingProductId } of candidates) {
+                        decisions[sourceRowNumber] ??= { sourceRowNumber, action: "connect", existingProductId };
+                      }
+                      return decisions;
+                    })
+                  }
                   disabled={dryRunPreviewPending || isImporting}
                 />
               ) : dryRunPreviewError ? (

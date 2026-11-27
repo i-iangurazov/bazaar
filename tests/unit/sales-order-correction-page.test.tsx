@@ -181,6 +181,13 @@ vi.mock("@/lib/trpc", () => ({
           refetch: vi.fn(),
         }),
       },
+      paymentInfo: {
+        useQuery: () => ({
+          data: { canAppendUnpaidLine: false },
+          isLoading: false,
+          isError: false,
+        }),
+      },
       correctionQuote: {
         useQuery: (input: Record<string, unknown>, options?: { enabled?: boolean }) => {
           const enabled = options?.enabled !== false;

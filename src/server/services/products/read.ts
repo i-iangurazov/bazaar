@@ -56,6 +56,7 @@ const productExportColumns: Array<{ key: ProductExportColumnKey; header: string 
   { key: "categories", header: "Категории" },
   { key: "description", header: "Описание" },
   { key: "basePriceKgs", header: "Цена продажи" },
+  { key: "wholesalePriceKgs", header: "Оптовая цена" },
   { key: "purchasePriceKgs", header: "Цена закупки" },
   { key: "avgCostKgs", header: "Себестоимость" },
   { key: "minStock", header: "Минимальный остаток" },
@@ -2106,7 +2107,14 @@ export const exportProductTableBatch = async ({
   });
 
   const productIds = products.map((product) => product.id);
-  const [baseCosts, latestPurchaseLines, minStockRows, storePrices] = productIds.length
+  const priceTypesEnabled = Boolean(
+    exportStoreId &&
+    (await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { retailWholesaleEnabled: true },
+    }))?.retailWholesaleEnabled,
+  );
+  const [baseCosts, latestPurchaseLines, minStockRows, storePrices, priceTypes] = productIds.length
     ? await Promise.all([
         prisma.productCost.findMany({
           where: {
@@ -2162,8 +2170,19 @@ export const exportProductTableBatch = async ({
               },
             })
           : Promise.resolve([]),
+        exportStoreId && priceTypesEnabled
+          ? prisma.storePriceTypes.findMany({
+              where: {
+                organizationId,
+                storeId: exportStoreId,
+                productId: { in: productIds },
+                variantKey: "BASE",
+              },
+              select: { productId: true, retailPriceKgs: true, wholesalePriceKgs: true },
+            })
+          : Promise.resolve([]),
       ])
-    : [[], [], [], []];
+    : [[], [], [], [], []];
 
   const avgCostByProductId = new Map(
     baseCosts.map((cost) => [cost.productId, decimalToNumber(cost.avgCostKgs)]),
@@ -2177,6 +2196,8 @@ export const exportProductTableBatch = async ({
       .filter((price) => price.priceKgs != null)
       .map((price) => [price.productId, decimalToNumber(price.priceKgs)]),
   );
+
+  const priceTypesByProductId = new Map(priceTypes.map((price) => [price.productId, price]));
 
   const serializeVariants = (product: (typeof products)[number]) =>
     product.variants.length
@@ -2209,15 +2230,19 @@ export const exportProductTableBatch = async ({
   const selectedColumns = productExportColumns.filter(
     (column) =>
       (!selectedColumnSet || selectedColumnSet.has(column.key)) &&
-      (canReadCost || !["avgCostKgs", "purchasePriceKgs"].includes(column.key)),
+      (canReadCost || !["avgCostKgs", "purchasePriceKgs"].includes(column.key)) &&
+      (column.key !== "wholesalePriceKgs" || priceTypesEnabled),
   );
   const header = selectedColumns.map((column) => column.header);
   const keys = selectedColumns.map((column) => column.key);
   const rows = products.map((product) => {
     const avgCostKgs = avgCostByProductId.get(product.id) ?? null;
-    const purchasePriceKgs = purchasePriceByProductId.get(product.id) ?? avgCostKgs;
+    const purchasePriceKgs = purchasePriceByProductId.get(product.id);
+    const priceType = priceTypesByProductId.get(product.id);
     const basePriceKgs =
-      storePriceByProductId.get(product.id) ?? decimalToNumber(product.basePriceKgs);
+      decimalToNumber(priceType?.retailPriceKgs) ??
+      storePriceByProductId.get(product.id) ??
+      decimalToNumber(product.basePriceKgs);
     return {
       sku: product.sku,
       name: product.name,
@@ -2227,6 +2252,7 @@ export const exportProductTableBatch = async ({
         : (product.category ?? ""),
       description: product.description ?? "",
       basePriceKgs: basePriceKgs ?? "",
+      wholesalePriceKgs: decimalToNumber(priceType?.wholesalePriceKgs) ?? "",
       purchasePriceKgs: purchasePriceKgs ?? "",
       avgCostKgs: avgCostKgs ?? "",
       minStock: minStockByProductId.get(product.id) ?? "",

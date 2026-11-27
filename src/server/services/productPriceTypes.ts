@@ -9,6 +9,46 @@ export type ProductPriceTypeValues = {
   wholesalePriceKgs?: number | null;
 };
 
+export async function resolveImportedConnectionPrices(
+  db: Pick<Prisma.TransactionClient, "storePrice" | "storePriceTypes" | "priceBookStoreItem">,
+  scope: { organizationId: string; storeId: string; productId: string },
+  values: { retailPriceKgs?: number; wholesalePriceKgs?: number },
+  preserveExisting: boolean,
+  retailWholesaleEnabled: boolean,
+) {
+  const key = { ...scope, variantKey: "BASE" };
+  const where = { organizationId_storeId_productId_variantKey: key };
+  const [standard, types, shared] = await Promise.all([
+    db.storePrice.findUnique({ where, select: { priceKgs: true } }),
+    retailWholesaleEnabled
+      ? db.storePriceTypes.findUnique({
+          where,
+          select: { retailPriceKgs: true, wholesalePriceKgs: true },
+        })
+      : null,
+    preserveExisting
+      ? db.priceBookStoreItem.findFirst({
+          where: key,
+          select: { retailShared: true, wholesaleShared: true },
+        })
+      : null,
+  ]);
+  const retailBefore = types?.retailPriceKgs ?? standard?.priceKgs;
+  const wholesaleBefore = types?.wholesalePriceKgs;
+  return {
+    retailBefore,
+    wholesaleBefore,
+    retailPriceKgs:
+      preserveExisting && (retailBefore != null || shared?.retailShared)
+        ? undefined
+        : values.retailPriceKgs,
+    wholesalePriceKgs:
+      preserveExisting && (wholesaleBefore != null || shared?.wholesaleShared)
+        ? undefined
+        : values.wholesalePriceKgs,
+  };
+}
+
 // Called inside the product transaction, so the product and its prices save together.
 export async function saveProductPriceTypes(
   tx: Prisma.TransactionClient,

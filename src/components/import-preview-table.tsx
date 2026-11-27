@@ -18,6 +18,7 @@ type ImportPreviewRow = {
   unit?: string;
   category?: string | null;
   basePriceKgs?: number;
+  wholesalePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
   minStock?: number;
@@ -47,6 +48,7 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                 <TableHead>{t("fieldSku")}</TableHead>
                 <TableHead>{t("fieldName")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldBasePrice")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("fieldWholesalePrice")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldPurchasePrice")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldAvgCost")}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t("fieldMinStock")}</TableHead>
@@ -65,6 +67,9 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                   </TableCell>
                   <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                     {row.basePriceKgs ?? tCommon("notAvailable")}
+                  </TableCell>
+                  <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
+                    {row.wholesalePriceKgs ?? tCommon("notAvailable")}
                   </TableCell>
                   <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">
                     {row.purchasePriceKgs ?? tCommon("notAvailable")}
@@ -119,6 +124,12 @@ const ImportPreviewTable = ({ rows, limit = 5 }: ImportPreviewTableProps) => {
                 {t("fieldBasePrice")}
               </p>
               <p className="text-foreground/90">{row.basePriceKgs ?? tCommon("notAvailable")}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                {t("fieldWholesalePrice")}
+              </p>
+              <p className="text-foreground/90">{row.wholesalePriceKgs ?? tCommon("notAvailable")}</p>
             </div>
             <div>
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">

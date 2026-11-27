@@ -1205,7 +1205,7 @@ const SalesOrderDetailPage = () => {
         <Link href={returnTo}>{tCommon("back")}</Link>
       </Button>
       {order ? <SalesDocumentActions orderId={order.id} number={order.number} /> : null}
-      {order && isEditable ? (
+      {order && (isEditable || canAppendLine) ? (
         <Button variant="secondary" asChild>
           <Link
             href={`/sales/orders/${encodeURIComponent(order.id)}/edit?returnTo=${encodeURIComponent(returnTo)}`}
@@ -1215,7 +1215,8 @@ const SalesOrderDetailPage = () => {
           </Link>
         </Button>
       ) : null}
-      {order && order.status === CustomerOrderStatus.COMPLETED && canFinalize ? (
+      {order && order.status === CustomerOrderStatus.COMPLETED && canFinalize &&
+      !paymentInfoQuery.isLoading && !canAppendLine ? (
         <Button variant="secondary" asChild>
           <Link
             href={`/sales/orders/${encodeURIComponent(order.id)}/correction?returnTo=${encodeURIComponent(`/sales/orders/${order.id}`)}`}

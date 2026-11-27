@@ -630,4 +630,95 @@ describeDb("import batches", () => {
       truncated: true,
     });
   });
+
+  it("connects verified rows beyond the preview and preserves destination prices and stock", async () => {
+    const { org, adminUser, baseUnit, store } = await seedBase({ plan: "BUSINESS" });
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { retailWholesaleEnabled: true },
+    });
+    const target = await prisma.store.create({
+      data: { organizationId: org.id, name: "Delivery QA", code: "QA-DELIVERY" },
+    });
+    const all = Array.from({ length: 501 }, (_, index) => ({
+      id: `excel-product-${index + 1}`,
+      sku: `EXCEL-SKU-${index + 1}`,
+      name: `Excel test product ${index + 1}`,
+      organizationId: org.id,
+      unit: baseUnit.code,
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 90,
+    }));
+    await prisma.product.createMany({ data: all });
+    await prisma.storeProduct.createMany({
+      data: all.map(({ id }) => ({ organizationId: org.id, storeId: store.id, productId: id })),
+    });
+    const first = all[0]!;
+    const last = all[all.length - 1]!;
+    const priceKey = (storeId: string, productId: string) => ({
+      organizationId: org.id, storeId, productId, variantKey: "BASE",
+    });
+    await prisma.storePriceTypes.createMany({
+      data: [
+        { ...priceKey(store.id, first.id), retailPriceKgs: 140, wholesalePriceKgs: 84 },
+        { ...priceKey(target.id, first.id), retailPriceKgs: 0, wholesalePriceKgs: 0 },
+      ],
+    });
+    await prisma.inventorySnapshot.createMany({
+      data: [
+        { storeId: store.id, productId: first.id, onHand: 7 },
+        { storeId: target.id, productId: first.id, onHand: 3 },
+      ],
+    });
+    const caller = createTestCaller({
+      id: adminUser.id, email: adminUser.email, role: adminUser.role, organizationId: org.id,
+    });
+    const rows = all.map(({ sku, name }, index) => ({
+      sourceRowNumber: index + 1, sku, name, unit: baseUnit.code,
+      basePriceKgs: 140, wholesalePriceKgs: 84, stockQty: 99,
+    }));
+    const options = { storeId: target.id, existingBehavior: "skip", stockBehavior: "ignore" } as const;
+    const preview = await caller.products.previewImportCsv({ ...options, rows, previewLimit: 100 });
+    expect(preview.connectionCandidates).toHaveLength(501);
+    expect(preview.summary).toMatchObject({
+      blockingWarningCount: 501,
+      skipped: 0,
+      returnedRows: 100,
+    });
+    expect(preview.connectionCandidates.at(-1)).toMatchObject({
+      sourceRowNumber: 501, existingProductId: last.id,
+    });
+    const rowActions = preview.connectionCandidates
+      .filter((row) => row.sourceRowNumber === 1 || row.sourceRowNumber === 501)
+      .map(({ sourceRowNumber, existingProductId }) => ({
+        sourceRowNumber, existingProductId, action: "connect" as const,
+      }));
+    const subset = [rows[0]!, rows[500]!];
+    const reviewed = await caller.products.previewImportCsv({ ...options, rows: subset, rowActions });
+    expect(reviewed.summary).toMatchObject({ connected: 2, blockingWarningCount: 0 });
+    expect(reviewed.rows[0]?.changes).toEqual([]);
+    expect(reviewed.rows[1]?.changes).toContainEqual({ field: "wholesalePriceKgs", before: null, after: 84 });
+    const imported = await caller.products.importCsv({
+      ...options, rows: subset, rowActions, idempotencyKey: "excel-prices-keep-destination",
+    });
+    expect(imported.summary).toMatchObject({ created: 0, updated: 0, connected: 2 });
+    const readPrices = async (storeId: string, productId: string) => {
+      const price = await prisma.storePriceTypes.findUniqueOrThrow({
+        where: { organizationId_storeId_productId_variantKey: priceKey(storeId, productId) },
+      });
+      return [Number(price.retailPriceKgs), Number(price.wholesalePriceKgs)];
+    };
+    expect(await readPrices(target.id, first.id)).toEqual([0, 0]);
+    expect(await readPrices(target.id, last.id)).toEqual([140, 84]);
+    expect(await readPrices(store.id, first.id)).toEqual([140, 84]);
+    const snapshots = await prisma.inventorySnapshot.findMany({ where: { productId: first.id } });
+    expect(snapshots.find((row) => row.storeId === store.id)?.onHand).toBe(7);
+    expect(snapshots.find((row) => row.storeId === target.id)?.onHand).toBe(3);
+    const exported = await caller.products.exportCsv({
+      storeId: target.id, ids: [last.id],
+      columns: ["sku", "basePriceKgs", "wholesalePriceKgs", "purchasePriceKgs"],
+    });
+    expect(exported).toContain("Оптовая цена");
+    expect(exported).toContain(`${last.sku};140;84;`);
+  });
 });

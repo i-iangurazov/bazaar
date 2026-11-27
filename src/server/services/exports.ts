@@ -666,7 +666,8 @@ const buildSalesSummaryRows = async (
   movements.forEach((movement) => {
     const day = formatDay(movement.createdAt);
     const entry = byDay.get(day) ?? { totalQty: 0, movementCount: 0 };
-    entry.totalQty += Math.abs(movement.qtyDelta);
+    // A signed SALE correction can restore quantities to stock.
+    entry.totalQty -= movement.qtyDelta;
     entry.movementCount += 1;
     byDay.set(day, entry);
   });
@@ -886,6 +887,7 @@ const buildReceiptsRows = async (
     where: {
       storeId,
       type: StockMovementType.SALE,
+      qtyDelta: { lt: 0 },
       createdAt: { gte: periodStart, lte: periodEnd },
     },
     include: { product: { select: { id: true, sku: true, name: true } }, variant: true },
