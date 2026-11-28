@@ -428,6 +428,8 @@ const ProductMovementsPage = () => {
 
   const renderActions = (movement: MovementRow, layout: "desktop" | "mobile" = "desktop") => {
     const isCanceledTransfer = movement.documentType === "TRANSFER" && movement.status === "CANCELED";
+    const isCanceledOrder =
+      movement.documentType === "SALE" && !movement.isPosSale && movement.status === "CANCELED";
     const isStockDocument =
       movement.documentType === "STOCK_RECEIVING" ||
       movement.documentType === "TRANSFER" ||
@@ -485,10 +487,13 @@ const ProductMovementsPage = () => {
     const saleOrderId = movement.documentType === "SALE" && movement.id.startsWith(saleReferencePrefix)
       ? movement.id.slice(saleReferencePrefix.length)
       : null;
-    const printButton = saleOrderId ? (
+    const isEstimate = !movement.isPosSale && movement.status === "DRAFT" && !movement.postedAt;
+    const printButton = saleOrderId && !isCanceledOrder ? (
       <SalesDocumentActions
         orderId={saleOrderId}
         number={movement.documentNumber || shortDocumentReference(movement.documentId)}
+        estimateOnly={isEstimate}
+        disabled={isEstimate && movement.positionsCount === 0}
         iconOnly
         variant={layout === "desktop" ? "ghost" : "secondary"}
         className="h-10 w-10 md:h-8 md:w-8"
@@ -542,7 +547,7 @@ const ProductMovementsPage = () => {
         }
       >
         {viewButton ?? <span className="text-muted-foreground">{tCommon("notAvailable")}</span>}
-        {!isCanceledTransfer && editButton}
+        {!isCanceledTransfer && !isCanceledOrder && editButton}
         {printButton}
         {archiveButton}
       </div>

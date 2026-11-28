@@ -746,6 +746,7 @@ const buildProductMovementJournalCte = (input: {
       END AS "status",
       co."status"::text AS "orderStatus",
       CASE
+        WHEN g."firstMovementAt" IS NULL THEN 'NOT_APPLICABLE'
         WHEN co."id" IS NOT NULL THEN
           CASE
             WHEN COALESCE(co."totalKgs", 0) <= 0 OR COALESCE(co_payments."paidAmount", 0) >= COALESCE(co."totalKgs", 0) THEN 'PAID'
@@ -785,6 +786,7 @@ const buildProductMovementJournalCte = (input: {
         ELSE NULL
       END AS "totalAmount",
       CASE
+        WHEN g."firstMovementAt" IS NULL THEN NULL
         WHEN co."id" IS NOT NULL THEN co_payments."paidAmount"
         WHEN sr."id" IS NOT NULL THEN sr_payments."refundedAmount"
         ELSE NULL

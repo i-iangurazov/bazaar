@@ -90,6 +90,8 @@ describeDb("movement journal customers and pending sales", () => {
         documentType: "SALE",
         status: "DRAFT",
         postedAt: null,
+        paymentStatus: "NOT_APPLICABLE",
+        paidAmount: null,
         customerName: "Эмиль",
         recipientName: "Эмиль",
         positionsCount: 1,
@@ -98,6 +100,9 @@ describeDb("movement journal customers and pending sales", () => {
         detailUrl: "/sales/orders/" + draft.id,
       }),
     ]);
+    await expect(caller.inventory.productMovements({
+      ...filter, paymentStatus: "UNPAID",
+    })).resolves.toMatchObject({ total: 0 });
     await expect(caller.inventory.productMovements({
       includePendingSales: true, search: "Эмиль", type: "SALE", archiveMode: "ARCHIVED",
     })).resolves.toMatchObject({
@@ -124,6 +129,7 @@ describeDb("movement journal customers and pending sales", () => {
         documentId: draft.id,
         status: "COMPLETED",
         postedAt: completedAt,
+        paymentStatus: "UNPAID",
         customerName: "Эмиль",
         totalQuantity: 2,
       }),

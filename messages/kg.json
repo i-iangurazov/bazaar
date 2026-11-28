@@ -4035,7 +4035,7 @@
       "createSale": "Сатуу",
       "tableTitle": "Кыймыл документтери",
       "totalLabel": "Документтер: {count}",
-      "searchPlaceholder": "Номер, комментарий, жөнөтүүчү, алуучу, дүкөн же автор",
+      "searchPlaceholder": "Номер, кардар же товар",
       "dateRange": "Период",
       "dateRangeStart": "Периоддун башы",
       "dateRangeEnd": "Периоддун аягы",

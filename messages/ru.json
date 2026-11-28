@@ -4036,7 +4036,7 @@
       "createSale": "Продажа",
       "tableTitle": "Документы движения",
       "totalLabel": "Документов: {count}",
-      "searchPlaceholder": "Номер, комментарий, отправитель, получатель, магазин или автор",
+      "searchPlaceholder": "Номер, клиент или товар",
       "dateRange": "Период",
       "dateRangeStart": "Начало периода",
       "dateRangeEnd": "Конец периода",

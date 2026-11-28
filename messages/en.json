@@ -4046,7 +4046,7 @@
       "createSale": "Sale",
       "tableTitle": "Movement documents",
       "totalLabel": "{count} documents",
-      "searchPlaceholder": "Search number, comment, sender, recipient, store, or author",
+      "searchPlaceholder": "Number, customer or product",
       "dateRange": "Period",
       "dateRangeStart": "Period start",
       "dateRangeEnd": "Period end",
