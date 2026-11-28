@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import { buildSalesDocumentPdf, type SalesDocumentPdfLabels } from "@/server/services/salesDocumentPdf";
 import type { SalesDocumentPayload } from "@/server/services/salesDocuments";
 
-const labels = (locale: string) => JSON.parse(readFileSync(`messages/${locale}.json`, "utf8")).salesDocuments.pdf as SalesDocumentPdfLabels;
+const labels = (locale: string): SalesDocumentPdfLabels => {
+  const { salesDocuments } = JSON.parse(readFileSync(`messages/${locale}.json`, "utf8"));
+  return { ...salesDocuments.pdf, estimate: salesDocuments.estimate };
+};
 const job: SalesDocumentPayload = {
   id: "sale-1", organizationId: "org-1", storeId: "store-1", number: "SO-20261115-001", status: "COMPLETED", isPosSale: false,
   createdAt: new Date("2026-11-15T20:30:00Z"), currencyCode: "USD", currencyRateKgsPerUnit: 90,
@@ -18,6 +21,35 @@ const pages = (pdf: Buffer) => (pdf.toString("latin1").match(/\/Type\s*\/Page\b/
 const dimensions = (pdf: Buffer) => Array.from(pdf.toString("latin1").matchAll(/\/MediaBox\s*\[0 0 ([\d.]+) ([\d.]+)\]/g), (match) => [Number(match[1]), Number(match[2])]);
 
 describe("sales documents PDF layout", () => {
+  it.each(["ru", "kg", "en"])("prints all 30 estimate rows without handover signatures in %s", async (locale) => {
+    const text = vi.spyOn(PDFDocument.prototype, "text");
+    const translated = labels(locale);
+    const items = Array.from({ length: 30 }, (_, index) => ({
+      ...job.items[0]!,
+      id: `estimate-line-${index + 1}`,
+      name: `Item ${index + 1}`,
+    }));
+    const subtotalKgs = Math.round(items.reduce((sum, item) => sum + item.lineTotalKgs, 0) * 100) / 100;
+    try {
+      const pdf = await buildSalesDocumentPdf({
+        job: { ...job, status: "DRAFT", items, subtotalKgs, totalKgs: subtotalKgs },
+        kind: "estimate",
+        locale,
+        labels: translated,
+      });
+      const printed = text.mock.calls.map(([value]) => String(value));
+      expect(pages(pdf)).toBeGreaterThan(1);
+      expect(printed).toEqual(expect.arrayContaining([
+        translated.estimate, translated.estimateNote, translated.price, translated.amount,
+        ...items.map((item) => item.name),
+      ]));
+      expect(printed).not.toContain(translated.issuedBy);
+      expect(printed).not.toContain(translated.receivedBy);
+    } finally {
+      text.mockRestore();
+    }
+  });
+
   it.each(["ru", "kg", "en"])("renders A4 and a compact80mm PDF with the shared font in %s", async (locale) => {
     for (const kind of ["invoice", "goods_receipt"] as const) {
       const pdf = await buildSalesDocumentPdf({ job, kind, locale, labels: labels(locale) });

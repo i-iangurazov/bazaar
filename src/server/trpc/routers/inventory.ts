@@ -47,6 +47,7 @@ import {
   decodeProductMovementDocumentKey,
   getProductMovementDocument,
   listProductMovementJournal,
+  listProductMovementRecipientOptions,
   productMovementArchiveModes,
   productMovementDocumentTypes,
   productMovementPaymentStatuses,
@@ -954,6 +955,7 @@ export const inventoryRouter = router({
           authorSearch: z.string().trim().max(120).optional(),
           senderSearch: z.string().trim().max(160).optional(),
           recipientSearch: z.string().trim().max(160).optional(),
+          includePendingSales: z.boolean().optional(),
           archiveMode: productMovementArchiveModeSchema.optional(),
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(10).max(100).optional(),
@@ -963,6 +965,13 @@ export const inventoryRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => listProductMovementJournal(ctx.prisma, ctx.user, input ?? {})),
+
+  productMovementRecipientOptions: protectedProcedure
+    .input(z.object({
+      storeId: z.string().trim().min(1).optional(),
+      search: z.string().trim().min(2).max(160),
+    }))
+    .query(({ ctx, input }) => listProductMovementRecipientOptions(ctx.prisma, ctx.user, input)),
 
   productMovementDocument: protectedProcedure
     .input(z.object({ documentKey: z.string().min(1).max(300) }))

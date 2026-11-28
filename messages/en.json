@@ -4035,7 +4035,15 @@
     "noMovements": "No movements",
     "movementJournal": {
       "title": "Product Movement",
-      "subtitle": "A document journal of stock-affecting sales, returns, receiving, transfers, counts, and adjustments.",
+      "subtitle": "Customer orders, POS receipts, returns, receipts of goods, transfers, stock counts, and adjustments.",
+      "applySearch": "Find",
+      "searchInProgress": "Updating documents…",
+      "customerLabel": "Customer: {name}",
+      "posReceipt": "POS receipt",
+      "recipientSuggestions": "Recipient suggestions",
+      "recipientSuggestionsUnavailable": "Suggestions are unavailable. You can still search by the entered name.",
+      "recipientNoSuggestions": "No matching contacts.",
+      "createSale": "Sale",
       "tableTitle": "Movement documents",
       "totalLabel": "{count} documents",
       "searchPlaceholder": "Search number, comment, sender, recipient, store, or author",
@@ -5559,6 +5567,8 @@
     "documentPriceHint": "This price applies to this order only.",
     "orderWithoutShift": "You can create and complete this order without opening a cash register shift.",
     "workspace": {
+      "estimateSubtitle": "Save the estimate for the customer. Stock is deducted when the sale is posted.",
+      "saveEstimate": "Save estimate",
       "title": "Customer sale",
       "subtitle": "Choose a store and customer, add products and review the total.",
       "customerDetails": "Customer contact details",
@@ -9792,7 +9802,10 @@
     "textOnlyHelp": "Visual similarity is not confirmed for a card marked “From text in photo”. Check the physical product."
   },
   "salesDocuments": {
+    "estimate": "Price estimate",
+    "estimateDescription": "Print the estimate or download a PDF for the customer.",
     "pdf": {
+      "estimateNote": "Prices for review. Payment and handover are recorded separately.",
       "invoice": "Sales invoice",
       "goodsReceipt": "Sales receipt",
       "number": "Number",

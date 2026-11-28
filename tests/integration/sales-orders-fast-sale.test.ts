@@ -43,6 +43,7 @@ vi.mock("@/server/services/inventory", async (original) => {
 });
 
 import { prisma } from "@/server/db/prisma";
+import { getSalesDocument } from "@/server/services/salesDocuments";
 import { adjustStock, applyStockMovement } from "@/server/services/inventory";
 import { postCustomerSale, removeDeclinedCustomerOrderLine } from "@/server/services/salesOrders";
 import { createTestCaller } from "../helpers/context";
@@ -138,6 +139,36 @@ describeDb("immediate ordinary sales and explicit declined-item corrections", ()
     expect(await prisma.stockMovement.count({ where: { referenceId: sale.id, type: "SALE" } })).toBe(2);
     expect(Number((await prisma.product.findUniqueOrThrow({ where: { id: f.product.id } })).basePriceKgs)).toBe(120);
     expect(Number((await prisma.storePrice.findFirstOrThrow({ where: { productId: f.product.id } })).priceKgs)).toBe(100);
+  });
+
+  it("prepares a printable customer estimate and cancels it without a shift or an accounting operation", async () => {
+    const f = await fixture();
+    const before = await accounting(f);
+    const draft = await f.api.salesOrders.createDraft({
+      ...orderInput(f),
+      lines: [{ productId: f.product.id, qty: 3, unitPriceKgs: 31.25 }],
+    });
+    const request = {
+      actorId: f.adminUser.id, organizationId: f.org.id, customerOrderId: draft.id, locale: "ru",
+    };
+    await expect(getSalesDocument({ ...request, kind: "estimate" })).resolves.toMatchObject({
+      status: "DRAFT", isPosSale: false, customer: { name: f.customer.name },
+      totalKgs: 93.75, items: [{ qty: 3, unitPriceKgs: 31.25, lineTotalKgs: 93.75 }],
+    });
+    const projected = await accounting(f);
+    expect(projected.stock).toEqual(before.stock);
+    expect(projected.movements).toEqual(before.movements);
+    expect(projected.payments).toEqual(before.payments);
+    expect(await prisma.registerShift.count()).toBe(0);
+
+    await f.api.salesOrders.cancel({ customerOrderId: draft.id });
+    const canceled = await accounting(f);
+    expect(canceled.orders[0]?.status).toBe("CANCELED");
+    expect(canceled.stock).toEqual(before.stock);
+    expect(canceled.movements).toEqual(before.movements);
+    expect(canceled.payments).toEqual(before.payments);
+    await expect(getSalesDocument({ ...request, kind: "estimate" })).rejects.toMatchObject({ status: 409 });
+    await expect(getSalesDocument(request)).resolves.toMatchObject({ status: "CANCELED" });
   });
 
   it("rolls all creation, customer counters and stock back when posting cannot finish", async () => {

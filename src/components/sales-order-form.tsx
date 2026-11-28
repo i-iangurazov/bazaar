@@ -94,6 +94,7 @@ export const SalesOrderForm = ({
   const isEdit = mode === "edit" && Boolean(orderId);
   const t = useTranslations("salesOrders");
   const tCommon = useTranslations("common");
+  const tDocuments = useTranslations("salesDocuments");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status: sessionStatus } = useSession();
@@ -111,6 +112,9 @@ export const SalesOrderForm = ({
   const searchParams = useSearchParams();
   const requestedStoreId = searchParams.get("storeId");
   const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"), "/sales/orders");
+  const fromMovementJournal = returnTo.split(/[?#]/, 1)[0] === "/inventory/movements";
+  const isEstimate = !isEdit && fromMovementJournal && searchParams.get("estimate") === "1";
+  const showPostSaleAction = canPostSale && !isEdit && !isEstimate;
   const utils = trpc.useUtils();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -535,6 +539,7 @@ export const SalesOrderForm = ({
         return;
       forgetNewOrder();
       createAttemptRef.current = null;
+      if (fromMovementJournal) void utils.inventory.productMovements.invalidate();
       toast({ variant: "success", description: t("createSuccess") });
       router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
     },
@@ -571,6 +576,7 @@ export const SalesOrderForm = ({
       setPendingSale(null);
       forgetNewOrder();
       createAttemptRef.current = null;
+      if (fromMovementJournal) void utils.inventory.productMovements.invalidate();
       toast({ variant: "success", description: t("completeSuccess") });
       router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
     },
@@ -604,6 +610,10 @@ export const SalesOrderForm = ({
       await Promise.all([
         utils.salesOrders.list.invalidate(),
         utils.salesOrders.getById.invalidate({ customerOrderId: order.id }),
+        ...(fromMovementJournal ? [
+          utils.inventory.productMovements.invalidate(),
+          utils.inventory.productMovementDocument.invalidate(),
+        ] : []),
         ...(isCompletedEdit ? [utils.salesOrders.paymentInfo.invalidate({ customerOrderId: order.id })] : []),
       ]);
       toast({ variant: "success", description: t("workspace.updateSuccess") });
@@ -895,7 +905,7 @@ export const SalesOrderForm = ({
     }
 
     if (isRefreshingPrices || isAddingLine || pricingFailed) return;
-    if (postSale && !draftLines.length) {
+    if ((postSale || isEstimate) && !draftLines.length) {
       toast({ variant: "error", description: tErrors("salesOrderEmpty") });
       return;
     }
@@ -919,9 +929,9 @@ export const SalesOrderForm = ({
       toast({ variant: "error", description: t("unitPriceInvalid") });
       return;
     }
-    // BZR-03: a draft may be saved while a loaded line is still missing its
-    // price; only posting requires every line to have a price.
-    if (postSale && draftLines.some((line) => line.unitPriceKgs === null)) {
+    // Ordinary drafts can keep unresolved prices. An estimate must already
+    // have all the prices the customer will see on the PDF.
+    if ((postSale || isEstimate) && draftLines.some((line) => line.unitPriceKgs === null)) {
       toast({ variant: "error", description: t("priceNotSetBlocking") });
       return;
     }
@@ -1211,9 +1221,9 @@ export const SalesOrderForm = ({
         title={
           isEdit
             ? t("workspace.editTitle", { number: orderQuery.data?.number ?? "" })
-            : t("workspace.title")
+            : isEstimate ? tDocuments("estimate") : t("workspace.title")
         }
-        subtitle={t(isCompletedEdit ? "workspace.editUnpaidSubtitle" : isEdit ? "workspace.editSubtitle" : "workspace.subtitle")}
+        subtitle={t(isCompletedEdit ? "workspace.editUnpaidSubtitle" : isEdit ? "workspace.editSubtitle" : isEstimate ? "workspace.estimateSubtitle" : "workspace.subtitle")}
         action={
           isEdit ? (
             <Button
@@ -1676,11 +1686,11 @@ export const SalesOrderForm = ({
               <p className="mt-1 text-xs">{t("workspace.staleConflictHint")}</p>
             </div>
           ) : null}
-          {!isEdit ? (
+          {!isEdit && !isEstimate ? (
             <p className="text-xs leading-5 text-muted-foreground">{t("workspace.postHint")}</p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            {canPostSale && !isEdit ? (
+            {showPostSaleAction ? (
               <Button
                 type="button"
                 className="min-h-10 flex-1"
@@ -1705,19 +1715,20 @@ export const SalesOrderForm = ({
             ) : null}
             <Button
               type="button"
-              variant={canPostSale && !isEdit ? "secondary" : "primary"}
+              variant={showPostSaleAction ? "secondary" : "primary"}
               className="min-h-10 flex-1"
               onClick={() => void handleSubmit(false)}
               disabled={
                 isSaving || isRefreshingPrices || isAddingLine || pricingFailed ||
-                (isEdit ? !storeId : !selectedStore) || (isCompletedEdit && !draftLines.length)
+                (isEdit ? !storeId : !selectedStore) || (isCompletedEdit && !draftLines.length) ||
+                (isEstimate && (!draftLines.length || draftLines.some((line) => line.unitPriceKgs === null)))
               }
               data-testid="sales-order-save"
             >
               {createMutation.isLoading || updateMutation.isLoading ? (
                 <Spinner className="h-4 w-4" />
               ) : null}
-              {isEdit ? t("workspace.saveChanges") : t("workspace.saveDraft")}
+              {t(isEdit ? "workspace.saveChanges" : isEstimate ? "workspace.saveEstimate" : "workspace.saveDraft")}
             </Button>
             <Button
               type="button"

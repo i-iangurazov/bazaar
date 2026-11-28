@@ -40,10 +40,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   try {
     const { id } = await params;
-    const job = await getSalesDocument({ actorId: token.sub, organizationId: token.organizationId, customerOrderId: id, locale });
+    const job = await getSalesDocument({ actorId: token.sub, organizationId: token.organizationId, customerOrderId: id, locale, kind });
     const t = (key: string) => message(messages, `salesDocuments.pdf.${key}`);
     const labels: SalesDocumentPdfLabels = {
       invoice: t("invoice"), invoiceWithoutPrices: t("invoiceWithoutPrices"), goodsReceipt: t("goodsReceipt"),
+      estimate: message(messages, "salesDocuments.estimate"), estimateNote: t("estimateNote"),
       number: t("number"), date: t("date"), status: t("status"),
       seller: t("seller"), customer: t("customer"), unnamedCustomer: t("unnamedCustomer"), store: t("store"), inn: t("inn"),
       phone: t("phone"), email: t("email"), address: t("address"), product: t("product"), sku: t("sku"), quantity: t("quantity"),

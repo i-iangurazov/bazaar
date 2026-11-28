@@ -29,7 +29,7 @@ describe("sales document HTTP contract", () => {
     expect((await call(query)).status).toBe(400);
     expect(mocks.project).not.toHaveBeenCalled();
   });
-  it.each(["goods_receipt", "invoice_without_prices"])("downloads a no-cache %s with a safe filename and live projection", async (kind) => {
+  it.each(["goods_receipt", "invoice_without_prices", "estimate"])("downloads a no-cache %s with a safe filename and live projection", async (kind) => {
     const response = await call(`?kind=${kind}&action=download`);
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
@@ -38,7 +38,7 @@ describe("sales document HTTP contract", () => {
     );
     expect(response.headers.get("Content-Disposition")).not.toMatch(/[\r\n]/);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
-    expect(mocks.project).toHaveBeenCalledWith({ actorId: "live-user", organizationId: "org-1", customerOrderId: "sale-1", locale: "ru" });
+    expect(mocks.project).toHaveBeenCalledWith({ actorId: "live-user", organizationId: "org-1", customerOrderId: "sale-1", locale: "ru", kind });
     expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ kind }));
     expect(mocks.audit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       action: "SALES_DOCUMENT_DOWNLOAD",

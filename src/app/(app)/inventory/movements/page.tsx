@@ -10,6 +10,7 @@ import { CustomerOrderStatus } from "@prisma/client";
 import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table";
 
 import { PageHeader } from "@/components/page-header";
+import { MovementRecipientInput } from "@/components/inventory/movement-recipient-input";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { SalesDocumentActions } from "@/components/sales-document-actions";
@@ -50,6 +51,7 @@ import {
   EmptyIcon,
   PrintIcon,
   ReceiveIcon,
+  SalesOrdersIcon,
   SortIcon,
   TransferIcon,
   ViewIcon,
@@ -159,6 +161,12 @@ const ProductMovementsPage = () => {
   const senderSearch = searchParams.get("senderSearch") ?? "";
   const recipientSearch = searchParams.get("recipientSearch") ?? "";
   const authorSearch = searchParams.get("authorSearch") ?? "";
+  const [draft, setDraft] = useState({ search, senderSearch, recipientSearch, authorSearch });
+
+  useEffect(() => {
+    setDraft({ search, senderSearch, recipientSearch, authorSearch });
+  }, [search, senderSearch, recipientSearch, authorSearch]);
+
   const sortBy = parseOption(searchParams.get("sortBy"), sortOptions, "date");
   const sortDirection = parseOption(
     searchParams.get("sortDirection"),
@@ -210,6 +218,7 @@ const ProductMovementsPage = () => {
 
   const storesQuery = trpc.stores.list.useQuery();
   const stores = storesQuery.data ?? [];
+  const features = trpc.billing.features.useQuery(undefined, { staleTime: 60_000, retry: false });
 
   const movementQuery = trpc.inventory.productMovements.useQuery(
     {
@@ -229,9 +238,30 @@ const ProductMovementsPage = () => {
       authorSearch: authorSearch.trim() || undefined,
       sortBy,
       sortDirection,
+      includePendingSales: true,
     },
     { keepPreviousData: true },
   );
+
+  const applySearch = (terms = draft) => {
+    const next = {
+      search: normalizeOptionalParam(terms.search),
+      senderSearch: normalizeOptionalParam(terms.senderSearch),
+      recipientSearch: normalizeOptionalParam(terms.recipientSearch),
+      authorSearch: normalizeOptionalParam(terms.authorSearch),
+    };
+    if (
+      page === 1 &&
+      next.search === normalizeOptionalParam(search) &&
+      next.senderSearch === normalizeOptionalParam(senderSearch) &&
+      next.recipientSearch === normalizeOptionalParam(recipientSearch) &&
+      next.authorSearch === normalizeOptionalParam(authorSearch)
+    ) {
+      void movementQuery.refetch();
+      return;
+    }
+    updateJournalParams({ ...next, page: null });
+  };
 
   const items = useMemo(() => movementQuery.data?.items ?? [], [movementQuery.data?.items]);
   const totalItems = movementQuery.data?.total ?? 0;
@@ -253,6 +283,7 @@ const ProductMovementsPage = () => {
   });
 
   const resetFilters = () => {
+    setDraft({ search: "", senderSearch: "", recipientSearch: "", authorSearch: "" });
     updateJournalParams({
       search: null,
       dateFrom: null,
@@ -300,6 +331,7 @@ const ProductMovementsPage = () => {
           ? t("dateRangeToValue", { to: formatDateInput(dateTo) })
           : t("dateRangeAny");
   const hasFilters =
+    Object.values(draft).some((value) => value.trim()) ||
     Boolean(search.trim()) ||
     Boolean(dateFrom) ||
     Boolean(dateTo) ||
@@ -526,7 +558,9 @@ const ProductMovementsPage = () => {
             variant="muted"
             className="border-transparent bg-muted/60 px-1.5 py-0 text-[11px] font-medium"
           >
-            {documentTypeLabel(movement.documentType)}
+            {movement.documentType === "SALE" && movement.isPosSale
+              ? t("posReceipt")
+              : documentTypeLabel(movement.documentType)}
           </Badge>
           {movement.detailUrl ? (
             <Link
@@ -540,6 +574,11 @@ const ProductMovementsPage = () => {
             <span className="truncate font-medium text-foreground">#{documentNumber}</span>
           )}
         </div>
+        {movement.customerName ? (
+          <p className="mt-1 break-words text-xs text-muted-foreground">
+            {t("customerLabel", { name: movement.customerName })}
+          </p>
+        ) : null}
         {movement.description || movement.comment ? (
           <p className="mt-1 max-w-[28rem] truncate text-xs text-muted-foreground">
             {movement.comment || movement.description}
@@ -717,20 +756,28 @@ const ProductMovementsPage = () => {
   );
 
   const filterControls = (
-    <div className="flex w-full flex-col gap-3">
+    <form
+      className="flex w-full flex-col gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        applySearch();
+      }}
+    >
       <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_repeat(3,minmax(0,1fr))]">
         <div className="space-y-1">
           <Label htmlFor="movement-search">{tCommon("search")}</Label>
-          <div className="relative">
+          <div className="flex min-w-0 items-center gap-2">
             <SearchInput
               id="movement-search"
               aria-label={tCommon("search")}
-              value={search}
-              onValueChange={(value) =>
-                setFilterParam("search", normalizeOptionalParam(value))
-              }
+              value={draft.search}
+              maxLength={200}
+              onValueChange={(value) => setDraft((current) => ({ ...current, search: value }))}
               placeholder={t("searchPlaceholder")}
             />
+            <Button type="submit" className="shrink-0 px-3">
+              {t("applySearch")}
+            </Button>
           </div>
         </div>
         <div className="space-y-1">
@@ -915,31 +962,34 @@ const ProductMovementsPage = () => {
               <Label htmlFor="movement-sender">{t("sender")}</Label>
               <Input
                 id="movement-sender"
-                value={senderSearch}
+                value={draft.senderSearch}
+                maxLength={160}
+                enterKeyHint="search"
                 onChange={(event) => {
-                  setFilterParam("senderSearch", normalizeOptionalParam(event.target.value));
+                  setDraft({ ...draft, senderSearch: event.target.value });
                 }}
                 placeholder={t("senderPlaceholder")}
               />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="movement-recipient">{t("recipient")}</Label>
-              <Input
-                id="movement-recipient"
-                value={recipientSearch}
-                onChange={(event) => {
-                  setFilterParam("recipientSearch", normalizeOptionalParam(event.target.value));
-                }}
-                placeholder={t("recipientPlaceholder")}
-              />
-            </div>
+            <MovementRecipientInput
+              storeId={storeId === allValue ? undefined : storeId}
+              value={draft.recipientSearch}
+              onChange={(value) => setDraft((current) => ({ ...current, recipientSearch: value }))}
+              onSelect={(name) => {
+                const next = { ...draft, recipientSearch: name };
+                setDraft(next);
+                applySearch(next);
+              }}
+            />
             <div className="space-y-1">
               <Label htmlFor="movement-author">{t("author")}</Label>
               <Input
                 id="movement-author"
-                value={authorSearch}
+                value={draft.authorSearch}
+                maxLength={120}
+                enterKeyHint="search"
                 onChange={(event) => {
-                  setFilterParam("authorSearch", normalizeOptionalParam(event.target.value));
+                  setDraft({ ...draft, authorSearch: event.target.value });
                 }}
                 placeholder={t("authorPlaceholder")}
               />
@@ -947,7 +997,7 @@ const ProductMovementsPage = () => {
           </div>
         </div>
       ) : null}
-    </div>
+    </form>
   );
 
   return (
@@ -966,6 +1016,22 @@ const ProductMovementsPage = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[240px]">
               <DropdownMenuLabel>{t("createDocument")}</DropdownMenuLabel>
+              {features.data?.featureFlags.customerOrders ? (
+                <DropdownMenuItem asChild>
+                  <Link
+                    href={withJournalReturn(
+                      `/sales/orders/new?${new URLSearchParams({
+                        estimate: "1",
+                        ...(storeId !== allValue ? { storeId } : {}),
+                      })}`,
+                    )}
+                    prefetch={false}
+                  >
+                    <SalesOrdersIcon className="h-4 w-4" aria-hidden />
+                    {t("createSale")}
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem asChild>
                 <Link href="/inventory/write-offs" prefetch={false}>
                   <ArchiveIcon className="h-4 w-4" aria-hidden />
@@ -993,11 +1059,11 @@ const ProductMovementsPage = () => {
       <Card className="overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>{t("tableTitle")}</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {t("totalLabel", { count: totalItems })}
+          <span role="status" className="text-sm text-muted-foreground">
+            {movementQuery.isFetching ? t("searchInProgress") : t("totalLabel", { count: totalItems })}
           </span>
         </CardHeader>
-        <CardContent className="min-w-0 overflow-hidden">
+        <CardContent className="min-w-0 overflow-hidden" aria-busy={movementQuery.isFetching}>
           {movementQuery.error ? (
             <QueryErrorState error={movementQuery.error} onRetry={() => void movementQuery.refetch()} />
           ) : (
@@ -1057,18 +1123,22 @@ const ProductMovementsPage = () => {
                     <p>{t("paymentStatus")}</p>
                     {renderPaymentStatus(movement.paymentStatus)}
                   </div>
-                  <div>
-                    <p>{t("sender")}</p>
-                    <p className="font-medium text-foreground">
-                      {renderOptionalText(movement.senderName)}
-                    </p>
-                  </div>
-                  <div>
-                    <p>{t("recipient")}</p>
-                    <p className="font-medium text-foreground">
-                      {renderOptionalText(movement.recipientName)}
-                    </p>
-                  </div>
+                  {!movement.customerName ? (
+                    <>
+                      <div>
+                        <p>{t("sender")}</p>
+                        <p className="font-medium text-foreground">
+                          {renderOptionalText(movement.senderName)}
+                        </p>
+                      </div>
+                      <div>
+                        <p>{t("recipient")}</p>
+                        <p className="font-medium text-foreground">
+                          {renderOptionalText(movement.recipientName)}
+                        </p>
+                      </div>
+                    </>
+                  ) : null}
                   <div>
                     <p>{t("store")}</p>
                     <p className="font-medium text-foreground">

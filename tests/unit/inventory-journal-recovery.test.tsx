@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   error: null as null | { message: string; data: { code: string } },
   storeError: null as null | { message: string; data: { code: string } },
   stores: [{ id: "assigned-store", name: "Assigned store" }],
+  recipients: [] as string[],
   retry: vi.fn(),
   retryStores: vi.fn(),
   mutate: vi.fn(),
@@ -66,8 +67,14 @@ vi.mock("@/lib/trpc", () => {
           }),
         },
       },
+      billing: {
+        features: { useQuery: () => ({ data: { featureFlags: { customerOrders: true } } }) },
+      },
       inventory: {
         productMovements: { useQuery: list },
+        productMovementRecipientOptions: {
+          useQuery: () => ({ data: state.recipients, isFetching: false, isError: false }),
+        },
         productMovementDocument: {
           useQuery: () => ({
             data: null,
@@ -100,6 +107,8 @@ beforeEach(() => {
   state.params = new URLSearchParams("storeId=assigned-store");
   state.error = state.storeError = null;
   state.stores = [{ id: "assigned-store", name: "Assigned store" }];
+  state.recipients = [];
+  window.history.replaceState(null, "", `${state.path}?${state.params}`);
 });
 
 describe("inventory journal recovery preserves document semantics", () => {
@@ -111,6 +120,37 @@ describe("inventory journal recovery preserves document semantics", () => {
     fireEvent.click(screen.getByRole("button", { name: "common.tryAgain" }));
     expect(state.retry).toHaveBeenCalledOnce();
     expect(state.mutate).not.toHaveBeenCalled();
+  });
+  it("applies text only on submit and keeps the store while resetting pagination", () => {
+    state.params = new URLSearchParams("storeId=assigned-store&page=3");
+    window.history.replaceState(null, "", `${state.path}?${state.params}`);
+    render(<MovementsPage />);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "common.search" }), {
+      target: { value: "  Эмиль  " },
+    });
+    expect(new URLSearchParams(window.location.search).get("search")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "inventory.movementJournal.applySearch" }));
+    const applied = new URLSearchParams(window.location.search);
+    expect(applied.get("search")).toBe("Эмиль");
+    expect(applied.get("storeId")).toBe("assigned-store");
+    expect(applied.get("page")).toBeNull();
+  });
+  it("applies the saved recipient when a suggestion is selected with the keyboard", async () => {
+    state.recipients = ["Эмиль"];
+    render(<MovementsPage />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "inventory.movementJournal.additionalFilters" }),
+    );
+    const recipient = screen.getByRole("combobox", { name: "inventory.movementJournal.recipient" });
+    fireEvent.change(recipient, { target: { value: "Эмил" } });
+    expect(new URLSearchParams(window.location.search).get("recipientSearch")).toBeNull();
+    await screen.findByRole("option", { name: "Эмиль" });
+    fireEvent.keyDown(recipient, { key: "ArrowDown" });
+    fireEvent.keyDown(recipient, { key: "Enter" });
+    expect(new URLSearchParams(window.location.search).get("recipientSearch")).toBe("Эмиль");
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
   it("does not describe a service failure as a missing movement document", () => {
     state.error = { message: "serviceUnavailable", data: { code: "INTERNAL_SERVER_ERROR" } };

@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db/prisma";
 import { currencySourceWithFallback, resolveCurrency } from "@/lib/currencyDisplay";
 import { AppError } from "@/server/services/errors";
+import type { SalesDocumentKind } from "@/lib/salesDocumentKind";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
@@ -28,6 +29,7 @@ export async function getSalesDocument(input: {
   organizationId: string;
   customerOrderId: string;
   locale: string;
+  kind?: SalesDocumentKind;
 }): Promise<SalesDocumentPayload> {
   // Do not trust stale role, owner or store claims from a session token.
   const actor = await prisma.user.findFirst({
@@ -48,7 +50,7 @@ export async function getSalesDocument(input: {
       lines: {
         orderBy: { id: "asc" },
         select: {
-          id: true, qty: true, unitPriceKgs: true, lineTotalKgs: true,
+          id: true, qty: true, unitPriceKgs: true, lineTotalKgs: true, priceSource: true,
           product: { select: { name: true, sku: true, unit: true, baseUnit: { select: { code: true, labelRu: true, labelKg: true } } } },
           variant: { select: { name: true } },
         },
@@ -58,6 +60,16 @@ export async function getSalesDocument(input: {
   if (!order) throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
   await assertUserCanAccessStore(prisma, { ...actor, organizationId: actor.organizationId }, order.storeId);
   await assertFeatureEnabled({ organizationId: actor.organizationId, feature: order.isPosSale ? "pos" : "customerOrders" });
+
+  if (input.kind === "estimate") {
+    if (order.isPosSale || order.status !== "DRAFT") {
+      throw new AppError("invalidTransition", "CONFLICT", 409);
+    }
+    if (!order.lines.length) throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+    if (order.lines.some((line) => line.priceSource === "MISSING")) {
+      throw new AppError("salesOrderPriceRequired", "BAD_REQUEST", 400);
+    }
+  }
 
   const currency = resolveCurrency(currencySourceWithFallback(order, order.store));
   return {

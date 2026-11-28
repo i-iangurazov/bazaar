@@ -3,6 +3,9 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { parseWriteOffMovementNote } from "@/lib/inventory/writeOff";
 import { transferCancellationLinePosition } from "@/lib/inventory/transferCancellation";
 import { resolveProductMovementDocumentViewTarget } from "@/lib/productMovementDocumentTarget";
+import { buildCustomerListWhere } from "@/server/services/customers";
+import { AppError } from "@/server/services/errors";
+import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   resolveAccessibleStoreIds,
   userHasAllStoreAccess,
@@ -64,6 +67,7 @@ export type ProductMovementJournalInput = {
   authorSearch?: string | null;
   senderSearch?: string | null;
   recipientSearch?: string | null;
+  includePendingSales?: boolean;
   archiveMode?: ProductMovementArchiveMode | null;
   page?: number;
   pageSize?: number;
@@ -86,6 +90,7 @@ export type ProductMovementJournalRow = {
   orderStatus: string | null;
   senderName: string | null;
   recipientName: string | null;
+  customerName: string | null;
   storeName: string | null;
   authorName: string | null;
   authorEmail: string | null;
@@ -220,6 +225,8 @@ const normalizeSearchTokens = (value?: string | null) =>
     ),
   ).slice(0, 8);
 
+const escapeLikeText = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
 const parseDateBound = (value: string | null | undefined, endOfDay: boolean) => {
   const trimmed = value?.trim();
   if (!trimmed) {
@@ -348,11 +355,16 @@ const buildMovementDocumentTypeSql = (referenceTypeSql: Prisma.Sql, movementType
     END
   `;
 
+const customerSnapshotNameSql = (order: Prisma.Sql) => Prisma.sql`COALESCE(
+  NULLIF(BTRIM(${order}."customerName"), ''), NULLIF(BTRIM(${order}."debtCustomerName"), '')
+)`;
+
 const buildProductMovementJournalCte = (input: {
   baseWhereSql: Prisma.Sql;
   organizationId: string;
   documentPageSql?: Prisma.Sql;
   archiveReferenceScopeSql?: Prisma.Sql;
+  pendingSalesWhereSql?: Prisma.Sql;
 }) => Prisma.sql`
   WITH movement_base AS (
     SELECT
@@ -388,6 +400,16 @@ const buildProductMovementJournalCte = (input: {
     LEFT JOIN "User" u ON u."id" = m."createdById"
     ${input.baseWhereSql}
   ),
+  ${input.pendingSalesWhereSql ? Prisma.sql`
+  pending_sales AS MATERIALIZED (
+    SELECT pending."id", pending."storeId", pending."createdAt", pending."createdById", pending."archivedAt"
+    FROM "CustomerOrder" pending
+    INNER JOIN "Store" pending_store
+      ON pending_store."id" = pending."storeId"
+     AND pending_store."organizationId" = pending."organizationId"
+    ${input.pendingSalesWhereSql}
+  ),
+  ` : Prisma.empty}
   archive_references AS MATERIALIZED (
     SELECT
       m."referenceType",
@@ -440,6 +462,12 @@ const buildProductMovementJournalCte = (input: {
       ON d."documentType" = 'STOCK_RECEIVING'
      AND archived_receiving."referenceType" = ${stockReceivingArchiveReferenceType}
      AND archived_receiving."referenceId" = d."documentReferenceId"
+    ${input.pendingSalesWhereSql ? Prisma.sql`
+    UNION ALL
+    SELECT 'SALE', 'CustomerOrder', pending."id", pending."createdAt",
+      pending."archivedAt" IS NOT NULL, FALSE
+    FROM pending_sales pending
+    ` : Prisma.empty}
   ),
   document_page AS (
     ${
@@ -645,6 +673,48 @@ const buildProductMovementJournalCte = (input: {
       ON sd."documentType" = g."documentType"
      AND sd."documentReferenceType" = g."documentReferenceType"
      AND sd."documentReferenceId" = g."documentReferenceId"
+    ${input.pendingSalesWhereSql ? Prisma.sql`
+    UNION ALL
+    SELECT
+      d."documentType",
+      d."documentReferenceType",
+      d."documentReferenceId",
+      d."documentDate",
+      NULL::timestamp AS "firstMovementAt",
+      order_lines."positionsCount",
+      order_lines."totalQuantity",
+      s."name" AS "storeName",
+      o."name" AS "organizationName",
+      NULL AS "sourceStoreName",
+      NULL AS "destinationStoreName",
+      order_lines."productPreview",
+      NULL::numeric AS "movementLineTotalAmount",
+      FALSE AS "hasMovementLineTotal",
+      NULL AS "comment",
+      pending."createdById" AS "authorId",
+      u."name" AS "authorName",
+      u."email" AS "authorEmail",
+      d."isArchived",
+      d."isCanceled",
+      d."groupedTotalCount"
+    FROM document_page d
+    INNER JOIN pending_sales pending
+      ON d."documentType" = 'SALE'
+     AND d."documentReferenceType" = 'CustomerOrder'
+     AND d."documentReferenceId" = pending."id"
+    INNER JOIN "Store" s ON s."id" = pending."storeId"
+    INNER JOIN "Organization" o ON o."id" = s."organizationId"
+    LEFT JOIN "User" u ON u."id" = pending."createdById"
+    CROSS JOIN LATERAL (
+      SELECT
+        COUNT(*)::int AS "positionsCount",
+        COALESCE(SUM(ABS(l."qty")), 0)::double precision AS "totalQuantity",
+        STRING_AGG(DISTINCT p."name", ', ' ORDER BY p."name") AS "productPreview"
+      FROM "CustomerOrderLine" l
+      INNER JOIN "Product" p ON p."id" = l."productId" AND p."organizationId" = o."id"
+      WHERE l."customerOrderId" = pending."id"
+    ) order_lines
+    ` : Prisma.empty}
   ),
   movement_enriched AS (
     SELECT
@@ -666,7 +736,10 @@ const buildProductMovementJournalCte = (input: {
       END AS "sourceExists",
       g."organizationName" AS "organizationName",
       g."documentDate" AS "createdAt",
-      COALESCE(co."completedAt", sr."completedAt", po."receivedAt", sc."appliedAt", g."documentDate") AS "postedAt",
+      CASE WHEN g."firstMovementAt" IS NOT NULL
+        THEN COALESCE(co."completedAt", sr."completedAt", po."receivedAt", sc."appliedAt", g."documentDate")
+        ELSE NULL
+      END AS "postedAt",
       CASE
         WHEN g."isCanceled" THEN 'CANCELED'
         ELSE COALESCE(co."status"::text, sr."status"::text, po."status"::text, sc."status"::text, 'POSTED')
@@ -690,12 +763,12 @@ const buildProductMovementJournalCte = (input: {
       CASE
         WHEN g."documentType" = 'TRANSFER' THEN NULLIF(g."sourceStoreName", '')
         WHEN g."documentType" IN ('STOCK_RECEIVING', 'PURCHASE_ORDER') THEN supplier."name"
-        WHEN g."documentType" = 'RETURN' THEN COALESCE(co_original."customerName", co_original."debtCustomerName")
+        WHEN g."documentType" = 'RETURN' THEN ${customerSnapshotNameSql(Prisma.sql`co_original`)}
         ELSE g."storeName"
       END AS "senderName",
       CASE
         WHEN g."documentType" = 'TRANSFER' THEN NULLIF(g."destinationStoreName", '')
-        WHEN g."documentType" = 'SALE' THEN COALESCE(co."customerName", co."debtCustomerName")
+        WHEN g."documentType" = 'SALE' THEN ${customerSnapshotNameSql(Prisma.sql`co`)}
         ELSE g."storeName"
       END AS "recipientName",
       g."storeName" AS "storeName",
@@ -724,10 +797,13 @@ const buildProductMovementJournalCte = (input: {
     FROM movement_grouped g
     LEFT JOIN "CustomerOrder" co
       ON g."documentReferenceType" = 'CustomerOrder' AND co."id" = g."documentReferenceId"
+     AND co."organizationId" = ${input.organizationId}
     LEFT JOIN "SaleReturn" sr
       ON g."documentReferenceType" = 'SaleReturn' AND sr."id" = g."documentReferenceId"
+     AND sr."organizationId" = ${input.organizationId}
     LEFT JOIN "CustomerOrder" co_original
       ON sr."originalSaleId" = co_original."id"
+     AND co_original."organizationId" = ${input.organizationId}
     LEFT JOIN "PurchaseOrder" po
       ON g."documentReferenceType" = 'PURCHASE_ORDER' AND po."id" = g."documentReferenceId"
     LEFT JOIN "Supplier" supplier
@@ -783,14 +859,14 @@ const buildSearchCondition = (token: string) => {
   `;
 };
 
-const buildTextFilterCondition = (column: string, value?: string | null) => {
+const buildTextFilterCondition = (column: Prisma.Sql, value?: string | null) => {
   const tokens = normalizeSearchTokens(value);
   if (!tokens.length) {
     return [];
   }
   return tokens.map((token) => {
     const pattern = `%${token}%`;
-    return Prisma.sql`COALESCE(${Prisma.raw(column)}, '') ILIKE ${pattern}`;
+    return Prisma.sql`COALESCE(${column}, '') ILIKE ${pattern}`;
   });
 };
 
@@ -846,6 +922,7 @@ const normalizeProductMovementJournalRow = (
     orderStatus: row.orderStatus,
     senderName: row.senderName,
     recipientName: row.recipientName,
+    customerName: row.documentType === "SALE" ? row.recipientName : row.documentType === "RETURN" ? row.senderName : null,
     storeName: row.storeName,
     authorName: row.authorName,
     authorEmail: row.authorEmail,
@@ -1047,37 +1124,71 @@ const buildBaseConditions = async (
   user: StoreAccessUser,
   input: Pick<ProductMovementJournalInput, "storeId" | "authorId" | "dateFrom" | "dateTo">,
 ) => {
+  const accessibleStoreIds = userHasAllStoreAccess(user)
+    ? null
+    : await resolveAccessibleStoreIds(prisma, user);
+  if (accessibleStoreIds?.length === 0) {
+    return null;
+  }
+
   const dateFrom = parseDateBound(input.dateFrom, false);
   const dateTo = parseDateBound(input.dateTo, true);
-  const baseConditions: Prisma.Sql[] = [
-    Prisma.sql`p."organizationId" = ${user.organizationId}`,
-    Prisma.sql`s."organizationId" = ${user.organizationId}`,
-    Prisma.sql`COALESCE(m."referenceType", '') <> ${stockDocumentArchiveReferenceType}`,
-    Prisma.sql`COALESCE(m."referenceType", '') <> ${stockReceivingArchiveReferenceType}`,
+  const scopedConditions = (row: Prisma.Sql) => [
+    ...(accessibleStoreIds ? [
+      Prisma.sql`${row}."storeId" IN (${Prisma.join(accessibleStoreIds)})`,
+    ] : []),
+    ...(input.storeId?.trim() ? [Prisma.sql`${row}."storeId" = ${input.storeId.trim()}`] : []),
+    ...(input.authorId?.trim() ? [Prisma.sql`${row}."createdById" = ${input.authorId.trim()}`] : []),
+    ...(dateFrom ? [Prisma.sql`${row}."createdAt" >= ${dateFrom}`] : []),
+    ...(dateTo ? [Prisma.sql`${row}."createdAt" <= ${dateTo}`] : []),
   ];
+  return {
+    scopedConditions,
+    movement: [
+      Prisma.sql`p."organizationId" = ${user.organizationId}`,
+      Prisma.sql`s."organizationId" = ${user.organizationId}`,
+      Prisma.sql`COALESCE(m."referenceType", '') <> ${stockDocumentArchiveReferenceType}`,
+      Prisma.sql`COALESCE(m."referenceType", '') <> ${stockReceivingArchiveReferenceType}`,
+      ...scopedConditions(Prisma.sql`m`),
+    ],
+  };
+};
 
-  if (!userHasAllStoreAccess(user)) {
-    const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, user);
-    if (!accessibleStoreIds.length) {
-      return null;
+export const listProductMovementRecipientOptions = async (
+  prisma: PrismaClient,
+  user: StoreAccessUser,
+  input: { storeId?: string; search: string },
+): Promise<string[]> => {
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, user);
+  const storeIds = input.storeId
+    ? accessibleStoreIds.filter((id) => id === input.storeId)
+    : accessibleStoreIds;
+  if (!storeIds.length) {
+    return [];
+  }
+  const matches = await prisma.customer.groupBy({
+    by: ["name"],
+    where: {
+      ...buildCustomerListWhere({ organizationId: user.organizationId, storeIds }),
+      store: { organizationId: user.organizationId },
+      name: { contains: escapeLikeText(input.search), mode: "insensitive" },
+    },
+    orderBy: { name: "asc" },
+    take: 12,
+  });
+  return matches.map(({ name }) => name);
+};
+
+const hasPendingSalesAccess = async (organizationId: string) => {
+  try {
+    await assertFeatureEnabled({ organizationId, feature: "customerOrders" });
+    return true;
+  } catch (error) {
+    if (error instanceof AppError && error.code === "FORBIDDEN") {
+      return false;
     }
-    baseConditions.push(Prisma.sql`m."storeId" IN (${Prisma.join(accessibleStoreIds)})`);
+    throw error;
   }
-
-  if (input.storeId?.trim()) {
-    baseConditions.push(Prisma.sql`m."storeId" = ${input.storeId.trim()}`);
-  }
-  if (input.authorId?.trim()) {
-    baseConditions.push(Prisma.sql`m."createdById" = ${input.authorId.trim()}`);
-  }
-  if (dateFrom) {
-    baseConditions.push(Prisma.sql`m."createdAt" >= ${dateFrom}`);
-  }
-  if (dateTo) {
-    baseConditions.push(Prisma.sql`m."createdAt" <= ${dateTo}`);
-  }
-
-  return baseConditions;
 };
 
 export const listProductMovementJournal = async (
@@ -1092,6 +1203,28 @@ export const listProductMovementJournal = async (
   if (!baseConditions) {
     return { items: [], total: 0, page, pageSize };
   }
+
+  // A customer's order can be opened from the journal before stock is posted.
+  // After posting, the ledger remains the journal's source for that order.
+  const pendingSalesWhereSql =
+    input.includePendingSales &&
+    (!input.type || input.type === "SALE") &&
+    (await hasPendingSalesAccess(user.organizationId))
+      ? buildWhereSql([
+          Prisma.sql`pending."organizationId" = ${user.organizationId}`,
+          Prisma.sql`pending."isPosSale" = false AND pending."isHeld" = false`,
+          Prisma.sql`pending."status" IN ('DRAFT', 'CONFIRMED', 'READY', 'CANCELED')`,
+          Prisma.sql`NOT EXISTS (
+            SELECT 1
+            FROM "StockMovement" posted
+            INNER JOIN "Store" posted_store ON posted_store."id" = posted."storeId"
+            WHERE posted."referenceType" = 'CustomerOrder'
+              AND posted."referenceId" = pending."id"
+              AND posted_store."organizationId" = pending."organizationId"
+          )`,
+          ...baseConditions.scopedConditions(Prisma.sql`pending`),
+        ])
+      : undefined;
 
   const finalConditions: Prisma.Sql[] = [];
   if (input.type) {
@@ -1110,9 +1243,10 @@ export const listProductMovementJournal = async (
   searchTokens.forEach((token) => {
     finalConditions.push(buildSearchCondition(token));
   });
-  finalConditions.push(...buildTextFilterCondition('"authorName"', input.authorSearch));
-  finalConditions.push(...buildTextFilterCondition('"senderName"', input.senderSearch));
-  finalConditions.push(...buildTextFilterCondition('"recipientName"', input.recipientSearch));
+  finalConditions.push(...buildTextFilterCondition(Prisma.sql`"authorName"`, input.authorSearch));
+  finalConditions.push(...buildTextFilterCondition(Prisma.sql`"senderName"`, input.senderSearch));
+  finalConditions.push(...buildTextFilterCondition(Prisma.sql`"recipientName"`, input.recipientSearch));
+  const recipientTokens = normalizeSearchTokens(input.recipientSearch);
   const archiveMode = input.archiveMode ?? "ACTIVE";
   if (archiveMode === "ACTIVE") {
     finalConditions.push(Prisma.sql`"isArchived" = false`);
@@ -1131,7 +1265,7 @@ export const listProductMovementJournal = async (
     searchTokens.length === 0 &&
     normalizeSearchTokens(input.authorSearch).length === 0 &&
     normalizeSearchTokens(input.senderSearch).length === 0 &&
-    normalizeSearchTokens(input.recipientSearch).length === 0 &&
+    recipientTokens.length === 0 &&
     sortBy === "date";
   const documentPageConditions: Prisma.Sql[] = [];
   if (input.type) {
@@ -1141,6 +1275,23 @@ export const listProductMovementJournal = async (
     documentPageConditions.push(Prisma.sql`d."isArchived" = false`);
   } else if (archiveMode === "ARCHIVED") {
     documentPageConditions.push(Prisma.sql`d."isArchived" = true`);
+  }
+  // Customer-order recipients are known before movement lines and payments
+  // are grouped. Keep the full predicate for other document types.
+  if (recipientTokens.some((token) => !/^%+$/.test(token))) {
+    const saleRecipientConditions = buildTextFilterCondition(
+      customerSnapshotNameSql(Prisma.sql`sale`),
+      input.recipientSearch,
+    );
+    documentPageConditions.push(Prisma.sql`(
+      d."documentReferenceType" <> 'CustomerOrder'
+      OR d."documentReferenceId" IN (
+        SELECT sale."id"
+        FROM "CustomerOrder" sale
+        WHERE sale."organizationId" = ${user.organizationId}
+          AND ${Prisma.join(saleRecipientConditions, " AND ")}
+      )
+    )`);
   }
   const documentPageWhereSql = buildWhereSql(documentPageConditions);
   const groupedDateDirection = sortDirection === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
@@ -1157,11 +1308,16 @@ export const listProductMovementJournal = async (
         LIMIT ${pageSize}
         OFFSET ${(page - 1) * pageSize}
       `
-    : undefined;
+    : Prisma.sql`
+        SELECT d.*, NULL::int AS "groupedTotalCount"
+        FROM document_index d
+        ${documentPageWhereSql}
+      `;
   const cte = buildProductMovementJournalCte({
-    baseWhereSql: buildWhereSql(baseConditions),
+    baseWhereSql: buildWhereSql(baseConditions.movement),
     organizationId: user.organizationId,
     documentPageSql,
+    pendingSalesWhereSql,
   });
 
   const rows = canPageBeforeEnrichment
@@ -1193,8 +1349,9 @@ export const listProductMovementJournal = async (
   if (!rows.length && page > 1) {
     const countCte = canPageBeforeEnrichment
       ? buildProductMovementJournalCte({
-          baseWhereSql: buildWhereSql(baseConditions),
+          baseWhereSql: buildWhereSql(baseConditions.movement),
           organizationId: user.organizationId,
+          pendingSalesWhereSql,
         })
       : cte;
     const countRows = await prisma.$queryRaw<Array<{ count: number | bigint }>>(
@@ -1242,7 +1399,7 @@ export const getProductMovementDocument = async (
   // Filter the ledger before the CTE is materialized, using the reference
   // index for posted documents and the movement ID for rows without a reference ID.
   const documentConditions = [
-    ...baseConditions,
+    ...baseConditions.movement,
     Prisma.sql`${movementTypeSql} = ${decoded.documentType}`,
     Prisma.sql`(
       (${matchingReferenceType} AND m."referenceId" = ${decoded.documentReferenceId})

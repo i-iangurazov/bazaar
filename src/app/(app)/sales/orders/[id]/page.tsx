@@ -31,6 +31,7 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { ScanInput } from "@/components/ScanInput";
 import { RowActions } from "@/components/row-actions";
 import { SalesDocumentActions } from "@/components/sales-document-actions";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import {
   CorrectionRefundQueuePanel,
   type CorrectionRefundQueueRequest,
@@ -169,11 +170,12 @@ const SalesOrderDetailPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const customerOrderId = String(params?.id ?? "");
-  const requestedReturnTo = searchParams.get("returnTo");
-  const returnTo =
-    requestedReturnTo === "/sales/orders" || requestedReturnTo?.startsWith("/sales/orders?")
-      ? requestedReturnTo
-      : "/sales/orders";
+  const requestedReturnTo = resolveSafeReturnTo(searchParams.get("returnTo"), "/sales/orders");
+  const returnPath = requestedReturnTo.split(/[?#]/, 1)[0];
+  const fromMovementJournal = returnPath === "/inventory/movements";
+  const returnTo = fromMovementJournal || returnPath === "/sales/orders"
+    ? requestedReturnTo
+    : "/sales/orders";
 
   const t = useTranslations("salesOrders");
   const tCommon = useTranslations("common");
@@ -374,6 +376,10 @@ const SalesOrderDetailPage = () => {
       utils.salesOrders.getById.invalidate({ customerOrderId }),
       utils.salesOrders.paymentInfo.invalidate({ customerOrderId }),
       utils.loyalty.orderSummary.invalidate({ customerOrderId }),
+      ...(fromMovementJournal ? [
+        utils.inventory.productMovements.invalidate(),
+        utils.inventory.productMovementDocument.invalidate(),
+      ] : []),
     ]);
   };
 
@@ -1204,6 +1210,14 @@ const SalesOrderDetailPage = () => {
       <Button variant="secondary" asChild>
         <Link href={returnTo}>{tCommon("back")}</Link>
       </Button>
+      {fromMovementJournal && order?.status === CustomerOrderStatus.DRAFT && !order.isPosSale ? (
+        <SalesDocumentActions
+          orderId={order.id}
+          number={order.number}
+          estimateOnly
+          disabled={lineActionsDisabled || !lines.length || unresolvedPriceLines.length > 0}
+        />
+      ) : null}
       {order ? <SalesDocumentActions orderId={order.id} number={order.number} /> : null}
       {order && (isEditable || canAppendLine) ? (
         <Button variant="secondary" asChild>

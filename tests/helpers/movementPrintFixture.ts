@@ -57,6 +57,7 @@ export const movementPrintFixture = (
   orderStatus: null,
   senderName: "Тестовый отправитель",
   recipientName: "Тестовый получатель",
+  customerName: null,
   storeName: "Тестовый склад",
   authorName: "Тестовый сотрудник",
   authorEmail: null,

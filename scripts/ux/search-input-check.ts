@@ -74,6 +74,7 @@ export async function verifySearchInputs(
     const query = "Search_QA_123";
     await input.pressSequentially(query, { delay: 10 });
     await expect(input).toHaveValue(query);
+    if (path === "/inventory/movements") await input.press("Enter");
     if (parameter) {
       await expect.poll(() => new URL(page.url()).searchParams.get(parameter)).toBe(query);
       await page.reload();
@@ -82,6 +83,7 @@ export async function verifySearchInputs(
     await input.press("ControlOrMeta+a");
     await input.press("Backspace");
     await expect(input).toHaveValue("");
+    if (path === "/inventory/movements") await input.press("Enter");
     if (parameter)
       await expect.poll(() => new URL(page.url()).searchParams.get(parameter)).toBeNull();
     checks.push(`${path}: rapid typing, replacement, clear, URL persistence`);

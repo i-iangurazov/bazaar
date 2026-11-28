@@ -18,6 +18,7 @@ export type SalesDocumentPdfLabels = {
   phone: string; email: string; address: string; product: string; sku: string; quantity: string;
   unit: string; price: string; amount: string; subtotal: string; discount: string; total: string;
   issuedBy: string; receivedBy: string; nonFiscal: string; empty: string; page: string;
+  estimate: string; estimateNote: string;
   statuses: Record<SalesDocumentPayload["status"], string>;
 };
 
@@ -89,13 +90,14 @@ export async function buildSalesDocumentPdf(input: {
     invoice: labels.invoice,
     invoice_without_prices: labels.invoiceWithoutPrices,
     goods_receipt: labels.goodsReceipt,
+    estimate: labels.estimate,
   };
   const title = titles[kind];
   doc.info.Title = `${title} ${job.number}`;
   doc.info.Author = kind === "invoice_without_prices" ? "BAZAAR" : job.seller.name;
   if (kind === "invoice_without_prices") renderInvoiceWithoutPrices(doc, job, labels, locale, title);
-  else if (kind === "invoice") renderInvoice(doc, job, labels, locale, title);
-  else renderGoodsReceipt(doc, job, labels, locale, title);
+  else if (kind === "goods_receipt") renderGoodsReceipt(doc, job, labels, locale, title);
+  else renderInvoice(doc, job, labels, locale, title, kind === "estimate");
   doc.end();
   return finished;
 }
@@ -216,7 +218,14 @@ function renderInvoiceWithoutPrices(
   }
 }
 
-function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumentPdfLabels, locale: string, title: string) {
+function renderInvoice(
+  doc: Pdf,
+  job: SalesDocumentPayload,
+  labels: SalesDocumentPdfLabels,
+  locale: string,
+  title: string,
+  isEstimate: boolean,
+) {
   const left = 36;
   const width = 523.28;
   const bottom = 782;
@@ -274,6 +283,7 @@ function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumen
   newPage();
   paragraph(`${labels.number}: ${job.number}    ${labels.date}: ${formatDateTime(job.createdAt, locale)}`, 9);
   paragraph(`${labels.status}: ${labels.statuses[job.status]}`, 9, 12);
+  if (isEstimate) paragraph(labels.estimateNote, 9, 12);
   paragraph(`${labels.seller}: ${job.seller.name}`, 10);
   if (job.seller.storeName !== job.seller.name) paragraph(`${labels.store}: ${job.seller.storeName}`);
   for (const [label, value] of [[labels.inn, job.seller.inn], [labels.address, job.seller.address], [labels.phone, job.seller.phone]]) {
@@ -302,7 +312,7 @@ function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumen
     const lines = wrap(doc, `${row.label}: ${money(job, row.value, locale)}`, width, size);
     return total + lines.length * (size + 3) + 7;
   }, 0);
-  const footerHeight = 14 + totalsHeight + 46;
+  const footerHeight = 14 + totalsHeight + (isEstimate ? 0 : 46);
   const footerReserve = footerHeight <= bottom - 125 ? footerHeight : 0;
 
   for (const [index, item] of job.items.entries()) {
@@ -349,11 +359,13 @@ function renderInvoice(doc: Pdf, job: SalesDocumentPayload, labels: SalesDocumen
     y += lines.length * (size + 3) + 7;
   };
   for (const row of totalRows) totalRow(row.label, row.value, row.emphasis);
-  y += 22;
-  doc.moveTo(left, y).lineTo(left + 205, y).strokeColor(BLACK).lineWidth(0.6).stroke();
-  doc.moveTo(left + 285, y).lineTo(left + width, y).stroke();
-  drawLines(doc, [labels.issuedBy], left, y + 5, 205, 8, "left", GRAY);
-  drawLines(doc, [labels.receivedBy], left + 285, y + 5, width - 285, 8, "left", GRAY);
+  if (!isEstimate) {
+    y += 22;
+    doc.moveTo(left, y).lineTo(left + 205, y).strokeColor(BLACK).lineWidth(0.6).stroke();
+    doc.moveTo(left + 285, y).lineTo(left + width, y).stroke();
+    drawLines(doc, [labels.issuedBy], left, y + 5, 205, 8, "left", GRAY);
+    drawLines(doc, [labels.receivedBy], left + 285, y + 5, width - 285, 8, "left", GRAY);
+  }
 
   const range = doc.bufferedPageRange();
   for (let index = 0; index < range.count; index += 1) {

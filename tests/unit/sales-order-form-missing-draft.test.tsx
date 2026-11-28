@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     store,
     order,
     mode: "edit" as "edit" | "create",
+    search: "",
     canAmendCompleted: false,
     userId: "user-1",
     toast: vi.fn(),
@@ -75,7 +76,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, replace: mocks.push }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(mocks.search),
   usePathname: () => "/sales/orders/order-10/edit",
 }));
 
@@ -204,6 +205,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.userId = "user-1";
+  mocks.search = "";
   mocks.order.status = "DRAFT";
   mocks.canAmendCompleted = false;
   window.sessionStorage.clear();
@@ -279,6 +281,32 @@ describe("BZR-03 saving an incomplete MISSING draft", () => {
     fireEvent.click(postButton);
     expect(mocks.saleMutate).not.toHaveBeenCalled();
   });
+});
+
+it("prepares a priced draft from the journal without exposing immediate posting", async () => {
+  const returnTo = "/inventory/movements?storeId=store-1";
+  mocks.search = new URLSearchParams({ estimate: "1", returnTo, storeId: "store-1" }).toString();
+  renderForm("create");
+  expect(screen.getByRole("heading", { name: ru.salesDocuments.estimate })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: ru.salesOrders.workspace.postSale })).toBeNull();
+
+  const save = screen.getByRole("button", { name: ru.salesOrders.workspace.saveEstimate }) as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  await screen.findByText(mocks.store.name);
+  fireEvent.click(screen.getByRole("button", { name: "resolve product" }));
+  const price = await screen.findByLabelText(`${ru.salesOrders.unitPrice} · Unpriced item`);
+  expect(save.disabled).toBe(true);
+  fireEvent.change(price, { target: { value: "68,5" } });
+  await waitFor(() => expect(save.disabled).toBe(false));
+
+  fireEvent.click(save);
+  await waitFor(() => expect(mocks.createMutate).toHaveBeenCalledWith(expect.objectContaining({
+    storeId: "store-1",
+    lines: [{ productId: "product-missing", variantId: null, qty: 1, unitPriceKgs: 68.5 }],
+  })));
+  expect(mocks.saleMutate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: ru.common.back }));
+  expect(mocks.push).toHaveBeenCalledWith(returnTo);
 });
 
 describe("unfinished customer order recovery", () => {

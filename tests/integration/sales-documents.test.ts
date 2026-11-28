@@ -51,6 +51,22 @@ describeDb("sales document authorization and sale-price projection", () => {
     expect(result.customer).toEqual({ name: null, phone: null, email: null, address: null });
   });
 
+  it("rejects an estimate with an unresolved price and still prints ordinary invoice formats", async () => {
+    const f = await fixture();
+    await prisma.customerOrder.update({
+      where: { id: f.order.id },
+      data: { status: "DRAFT", completedAt: null },
+    });
+    await prisma.customerOrderLine.updateMany({
+      where: { customerOrderId: f.order.id },
+      data: { priceSource: "MISSING" },
+    });
+    await expect(getSalesDocument({ ...f.request, kind: "estimate" })).rejects.toMatchObject({
+      message: "salesOrderPriceRequired", status: 400,
+    });
+    await expect(getSalesDocument({ ...f.request, kind: "invoice_without_prices" })).resolves.toMatchObject({ status: "DRAFT" });
+  });
+
   it("enforces current active membership, role and store assignments instead of stale session privileges", async () => {
     const f = await fixture();
     await expect(getSalesDocument({ ...f.request, actorId: f.staffUser.id })).resolves.toMatchObject({ id: f.order.id });

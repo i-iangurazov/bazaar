@@ -1,4 +1,4 @@
-const salesDocumentKinds = ["invoice", "invoice_without_prices", "goods_receipt"] as const;
+const salesDocumentKinds = ["invoice", "invoice_without_prices", "goods_receipt", "estimate"] as const;
 
 export type SalesDocumentKind = (typeof salesDocumentKinds)[number];
 
