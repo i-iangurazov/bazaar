@@ -80,6 +80,12 @@ describeDb("seven-day trial lifecycle on isolated PostgreSQL", () => {
 
   it("freezes the offer and ends vendor allowances at the actual trial boundary", async () => {
     const f = await register(await identity());
+    // The usage window starts at the persisted registration time, while fake
+    // timers only change the application clock, not the PostgreSQL default.
+    await prisma.organization.update({
+      where: { id: f.organizationId },
+      data: { createdAt: now },
+    });
     const usage = await getSubscriptionUsage(f.organizationId);
     expect(usage.find(row => row.resource === "ai")).toMatchObject({ limit: 100, resetsAt: end });
     expect(usage.find(row => row.resource === "images")).toMatchObject({ limit: 3, resetsAt: end });
