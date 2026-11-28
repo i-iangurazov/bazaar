@@ -36,7 +36,7 @@ export async function resolveImportedConnectionPrices(
   const retailBefore = types?.retailPriceKgs ?? standard?.priceKgs;
   const wholesaleBefore = types?.wholesalePriceKgs;
   return {
-    retailBefore,
+    effectiveRetailBefore: types?.retailPriceKgs ?? wholesaleBefore ?? standard?.priceKgs,
     wholesaleBefore,
     retailPriceKgs:
       preserveExisting && (retailBefore != null || shared?.retailShared)

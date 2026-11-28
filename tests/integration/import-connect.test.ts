@@ -148,6 +148,18 @@ describeDb("connecting existing products during import", () => {
       before: 2,
       after: 5,
     });
+    expect(chosen.rows[0].changes.find((change) => change.field === "basePriceKgs")).toMatchObject({
+      before: 150,
+      after: 225,
+    });
+    const preserveExisting = await f.caller.products.previewImportCsv({
+      ...f.input,
+      existingBehavior: "skip",
+    });
+    expect(preserveExisting.rows[0].changes.map((change) => change.field).sort()).toEqual([
+      "minStock",
+      "stockQty",
+    ]);
     const ignored = await f.caller.products.previewImportCsv({
       ...f.input,
       stockBehavior: "ignore",
@@ -161,7 +173,7 @@ describeDb("connecting existing products during import", () => {
   });
 
   it.each(["set", "add", "ignore"] as const)(
-    "connects safely with stock mode %s and preserves other stores and common fields",
+    "connects with stock mode %s while preserving existing prices and common fields",
     async (stockBehavior) => {
       const f = await fixture();
       const input = { ...f.input, stockBehavior, existingBehavior: "skip" as const };
@@ -181,12 +193,15 @@ describeDb("connecting existing products during import", () => {
         }),
       ).toMatchObject({ isActive: true, isDirect: true });
       expect(await prisma.storeProduct.count({ where: { storeId: f.peer.id } })).toBe(0);
-      const prices = await prisma.storePrice.findMany({ orderBy: { priceKgs: "asc" } });
-      expect(prices.map((price) => Number(price.priceKgs))).toEqual([180, 225]);
+      const prices = await prisma.storePrice.findMany({
+        where: { organizationId: f.org.id, productId: f.product.id },
+      });
+      expect(prices.map((price) => ({ storeId: price.storeId, amount: Number(price.priceKgs) })))
+        .toEqual([{ storeId: f.store.id, amount: 180 }]);
       const extra = await prisma.storePriceTypes.findFirstOrThrow({
         where: { storeId: f.target.id },
       });
-      expect(Number(extra.retailPriceKgs)).toBe(225);
+      expect(Number(extra.retailPriceKgs)).toBe(150);
       expect(Number(extra.wholesalePriceKgs)).toBe(120);
       expect(Number((await prisma.productCost.findFirstOrThrow()).avgCostKgs)).toBe(70);
       expect(await prisma.unit.count()).toBe(1);
@@ -247,6 +262,19 @@ describeDb("connecting existing products during import", () => {
       expect(
         preview.rows[0].changes.find((change) => change.field === "basePriceKgs"),
       ).toMatchObject({ before: enabled ? 120 : 100, after: 225 });
+      await prisma.storePrice.create({
+        data: {
+          organizationId: f.org.id,
+          storeId: f.target.id,
+          productId: f.product.id,
+          variantKey: "BASE",
+          priceKgs: 95,
+        },
+      });
+      const withStorePrice = await f.caller.products.previewImportCsv(f.input);
+      expect(
+        withStorePrice.rows[0].changes.find((change) => change.field === "basePriceKgs"),
+      ).toMatchObject({ before: enabled ? 120 : 95, after: 225 });
       await f.caller.products.importCsv({ ...f.input, stockBehavior: "ignore" });
       const prices = await prisma.storePriceTypes.findFirstOrThrow({
         where: { storeId: f.target.id },

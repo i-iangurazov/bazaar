@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET } from "@/app/api/jobs/cron/[group]/route";
+import type * as AppleConfig from "@/server/billing/appleConfig";
 import type * as Jobs from "@/server/jobs";
 
 const mocks = vi.hoisted(() => {
@@ -40,7 +41,10 @@ vi.mock("@/server/jobs/orderConfirmationEmails", () => ({
 }));
 vi.mock("@/server/services/exports", () => ({}));
 vi.mock("@/server/services/kkmConnector", () => ({}));
-vi.mock("@/server/billing/appleConfig", () => ({ appleBillingConfig: mocks.config }));
+vi.mock("@/server/billing/appleConfig", async (importOriginal) => ({
+  ...await importOriginal<typeof AppleConfig>(),
+  appleBillingConfig: mocks.config,
+}));
 vi.mock("@/server/billing/appleConsumption", () => ({ processAppleConsumptionRequests: async () => ({ checked: 0 }) }));
 vi.mock("@/server/billing/applePayments", () => ({}));
 vi.mock("@/server/billing/appleSupportAuth", () => ({}));
@@ -73,6 +77,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(due);
   vi.stubEnv("CRON_SECRET", cronSecret);
+  vi.stubEnv("VERCEL_ENV", "development");
   vi.resetAllMocks();
   mocks.config.mockReturnValue({ mode: "live", apiReady: true });
   mocks.prisma.appleServerNotification.findMany.mockResolvedValue([]);

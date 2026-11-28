@@ -638,7 +638,7 @@ export const previewProductImport = async ({
           addChange(
             changes,
             "basePriceKgs",
-            decimalToNumber(prices.retailBefore ?? existing.basePriceKgs),
+            decimalToNumber(prices.effectiveRetailBefore ?? existing.basePriceKgs),
             prices.retailPriceKgs,
           );
         }
